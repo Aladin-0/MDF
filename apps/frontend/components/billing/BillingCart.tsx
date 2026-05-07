@@ -12,7 +12,7 @@ import { CustomerSelector } from './CustomerSelector'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import { ScrollArea } from '@/components/ui/scroll-area'
 
-import { calculateLandingRate } from '@/lib/purchase-calculations'
+import { applyGstAndFreightToBaseRate } from '@/lib/purchase-calculations'
 import { useOutletSettings } from '@/hooks/useOutletSettings'
 
 // Inline date helper to avoid external date-fns dependency
@@ -41,7 +41,7 @@ const CartItemRow = ({
     const { data: settings } = useOutletSettings();
 
     const landingRate = useMemo(() => {
-        return calculateLandingRate(
+        return applyGstAndFreightToBaseRate(
             item.purchaseRate || 0,
             item.gstRate || 0,
             item.freight || 0,
@@ -381,7 +381,7 @@ export function BillingCart({ onProceedToPayment, onAddDoctorDetails }: BillingC
     const hasFloorError = Object.values(floorErrors).some(Boolean);
     const totalFloorCost = canViewRates
         ? cart.reduce((sum, item) => {
-            const floorRate = calculateLandingRate(
+            const floorRate = applyGstAndFreightToBaseRate(
                 item.purchaseRate || 0,
                 item.gstRate || 0,
                 item.freight || 0,

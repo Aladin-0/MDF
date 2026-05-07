@@ -356,7 +356,11 @@ class VoucherDetailView(APIView):
 
     def get(self, request, voucher_id):
         try:
-            voucher = Voucher.objects.prefetch_related('lines__ledger').get(id=voucher_id)
+            voucher = Voucher.objects.prefetch_related(
+                'lines__ledger',
+                'bill_adjustments__purchase_invoice',
+                'bill_adjustments__sale_invoice',
+            ).get(id=voucher_id)
             return Response(VoucherSerializer(voucher).data)
         except Voucher.DoesNotExist:
             return Response({'detail': 'Not found'}, status=404)

@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
-import { Loader2, Plus, Trash2 } from 'lucide-react';
+import { Loader2, Plus, Trash2, CheckSquare, Square, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,13 +10,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { useOutletId } from '@/hooks/useOutletId';
 import { voucherApi } from '@/lib/apiClient';
-import { Ledger, Voucher, BillAdjustment } from '@/types';
+import { Ledger, Voucher, PendingBill } from '@/types';
 import { LedgerPicker } from './LedgerPicker';
-import { BillAdjustmentModal } from './BillAdjustmentModal';
 import { cn } from '@/lib/utils';
 
 type VoucherType = 'receipt' | 'payment' | 'contra' | 'journal';
-type PaymentMode = 'cash' | 'bank' | 'upi';
 
 interface LineRow {
     id: string;
@@ -49,6 +47,10 @@ function newLine(): LineRow {
     return { id: Math.random().toString(36).slice(2), ledger: null, debit: '', credit: '', description: '' };
 }
 
+function fmt(n: number) {
+    return '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 export function VoucherForm({ initialType = 'receipt', onSuccess }: VoucherFormProps) {
     const outletId = useOutletId();
     const { toast } = useToast();
@@ -60,45 +62,58 @@ export function VoucherForm({ initialType = 'receipt', onSuccess }: VoucherFormP
     const [saving, setSaving] = useState(false);
     const [loadingNo, setLoadingNo] = useState(false);
 
-    // Receipt / Payment state
+    // Party + cash/bank
     const [partyLedger, setPartyLedger] = useState<Ledger | null>(null);
     const [cashBankLedger, setCashBankLedger] = useState<Ledger | null>(null);
-    const [amount, setAmount] = useState('');
-    const [partyOutstanding, setPartyOutstanding] = useState<{ outstanding: number; balanceType: string } | null>(null);
-    const [showBillModal, setShowBillModal] = useState(false);
-    const [pendingAdjustments, setPendingAdjustments] = useState<BillAdjustment[]>([]);
-    const amountBlurredRef = useRef(false);
 
-    // Contra state
+    // Bill-by-bill state
+    const [pendingBills, setPendingBills] = useState<PendingBill[]>([]);
+    const [billAmounts, setBillAmounts] = useState<Record<string, string>>({});
+    const [onAccountAmount, setOnAccountAmount] = useState('');
+    const [loadingBills, setLoadingBills] = useState(false);
+
+    // Contra
     const [contraDebitLedger, setContraDebitLedger] = useState<Ledger | null>(null);
     const [contraCreditLedger, setContraCreditLedger] = useState<Ledger | null>(null);
     const [contraAmount, setContraAmount] = useState('');
 
-    // Journal state
+    // Journal
     const [lines, setLines] = useState<LineRow[]>([newLine(), newLine()]);
 
-    // Load next voucher number when type changes
+    // Computed totals
+    const billTotal = Object.values(billAmounts).reduce((s, v) => s + (parseFloat(v) || 0), 0);
+    const onAcc = parseFloat(onAccountAmount) || 0;
+    const totalAmount = billTotal + onAcc;
+
+    // Load voucher number
     useEffect(() => {
         if (!outletId) return;
         setLoadingNo(true);
-        voucherApi
-            .getNextVoucherNo(outletId, voucherType)
-            .then((data: any) => setVoucherNo(data.voucherNo || ''))
+        voucherApi.getNextVoucherNo(outletId, voucherType)
+            .then((d: any) => setVoucherNo(d.voucherNo || ''))
             .catch(() => {})
             .finally(() => setLoadingNo(false));
     }, [outletId, voucherType]);
 
-    // Fetch outstanding when party ledger changes
+    // Load pending bills when party ledger changes
     useEffect(() => {
-        if (!partyLedger) {
-            setPartyOutstanding(null);
+        if (!partyLedger || !outletId) {
+            setPendingBills([]);
+            setBillAmounts({});
             return;
         }
-        voucherApi
-            .getLedgerOutstanding(partyLedger.id)
-            .then((data: any) => setPartyOutstanding({ outstanding: data.outstanding, balanceType: data.balanceType }))
-            .catch(() => setPartyOutstanding(null));
-    }, [partyLedger]);
+        setLoadingBills(true);
+        voucherApi.getPendingBills(outletId, partyLedger.id)
+            .then((data: PendingBill[]) => {
+                setPendingBills(data);
+                // Init with 0 for each bill
+                const init: Record<string, string> = {};
+                data.forEach(b => { init[b.id] = ''; });
+                setBillAmounts(init);
+            })
+            .catch(() => setPendingBills([]))
+            .finally(() => setLoadingBills(false));
+    }, [partyLedger, outletId]);
 
     // Keyboard shortcuts
     useEffect(() => {
@@ -110,13 +125,8 @@ export function VoucherForm({ initialType = 'receipt', onSuccess }: VoucherFormP
                 e.preventDefault();
                 setVoucherType(type);
             }
-            if (e.ctrlKey && e.key === 's') {
-                e.preventDefault();
-                handleSave();
-            }
-            if (e.key === 'Escape' && !showBillModal) {
-                handleClear();
-            }
+            if (e.ctrlKey && e.key === 's') { e.preventDefault(); handleSave(); }
+            if (e.key === 'Escape') handleClear();
         }
         window.addEventListener('keydown', handleKey);
         return () => window.removeEventListener('keydown', handleKey);
@@ -125,108 +135,75 @@ export function VoucherForm({ initialType = 'receipt', onSuccess }: VoucherFormP
     function handleClear() {
         setPartyLedger(null);
         setCashBankLedger(null);
-        setAmount('');
-        setPartyOutstanding(null);
-        setPendingAdjustments([]);
+        setPendingBills([]);
+        setBillAmounts({});
+        setOnAccountAmount('');
         setContraDebitLedger(null);
         setContraCreditLedger(null);
         setContraAmount('');
         setLines([newLine(), newLine()]);
         setNarration('');
-        amountBlurredRef.current = false;
     }
 
-    function handleAmountBlur() {
-        const amt = parseFloat(amount);
-        if (amt > 0 && partyLedger && !amountBlurredRef.current) {
-            amountBlurredRef.current = true;
-            setShowBillModal(true);
-        }
+    function toggleBillFull(billId: string, outstanding: number) {
+        const cur = parseFloat(billAmounts[billId]) || 0;
+        const isFull = Math.abs(cur - outstanding) < 0.01;
+        setBillAmounts(prev => ({ ...prev, [billId]: isFull ? '' : outstanding.toFixed(2) }));
     }
 
-    function handleBillAdjustConfirm(adjustments: BillAdjustment[]) {
-        setPendingAdjustments(adjustments);
-        setShowBillModal(false);
+    function selectAll() {
+        const next: Record<string, string> = {};
+        pendingBills.forEach(b => { next[b.id] = b.outstanding.toFixed(2); });
+        setBillAmounts(next);
     }
 
-    function handleBillAdjustSkip() {
-        setPendingAdjustments([]);
-        setShowBillModal(false);
-    }
-
-    // Journal helpers
-    const totalDebit = lines.reduce((s, l) => s + (parseFloat(l.debit) || 0), 0);
-    const totalCredit = lines.reduce((s, l) => s + (parseFloat(l.credit) || 0), 0);
-
-    function updateLine(id: string, field: keyof LineRow, value: any) {
-        setLines((prev) => prev.map((l) => (l.id === id ? { ...l, [field]: value } : l)));
-    }
-
-    function addLine() {
-        setLines((prev) => [...prev, newLine()]);
-    }
-
-    function removeLine(id: string) {
-        setLines((prev) => prev.filter((l) => l.id !== id));
+    function clearAll() {
+        const next: Record<string, string> = {};
+        pendingBills.forEach(b => { next[b.id] = ''; });
+        setBillAmounts(next);
     }
 
     async function handleSave() {
         if (!outletId) return;
         setSaving(true);
         try {
-            let payload: any = {
-                outletId,
-                voucher_type: voucherType,
-                date,
-                narration,
-            };
+            let payload: any = { outletId, voucher_type: voucherType, date, narration };
 
-            if (voucherType === 'receipt') {
+            if (voucherType === 'receipt' || voucherType === 'payment') {
                 if (!partyLedger || !cashBankLedger) {
                     toast({ variant: 'destructive', title: 'Select both ledgers' });
                     setSaving(false);
                     return;
                 }
-                const amt = parseFloat(amount);
-                if (!amt || amt <= 0) {
-                    toast({ variant: 'destructive', title: 'Enter an amount' });
+                if (totalAmount <= 0) {
+                    toast({ variant: 'destructive', title: 'Enter at least one bill amount or on-account amount' });
                     setSaving(false);
                     return;
                 }
-                payload.total_amount = amt;
+
+                payload.total_amount = totalAmount;
                 payload.payment_mode = cashBankLedger.groupName === 'Bank Accounts' ? 'bank' : 'cash';
-                payload.lines = [
-                    { ledger_id: cashBankLedger.id, debit: amt, credit: 0, description: '' },
-                    { ledger_id: partyLedger.id, debit: 0, credit: amt, description: '' },
-                ];
-                payload.bill_adjustments = pendingAdjustments.map((a) => ({
-                    invoice_id: a.invoiceId,
-                    invoice_type: a.invoiceType,
-                    adjusted_amount: a.adjustedAmount,
-                }));
-            } else if (voucherType === 'payment') {
-                if (!partyLedger || !cashBankLedger) {
-                    toast({ variant: 'destructive', title: 'Select both ledgers' });
-                    setSaving(false);
-                    return;
+
+                if (voucherType === 'payment') {
+                    payload.lines = [
+                        { ledger_id: partyLedger.id, debit: totalAmount, credit: 0, description: '' },
+                        { ledger_id: cashBankLedger.id, debit: 0, credit: totalAmount, description: '' },
+                    ];
+                } else {
+                    payload.lines = [
+                        { ledger_id: cashBankLedger.id, debit: totalAmount, credit: 0, description: '' },
+                        { ledger_id: partyLedger.id, debit: 0, credit: totalAmount, description: '' },
+                    ];
                 }
-                const amt = parseFloat(amount);
-                if (!amt || amt <= 0) {
-                    toast({ variant: 'destructive', title: 'Enter an amount' });
-                    setSaving(false);
-                    return;
-                }
-                payload.total_amount = amt;
-                payload.payment_mode = cashBankLedger.groupName === 'Bank Accounts' ? 'bank' : 'cash';
-                payload.lines = [
-                    { ledger_id: partyLedger.id, debit: amt, credit: 0, description: '' },
-                    { ledger_id: cashBankLedger.id, debit: 0, credit: amt, description: '' },
-                ];
-                payload.bill_adjustments = pendingAdjustments.map((a) => ({
-                    invoice_id: a.invoiceId,
-                    invoice_type: a.invoiceType,
-                    adjusted_amount: a.adjustedAmount,
-                }));
+
+                payload.bill_adjustments = pendingBills
+                    .filter(b => (parseFloat(billAmounts[b.id]) || 0) > 0)
+                    .map(b => ({
+                        invoice_id: b.id,
+                        invoice_type: b.invoiceType,
+                        adjusted_amount: parseFloat(billAmounts[b.id]) || 0,
+                    }));
+
             } else if (voucherType === 'contra') {
                 if (!contraDebitLedger || !contraCreditLedger) {
                     toast({ variant: 'destructive', title: 'Select both ledgers' });
@@ -251,21 +228,22 @@ export function VoucherForm({ initialType = 'receipt', onSuccess }: VoucherFormP
                     { ledger_id: contraCreditLedger.id, debit: 0, credit: amt, description: '' },
                 ];
             } else {
-                // journal
-                const validLines = lines.filter((l) => l.ledger);
+                const validLines = lines.filter(l => l.ledger);
                 if (validLines.length < 2) {
                     toast({ variant: 'destructive', title: 'Add at least two journal lines' });
                     setSaving(false);
                     return;
                 }
-                if (totalDebit !== totalCredit) {
+                const td = lines.reduce((s, l) => s + (parseFloat(l.debit) || 0), 0);
+                const tc = lines.reduce((s, l) => s + (parseFloat(l.credit) || 0), 0);
+                if (td !== tc) {
                     toast({ variant: 'destructive', title: 'Journal must balance (Dr = Cr)' });
                     setSaving(false);
                     return;
                 }
-                payload.total_amount = totalDebit;
+                payload.total_amount = td;
                 payload.payment_mode = 'cash';
-                payload.lines = validLines.map((l) => ({
+                payload.lines = validLines.map(l => ({
                     ledger_id: l.ledger!.id,
                     debit: parseFloat(l.debit) || 0,
                     credit: parseFloat(l.credit) || 0,
@@ -285,9 +263,12 @@ export function VoucherForm({ initialType = 'receipt', onSuccess }: VoucherFormP
         }
     }
 
+    const totalDebit = lines.reduce((s, l) => s + (parseFloat(l.debit) || 0), 0);
+    const totalCredit = lines.reduce((s, l) => s + (parseFloat(l.credit) || 0), 0);
+
     return (
         <div className="space-y-6">
-            {/* Voucher Type Selector */}
+            {/* Voucher Type */}
             <div className="grid grid-cols-4 gap-2">
                 {(['receipt', 'payment', 'contra', 'journal'] as VoucherType[]).map((t) => (
                     <button
@@ -309,7 +290,7 @@ export function VoucherForm({ initialType = 'receipt', onSuccess }: VoucherFormP
                 ))}
             </div>
 
-            {/* Header: Date + Voucher No */}
+            {/* Date + Voucher No */}
             <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                     <Label>Date</Label>
@@ -321,119 +302,188 @@ export function VoucherForm({ initialType = 'receipt', onSuccess }: VoucherFormP
                 </div>
             </div>
 
-            {/* ── Receipt Form ── */}
-            {voucherType === 'receipt' && (
+            {/* ── Receipt / Payment (Bill-by-Bill) ── */}
+            {(voucherType === 'receipt' || voucherType === 'payment') && (
                 <div className="space-y-4">
+                    {/* Party Ledger */}
                     <div className="space-y-1.5">
-                        <Label>Cr. Ledger <span className="text-muted-foreground text-xs">(Received From)</span></Label>
+                        <Label>
+                            {voucherType === 'payment' ? 'Dr. Ledger' : 'Cr. Ledger'}
+                            <span className="text-muted-foreground text-xs ml-1">
+                                ({voucherType === 'payment' ? 'Paid To' : 'Received From'})
+                            </span>
+                        </Label>
                         <LedgerPicker
-                            voucherType="receipt"
+                            voucherType={voucherType}
                             filterGroup="party"
                             value={partyLedger}
-                            onChange={(l) => { setPartyLedger(l); amountBlurredRef.current = false; setPendingAdjustments([]); }}
-                            placeholder="Search customer / income ledger..."
+                            onChange={(l) => { setPartyLedger(l); }}
+                            placeholder={voucherType === 'payment' ? 'Search supplier / expense ledger...' : 'Search customer / income ledger...'}
                         />
-                        {partyOutstanding && partyOutstanding.outstanding > 0 && (
-                            <p className="text-xs text-muted-foreground pl-1">
-                                Outstanding: ₹{partyOutstanding.outstanding.toLocaleString('en-IN', { minimumFractionDigits: 2 })} {partyOutstanding.balanceType}
-                            </p>
-                        )}
                     </div>
 
-                    <div className="space-y-1.5">
-                        <Label>Amount</Label>
-                        <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">₹</span>
-                            <Input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                className="pl-7"
-                                placeholder="0.00"
-                                value={amount}
-                                onChange={(e) => { setAmount(e.target.value); amountBlurredRef.current = false; }}
-                                onBlur={handleAmountBlur}
-                            />
+                    {/* Bill-by-Bill Table */}
+                    {partyLedger && (
+                        <div className="border rounded-lg overflow-hidden">
+                            <div className="flex items-center justify-between px-4 py-2.5 bg-muted/60 border-b">
+                                <span className="text-sm font-semibold text-foreground">
+                                    {loadingBills ? 'Loading bills...' : `Outstanding Bills (${pendingBills.length})`}
+                                </span>
+                                {pendingBills.length > 0 && !loadingBills && (
+                                    <div className="flex gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={selectAll}
+                                            className="text-xs text-primary hover:underline font-medium"
+                                        >
+                                            Pay All
+                                        </button>
+                                        <span className="text-muted-foreground text-xs">·</span>
+                                        <button
+                                            type="button"
+                                            onClick={clearAll}
+                                            className="text-xs text-muted-foreground hover:underline"
+                                        >
+                                            Clear
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+
+                            {loadingBills ? (
+                                <div className="flex items-center justify-center py-8 gap-2 text-muted-foreground text-sm">
+                                    <Loader2 className="w-4 h-4 animate-spin" /> Loading pending bills...
+                                </div>
+                            ) : pendingBills.length === 0 ? (
+                                <div className="flex items-center gap-2 px-4 py-5 text-sm text-muted-foreground">
+                                    <AlertCircle className="w-4 h-4 text-amber-500" />
+                                    No outstanding bills. Amount will be recorded On Account.
+                                </div>
+                            ) : (
+                                <table className="w-full text-sm">
+                                    <thead className="bg-muted/30">
+                                        <tr>
+                                            <th className="px-4 py-2 text-left font-medium text-muted-foreground w-8"></th>
+                                            <th className="px-4 py-2 text-left font-medium text-muted-foreground">Bill No</th>
+                                            <th className="px-4 py-2 text-left font-medium text-muted-foreground">Date</th>
+                                            <th className="px-4 py-2 text-right font-medium text-muted-foreground">Bill Amt</th>
+                                            <th className="px-4 py-2 text-right font-medium text-muted-foreground">Pending</th>
+                                            <th className="px-4 py-2 text-right font-medium text-muted-foreground">Pay Now (₹)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y">
+                                        {pendingBills.map((bill) => {
+                                            const payAmt = parseFloat(billAmounts[bill.id]) || 0;
+                                            const isSelected = payAmt > 0;
+                                            const isFull = Math.abs(payAmt - bill.outstanding) < 0.01;
+                                            return (
+                                                <tr
+                                                    key={bill.id}
+                                                    className={cn(
+                                                        'hover:bg-muted/20 transition-colors',
+                                                        isSelected && 'bg-primary/5'
+                                                    )}
+                                                >
+                                                    <td className="px-4 py-2.5">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => toggleBillFull(bill.id, bill.outstanding)}
+                                                            className={cn(
+                                                                'text-primary transition-colors',
+                                                                !isSelected && 'text-muted-foreground'
+                                                            )}
+                                                        >
+                                                            {isFull
+                                                                ? <CheckSquare className="w-4 h-4" />
+                                                                : <Square className="w-4 h-4" />
+                                                            }
+                                                        </button>
+                                                    </td>
+                                                    <td className="px-4 py-2.5 font-medium">{bill.invoiceNo}</td>
+                                                    <td className="px-4 py-2.5 text-muted-foreground">
+                                                        {format(new Date(bill.date), 'dd-MM-yy')}
+                                                    </td>
+                                                    <td className="px-4 py-2.5 text-right text-muted-foreground">
+                                                        {fmt(bill.grandTotal)}
+                                                    </td>
+                                                    <td className="px-4 py-2.5 text-right font-medium text-orange-600">
+                                                        {fmt(bill.outstanding)}
+                                                    </td>
+                                                    <td className="px-4 py-2.5">
+                                                        <Input
+                                                            type="number"
+                                                            min="0"
+                                                            max={bill.outstanding}
+                                                            step="0.01"
+                                                            placeholder="0.00"
+                                                            className={cn(
+                                                                'text-right w-28 ml-auto h-8 text-sm',
+                                                                isSelected && 'border-primary ring-1 ring-primary/30'
+                                                            )}
+                                                            value={billAmounts[bill.id] ?? ''}
+                                                            onChange={(e) =>
+                                                                setBillAmounts(prev => ({ ...prev, [bill.id]: e.target.value }))
+                                                            }
+                                                        />
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                    {/* Summary row */}
+                                    <tfoot className="bg-muted/30 border-t-2">
+                                        <tr>
+                                            <td colSpan={4} className="px-4 py-2.5 text-sm font-semibold text-right text-muted-foreground">
+                                                Bills Total:
+                                            </td>
+                                            <td className="px-4 py-2.5 text-right font-bold text-orange-600">
+                                                {fmt(pendingBills.reduce((s, b) => s + b.outstanding, 0))}
+                                            </td>
+                                            <td className="px-4 py-2.5 text-right font-bold text-primary">
+                                                {fmt(billTotal)}
+                                            </td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            )}
+
+                            {/* On Account extra */}
+                            <div className="flex items-center justify-between px-4 py-3 border-t bg-muted/20">
+                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                    <span className="font-medium">On Account</span>
+                                    <span className="text-xs">(advance / extra amount not against any bill)</span>
+                                </div>
+                                <Input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    placeholder="0.00"
+                                    className="text-right w-28 h-8 text-sm"
+                                    value={onAccountAmount}
+                                    onChange={(e) => setOnAccountAmount(e.target.value)}
+                                />
+                            </div>
                         </div>
-                        {pendingAdjustments.length > 0 && (
-                            <p className="text-xs text-green-600 pl-1">
-                                {pendingAdjustments.length} bill(s) adjusted — ₹{pendingAdjustments.reduce((s, a) => s + a.adjustedAmount, 0).toFixed(2)}
-                                <button
-                                    type="button"
-                                    className="ml-2 underline"
-                                    onClick={() => setShowBillModal(true)}
-                                >
-                                    Edit
-                                </button>
-                            </p>
-                        )}
-                    </div>
+                    )}
 
-                    <div className="space-y-1.5">
-                        <Label>Dr. Ledger <span className="text-muted-foreground text-xs">(Received In)</span></Label>
-                        <LedgerPicker
-                            voucherType="receipt"
-                            filterGroup="cashbank"
-                            value={cashBankLedger}
-                            onChange={setCashBankLedger}
-                            placeholder="Search cash / bank ledger..."
-                        />
-                    </div>
-                </div>
-            )}
-
-            {/* ── Payment Form ── */}
-            {voucherType === 'payment' && (
-                <div className="space-y-4">
-                    <div className="space-y-1.5">
-                        <Label>Dr. Ledger <span className="text-muted-foreground text-xs">(Paid To)</span></Label>
-                        <LedgerPicker
-                            voucherType="payment"
-                            filterGroup="party"
-                            value={partyLedger}
-                            onChange={(l) => { setPartyLedger(l); amountBlurredRef.current = false; setPendingAdjustments([]); }}
-                            placeholder="Search supplier / expense ledger..."
-                        />
-                        {partyOutstanding && partyOutstanding.outstanding > 0 && (
-                            <p className="text-xs text-muted-foreground pl-1">
-                                Outstanding: ₹{partyOutstanding.outstanding.toLocaleString('en-IN', { minimumFractionDigits: 2 })} {partyOutstanding.balanceType}
-                            </p>
-                        )}
-                    </div>
-
-                    <div className="space-y-1.5">
-                        <Label>Amount</Label>
-                        <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">₹</span>
-                            <Input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                className="pl-7"
-                                placeholder="0.00"
-                                value={amount}
-                                onChange={(e) => { setAmount(e.target.value); amountBlurredRef.current = false; }}
-                                onBlur={handleAmountBlur}
-                            />
+                    {/* Total Amount Display */}
+                    {partyLedger && (
+                        <div className="flex items-center justify-between rounded-lg bg-primary/5 border-2 border-primary/20 px-5 py-3">
+                            <span className="font-semibold text-foreground">Total Amount</span>
+                            <span className="text-2xl font-black text-primary">{fmt(totalAmount)}</span>
                         </div>
-                        {pendingAdjustments.length > 0 && (
-                            <p className="text-xs text-green-600 pl-1">
-                                {pendingAdjustments.length} bill(s) adjusted — ₹{pendingAdjustments.reduce((s, a) => s + a.adjustedAmount, 0).toFixed(2)}
-                                <button
-                                    type="button"
-                                    className="ml-2 underline"
-                                    onClick={() => setShowBillModal(true)}
-                                >
-                                    Edit
-                                </button>
-                            </p>
-                        )}
-                    </div>
+                    )}
 
+                    {/* Cash/Bank Ledger */}
                     <div className="space-y-1.5">
-                        <Label>Cr. Ledger <span className="text-muted-foreground text-xs">(Paid From)</span></Label>
+                        <Label>
+                            {voucherType === 'payment' ? 'Cr. Ledger' : 'Dr. Ledger'}
+                            <span className="text-muted-foreground text-xs ml-1">
+                                ({voucherType === 'payment' ? 'Paid From' : 'Received In'})
+                            </span>
+                        </Label>
                         <LedgerPicker
-                            voucherType="payment"
+                            voucherType={voucherType}
                             filterGroup="cashbank"
                             value={cashBankLedger}
                             onChange={setCashBankLedger}
@@ -448,40 +498,18 @@ export function VoucherForm({ initialType = 'receipt', onSuccess }: VoucherFormP
                 <div className="space-y-4">
                     <div className="space-y-1.5">
                         <Label>Dr. Ledger <span className="text-muted-foreground text-xs">(Money Going TO)</span></Label>
-                        <LedgerPicker
-                            voucherType="contra"
-                            filterGroup="cashbank"
-                            value={contraDebitLedger}
-                            onChange={setContraDebitLedger}
-                            placeholder="Search cash / bank ledger..."
-                        />
+                        <LedgerPicker voucherType="contra" filterGroup="cashbank" value={contraDebitLedger} onChange={setContraDebitLedger} placeholder="Search cash / bank ledger..." />
                     </div>
-
                     <div className="space-y-1.5">
                         <Label>Amount</Label>
                         <div className="relative">
                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">₹</span>
-                            <Input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                className="pl-7"
-                                placeholder="0.00"
-                                value={contraAmount}
-                                onChange={(e) => setContraAmount(e.target.value)}
-                            />
+                            <Input type="number" min="0" step="0.01" className="pl-7" placeholder="0.00" value={contraAmount} onChange={(e) => setContraAmount(e.target.value)} />
                         </div>
                     </div>
-
                     <div className="space-y-1.5">
                         <Label>Cr. Ledger <span className="text-muted-foreground text-xs">(Money Coming FROM)</span></Label>
-                        <LedgerPicker
-                            voucherType="contra"
-                            filterGroup="cashbank"
-                            value={contraCreditLedger}
-                            onChange={setContraCreditLedger}
-                            placeholder="Search cash / bank ledger..."
-                        />
+                        <LedgerPicker voucherType="contra" filterGroup="cashbank" value={contraCreditLedger} onChange={setContraCreditLedger} placeholder="Search cash / bank ledger..." />
                     </div>
                 </div>
             )}
@@ -497,53 +525,21 @@ export function VoucherForm({ initialType = 'receipt', onSuccess }: VoucherFormP
                     </div>
                     {lines.map((line) => (
                         <div key={line.id} className="grid grid-cols-[1fr_110px_110px_auto] gap-2 items-center">
-                            <LedgerPicker
-                                value={line.ledger}
-                                onChange={(l) => updateLine(line.id, 'ledger', l)}
-                            />
-                            <Input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                placeholder="0.00"
-                                className="text-right"
-                                value={line.debit}
-                                onChange={(e) => updateLine(line.id, 'debit', e.target.value)}
-                            />
-                            <Input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                placeholder="0.00"
-                                className="text-right"
-                                value={line.credit}
-                                onChange={(e) => updateLine(line.id, 'credit', e.target.value)}
-                            />
-                            <button
-                                type="button"
-                                onClick={() => removeLine(line.id)}
-                                className="p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-                            >
+                            <LedgerPicker value={line.ledger} onChange={(l) => setLines(prev => prev.map(x => x.id === line.id ? { ...x, ledger: l } : x))} />
+                            <Input type="number" min="0" step="0.01" placeholder="0.00" className="text-right" value={line.debit} onChange={(e) => setLines(prev => prev.map(x => x.id === line.id ? { ...x, debit: e.target.value } : x))} />
+                            <Input type="number" min="0" step="0.01" placeholder="0.00" className="text-right" value={line.credit} onChange={(e) => setLines(prev => prev.map(x => x.id === line.id ? { ...x, credit: e.target.value } : x))} />
+                            <button type="button" onClick={() => setLines(prev => prev.filter(x => x.id !== line.id))} className="p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors">
                                 <Trash2 className="w-4 h-4" />
                             </button>
                         </div>
                     ))}
-                    <button
-                        type="button"
-                        onClick={addLine}
-                        className="flex items-center gap-1.5 text-xs text-primary hover:underline"
-                    >
+                    <button type="button" onClick={() => setLines(prev => [...prev, newLine()])} className="flex items-center gap-1.5 text-xs text-primary hover:underline">
                         <Plus className="w-3.5 h-3.5" /> Add line
                     </button>
-
                     <div className="grid grid-cols-[1fr_110px_110px_auto] gap-2 pt-2 border-t text-sm font-semibold">
                         <span className="text-right text-muted-foreground">Total</span>
-                        <span className={cn('text-right', totalDebit !== totalCredit && 'text-destructive')}>
-                            ₹{totalDebit.toFixed(2)}
-                        </span>
-                        <span className={cn('text-right', totalDebit !== totalCredit && 'text-destructive')}>
-                            ₹{totalCredit.toFixed(2)}
-                        </span>
+                        <span className={cn('text-right', totalDebit !== totalCredit && 'text-destructive')}>₹{totalDebit.toFixed(2)}</span>
+                        <span className={cn('text-right', totalDebit !== totalCredit && 'text-destructive')}>₹{totalCredit.toFixed(2)}</span>
                         <span />
                     </div>
                     {totalDebit !== totalCredit && totalDebit > 0 && (
@@ -555,12 +551,7 @@ export function VoucherForm({ initialType = 'receipt', onSuccess }: VoucherFormP
             {/* Narration */}
             <div className="space-y-1.5">
                 <Label>Narration <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                <Textarea
-                    rows={2}
-                    placeholder="Add a note..."
-                    value={narration}
-                    onChange={(e) => setNarration(e.target.value)}
-                />
+                <Textarea rows={2} placeholder="Add a note..." value={narration} onChange={(e) => setNarration(e.target.value)} />
             </div>
 
             {/* Actions */}
@@ -570,14 +561,7 @@ export function VoucherForm({ initialType = 'receipt', onSuccess }: VoucherFormP
                     Save <span className="ml-1.5 text-xs opacity-70">Ctrl+S</span>
                 </Button>
                 {(voucherType === 'receipt' || voucherType === 'payment') && (
-                    <Button
-                        variant="outline"
-                        disabled={saving}
-                        onClick={async () => {
-                            await handleSave();
-                            // Print logic can be wired here
-                        }}
-                    >
+                    <Button variant="outline" disabled={saving} onClick={async () => { await handleSave(); }}>
                         Save &amp; Print <span className="ml-1.5 text-xs opacity-70">Ctrl+P</span>
                     </Button>
                 )}
@@ -585,18 +569,6 @@ export function VoucherForm({ initialType = 'receipt', onSuccess }: VoucherFormP
                     Clear <span className="ml-1.5 text-xs opacity-70">Esc</span>
                 </Button>
             </div>
-
-            {/* Bill Adjustment Modal */}
-            {showBillModal && partyLedger && outletId && (
-                <BillAdjustmentModal
-                    outletId={outletId}
-                    ledgerId={partyLedger.id}
-                    totalAmount={parseFloat(amount) || 0}
-                    voucherType={voucherType as 'receipt' | 'payment'}
-                    onConfirm={handleBillAdjustConfirm}
-                    onSkip={handleBillAdjustSkip}
-                />
-            )}
         </div>
     );
 }

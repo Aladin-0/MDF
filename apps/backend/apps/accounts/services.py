@@ -342,12 +342,12 @@ class VoucherService:
                 outlet_id=outlet_id,
                 distributor_id=ledger.linked_distributor_id,
                 outstanding__gt=0,
-            ).order_by('date')
+            ).order_by('invoice_date')
             for inv in invoices:
                 result.append({
                     'id': str(inv.id),
                     'invoiceNo': inv.invoice_no,
-                    'date': str(inv.date),
+                    'date': str(inv.invoice_date),
                     'grandTotal': float(inv.grand_total),
                     'outstanding': float(inv.outstanding),
                     'invoiceType': 'purchase',
@@ -360,9 +360,18 @@ class DebitNoteService:
 
     @staticmethod
     def generate_debit_note_no(outlet_id):
+        """Race-safe: uses SELECT FOR UPDATE on the last row instead of count()."""
         year = date.today().year
-        count = DebitNote.objects.filter(outlet_id=outlet_id, date__year=year).count()
-        return f"DN-{year}-{count + 1:04d}"
+        last = DebitNote.objects.filter(
+            outlet_id=outlet_id, date__year=year
+        ).select_for_update(skip_locked=False).order_by('-date', '-created_at').first()
+        import re
+        if not last:
+            seq = 1
+        else:
+            m = re.search(r'DN-(\d{4})-(\d+)', last.debit_note_no)
+            seq = (int(m.group(2)) + 1) if m else 1
+        return f"DN-{year}-{seq:04d}"
 
     @staticmethod
     @transaction.atomic
@@ -416,13 +425,32 @@ class DebitNoteService:
                 total=item['total'],
             )
 
-            # Reduce stock (goods are leaving the pharmacy to go back to the supplier)
-            qty_to_return = int(qty)
-            if batch.qty_strips < qty_to_return:
-                raise ValidationError(f"Cannot return {qty_to_return}. Only {batch.qty_strips} available.")
-            
-            batch.qty_strips -= qty_to_return
-            batch.save(update_fields=['qty_strips'])
+            # Reduce stock: goods leave the pharmacy back to the supplier.
+            # Treat qty as strips. Deduct from loose first (break-open logic),
+            # then full strips, so the batch never ends up with negative loose.
+            pack_size = batch.pack_size or 1
+            qty_to_return_strips = int(qty)
+
+            # Check there is enough total stock (strips + loose)
+            total_available = (batch.qty_strips * pack_size) + batch.qty_loose
+            total_needed = qty_to_return_strips * pack_size
+            if total_available < total_needed:
+                raise ValidationError(
+                    f"Cannot return {qty_to_return_strips} strips of '{item['product_name']}'. "
+                    f"Only {batch.qty_strips} strips + {batch.qty_loose} loose available."
+                )
+
+            # Simple strip deduction (goods going back to supplier are always whole strips)
+            batch.qty_strips -= qty_to_return_strips
+            # If strips went negative, convert loose tablets to cover the deficit
+            while batch.qty_strips < 0 and batch.qty_loose >= pack_size:
+                batch.qty_strips += 1
+                batch.qty_loose -= pack_size
+            if batch.qty_strips < 0:
+                raise ValidationError(
+                    f"Insufficient strip stock for '{item['product_name']}' after loose conversion."
+                )
+            batch.save(update_fields=['qty_strips', 'qty_loose'])
 
         # Reduce distributor outstanding if linked to invoice
         if data.get('purchase_invoice_id'):
@@ -457,9 +485,18 @@ class CreditNoteService:
 
     @staticmethod
     def generate_credit_note_no(outlet_id):
+        """Race-safe: uses SELECT FOR UPDATE on the last row instead of count()."""
         year = date.today().year
-        count = CreditNote.objects.filter(outlet_id=outlet_id, date__year=year).count()
-        return f"CN-{year}-{count + 1:04d}"
+        last = CreditNote.objects.filter(
+            outlet_id=outlet_id, date__year=year
+        ).select_for_update(skip_locked=False).order_by('-date', '-created_at').first()
+        import re
+        if not last:
+            seq = 1
+        else:
+            m = re.search(r'CN-(\d{4})-(\d+)', last.credit_note_no)
+            seq = (int(m.group(2)) + 1) if m else 1
+        return f"CN-{year}-{seq:04d}"
 
     @staticmethod
     @transaction.atomic
@@ -501,9 +538,16 @@ class CreditNoteService:
                 total=item['total'],
             )
 
-            # Restore stock
-            batch.qty_strips += int(qty)
-            batch.save(update_fields=['qty_strips'])
+            # Restore stock: qty is in tablets (loose units).
+            # Add to the loose tray and consolidate into strips so batch
+            # bookkeeping remains accurate (same logic as sale returns).
+            pack_size = batch.pack_size or 1
+            qty_tablets = int(qty)
+            batch.qty_loose += qty_tablets
+            while batch.qty_loose >= pack_size:
+                batch.qty_strips += 1
+                batch.qty_loose -= pack_size
+            batch.save(update_fields=['qty_strips', 'qty_loose'])
 
         # Reduce customer outstanding
         if data.get('customer_id'):

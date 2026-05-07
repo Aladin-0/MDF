@@ -85,6 +85,9 @@ def serialize_batch(batch):
         'saleRate': float(batch.sale_rate),
         'qtyStrips': batch.qty_strips,
         'qtyLoose': batch.qty_loose,
+        'packSize': batch.pack_size,
+        'packUnit': batch.pack_unit,
+        'packType': batch.pack_type,
         'rackLocation': batch.rack_location,
         'isActive': batch.is_active,
         'createdAt': batch.created_at.isoformat(),
@@ -487,10 +490,12 @@ class ProductSearchView(APIView):
                 expiry_date__gt=today
             ).order_by('expiry_date')
 
-            # Aggregate stock
-            total_stock = batches.aggregate(
-                total=Sum('qty_strips')
-            )['total'] or 0
+            # Aggregate stock — count both strips AND loose tablets (as fractional strips)
+            # so products with only loose stock don't show as 0/out-of-stock.
+            total_stock = sum(
+                b.qty_strips + (b.qty_loose / (b.pack_size or 1))
+                for b in batches
+            )
 
             # Get nearest expiry date (first batch in FEFO order)
             nearest_expiry = (
@@ -502,26 +507,10 @@ class ProductSearchView(APIView):
             # Determine if low stock (< 10 strips)
             is_low_stock = total_stock < 10
 
-            # Serialize batches
-            batch_list = [
-                {
-                    'id': str(batch.id),
-                    'outletId': str(batch.outlet.id),
-                    'outletProductId': str(batch.product.id),
-                    'batchNo': batch.batch_no,
-                    'mfgDate': batch.mfg_date.isoformat() if batch.mfg_date else None,
-                    'expiryDate': batch.expiry_date.isoformat(),
-                    'mrp': float(batch.mrp),
-                    'purchaseRate': float(batch.purchase_rate),
-                    'saleRate': float(batch.sale_rate),
-                    'qtyStrips': batch.qty_strips,
-                    'qtyLoose': batch.qty_loose,
-                    'rackLocation': batch.rack_location,
-                    'isActive': batch.is_active,
-                    'createdAt': batch.created_at.isoformat(),
-                }
-                for batch in batches
-            ]
+            # Serialize batches — use serialize_batch() so pack_size/unit/type
+            # are always read from the Batch record (frozen at purchase time),
+            # not from the MasterProduct which may have been updated since.
+            batch_list = [serialize_batch(batch) for batch in batches]
 
             # Build ProductSearchResult
             result = {
@@ -659,7 +648,9 @@ class InventoryListView(APIView):
             product_batches = batches_map.get(product.id, [])
 
             # All aggregations done in Python (batches already in memory)
+            # total_stock = integer strip count only (loose shown separately as totalLoose)
             total_stock = sum(b.qty_strips for b in product_batches)
+            total_loose = sum(b.qty_loose for b in product_batches)
             nearest_expiry = (
                 product_batches[0].expiry_date.isoformat()
                 if product_batches
@@ -667,25 +658,9 @@ class InventoryListView(APIView):
             )
             is_low_stock = total_stock < 10
 
-            batch_list = [
-                {
-                    'id': str(batch.id),
-                    'outletId': str(outlet.id),
-                    'outletProductId': str(product.id),
-                    'batchNo': batch.batch_no,
-                    'mfgDate': batch.mfg_date.isoformat() if batch.mfg_date else None,
-                    'expiryDate': batch.expiry_date.isoformat(),
-                    'mrp': float(batch.mrp),
-                    'purchaseRate': float(batch.purchase_rate),
-                    'saleRate': float(batch.sale_rate),
-                    'qtyStrips': batch.qty_strips,
-                    'qtyLoose': batch.qty_loose,
-                    'rackLocation': batch.rack_location,
-                    'isActive': batch.is_active,
-                    'createdAt': batch.created_at.isoformat(),
-                }
-                for batch in product_batches
-            ]
+            # Use serialize_batch() so pack_size/unit/type come from the Batch record
+            # (frozen at purchase time), not from MasterProduct (which may have changed).
+            batch_list = [serialize_batch(batch) for batch in product_batches]
 
             result = {
                 'id': str(product.id),
@@ -700,16 +675,19 @@ class InventoryListView(APIView):
                 'packSize': product.pack_size,
                 'packUnit': product.pack_unit,
                 'packType': product.pack_type,
+                'minQty': product.min_qty,
+                'reorderQty': product.reorder_qty,
                 'barcode': product.barcode,
                 'isFridge': product.is_fridge,
                 'isDiscontinued': product.is_discontinued,
                 'imageUrl': product.image_url,
-                'mrp': float(product.mrp),
-                'saleRate': float(product.default_sale_rate),
+                'mrp': float(product_batches[0].mrp) if product_batches else float(product.mrp),
+                'saleRate': float(product_batches[0].sale_rate) if product_batches else float(product.default_sale_rate),
                 'outletProductId': str(product.id),
                 'totalStock': total_stock,
+                'totalLoose': total_loose,
                 'nearestExpiry': nearest_expiry,
-                'isLowStock': is_low_stock,
+                'isLowStock': is_low_stock or total_loose > 0 and total_stock == 0,
                 'batches': batch_list,
             }
             results.append(result)
@@ -830,8 +808,11 @@ class InventoryAlertsView(APIView):
         for product_id, product_batches in batches_map.items():
             product = product_map[product_id]
 
-            # Aggregate total stock in Python (no extra DB queries)
-            total_stock = sum(b.qty_strips for b in product_batches)
+            # Count both strips AND fractional loose stock
+            total_stock = sum(
+                b.qty_strips + (b.qty_loose / (b.pack_size or 1))
+                for b in product_batches
+            )
 
             # Nearest expiry = first batch (already sorted asc by expiry_date)
             nearest_expiry = (
@@ -856,9 +837,11 @@ class InventoryAlertsView(APIView):
 
             # Batches expiring within 30 days with stock remaining
             for batch in product_batches:
+                has_loose_stock = batch.qty_loose > 0
+                has_strip_stock = batch.qty_strips > 0
                 if (batch.expiry_date and
                         today <= batch.expiry_date <= cutoff_30 and
-                        batch.qty_strips > 0):
+                        (has_strip_stock or has_loose_stock)):
                     expiring_in_30_days.append({
                         'productId': str(product.id),
                         'productName': product.name,
@@ -866,6 +849,7 @@ class InventoryAlertsView(APIView):
                         'expiryDate': batch.expiry_date.isoformat(),
                         'daysRemaining': (batch.expiry_date - today).days,
                         'qty': batch.qty_strips,
+                        'qtyLoose': batch.qty_loose,
                     })
 
         result = {
@@ -952,18 +936,82 @@ class InventoryAdjustView(APIView):
 
         # Update stock in transaction
         try:
-            with transaction.atomic():
-                batch.qty_strips += qty
+            # qty is treated as STRIPS by default.
+            # Positive = add strips in, Negative = remove strips out.
+            adjust_unit = request.data.get('adjustUnit', 'strips')  # 'strips' or 'loose'
+            qty = int(qty)  # ensure integer
 
-                # Validate stock never goes below 0
+            with transaction.atomic():
+                if adjust_unit == 'loose':
+                    # Adjust loose tray, then consolidate into strips
+                    batch.qty_loose += qty
+                    if batch.qty_loose < 0:
+                        # Try to break open a strip to cover the loose deficit
+                        while batch.qty_loose < 0 and batch.qty_strips > 0:
+                            batch.qty_strips -= 1
+                            batch.qty_loose += (batch.pack_size or 1)
+                    if batch.qty_loose < 0:
+                        return Response(
+                            {'detail': f'Insufficient loose stock. Cannot go below 0.'},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                    # Consolidate loose into strips
+                    while batch.qty_loose >= (batch.pack_size or 1):
+                        batch.qty_strips += 1
+                        batch.qty_loose -= (batch.pack_size or 1)
+                else:
+                    # Default: adjust strips
+                    batch.qty_strips += qty
+
+                # Final guard: strips must not go below 0
                 if batch.qty_strips < 0:
                     return Response(
                         {'detail': f'Stock cannot go below 0. Current: {batch.qty_strips - qty}, Adjustment: {qty}'},
                         status=status.HTTP_400_BAD_REQUEST
                     )
 
-                batch.save()
-                logger.info(f"Adjusted batch {batch_id} stock by {qty} ({adjust_type}): {reason}")
+                batch.save(update_fields=['qty_strips', 'qty_loose'])
+                logger.info(f"Adjusted batch {batch_id} stock by {qty} ({adjust_type} {adjust_unit}): {reason}")
+
+                # Post to Stock Ledger
+                from apps.inventory.services import post_stock_ledger_entry
+                from datetime import date as _date
+                # Compute the strip-equivalent qty for the ledger
+                if adjust_unit == 'loose':
+                    ledger_qty = Decimal(str(abs(qty))) / Decimal(str(batch.pack_size or 1))
+                else:
+                    ledger_qty = Decimal(str(abs(qty)))
+
+                if qty > 0:
+                    post_stock_ledger_entry(
+                        outlet=outlet,
+                        product=batch.product,
+                        batch=batch,
+                        txn_type='ADJUSTMENT_IN',
+                        txn_date=_date.today(),
+                        voucher_type='Stock Adjustment',
+                        voucher_number='ADJ',
+                        party_name=f'{adjust_type.title()} – {reason or "Manual adjustment"}',
+                        qty_in=ledger_qty,
+                        qty_out=0,
+                        rate=batch.purchase_rate,
+                        source_object=batch,
+                    )
+                else:
+                    post_stock_ledger_entry(
+                        outlet=outlet,
+                        product=batch.product,
+                        batch=batch,
+                        txn_type='ADJUSTMENT_OUT',
+                        txn_date=_date.today(),
+                        voucher_type='Stock Adjustment',
+                        voucher_number='ADJ',
+                        party_name=f'{adjust_type.title()} – {reason or "Manual adjustment"}',
+                        qty_in=0,
+                        qty_out=ledger_qty,
+                        rate=batch.purchase_rate,
+                        source_object=batch,
+                    )
 
         except Exception as e:
             logger.error(f"Error adjusting batch stock: {str(e)}")
@@ -1005,7 +1053,7 @@ class StockLedgerView(APIView):
         except Outlet.DoesNotExist:
             return Response({'detail': 'Outlet not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        qs = StockLedger.objects.filter(outlet=outlet).select_related('product', 'batch').order_by('-created_at')
+        qs = StockLedger.objects.filter(outlet=outlet).select_related('product', 'batch').order_by('-txn_date', '-created_at')
 
         if batch_id:
             qs = qs.filter(batch_id=batch_id)
@@ -1038,12 +1086,25 @@ class StockLedgerView(APIView):
         
         qs = qs[(page - 1) * page_size : page * page_size]
 
+        TXN_LABELS = {
+            'OPENING':         'Opening Stock',
+            'PURCHASE_IN':     'Purchase In',
+            'SALE_OUT':        'Sale Out',
+            'PURCHASE_RETURN': 'Purchase Return',
+            'SALE_RETURN':     'Sale Return',
+            'ADJUSTMENT_IN':   'Adjustment In',
+            'ADJUSTMENT_OUT':  'Adjustment Out',
+        }
+
         data = []
         for entry in qs:
             data.append({
                 'id': str(entry.id),
+                'batch_id': str(entry.batch.id) if entry.batch else None,
+                'product_id': str(entry.product.id) if entry.product else None,
                 'txn_date': entry.txn_date.isoformat(),
                 'txn_type': entry.txn_type,
+                'txn_type_label': TXN_LABELS.get(entry.txn_type, entry.txn_type),
                 'voucher_type': entry.voucher_type,
                 'voucher_number': entry.voucher_number,
                 'party_name': entry.party_name,
@@ -1053,16 +1114,23 @@ class StockLedgerView(APIView):
                 'qty_in': float(entry.qty_in),
                 'qty_out': float(entry.qty_out),
                 'rate': float(entry.rate),
+                'value_in': float(entry.value_in),
+                'value_out': float(entry.value_out),
                 'running_qty': float(entry.running_qty),
                 'running_value': float(entry.running_value),
                 'created_at': entry.created_at.isoformat(),
             })
+
+        total_value_in = qs.aggregate(Sum('value_in'))['value_in__sum'] or Decimal('0')
+        total_value_out = qs.aggregate(Sum('value_out'))['value_out__sum'] or Decimal('0')
 
         return Response({
             'data': data,
             'summary': {
                 'total_in': float(total_in),
                 'total_out': float(total_out),
+                'total_value_in': float(total_value_in),
+                'total_value_out': float(total_value_out),
             },
             'pagination': {
                 'page': page,

@@ -112,6 +112,10 @@ export function PurchaseItemRow({
     const { data: settings } = useOutletSettings();
     const landingRate = calculateLandingRate(
         value.purchaseRate || 0,
+        value.qty || 0,
+        value.freeQty || 0,
+        value.discountPct || 0,
+        value.cashDiscountPct || 0,
         value.gstRate || 0,
         value.freightPerUnit || 0,
         !!settings?.landingCostIncludeGst,
@@ -417,15 +421,18 @@ export function PurchaseItemRow({
                 </td>
 
                 {/* Pkg */}
-                <td className={td}>
-                    <div className="flex flex-col items-center justify-center bg-slate-50 border border-slate-100 rounded py-0.5">
-                        <span className="font-medium text-slate-700 text-xs">{value.pkg || 1}</span>
-                        {value.packUnitLabel && (
-                            <span className="text-[9px] text-slate-400 whitespace-nowrap leading-none mt-0.5">
-                                {value.packUnitLabel}/pkg
-                            </span>
-                        )}
-                    </div>
+                <td className={cn(td, 'align-top')}>
+                    <input
+                        type="number" min={1}
+                        className={cellInputCls(!!errors?.pkg, 'right')}
+                        value={value.pkg || ''}
+                        onChange={(e) => num('pkg', e.target.value)}
+                    />
+                    {value.packUnitLabel && (
+                        <p className="mt-0.5 text-right text-[9px] leading-none text-slate-400 truncate w-full" title={value.packUnitLabel}>
+                            {value.packUnitLabel}
+                        </p>
+                    )}
                 </td>
 
                 {/* Qty */}

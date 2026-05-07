@@ -89,16 +89,59 @@ export function calculatePurchaseTotals(
   };
 }
 
+export function calculateBaseLandingRate(
+  purchaseRate: number,
+  qty: number,
+  freeQty: number,
+  discountPct: number,
+  cashDiscountPct: number
+): number {
+  const totalQty = (qty || 0) + (freeQty || 0);
+  if (totalQty === 0) return 0;
+  
+  const baseCost = (qty || 0) * (purchaseRate || 0);
+  const afterTradeDisc = baseCost * (1 - (discountPct || 0) / 100);
+  const afterCashDisc = afterTradeDisc * (1 - (cashDiscountPct || 0) / 100);
+  
+  return afterCashDisc / totalQty;
+}
+
 export function calculateLandingRate(
   purchaseRate: number,
+  qty: number,
+  freeQty: number,
+  discountPct: number,
+  cashDiscountPct: number,
   gstRate: number,         // e.g. 12 for 12%
   freight: number,         // per-unit freight amount
   includeGst: boolean,     // from outlet settings
   includeFreight: boolean, // from outlet settings
   otherPerUnit: number = 0 // per-unit other charges — always added
 ): number {
-  let base = purchaseRate;
-  if (includeGst) base += (purchaseRate * gstRate) / 100;
+  const baseRate = calculateBaseLandingRate(purchaseRate, qty, freeQty, discountPct, cashDiscountPct);
+  
+  let landingRate = baseRate;
+  if (includeGst) {
+    landingRate += (baseRate * (gstRate || 0)) / 100;
+  }
+  if (includeFreight) {
+    landingRate += (freight || 0);
+  }
+  landingRate += (otherPerUnit || 0);
+  
+  return Math.round(landingRate * 100) / 100;
+}
+
+export function applyGstAndFreightToBaseRate(
+  baseRate: number,
+  gstRate: number,         // e.g. 12 for 12%
+  freight: number,         // per-unit freight amount
+  includeGst: boolean,     // from outlet settings
+  includeFreight: boolean, // from outlet settings
+  otherPerUnit: number = 0 // per-unit other charges — always added
+): number {
+  let base = baseRate;
+  if (includeGst) base += (baseRate * gstRate) / 100;
   if (includeFreight) base += freight;
   base += otherPerUnit;
   return Math.round(base * 100) / 100;

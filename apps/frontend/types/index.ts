@@ -189,9 +189,12 @@ export interface MasterProduct {
     scheduleType: DrugSchedule;
     hsnCode: string;
     gstRate: number;
-    packSize: number;
-    packUnit: string;
-    packType: string;
+    // NOTE: packSize / packUnit / packType on the product are "template" defaults
+    // used only when creating a new purchase. In billing, always read these from
+    // the selected Batch (which freezes the config at purchase time).
+    packSize?: number;
+    packUnit?: string;
+    packType?: string;
     barcode?: string;
     isFridge: boolean;
     isDiscontinued: boolean;
@@ -228,6 +231,9 @@ export interface Batch {
     saleRate: number;
     qtyStrips: number;
     qtyLoose: number;
+    packSize: number;
+    packUnit: string;
+    packType: string;
     rackLocation?: string;
     isActive: boolean;
     createdAt: string;
@@ -678,6 +684,7 @@ export interface CreatePurchaseItemPayload {
     actualQty: number;              // pkg × qty — pre-computed on client
     freeQty: number;
     purchaseRate: number;
+    baseLandingRate?: number;
     freightPerUnit: number;
     otherCostPerUnit: number;
     discountPct: number;
@@ -1097,6 +1104,7 @@ export interface BillingSettings {
     requirePinForEveryBill: boolean;
     pinSessionTimeoutMins: number;
     enableLooseTablets: boolean;
+    defaultQuantityMode: 'strip' | 'loose';
     enableCreditSales: boolean;
     creditWarningThresholdPct: number;
     enableWhatsAppReceipt: boolean;

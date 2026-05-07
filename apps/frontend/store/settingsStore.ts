@@ -52,6 +52,7 @@ const DEFAULT_BILLING: BillingSettings = {
     requirePinForEveryBill: true,
     pinSessionTimeoutMins: 30,
     enableLooseTablets: true,
+    defaultQuantityMode: 'loose' as const,
     enableCreditSales: true,
     creditWarningThresholdPct: 80,
     enableWhatsAppReceipt: true,

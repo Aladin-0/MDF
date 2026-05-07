@@ -43,7 +43,8 @@ export default function BillingPage() {
     const [showPayment, setShowPayment] = useState(false)
     const [showInvoicePreview, setShowInvoicePreview] = useState(false)
 
-    const searchBarRef = useRef<HTMLInputElement>(null)
+    const desktopSearchRef = useRef<HTMLInputElement>(null)
+    const mobileSearchRef = useRef<HTMLInputElement>(null)
     const { saveBill, isLoading } = useSaveBill()
     const { toast } = useToast()
 
@@ -68,7 +69,13 @@ export default function BillingPage() {
     }, [cart, isPinVerified, scheduleHData, getTotals])
 
     useKeyboardShortcuts({
-        '/': () => searchBarRef.current?.focus(),
+        '/': () => {
+            if (window.innerWidth >= 640) {
+                desktopSearchRef.current?.focus()
+            } else {
+                mobileSearchRef.current?.focus()
+            }
+        },
         'Escape': () => {
             setSelectedProduct(null)
             if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
@@ -115,7 +122,13 @@ export default function BillingPage() {
         resetBilling()
         setLastInvoice(null)
         setShowInvoicePreview(false)
-        setTimeout(() => searchBarRef.current?.focus(), 100)
+        setTimeout(() => {
+            if (window.innerWidth >= 640) {
+                desktopSearchRef.current?.focus()
+            } else {
+                mobileSearchRef.current?.focus()
+            }
+        }, 100)
     }
 
     if (lastInvoice && !showInvoicePreview) {
@@ -154,7 +167,7 @@ export default function BillingPage() {
 
                 <div className="flex-1 max-w-2xl mx-auto px-4 hidden sm:block">
                     <ProductSearchBar
-                        ref={searchBarRef}
+                        ref={desktopSearchRef}
                         onProductSelect={handleProductSelect}
                         disabled={!isPinVerified}
                     />
@@ -177,7 +190,7 @@ export default function BillingPage() {
             {/* Mobile Search Bar */}
             <div className="sm:hidden p-3 bg-white border-b shrink-0">
                 <ProductSearchBar
-                    ref={searchBarRef}
+                    ref={mobileSearchRef}
                     onProductSelect={handleProductSelect}
                     disabled={!isPinVerified}
                 />

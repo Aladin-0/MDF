@@ -27,6 +27,8 @@ interface ItemRow {
     gstRate: string;
     total: number;
     maxTotalUnits?: number;
+    // Canonical total from invoice — bypasses rate×qty recalculation unit bugs
+    invoiceTotal?: number;
 }
 
 function newItem(): ItemRow {
@@ -105,20 +107,26 @@ export default function NewCreditNotePage() {
         setInvoiceSearch(`${inv.invoiceNo} — ${inv.customerName}`);
         setShowInvoiceDropdown(false);
         if (inv.items && inv.items.length > 0) {
-            setItems(inv.items.map((item: any) => ({
-                id: Math.random().toString(36).slice(2),
-                // THE FIX: Properly extract the batch ID from the API response
-                saleItemId: item.id,
-                batchId: item.batchId || item.batch_id || item.batch?.id || '', 
-                productName: item.productName,
-                qtyStrips: String(item.qtyStrips || 0),
-                qtyLoose: String(item.qtyLoose || 0),
-                packSize: item.packSize || 1,
-                rate: String(item.rate),
-                gstRate: String(item.gstRate),
-                maxTotalUnits: (item.qtyStrips || 0) * (item.packSize || 1) + (item.qtyLoose || 0),
-                total: calcTotal(String(item.qtyStrips || 0), String(item.qtyLoose || 0), String(item.rate), item.packSize || 1),
-            })));
+            setItems(inv.items.map((item: any) => {
+                const packSize = item.packSize || 1;
+                const canonicalTotal = typeof item.totalAmount === 'number' ? item.totalAmount
+                    : calcTotal(String(item.qtyStrips || 0), String(item.qtyLoose || 0), String(item.rate), packSize);
+                return {
+                    id: Math.random().toString(36).slice(2),
+                    saleItemId: item.id,
+                    batchId: item.batchId || item.batch_id || item.batch?.id || '',
+                    productName: item.productName,
+                    qtyStrips: String(item.qtyStrips || 0),
+                    qtyLoose: String(item.qtyLoose || 0),
+                    packSize,
+                    rate: String(item.rate),
+                    gstRate: String(item.gstRate),
+                    maxTotalUnits: (item.qtyStrips || 0) * packSize + (item.qtyLoose || 0),
+                    // Store canonical total from invoice — this is what the customer was charged
+                    invoiceTotal: canonicalTotal,
+                    total: canonicalTotal,
+                };
+            }));
         }
     }
 
@@ -152,12 +160,14 @@ export default function NewCreditNotePage() {
     }
 
     const totalAmount = items.reduce((s, i) => {
+        // Use invoiceTotal (canonical from API) when set — avoids unit-mismatch bugs.
+        // Fall back to calcTotal only for manually added rows (no invoiceTotal).
+        if (typeof i.invoiceTotal === 'number') return s + i.invoiceTotal;
         const qs = parseFloat(i.qtyStrips) || 0;
         const ql = parseFloat(i.qtyLoose) || 0;
         const r = parseFloat(i.rate) || 0;
         const ps = i.packSize || 1;
-        const totalFractionalStrips = qs + (ql / ps);
-        return s + (totalFractionalStrips * r);
+        return s + (qs + ql / ps) * r;
     }, 0);
 
     const gstAmount = items.reduce((s, i) => {

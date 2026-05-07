@@ -293,8 +293,17 @@ def create_sales_return(payload: Dict[str, Any], outlet_id: str, created_by_id: 
         # C8: guard against over-returning across multiple return transactions
         already_returned = sale_item.qty_returned  # tracked by C10's field
         
+        # Determine pack_size from SaleItem first, then fall back to the batch.
+        # SaleItem.pack_size can be NULL on old records created before this field
+        # was populated — in that case, the batch's frozen pack_size is authoritative.
+        batch_for_lookup = Batch.objects.filter(id=batch_id, outlet=outlet).first()
+        pack_size = (
+            sale_item.pack_size
+            or (batch_for_lookup.pack_size if batch_for_lookup else None)
+            or 1
+        )
+
         # Calculate total units (tablets/capsules) originally sold
-        pack_size = sale_item.pack_size or 1
         original_total_units = (sale_item.qty_strips * pack_size) + sale_item.qty_loose
         
         if qty_returned + already_returned > original_total_units:
@@ -308,6 +317,15 @@ def create_sales_return(payload: Dict[str, Any], outlet_id: str, created_by_id: 
         except Batch.DoesNotExist:
             raise ReturnServiceError(f"Batch {batch_id} not found")
 
+        # Security: ensure the return batch_id matches the batch on the original SaleItem.
+        # Without this check, a malicious/buggy payload could specify a different batch
+        # and restore stock to the wrong batch, corrupting inventory.
+        if str(sale_item.batch_id) != str(batch_id):
+            raise ReturnServiceError(
+                f"Batch mismatch for '{sale_item.product_name}': "
+                f"return batch {batch_id} does not match original sale batch {sale_item.batch_id}."
+            )
+
         item_total = return_rate * (Decimal(str(qty_returned)) / Decimal(str(pack_size)))
         item_total = item_total.quantize(Decimal('0.01'))
         total_amount += item_total
@@ -315,6 +333,7 @@ def create_sales_return(payload: Dict[str, Any], outlet_id: str, created_by_id: 
         items_to_create.append({
             'sale_item': sale_item,
             'batch': batch,
+            'pack_size': pack_size,  # carry resolved pack_size for stock reversal
             'product_name': sale_item.product_name,
             'batch_no': sale_item.batch_no,
             'qty_returned': qty_returned,
@@ -356,14 +375,15 @@ def create_sales_return(payload: Dict[str, Any], outlet_id: str, created_by_id: 
         # Reverse stock (The Strip Builder Logic!)
         batch = item_data['batch']
         
-        # 1. We must get the pack size (how many tablets fit in a strip)
-        # We use select_related or fetch it safely
-        pack_size = batch.product.pack_size or 1
+        # Use the resolved pack_size carried from the validation step above.
+        # This is authoritative: it came from sale_item.pack_size first,
+        # falling back to batch.pack_size if the sale_item field is NULL.
+        pack_size = item_data['pack_size']
         
         # 2. Add the returned tablets directly to the loose tray first
         batch.qty_loose += item_data['qty_returned']
         
-        # 3. MAGIC: If the loose tray has enough to make a full box, seal it up!
+        # 3. MAGIC: If the loose tray has enough to make a full strip, consolidate it!
         while batch.qty_loose >= pack_size:
             batch.qty_strips += 1
             batch.qty_loose -= pack_size
@@ -376,6 +396,30 @@ def create_sales_return(payload: Dict[str, Any], outlet_id: str, created_by_id: 
         sale_item.save(update_fields=['qty_returned'])
 
     SalesReturnItem.objects.bulk_create(return_items)
+
+    # Post stock ledger entries for each returned item (SALE_RETURN = stock comes back IN)
+    from apps.inventory.services import post_stock_ledger_entry
+    customer_name = original_sale.customer.name if original_sale.customer else 'Walk-in'
+    for item_data in items_to_create:
+        batch = item_data['batch']
+        # Use the same resolved pack_size (consistent with validation + stock reversal above)
+        pack_size = item_data['pack_size']
+        returned_in_strips = Decimal(str(item_data['qty_returned'])) / Decimal(str(pack_size))
+
+        post_stock_ledger_entry(
+            outlet=outlet,
+            product=batch.product,
+            batch=batch,
+            txn_type='SALE_RETURN',
+            txn_date=return_date,
+            voucher_type='Sale Return',
+            voucher_number=return_no,
+            party_name=customer_name,
+            qty_in=returned_in_strips,
+            qty_out=0,
+            rate=item_data['return_rate'],
+            source_object=sales_return,
+        )
 
     # Handle credit note
     if refund_mode == 'credit_note' and original_sale.customer:

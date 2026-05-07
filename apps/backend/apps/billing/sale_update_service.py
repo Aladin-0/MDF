@@ -103,10 +103,12 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
             batch = old_item.batch
             batch.qty_strips += old_item.qty_strips
             batch.qty_loose += old_item.qty_loose
-            if batch.product.pack_size:
-                while batch.qty_loose >= batch.product.pack_size:
+            # Use batch.pack_size (frozen at purchase time) when restoring stock,
+            # NOT batch.product.pack_size which changes when master item is edited.
+            if batch.pack_size:
+                while batch.qty_loose >= batch.pack_size:
                     batch.qty_strips += 1
-                    batch.qty_loose -= batch.product.pack_size
+                    batch.qty_loose -= batch.pack_size
             batch.save(update_fields=['qty_strips', 'qty_loose'])
             old_item.delete()
 
@@ -144,8 +146,10 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
             product = MasterProduct.objects.get(id=product_id)
             if batch_id:
                 batch = Batch.objects.get(id=batch_id, outlet=outlet)
-                total_loose_needed = (qty_strips_needed * (product.pack_size or 1)) + qty_loose_needed
-                total_loose_available = (batch.qty_strips * (product.pack_size or 1)) + batch.qty_loose
+                # Use batch.pack_size (frozen at purchase time)
+                batch_pack_size = batch.pack_size or 1
+                total_loose_needed = (qty_strips_needed * batch_pack_size) + qty_loose_needed
+                total_loose_available = (batch.qty_strips * batch_pack_size) + batch.qty_loose
                 if total_loose_available < total_loose_needed:
                     raise SaleServiceError(f"Insufficient stock in batch {batch.batch_no}")
                 batch_allocations = [{'batch': batch, 'qty_to_deduct': qty_strips_needed, 'loose_to_deduct': qty_loose_needed}]
@@ -163,7 +167,7 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
                 batch.qty_loose -= loose_to_deduct
                 while batch.qty_loose < 0:
                     batch.qty_strips -= 1
-                    batch.qty_loose += (product.pack_size or 1)
+                    batch.qty_loose += (batch.pack_size or 1)
                 batch.save()
 
                 proposed_rate = Decimal(str(item_data.get('rate', batch.sale_rate)))
@@ -176,8 +180,9 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
                     batch=batch,
                     product_name=product.name,
                     composition=product.composition,
-                    pack_size=product.pack_size,
-                    pack_unit=product.pack_unit,
+                    # Snapshot pack_size/pack_unit from batch (frozen at purchase time)
+                    pack_size=batch.pack_size,
+                    pack_unit=batch.pack_unit,
                     schedule_type=product.schedule_type,
                     batch_no=batch.batch_no,
                     expiry_date=batch.expiry_date,

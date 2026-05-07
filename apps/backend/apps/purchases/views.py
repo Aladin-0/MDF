@@ -625,7 +625,9 @@ class PurchaseCreateView(APIView):
             'hsnCode': item.hsn_code,
             'batchNo': item.batch_no,
             'expiryDate': item.expiry_date.isoformat(),
-            'pkg': item.master_product.pack_size if item.master_product and item.master_product.pack_size else (item.pkg or 1),
+            # Use item.pkg (frozen at purchase time) NOT master_product.pack_size
+            # which changes when the master product template is edited later.
+            'pkg': item.pkg or 1,
             'packUnitLabel': item.master_product.pack_unit if item.master_product else '',
             'qty': item.qty,
             'actualQty': item.actual_qty,
@@ -1028,6 +1030,8 @@ class PurchaseDetailView(APIView):
                     'product': {
                         'id': str(item.master_product.id),
                         'name': item.master_product.name,
+                        'packSize': item.master_product.pack_size,
+                        'packUnit': item.master_product.pack_unit,
                     } if item.master_product else None,
                     'customProductName': item.custom_product_name,
                     'isCustomProduct': item.is_custom_product,

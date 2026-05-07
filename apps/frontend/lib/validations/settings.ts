@@ -54,6 +54,7 @@ export const billingSettingsSchema = z.object({
     requirePinForEveryBill: z.boolean(),
     pinSessionTimeoutMins: z.number().int().min(5).max(480),
     enableLooseTablets: z.boolean(),
+    defaultQuantityMode: z.enum(['strip', 'loose']),
     enableCreditSales: z.boolean(),
     creditWarningThresholdPct: z.number().min(50).max(100),
     enableWhatsAppReceipt: z.boolean(),

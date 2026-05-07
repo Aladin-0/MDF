@@ -40,6 +40,7 @@ export function BillingSettingsSection({ onDirty, onSaved, discardKey }: Billing
         requirePinForEveryBill: store.requirePinForEveryBill,
         pinSessionTimeoutMins: store.pinSessionTimeoutMins,
         enableLooseTablets: store.enableLooseTablets,
+        defaultQuantityMode: (store.defaultQuantityMode ?? 'loose') as 'strip' | 'loose',
         enableCreditSales: store.enableCreditSales,
         creditWarningThresholdPct: store.creditWarningThresholdPct,
         enableWhatsAppReceipt: store.enableWhatsAppReceipt,
@@ -169,6 +170,38 @@ export function BillingSettingsSection({ onDirty, onSaved, discardKey }: Billing
                     checked={watch('enableLooseTablets')}
                     onCheckedChange={(v) => setValue('enableLooseTablets', v, { shouldDirty: true })}
                 />
+
+                {/* Default Quantity Mode */}
+                <div className="flex items-center justify-between py-2">
+                    <div>
+                        <p className="text-sm font-medium text-slate-800">Default Quantity Mode</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Which unit is pre-selected when a medicine is added to billing</p>
+                    </div>
+                    <div className="flex items-center gap-1 rounded-lg border bg-slate-100 p-1">
+                        <button
+                            type="button"
+                            onClick={() => setValue('defaultQuantityMode', 'strip', { shouldDirty: true })}
+                            className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${
+                                watch('defaultQuantityMode') === 'strip'
+                                    ? 'bg-white shadow text-slate-900'
+                                    : 'text-slate-500 hover:text-slate-800'
+                            }`}
+                        >
+                            Strips
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setValue('defaultQuantityMode', 'loose', { shouldDirty: true })}
+                            className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${
+                                watch('defaultQuantityMode') === 'loose'
+                                    ? 'bg-white shadow text-slate-900'
+                                    : 'text-slate-500 hover:text-slate-800'
+                            }`}
+                        >
+                            Loose (Strips)
+                        </button>
+                    </div>
+                </div>
             </div>
 
             {/* Credit Settings */}

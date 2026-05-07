@@ -32,17 +32,27 @@ from apps.billing.payment_services import (
 )
 
 class NextInvoiceNumberView(APIView):
+    """
+    GET /api/v1/billing/next-invoice-number/?outletId=xxx
+
+    Returns a PREVIEW of the next invoice number.
+    The actual number is re-generated (with a row-level lock) when the bill is
+    saved, so this value may differ if another bill is created in the interim.
+    """
     permission_classes = [IsAuthenticated]
-    
+
     def get(self, request, *args, **kwargs):
         outlet_id = request.query_params.get('outletId')
         try:
             outlet = Outlet.objects.get(id=outlet_id)
         except Outlet.DoesNotExist:
             return Response({'detail': 'Outlet not found'}, status=status.HTTP_404_NOT_FOUND)
-        
-        invoice_no = generate_invoice_number(outlet)
-        return Response({'invoiceNo': invoice_no}, status=status.HTTP_200_OK)
+
+        # Wrap in atomic so the SELECT FOR UPDATE inside generate_invoice_number is valid.
+        # This is read-only — no row is inserted — the lock is released immediately.
+        with transaction.atomic():
+            invoice_no = generate_invoice_number(outlet_id)
+        return Response({'invoiceNo': invoice_no, 'isPreview': True}, status=status.HTTP_200_OK)
 
 logger = logging.getLogger(__name__)
 
@@ -335,8 +345,11 @@ class SaleCreateView(APIView):
                                 raise InsufficientStockError(f"Batch {batch_id} not found")
 
                             # --- THE PHARMACY MATH: Check total tablets available ---
-                            total_loose_needed = (qty_strips_needed * product.pack_size) + qty_loose_needed
-                            total_loose_available = (batch.qty_strips * product.pack_size) + batch.qty_loose
+                            # Use batch.pack_size (frozen at purchase time), NOT product.pack_size
+                            # which changes when the master item is edited.
+                            batch_pack_size = batch.pack_size or 1
+                            total_loose_needed = (qty_strips_needed * batch_pack_size) + qty_loose_needed
+                            total_loose_available = (batch.qty_strips * batch_pack_size) + batch.qty_loose
                             
                             if total_loose_available < total_loose_needed:
                                 raise InsufficientStockError(
@@ -366,9 +379,10 @@ class SaleCreateView(APIView):
                             batch.qty_loose -= loose_to_deduct
 
                             # MAGIC: If loose tablets go below 0, break open a strip!
+                            # Use batch.pack_size (frozen at purchase time)
                             while batch.qty_loose < 0:
                                 batch.qty_strips -= 1
-                                batch.qty_loose += product.pack_size
+                                batch.qty_loose += (batch.pack_size or 1)
 
                             batch.save()
 
@@ -386,14 +400,15 @@ class SaleCreateView(APIView):
                                     "mrp": str(pricing_check['mrp'])
                                 }, status=status.HTTP_400_BAD_REQUEST)
 
-                            # Create SaleItem
+                            # Create SaleItem — snapshot pack_size from batch (frozen at purchase time),
+                            # not from product (which changes when master item is edited)
                             sale_item = SaleItem.objects.create(
                                 invoice=sale_invoice,
                                 batch=batch,
                                 product_name=product.name,
                                 composition=product.composition,
-                                pack_size=product.pack_size,
-                                pack_unit=product.pack_unit,
+                                pack_size=batch.pack_size,
+                                pack_unit=batch.pack_unit,
                                 schedule_type=product.schedule_type,
                                 batch_no=batch.batch_no,
                                 expiry_date=batch.expiry_date,
@@ -412,7 +427,29 @@ class SaleCreateView(APIView):
 
                             sale_items.append(sale_item)
 
-                            # Step 6: Create ScheduleHRegister if Schedule H drug
+                            # Step 6a: Post stock ledger entry (SALE_OUT)
+                            from apps.inventory.services import post_stock_ledger_entry
+                            deducted_qty = Decimal(str(qty_to_deduct)) + (
+                                Decimal(str(loose_to_deduct)) / Decimal(str(batch.pack_size or 1))
+                                if loose_to_deduct else Decimal('0')
+                            )
+                            post_stock_ledger_entry(
+                                outlet         = sale_invoice.outlet,
+                                product        = batch.product,
+                                batch          = batch,
+                                txn_type       = 'SALE_OUT',
+                                txn_date       = sale_invoice.invoice_date.date(),
+                                voucher_type   = 'Sale Invoice',
+                                voucher_number = sale_invoice.invoice_no,
+                                party_name     = customer.name if customer else 'Walk-in',
+                                qty_in         = 0,
+                                qty_out        = deducted_qty,
+                                rate           = proposed_rate,
+                                source_object  = sale_item,
+                            )
+                            logger.info(f"Stock ledger SALE_OUT posted: {deducted_qty} of {product.name} (batch {batch.batch_no})")
+
+                            # Step 6b: Create ScheduleHRegister if Schedule H drug
                             if product.schedule_type in ['G', 'H', 'H1', 'X', 'C', 'Narcotic']:
                                 ScheduleHRegister.objects.create(
                                     sale_item=sale_item,
@@ -895,23 +932,37 @@ class SaleItemsView(APIView):
         except SaleInvoice.DoesNotExist:
             return Response({'detail': 'Invoice not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        items = invoice.items.all().order_by('created_at')
+        items = invoice.items.select_related('batch').order_by('created_at')
         results = []
+        from apps.billing.utils.pricing import get_landing_cost_for_batch
+        outlet_id = str(invoice.outlet_id)
         for item in items:
+            pack_size = item.pack_size or 1
+            # totalQty = total loose units = (strips × pack_size) + loose
+            # NOT strips + loose (those are different units!)
+            total_qty = (item.qty_strips * pack_size) + item.qty_loose
+            # Landing cost per strip so the return screen can warn below-cost refunds
+            landing_cost = None
+            if item.batch:
+                try:
+                    landing_cost = float(get_landing_cost_for_batch(item.batch, outlet_id))
+                except Exception:
+                    landing_cost = None
             results.append({
                 'id': str(item.id),
                 'productName': item.product_name,
                 'qtyStrips': item.qty_strips,
                 'qtyLoose': item.qty_loose,
-                'totalQty': item.qty_strips + item.qty_loose,
+                'totalQty': total_qty,
                 'rate': float(item.rate),
                 'discountPct': float(item.discount_pct),
                 'totalAmount': float(item.total_amount),
-                'packSize': item.pack_size,
+                'packSize': pack_size,
                 'packUnit': item.pack_unit,
                 'batchNo': item.batch_no,
                 'expiryDate': item.expiry_date.isoformat() if item.expiry_date else None,
                 'gstRate': float(item.gst_rate),
+                'landingCost': landing_cost,
             })
         return Response({'data': results}, status=status.HTTP_200_OK)
 
@@ -1734,7 +1785,8 @@ class SaleDetailView(APIView):
                 'rate': float(item.rate),
                 'qtyStrips': item.qty_strips,
                 'qtyLoose': item.qty_loose,
-                'totalQty': item.qty_strips * item.pack_size + item.qty_loose if item.pack_size else item.qty_strips,
+                # totalQty = total loose units = (strips × pack_size) + loose
+                'totalQty': (item.qty_strips * (item.pack_size or 1)) + item.qty_loose,
                 'saleMode': item.sale_mode,
                 'discountPct': float(item.discount_pct),
                 'gstRate': float(item.gst_rate),
@@ -2608,23 +2660,29 @@ class SaleInvoiceSearchView(APIView):
             for item in inv.items.all():
                 pack_size = item.pack_size or 1
                 qty_fractional = float(item.qty_strips) + (float(item.qty_loose) / pack_size)
+                # effective_rate: per-strip rate derived from the actual charged total_amount.
+                # This guarantees the return form shows the same total as the original invoice
+                # regardless of discounts, rounding, or GST adjustments.
                 effective_rate = float(item.total_amount) / qty_fractional if qty_fractional > 0 else 0.0
                 
                 items.append({
                     'id': str(item.id),
-                    'batchId': str(item.batch_id) if item.batch_id else '', # THE FIX
+                    'batchId': str(item.batch_id) if item.batch_id else '',
                     'productName': item.product_name,
                     'batchNo': item.batch_no,
                     'expiry': str(item.expiry_date),
-                    # Send total quantities correctly
                     'qtyStrips': item.qty_strips,
                     'qtyLoose': item.qty_loose,
                     'packSize': item.pack_size,
                     'qty': (item.qty_strips * pack_size) + item.qty_loose,
+                    # rate = effective per-strip rate from actual charged total
                     'rate': effective_rate,
                     'saleRate': float(item.sale_rate),
                     'discPercent': float(item.discount_pct),
                     'gstRate': float(item.gst_rate),
+                    # totalAmount: canonical item total for return display — avoids
+                    # frontend re-multiplying rate × qty and hitting unit mismatch bugs.
+                    'totalAmount': float(item.total_amount),
                 })
             results.append({
                 'id': str(inv.id),

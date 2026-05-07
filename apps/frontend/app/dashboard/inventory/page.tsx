@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useInventoryFilters } from '@/hooks/useInventoryFilters';
@@ -13,7 +13,6 @@ import { InventoryStatCards } from '@/components/inventory/InventoryStatCards';
 import { StockTable } from '@/components/inventory/StockTable';
 import { ExpiryTable } from '@/components/inventory/ExpiryTable';
 import { LowStockTable } from '@/components/inventory/LowStockTable';
-import { BatchDetailDrawer } from '@/components/inventory/BatchDetailDrawer';
 import { StockAdjustmentModal } from '@/components/inventory/StockAdjustmentModal';
 import { Batch, MasterProduct, ProductSearchResult } from '@/types';
 import { useStockList, useExpiryReport, useLowStockReport } from '@/hooks/useInventory';
@@ -28,7 +27,6 @@ export default function InventoryPage() {
     const { filters, setFilter, clearFilters } = useInventoryFilters();
 
     const [activeTab, setActiveTab] = useState<string>('all');
-    const [selectedProduct, setSelectedProduct] = useState<ProductSearchResult | null>(null);
     const [showAdjustmentModal, setShowAdjustmentModal] = useState(false);
     const [adjustmentBatch, setAdjustmentBatch] = useState<Batch | null>(null);
 
@@ -162,7 +160,7 @@ export default function InventoryPage() {
                  <div className="mt-6">
                      <TabsContent value="all" className="mt-0 outline-none">
                          <StockTable
-                             onProductClick={setSelectedProduct}
+                             onProductClick={(p: ProductSearchResult) => router.push(`/dashboard/inventory/${p.id}`)}
                              onAdjustClick={(batch: Batch) => {
                                  setAdjustmentBatch(batch);
                                  setShowAdjustmentModal(true);
@@ -191,16 +189,7 @@ export default function InventoryPage() {
                  </div>
              </Tabs>
 
-             <BatchDetailDrawer
-                 productId={selectedProduct?.id ?? null}
-                 product={selectedProduct}
-                 isOpen={!!selectedProduct}
-                 onClose={() => setSelectedProduct(null)}
-                 onAdjust={(batch: Batch) => {
-                     setAdjustmentBatch(batch);
-                     setShowAdjustmentModal(true);
-                 }}
-             />
+
 
              <StockAdjustmentModal
                  isOpen={showAdjustmentModal}

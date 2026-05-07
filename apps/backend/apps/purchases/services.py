@@ -201,10 +201,15 @@ def atomic_purchase_save(payload: Dict[str, Any], outlet_id: str, created_by_id:
             # Check if batch already exists in this transaction (batch_cache)
             if batch_key in batch_cache:
                 batch = batch_cache[batch_key]
-                # Merge: add qty_strips to existing batch
                 batch.qty_strips += total_strips
-                batch.save(update_fields=['qty_strips'])
-                logger.info(f"Merged batch {batch_no}, added {total_strips} strips, total={batch.qty_strips}")
+                batch.mrp = Decimal(str(item_payload['mrp']))
+                batch.purchase_rate = Decimal(str(item_payload.get('baseLandingRate', item_payload['purchaseRate'])))
+                batch.sale_rate = Decimal(str(item_payload['saleRate']))
+                new_pkg = int(item_payload.get('pkg') or 1)
+                if new_pkg and new_pkg != batch.pack_size:
+                    batch.pack_size = new_pkg
+                batch.save(update_fields=['qty_strips', 'mrp', 'purchase_rate', 'sale_rate', 'pack_size'])
+                logger.info(f"Merged batch {batch_no}, updated rates/qty, total={batch.qty_strips}")
             else:
                 # Check if batch exists in inventory for this outlet
                 try:
@@ -214,10 +219,15 @@ def atomic_purchase_save(payload: Dict[str, Any], outlet_id: str, created_by_id:
                         expiry_date=expiry_date,
                         product=master_product
                     )
-                    # Merge: add to existing batch
                     batch.qty_strips += total_strips
-                    batch.save(update_fields=['qty_strips'])
-                    logger.info(f"Merged batch {batch_no}, added {total_strips} strips, total={batch.qty_strips}")
+                    batch.mrp = Decimal(str(item_payload['mrp']))
+                    batch.purchase_rate = Decimal(str(item_payload.get('baseLandingRate', item_payload['purchaseRate'])))
+                    batch.sale_rate = Decimal(str(item_payload['saleRate']))
+                    new_pkg = int(item_payload.get('pkg') or 1)
+                    if new_pkg and new_pkg != batch.pack_size:
+                        batch.pack_size = new_pkg
+                    batch.save(update_fields=['qty_strips', 'mrp', 'purchase_rate', 'sale_rate', 'pack_size'])
+                    logger.info(f"Merged batch {batch_no}, updated rates/qty, total={batch.qty_strips}")
                 except Batch.DoesNotExist:
                     # Create new batch
                     batch = Batch.objects.create(
@@ -226,8 +236,11 @@ def atomic_purchase_save(payload: Dict[str, Any], outlet_id: str, created_by_id:
                         batch_no=batch_no,
                         expiry_date=expiry_date,
                         mrp=Decimal(str(item_payload['mrp'])),
-                        purchase_rate=Decimal(str(item_payload['purchaseRate'])),
+                        purchase_rate=Decimal(str(item_payload.get('baseLandingRate', item_payload['purchaseRate']))),
                         sale_rate=Decimal(str(item_payload['saleRate'])),
+                        pack_size=int(item_payload.get('pkg') or (master_product.pack_size if master_product else 1)),
+                        pack_unit=master_product.pack_unit if master_product else 'tablet',
+                        pack_type=master_product.pack_type if master_product else 'strip',
                         qty_strips=total_strips,
                         qty_loose=0,
                         rack_location='',
@@ -247,7 +260,7 @@ def atomic_purchase_save(payload: Dict[str, Any], outlet_id: str, created_by_id:
                 hsn_code=item_payload.get('hsnCode'),
                 batch_no=batch_no,
                 expiry_date=expiry_date,
-                pkg=(master_product.pack_size if master_product and master_product.pack_size else int(item_payload.get('pkg') or 1)) or 1,
+                pkg=batch.pack_size,
                 qty=int(item_payload['qty']),
                 actual_qty=int(item_payload['actualQty']),
                 free_qty=int(item_payload.get('freeQty', 0)),
@@ -623,11 +636,16 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
         from django.db.models.functions import Greatest
         from apps.inventory.models import Batch as BatchModel
 
-        old_items = list(purchase_invoice.items.all())
+        old_items = list(purchase_invoice.items.select_related('batch').all())
+        # Save mapping of (batch_no, expiry_date) -> batch pk so Step 6 can update the right batch
+        old_batch_pk_map: Dict[tuple, int] = {}
         for old_item in old_items:
             batch = old_item.batch
             if batch:
                 total_strips = old_item.qty + old_item.free_qty
+                bkey = (batch.batch_no, batch.expiry_date)
+                old_batch_pk_map[bkey] = batch.pk
+                logger.info(f"[EDIT] Reverting batch {batch.batch_no}: removing {total_strips} strips, will update mrp/saleRate on re-apply")
                 BatchModel.objects.filter(pk=batch.pk).update(
                     qty_strips=Greatest(F('qty_strips') - total_strips, 0)
                 )
@@ -723,30 +741,68 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
             if batch_key in batch_cache:
                 batch = batch_cache[batch_key]
                 batch.qty_strips += total_strips
-                batch.save(update_fields=['qty_strips'])
+                batch.mrp = Decimal(str(item_payload['mrp']))
+                batch.purchase_rate = Decimal(str(item_payload.get('baseLandingRate', item_payload['purchaseRate'])))
+                batch.sale_rate = Decimal(str(item_payload['saleRate']))
+                new_pkg = int(item_payload.get('pkg') or 1)
+                if new_pkg and new_pkg != batch.pack_size:
+                    batch.pack_size = new_pkg
+                batch.save(update_fields=['qty_strips', 'mrp', 'purchase_rate', 'sale_rate', 'pack_size'])
             else:
-                try:
-                    batch = Batch.objects.get(
-                        outlet=outlet,
-                        batch_no=batch_no,
-                        expiry_date=expiry_date,
-                        product=master_product
-                    )
+                # Prefer to look up batch by its original PK (saved from old_items) to avoid
+                # master_product=None mismatch when product lookup fails.
+                old_batch_pk = old_batch_pk_map.get(batch_key)
+                batch = None
+
+                if old_batch_pk:
+                    try:
+                        batch = Batch.objects.get(pk=old_batch_pk, outlet=outlet)
+                        logger.info(f"[EDIT] Found batch by PK {old_batch_pk} ({batch_no}): old_mrp={batch.mrp}, new_mrp={item_payload['mrp']}")
+                    except Batch.DoesNotExist:
+                        logger.warning(f"[EDIT] Batch pk={old_batch_pk} not found, falling back to search")
+                        batch = None
+
+                if batch is None:
+                    try:
+                        batch = Batch.objects.get(
+                            outlet=outlet,
+                            batch_no=batch_no,
+                            expiry_date=expiry_date,
+                            product=master_product
+                        )
+                        logger.info(f"[EDIT] Found batch by search ({batch_no}): old_mrp={batch.mrp}, new_mrp={item_payload['mrp']}")
+                    except Batch.DoesNotExist:
+                        batch = None
+
+                if batch is not None:
                     batch.qty_strips += total_strips
-                    batch.save(update_fields=['qty_strips'])
-                except Batch.DoesNotExist:
+                    batch.mrp = Decimal(str(item_payload['mrp']))
+                    batch.purchase_rate = Decimal(str(item_payload.get('baseLandingRate', item_payload['purchaseRate'])))
+                    batch.sale_rate = Decimal(str(item_payload['saleRate']))
+                    new_pkg = int(item_payload.get('pkg') or 1)
+                    if new_pkg and new_pkg != batch.pack_size:
+                        batch.pack_size = new_pkg
+                    batch.save(update_fields=['qty_strips', 'mrp', 'purchase_rate', 'sale_rate', 'pack_size'])
+                    logger.info(f"[EDIT] Batch {batch_no} updated: mrp={batch.mrp}, sale_rate={batch.sale_rate}")
+                else:
+                    # Create a new batch — this item is for a truly new batch
                     batch = Batch.objects.create(
                         outlet=outlet,
                         product=master_product,
                         batch_no=batch_no,
                         expiry_date=expiry_date,
                         mrp=Decimal(str(item_payload['mrp'])),
-                        purchase_rate=Decimal(str(item_payload['purchaseRate'])),
+                        purchase_rate=Decimal(str(item_payload.get('baseLandingRate', item_payload['purchaseRate']))),
                         sale_rate=Decimal(str(item_payload['saleRate'])),
+                        pack_size=int(item_payload.get('pkg') or (master_product.pack_size if master_product else 1)),
+                        pack_unit=master_product.pack_unit if master_product else 'tablet',
+                        pack_type=master_product.pack_type if master_product else 'strip',
                         qty_strips=total_strips,
                         qty_loose=0,
                         rack_location='',
                     )
+                    logger.info(f"[EDIT] Created new batch {batch_no} with mrp={batch.mrp}")
+
                 batch_cache[batch_key] = batch
 
             purchase_item = PurchaseItem(
@@ -758,7 +814,7 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
                 hsn_code=item_payload.get('hsnCode'),
                 batch_no=batch_no,
                 expiry_date=expiry_date,
-                pkg=(master_product.pack_size if master_product and master_product.pack_size else int(item_payload.get('pkg') or 1)) or 1,
+                pkg=batch.pack_size,
                 qty=int(item_payload['qty']),
                 actual_qty=int(item_payload['actualQty']),
                 free_qty=int(item_payload.get('freeQty', 0)),

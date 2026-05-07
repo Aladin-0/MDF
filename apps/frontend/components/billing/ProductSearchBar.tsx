@@ -239,9 +239,9 @@ export const ProductSearchBar = forwardRef<HTMLInputElement, ProductSearchBarPro
                                                     {outOfStock ? (
                                                         <span className="text-red-500">Out of stock</span>
                                                     ) : lowStock ? (
-                                                        <span className="text-amber-600">Low: {product.totalStock} strips</span>
+                                                        <span className="text-amber-600">Low: {Math.floor(product.totalStock)} strips</span>
                                                     ) : (
-                                                        <span className="text-slate-700">{product.totalStock} strips</span>
+                                                        <span className="text-slate-700">{Math.floor(product.totalStock)} strips</span>
                                                     )}
                                                 </div>
                                                 <div className="text-xs text-muted-foreground mt-0.5">

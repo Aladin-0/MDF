@@ -6,6 +6,7 @@ import { ProductSearchResult, CartItem } from '@/types'
 import { calculateItemTotals, formatCurrency } from '@/lib/gst'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/store/authStore'
+import { useSettingsStore } from '@/store/settingsStore'
 
 // Inline date helpers to avoid external date-fns dependency in Docker
 const diffInDays = (dateStr: string) => Math.floor((new Date(dateStr).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
@@ -20,9 +21,12 @@ interface AddToCartPanelProps {
 
 export function AddToCartPanel({ product, onAdd, onClose, maxDiscount }: AddToCartPanelProps) {
     const { user } = useAuthStore()
+    const defaultQtyMode = useSettingsStore(s => (s.defaultQuantityMode ?? 'loose')) as 'strip' | 'loose'
     const canViewRates = user?.canViewPurchaseRates ?? false
     const availableBatches = useMemo(() => 
-        product.batches.filter(b => b.qtyStrips > 0 || b.qtyLoose > 0),
+        [...product.batches]
+            .filter(b => b.qtyStrips > 0 || b.qtyLoose > 0)
+            .sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime()),
         [product.batches]
     )
 
@@ -32,12 +36,12 @@ export function AddToCartPanel({ product, onAdd, onClose, maxDiscount }: AddToCa
 
     const [selectedBatchId, setSelectedBatchId] = useState<string>(defaultBatch?.id ?? '')
 
-    const [saleMode, setSaleMode] = useState<'strip' | 'loose'>('strip')
-    const [qtyStrips, setQtyStrips] = useState<number>(1)
-    const [qtyLoose, setQtyLoose] = useState<number>(0)
+    const [saleMode, setSaleMode] = useState<'strip' | 'loose'>(defaultQtyMode)
+    const [qtyStrips, setQtyStrips] = useState<number | ''>('')
+    const [qtyLoose, setQtyLoose] = useState<number | ''>('')
     
     // Default discount handling (if product has a default, capped at maxDiscount)
-    const [discountPct, setDiscountPct] = useState<number>(Math.min(0, maxDiscount))
+    const [discountPct, setDiscountPct] = useState<number | ''>('')
     const [isDiscountCapped, setIsDiscountCapped] = useState(false)
 
     const qtyInputRef = useRef<HTMLInputElement>(null)
@@ -49,10 +53,10 @@ export function AddToCartPanel({ product, onAdd, onClose, maxDiscount }: AddToCa
             : null
         
         setSelectedBatchId(fifoBatch?.id ?? '')
-        setSaleMode('strip')
-        setQtyStrips(1)
-        setQtyLoose(0)
-        setDiscountPct(Math.min(0, maxDiscount))
+        setSaleMode(defaultQtyMode)
+        setQtyStrips('')
+        setQtyLoose('')
+        setDiscountPct('')
         setIsDiscountCapped(false)
         
         // Auto-focus quantity input slightly after mount
@@ -62,9 +66,19 @@ export function AddToCartPanel({ product, onAdd, onClose, maxDiscount }: AddToCa
     const selectedBatch = useMemo(() => 
         availableBatches.find(b => b.id === selectedBatchId), [availableBatches, selectedBatchId])
 
+    // Always use the batch's own packaging config (frozen at purchase time).
+    // Never fall back to product.packSize — that changes when the master item is edited.
+    const activePackSize = selectedBatch?.packSize ?? 1;
+    const activePackUnit = selectedBatch?.packUnit ?? 'tablet';
+
     const handleDiscountChange = (val: string) => {
+        if (val === '') {
+            setDiscountPct('')
+            setIsDiscountCapped(false)
+            return
+        }
         let num = parseFloat(val)
-        if (isNaN(num)) num = 0
+        if (isNaN(num)) return
         if (num > maxDiscount) {
             setDiscountPct(maxDiscount)
             setIsDiscountCapped(true)
@@ -76,31 +90,47 @@ export function AddToCartPanel({ product, onAdd, onClose, maxDiscount }: AddToCa
 
     const totalQty = useMemo(() => {
         if (!selectedBatch) return 0
-        if (saleMode === 'strip') return qtyStrips
-        return qtyLoose / product.packSize
-    }, [saleMode, qtyStrips, qtyLoose, product.packSize, selectedBatch])
+        if (saleMode === 'strip') return qtyStrips || 0
+        return (qtyLoose || 0) / activePackSize
+    }, [saleMode, qtyStrips, qtyLoose, activePackSize, selectedBatch])
+
+    // FIX: batch.saleRate is ALWAYS stored per-strip in the DB.
+    // batch.mrp may be per-strip OR per-pack depending on how GRN was entered.
+    // We use saleRate as the billing base (reliable per-strip).
+    // For MRP cap: if mrp >> saleRate*packSize it must be per-pack → normalize.
+    const billingRate = useMemo(() => {
+        if (!selectedBatch) return 0
+        // saleRate is per-strip; apply discount on top
+        return selectedBatch.saleRate
+    }, [selectedBatch])
+
+    // Normalized per-strip MRP for display/validation cap
+    const perStripMrp = useMemo(() => {
+        if (!selectedBatch || activePackSize <= 0) return billingRate
+        const { mrp, saleRate } = selectedBatch
+        // If mrp looks like a per-pack MRP (much larger than per-strip saleRate),
+        // divide by packSize to get per-strip MRP.
+        // Otherwise treat mrp as already per-strip.
+        const looksLikePackMrp = mrp > saleRate * activePackSize * 0.6
+        return looksLikePackMrp ? mrp / activePackSize : mrp
+    }, [selectedBatch, activePackSize, billingRate])
 
     const { taxableAmount, gstAmount, totalAmount } = useMemo(() => {
         if (!selectedBatch) return { taxableAmount: 0, gstAmount: 0, totalAmount: 0 }
-        
-        // The GST calculation takes the base rate (not MRP). 
-        // We calculate discount against the MRP to find the final selling price
-        // In our mock/app flow, if item has MRP 100 and rate 85, discount is usually given on MRP.
-        // Let's assume rate = mrp here for simplicity per requirements, and calculateItemTotals handles the exact split
-        
+        // billingRate = per-strip saleRate; totalQty = number of strips
         return calculateItemTotals(
-            selectedBatch.mrp, 
-            selectedBatch.mrp, // using MRP as the base rate for discount application
-            totalQty, 
-            discountPct, 
+            perStripMrp,   // MRP cap per strip (for validation)
+            billingRate,   // actual per-strip selling rate
+            totalQty,
+            discountPct || 0,
             product.gstRate
         )
-    }, [selectedBatch, totalQty, discountPct, product.gstRate])
+    }, [selectedBatch, perStripMrp, billingRate, totalQty, discountPct, product.gstRate])
 
     const discountAmount = useMemo(() => {
         if (!selectedBatch) return 0
-        return (selectedBatch.mrp * totalQty) - totalAmount
-    }, [selectedBatch, totalQty, totalAmount])
+        return (perStripMrp * totalQty) - totalAmount
+    }, [selectedBatch, perStripMrp, totalQty, totalAmount])
 
     const isOutOfStock = !selectedBatch || (selectedBatch.qtyStrips === 0 && selectedBatch.qtyLoose === 0)
 
@@ -112,18 +142,22 @@ export function AddToCartPanel({ product, onAdd, onClose, maxDiscount }: AddToCa
             batchId: selectedBatch.id,
             name: product.name,
             composition: product.composition,
-            packSize: product.packSize,
-            packUnit: product.packUnit,
+            packSize: activePackSize,
+            packUnit: activePackUnit,
             batchNo: selectedBatch.batchNo,
             expiryDate: selectedBatch.expiryDate,
-            mrp: selectedBatch.mrp,
-            rate: selectedBatch.saleRate, // Backend rate (purchase/base)
+            // mrp = per-strip MRP (for subtotal display and validation)
+            // rate = effective per-strip selling price after discount
+            // saleRate = per-strip base for discount recalculation in cart
+            mrp: perStripMrp,
+            rate: billingRate * (1 - (discountPct || 0) / 100),
+            saleRate: billingRate,
             gstRate: product.gstRate,
-            qtyStrips: saleMode === 'strip' ? qtyStrips : 0,
-            qtyLoose: saleMode === 'loose' ? qtyLoose : 0,
+            qtyStrips: saleMode === 'strip' ? (qtyStrips || 0) : 0,
+            qtyLoose: saleMode === 'loose' ? (qtyLoose || 0) : 0,
             totalQty: totalQty,
             saleMode: saleMode,
-            discountPct: discountPct,
+            discountPct: discountPct || 0,
             taxableAmount: taxableAmount,
             gstAmount: gstAmount,
             totalAmount: totalAmount,
@@ -149,11 +183,11 @@ export function AddToCartPanel({ product, onAdd, onClose, maxDiscount }: AddToCa
     if (!selectedBatch) return null
 
     const isLooseAllowed = 
-    ['tablet', 'capsule', 'unit', 'piece', 'drop'].includes(product.packUnit?.toLowerCase().trim() || '') || 
-    (product.packSize && product.packSize > 1);
+    ['tablet', 'capsule', 'unit', 'piece', 'drop'].includes(activePackUnit?.toLowerCase().trim() || '') || 
+    (activePackSize && activePackSize > 1);
     
     // Progress bar for discount
-    const discountProgressPercentage = maxDiscount > 0 ? (discountPct / maxDiscount) * 100 : 0
+    const discountProgressPercentage = maxDiscount > 0 ? ((discountPct || 0) / maxDiscount) * 100 : 0
     const progressColor = discountProgressPercentage > 90 ? 'bg-red-500' : discountProgressPercentage > 60 ? 'bg-amber-500' : 'bg-green-500'
 
     return (
@@ -224,9 +258,15 @@ export function AddToCartPanel({ product, onAdd, onClose, maxDiscount }: AddToCa
                                         </div>
                                     </div>
                                     <div className="text-right">
-                                        <div className="font-semibold">{formatCurrency(batch.mrp)}</div>
-                                        <div className="text-xs text-muted-foreground">
-                                            Stk: {batch.qtyStrips} (S) / {batch.qtyLoose} (L)
+                                        <div className="font-semibold text-slate-900">
+                                            {formatCurrency(batch.saleRate)}
+                                            <span className="text-[10px] text-muted-foreground font-normal ml-0.5">/ strip</span>
+                                        </div>
+                                        {canViewRates && batch.mrp > 0 && (
+                                            <div className="text-[10px] text-slate-400">MRP: {formatCurrency(batch.mrp)}</div>
+                                        )}
+                                        <div className="text-xs font-medium text-slate-600 mt-0.5">
+                                            Stk: <span className={batch.qtyStrips > 0 ? "text-emerald-600" : "text-red-400"}>{batch.qtyStrips}S</span> / <span className={batch.qtyLoose > 0 ? "text-emerald-600" : "text-slate-400"}>{batch.qtyLoose}L</span>
                                         </div>
                                     </div>
                                 </label>
@@ -273,11 +313,15 @@ export function AddToCartPanel({ product, onAdd, onClose, maxDiscount }: AddToCa
                                 min={1}
                                 step={1}
                                 value={qtyStrips}
-                                onChange={(e) => setQtyStrips(Math.max(1, parseInt(e.target.value) || 1))}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === '') setQtyStrips('');
+                                    else setQtyStrips(Math.max(1, parseInt(val) || 1));
+                                }}
                                 className="w-full h-10 px-3 border border-slate-300 rounded-lg focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary text-sm"
                             />
                             <p className="text-xs text-muted-foreground mt-1.5">
-                                = {qtyStrips * product.packSize} {product.packUnit}s
+                                = {(qtyStrips || 0) * activePackSize} {activePackUnit}s
                             </p>
                         </>
                     ) : (
@@ -288,11 +332,15 @@ export function AddToCartPanel({ product, onAdd, onClose, maxDiscount }: AddToCa
                                 min={1}
                                 step={1}
                                 value={qtyLoose}
-                                onChange={(e) => setQtyLoose(Math.max(1, parseInt(e.target.value) || 1))}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === '') setQtyLoose('');
+                                    else setQtyLoose(Math.max(1, parseInt(val) || 1));
+                                }}
                                 className="w-full h-10 px-3 border border-slate-300 rounded-lg focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary text-sm"
                             />
                             <p className="text-xs text-muted-foreground mt-1.5">
-                                = {(qtyLoose / product.packSize).toFixed(2)} strips equivalent
+                                = {((qtyLoose || 0) / activePackSize).toFixed(2)} strips equivalent
                             </p>
                         </>
                     )}
@@ -337,8 +385,8 @@ export function AddToCartPanel({ product, onAdd, onClose, maxDiscount }: AddToCa
             <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 mb-4">
                 <div className="space-y-1.5 text-sm">
                     <div className="flex justify-between text-slate-600">
-                        <span>MRP ({totalQty.toFixed(2)} × {formatCurrency(selectedBatch.mrp)})</span>
-                        <span>{formatCurrency(selectedBatch.mrp * totalQty)}</span>
+                        <span>MRP ({totalQty.toFixed(2)} × {formatCurrency(perStripMrp)})</span>
+                        <span>{formatCurrency(perStripMrp * totalQty)}</span>
                     </div>
                     {discountAmount > 0 && (
                         <div className="flex justify-between text-red-500">

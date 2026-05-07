@@ -93,6 +93,9 @@ class Batch(models.Model):
     mrp = models.DecimalField(max_digits=10, decimal_places=2, help_text='Maximum Retail Price')
     purchase_rate = models.DecimalField(max_digits=10, decimal_places=2, help_text='Cost price per pack')
     sale_rate = models.DecimalField(max_digits=10, decimal_places=2, help_text='Selling price per pack')
+    pack_size = models.IntegerField(default=1, help_text='Number of units per pack (e.g., 10 tablets per strip)')
+    pack_unit = models.CharField(max_length=50, default='tablet', help_text='Unit name (e.g., tablet, capsule, ml, etc.)')
+    pack_type = models.CharField(max_length=20, default='strip', choices=MasterProduct.PACK_TYPE_CHOICES)
     qty_strips = models.IntegerField(default=0, help_text='Number of full strips/packs')
     qty_loose = models.IntegerField(default=0, help_text='Number of loose units (< 1 pack)')
     opening_qty = models.DecimalField(
@@ -139,19 +142,19 @@ class Batch(models.Model):
     @property
     def total_stock(self):
         """Calculate total stock quantity (for reporting)."""
-        pack_size = self.product.pack_size if self.product else 1
+        pack_size = self.pack_size if self.pack_size else 1
         return (self.qty_strips * pack_size) + self.qty_loose
 
     @property
     def stock_value(self):
         """Calculate stock value at purchase rate."""
-        pack_size = self.product.pack_size if self.product else 1
+        pack_size = self.pack_size if self.pack_size else 1
         return float(self.purchase_rate) * (self.qty_strips + (self.qty_loose / pack_size))
 
     @property
     def mrp_value(self):
         """Calculate stock value at MRP."""
-        pack_size = self.product.pack_size if self.product else 1
+        pack_size = self.pack_size if self.pack_size else 1
         return float(self.mrp) * (self.qty_strips + (self.qty_loose / pack_size))
 
 

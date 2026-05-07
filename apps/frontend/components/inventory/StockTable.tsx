@@ -95,7 +95,9 @@ export function StockTable({ onProductClick, onAdjustClick, onEditClick }: any) 
             header: ({ column }) => <SortableHeader column={column} title="Stock" />,
             cell: ({ row }) => {
                 const p = row.original;
-                const qtyStrips = p.totalStock;
+                // totalStock can be a float (e.g. 204.611) because the backend
+                // adds loose/packSize to strips. Floor it for the strip count display.
+                const qtyStrips = Math.floor(p.totalStock || 0);
                 
                 // Safely calculate total loose items across all batches
                 const qtyLoose = p.batches?.reduce((sum: number, b: any) => sum + (Number(b.qtyLoose) || 0), 0) || 0;

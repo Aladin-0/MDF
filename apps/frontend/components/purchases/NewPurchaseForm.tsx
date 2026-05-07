@@ -75,7 +75,7 @@ const defaultDue = format(addDays(new Date(), 30), 'yyyy-MM-dd');
 export const emptyItem = (): PurchaseItemFormData => ({
     productId: '', productName: '', isCustom: false, hsnCode: '',
     batchNo: '', expiryDate: '',
-    pkg: 1, packUnitLabel: '', qty: 0, freeQty: 0,
+    pkg: '' as unknown as number, packUnitLabel: '', qty: 0, freeQty: 0,
     purchaseRate: 0, freightPerUnit: 0, otherCostPerUnit: 0, discountPct: 0, cashDiscountPct: 0,
     gstRate: 12, cess: 0,
     mrp: 0, ptr: 0, pts: 0, saleRate: 0,
@@ -131,7 +131,7 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
         const gstRate  = product.gstRate ?? 0;
         setItems((prev) => prev.map((item, i) => {
             if (i !== rowIndex) return item;
-            const newPkg = typeof product.packSize === 'number' && product.packSize > 0 ? product.packSize : 1;
+            const newPkg = typeof product.packSize === 'number' && product.packSize > 0 ? product.packSize : ('' as unknown as number);
             return {
                 ...item,
                 productId:   product.id,
@@ -188,8 +188,8 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
             hsnCode: it.hsnCode || '',
             batchNo: it.batchNo,
             expiryDate: it.expiryDate || '',
-            pkg: it.pkg,
-            packUnitLabel: '',
+            pkg: (it.pkg === 1 && it.product?.packSize) ? it.product.packSize : it.pkg,
+            packUnitLabel: it.product?.packUnit || '',
             qty: it.qty,
             freeQty: it.freeQty,
             purchaseRate: it.purchaseRate,
@@ -353,6 +353,7 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                     const base       = it.qty * it.purchaseRate * (1 - it.discountPct / 100) * (1 - it.cashDiscountPct / 100);
                     const gstAmount  = base * (it.gstRate / 100);
                     const cessAmount = base * (it.cess / 100);
+                    const baseLandingRate = (it.qty + it.freeQty) > 0 ? parseFloat((base / (it.qty + it.freeQty)).toFixed(2)) : 0;
                     return {
                         masterProductId:   it.isCustom ? null : it.productId,
                         customProductName: it.isCustom ? it.productName : null,
@@ -365,6 +366,7 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                         actualQty:       (it.qty + it.freeQty) * effPkg,
                         freeQty:         it.freeQty,
                         purchaseRate:    it.purchaseRate,
+                        baseLandingRate: baseLandingRate,
                         freightPerUnit:  it.freightPerUnit,
                         otherCostPerUnit: it.otherCostPerUnit,
                         discountPct:     it.discountPct,

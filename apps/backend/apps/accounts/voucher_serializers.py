@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from apps.accounts.models import (
-    LedgerGroup, Ledger, Voucher, VoucherLine,
+    LedgerGroup, Ledger, Voucher, VoucherLine, VoucherBillAdjustment,
     DebitNote, DebitNoteItem, CreditNote, CreditNoteItem,
 )
 
@@ -100,6 +100,49 @@ class VoucherLineSerializer(serializers.ModelSerializer):
         }
 
 
+class VoucherBillAdjustmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VoucherBillAdjustment
+        fields = '__all__'
+
+    def to_representation(self, instance):
+        inv_no = '—'
+        inv_date = None
+        grand_total = 0.0
+        current_outstanding = 0.0
+        inv_type = instance.invoice_type
+
+        if inv_type == 'purchase' and instance.purchase_invoice_id:
+            inv = instance.purchase_invoice
+            if inv:
+                inv_no = inv.invoice_no or '—'
+                inv_date = str(inv.invoice_date) if inv.invoice_date else None
+                grand_total = float(inv.grand_total)
+                current_outstanding = float(inv.outstanding)
+        elif inv_type == 'sale' and instance.sale_invoice_id:
+            inv = instance.sale_invoice
+            if inv:
+                inv_no = inv.invoice_no or '—'
+                inv_date = str(inv.invoice_date.date()) if inv.invoice_date else None
+                grand_total = float(inv.grand_total)
+                # Compute outstanding for sale invoices
+                from django.db.models import Sum
+                paid = VoucherBillAdjustment.objects.filter(
+                    sale_invoice_id=inv.id
+                ).aggregate(total=Sum('adjusted_amount'))['total'] or 0
+                current_outstanding = max(0.0, float(inv.grand_total) - float(paid))
+
+        return {
+            'id': str(instance.id),
+            'invoiceType': inv_type,
+            'invoiceNo': inv_no,
+            'invoiceDate': inv_date,
+            'grandTotal': grand_total,
+            'adjustedAmount': float(instance.adjusted_amount),
+            'currentOutstanding': current_outstanding,
+        }
+
+
 class VoucherSerializer(serializers.ModelSerializer):
     lines = VoucherLineSerializer(many=True, read_only=True)
 
@@ -108,6 +151,9 @@ class VoucherSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     def to_representation(self, instance):
+        adjustments = instance.bill_adjustments.select_related(
+            'purchase_invoice', 'sale_invoice'
+        ).all() if hasattr(instance, '_prefetched_objects_cache') or True else []
         return {
             'id': str(instance.id),
             'voucherType': instance.voucher_type,
@@ -117,6 +163,7 @@ class VoucherSerializer(serializers.ModelSerializer):
             'totalAmount': float(instance.total_amount),
             'paymentMode': instance.payment_mode,
             'lines': VoucherLineSerializer(instance.lines.all(), many=True).data,
+            'billAdjustments': VoucherBillAdjustmentSerializer(adjustments, many=True).data,
             'createdBy': str(instance.created_by_id),
             'createdAt': instance.created_at.isoformat(),
         }
