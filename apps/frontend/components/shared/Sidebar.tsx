@@ -7,6 +7,7 @@ import { useAuthStore } from '@/store/authStore';
 import { authApi } from '@/lib/apiClient';
 import { StaffRole } from '@/types';
 import { RoleBadge } from './RoleBadge';
+import { OutletSwitcher } from './OutletSwitcher';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -176,6 +177,13 @@ export function Sidebar({ isCollapsed, onToggle, isMobile = false }: SidebarProp
 
             {/* Nav items */}
             <div className="flex-1 overflow-y-auto py-4 px-2 space-y-1">
+                {/* Super Admin Outlet Switcher — always visible at top of nav */}
+                {user?.role === 'super_admin' && (
+                    <div className={isCollapsed ? 'px-0 mb-2' : 'px-1 mb-3'}>
+                        <OutletSwitcher isCollapsed={isCollapsed} />
+                    </div>
+                )}
+
                 <TooltipProvider delayDuration={isCollapsed ? 100 : 1000}>
                     {/* Super Admin: Chain Dashboard */}
                     {user?.role === 'super_admin' && (() => {

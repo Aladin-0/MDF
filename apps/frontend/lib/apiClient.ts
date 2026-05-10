@@ -1333,7 +1333,15 @@ const realChainApi = {
         const data = await response.json();
         return data.data || data || [];
     },
+    getAllOutlets: async (): Promise<{ id: string; name: string; city: string; state: string; phone: string }[]> => {
+        // Super-admin shortcut: returns all outlets in their org without needing org_id
+        const response = await fetch(`${API_URL}/organizations/outlets/all/`, { headers: getHeaders() });
+        await assertOk(response);
+        const data = await response.json();
+        return data.data || [];
+    },
 };
+
 
 const realVoucherApi = {
     getLedgerGroups: async (outletId: string) => {

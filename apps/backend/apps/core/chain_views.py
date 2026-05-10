@@ -15,6 +15,53 @@ from apps.accounts.models import Customer
 logger = logging.getLogger(__name__)
 
 
+class AllOutletsView(APIView):
+    """
+    GET /api/v1/organizations/outlets/all/
+    Super-admin only: returns all outlets across their organization.
+    Used by the frontend Outlet Switcher so super_admin can operate
+    as any outlet (billing, purchases, inventory, etc.)
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if getattr(request.user, 'role', None) != 'super_admin':
+            return Response({'detail': 'Super admin only.'}, status=status.HTTP_403_FORBIDDEN)
+
+        # Derive organization from the super_admin's own outlet
+        user_outlet_id = getattr(request.user, 'outlet_id', None)
+        if not user_outlet_id:
+            return Response({'detail': 'No outlet assigned to this super admin.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user_outlet = Outlet.objects.select_related('organization').get(id=user_outlet_id)
+            org = user_outlet.organization
+        except Outlet.DoesNotExist:
+            return Response({'detail': 'Outlet not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if org is None:
+            # Fallback: return all outlets if no org (single-outlet setup)
+            outlets = Outlet.objects.filter(is_active=True).values('id', 'name', 'city', 'state', 'phone')
+        else:
+            outlets = Outlet.objects.filter(organization=org, is_active=True).values('id', 'name', 'city', 'state', 'phone')
+
+        return Response({
+            'success': True,
+            'data': [
+                {
+                    'id': str(o['id']),
+                    'name': o['name'],
+                    'city': o['city'] or '',
+                    'state': o['state'] or '',
+                    'phone': o['phone'] or '',
+                }
+                for o in outlets
+            ]
+        })
+
+
+
+
 class OrganizationListView(APIView):
     """GET /api/v1/organizations/ — list all organizations (super_admin only)."""
 
