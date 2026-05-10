@@ -134,3 +134,13 @@ CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'Asia/Kolkata'
+
+# Cache — use the existing Redis service (db=1 to separate from Celery on db=0)
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+        'LOCATION': env('REDIS_URL', default='redis://redis:6379/1'),
+        'TIMEOUT': 120,  # 2 minutes default TTL
+        'KEY_PREFIX': 'mediflow',
+    }
+}
