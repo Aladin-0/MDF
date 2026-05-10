@@ -308,6 +308,14 @@ const realProductsApi = {
 };
 
 const realInventoryApi = {
+    getProductDetail: async (productId: string, outletId: string) => {
+        const url = `${API_URL}/inventory/?outletId=${outletId}&productId=${productId}`;
+        const response = await fetch(url, { headers: getHeaders() });
+        await assertOk(response);
+        const data = await response.json();
+        const list: any[] = Array.isArray(data) ? data : (data.data || []);
+        return list.find((p: any) => p.id === productId) || null;
+    },
     getStock: async (outletId: string, filters?: any) => {
         let url = `${API_URL}/inventory/?outletId=${outletId}`;
         if (filters?.search) url += `&search=${encodeURIComponent(filters.search)}`;

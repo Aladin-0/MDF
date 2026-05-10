@@ -58,18 +58,12 @@ export default function ProductInventoryPage() {
     const queryClient = useQueryClient();
     const [adjustBatch, setAdjustBatch] = useState<Batch | null>(null);
 
-    // Fetch product + batches from inventory endpoint
-    const { data: stockList, isLoading } = useQuery({
-        queryKey: ['inventory', 'stock', outletId, { search: productId }],
-        queryFn: () => inventoryApi.getStock(outletId, { pageSize: 200 }),
-        enabled: !!outletId,
+    // Fetch this specific product + its batches directly (avoids pagination limits)
+    const { data: product, isLoading } = useQuery({
+        queryKey: ['inventory', 'product', outletId, productId],
+        queryFn: () => inventoryApi.getProductDetail(productId, outletId),
+        enabled: !!outletId && !!productId,
     });
-
-    // Find the matching product by productId
-    const product = React.useMemo(() => {
-        if (!stockList?.data) return null;
-        return stockList.data.find((p: any) => p.id === productId) || null;
-    }, [stockList, productId]);
 
     const batches: any[] = product?.batches || [];
 

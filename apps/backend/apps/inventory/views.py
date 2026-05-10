@@ -598,6 +598,11 @@ class InventoryListView(APIView):
         # Get all MasterProducts (not filtered by search yet)
         products = MasterProduct.objects.all()
 
+        # Apply productId filter (used by product detail page)
+        product_id_filter = request.query_params.get('productId', '').strip()
+        if product_id_filter:
+            products = products.filter(id=product_id_filter)
+
         # Apply search filter
         search_query = request.query_params.get('search', '').strip()
         if search_query:
