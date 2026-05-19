@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { ShoppingCart, X, AlertTriangle, ShieldAlert } from 'lucide-react'
 import { ProductSearchResult, CartItem } from '@/types'
 import { calculateItemTotals, formatCurrency } from '@/lib/gst'
-import { cn } from '@/lib/utils'
+import { cn, formatQty } from '@/lib/utils'
 import { useAuthStore } from '@/store/authStore'
 import { useSettingsStore } from '@/store/settingsStore'
 
@@ -36,32 +36,45 @@ export function AddToCartPanel({ product, onAdd, onClose, maxDiscount }: AddToCa
 
     const [selectedBatchId, setSelectedBatchId] = useState<string>(defaultBatch?.id ?? '')
 
-    const [saleMode, setSaleMode] = useState<'strip' | 'loose'>(defaultQtyMode)
     const [qtyStrips, setQtyStrips] = useState<number | ''>('')
     const [qtyLoose, setQtyLoose] = useState<number | ''>('')
-    
+
+    // Per-sale mode: initialized from the outlet-level setting but toggleable per sale
+    const [qtyMode, setQtyMode] = useState<'strip' | 'loose'>(defaultQtyMode)
+
     // Default discount handling (if product has a default, capped at maxDiscount)
     const [discountPct, setDiscountPct] = useState<number | ''>('')
     const [isDiscountCapped, setIsDiscountCapped] = useState(false)
 
-    const qtyInputRef = useRef<HTMLInputElement>(null)
+    const qtyInputRef  = useRef<HTMLInputElement>(null)  // strips input
+    const looseInputRef = useRef<HTMLInputElement>(null) // loose input
 
-    // Reset state when product changes
+    // Reset state when product changes; auto-focus based on current mode
     useEffect(() => {
-        const fifoBatch = availableBatches.length > 0 
+        const fifoBatch = availableBatches.length > 0
             ? [...availableBatches].sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime())[0]
             : null
-        
+
         setSelectedBatchId(fifoBatch?.id ?? '')
-        setSaleMode(defaultQtyMode)
         setQtyStrips('')
         setQtyLoose('')
         setDiscountPct('')
         setIsDiscountCapped(false)
-        
-        // Auto-focus quantity input slightly after mount
-        setTimeout(() => qtyInputRef.current?.focus(), 50)
+
+        // Auto-focus the primary input based on mode
+        setTimeout(() => {
+            if (qtyMode === 'loose') looseInputRef.current?.focus()
+            else qtyInputRef.current?.focus()
+        }, 50)
     }, [product, maxDiscount])
+
+    // When mode changes, focus the appropriate input immediately
+    useEffect(() => {
+        setTimeout(() => {
+            if (qtyMode === 'loose') looseInputRef.current?.focus()
+            else qtyInputRef.current?.focus()
+        }, 30)
+    }, [qtyMode])
 
     const selectedBatch = useMemo(() => 
         availableBatches.find(b => b.id === selectedBatchId), [availableBatches, selectedBatchId])
@@ -90,9 +103,8 @@ export function AddToCartPanel({ product, onAdd, onClose, maxDiscount }: AddToCa
 
     const totalQty = useMemo(() => {
         if (!selectedBatch) return 0
-        if (saleMode === 'strip') return qtyStrips || 0
-        return (qtyLoose || 0) / activePackSize
-    }, [saleMode, qtyStrips, qtyLoose, activePackSize, selectedBatch])
+        return (qtyStrips || 0) + ((qtyLoose || 0) / activePackSize)
+    }, [qtyStrips, qtyLoose, activePackSize, selectedBatch])
 
     // FIX: batch.saleRate is ALWAYS stored per-strip in the DB.
     // batch.mrp may be per-strip OR per-pack depending on how GRN was entered.
@@ -135,7 +147,7 @@ export function AddToCartPanel({ product, onAdd, onClose, maxDiscount }: AddToCa
     const isOutOfStock = !selectedBatch || (selectedBatch.qtyStrips === 0 && selectedBatch.qtyLoose === 0)
 
     const handleAdd = () => {
-        if (isOutOfStock || !selectedBatch) return
+        if (isOutOfStock || !selectedBatch || totalQty <= 0) return
 
         const item: CartItem = {
             productId: product.id,
@@ -153,10 +165,10 @@ export function AddToCartPanel({ product, onAdd, onClose, maxDiscount }: AddToCa
             rate: billingRate * (1 - (discountPct || 0) / 100),
             saleRate: billingRate,
             gstRate: product.gstRate,
-            qtyStrips: saleMode === 'strip' ? (qtyStrips || 0) : 0,
-            qtyLoose: saleMode === 'loose' ? (qtyLoose || 0) : 0,
+            qtyStrips: (qtyStrips || 0),
+            qtyLoose: (qtyLoose || 0),
             totalQty: totalQty,
-            saleMode: saleMode,
+            saleMode: 'mixed',
             discountPct: discountPct || 0,
             taxableAmount: taxableAmount,
             gstAmount: gstAmount,
@@ -279,70 +291,95 @@ export function AddToCartPanel({ product, onAdd, onClose, maxDiscount }: AddToCa
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                 {/* Quantity */}
                 <div>
-                    <label className="text-sm font-medium text-slate-700 mb-2 block">Quantity</label>
-                    {isLooseAllowed && (
-                        <div className="flex bg-slate-100 p-1 rounded-lg mb-2">
-                            <button
-                                type="button"
-                                onClick={() => setSaleMode('strip')}
-                                className={cn(
-                                    "flex-1 text-sm py-1.5 rounded-md transition-colors",
-                                    saleMode === 'strip' ? "bg-white text-primary font-medium shadow-sm" : "text-slate-600 hover:text-slate-900"
-                                )}
-                            >
-                                Strips
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setSaleMode('loose')}
-                                className={cn(
-                                    "flex-1 text-sm py-1.5 rounded-md transition-colors",
-                                    saleMode === 'loose' ? "bg-white text-primary font-medium shadow-sm" : "text-slate-600 hover:text-slate-900"
-                                )}
-                            >
-                                Loose ({product.packUnit}s)
-                            </button>
-                        </div>
-                    )}
-                    
-                    {saleMode === 'strip' ? (
-                        <>
+                    {/* Label + mode toggle */}
+                    <div className="flex items-center justify-between mb-2">
+                        <label className="text-sm font-medium text-slate-700">Quantity</label>
+                        {isLooseAllowed && (
+                            <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs font-medium">
+                                <button
+                                    type="button"
+                                    onClick={() => setQtyMode('strip')}
+                                    className={cn(
+                                        'px-2.5 py-1 transition-colors',
+                                        qtyMode === 'strip'
+                                            ? 'bg-primary text-white'
+                                            : 'text-slate-500 hover:bg-slate-50'
+                                    )}
+                                >
+                                    Strips
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setQtyMode('loose')}
+                                    className={cn(
+                                        'px-2.5 py-1 transition-colors',
+                                        qtyMode === 'loose'
+                                            ? 'bg-primary text-white'
+                                            : 'text-slate-500 hover:bg-slate-50'
+                                    )}
+                                >
+                                    Loose
+                                </button>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Inputs */}
+                    <div className="flex gap-3">
+                        {/* Strips input — always shown */}
+                        <div className={cn('flex-1', qtyMode === 'loose' && isLooseAllowed && 'order-2')}>
                             <input
                                 ref={qtyInputRef}
                                 type="number"
-                                min={1}
+                                min={0}
                                 step={1}
+                                placeholder="Strips"
                                 value={qtyStrips}
                                 onChange={(e) => {
                                     const val = e.target.value;
                                     if (val === '') setQtyStrips('');
-                                    else setQtyStrips(Math.max(1, parseInt(val) || 1));
+                                    else setQtyStrips(Math.max(0, parseInt(val) || 0));
                                 }}
-                                className="w-full h-10 px-3 border border-slate-300 rounded-lg focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary text-sm"
+                                className={cn(
+                                    'w-full h-10 px-3 border rounded-lg focus:outline-none focus:ring-1 text-sm',
+                                    qtyMode === 'strip'
+                                        ? 'border-primary focus:border-primary focus:ring-primary'
+                                        : 'border-slate-200 focus:border-slate-400 focus:ring-slate-300 text-slate-500'
+                                )}
                             />
-                            <p className="text-xs text-muted-foreground mt-1.5">
-                                = {(qtyStrips || 0) * activePackSize} {activePackUnit}s
-                            </p>
-                        </>
-                    ) : (
-                        <>
-                            <input
-                                ref={qtyInputRef}
-                                type="number"
-                                min={1}
-                                step={1}
-                                value={qtyLoose}
-                                onChange={(e) => {
-                                    const val = e.target.value;
-                                    if (val === '') setQtyLoose('');
-                                    else setQtyLoose(Math.max(1, parseInt(val) || 1));
-                                }}
-                                className="w-full h-10 px-3 border border-slate-300 rounded-lg focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary text-sm"
-                            />
-                            <p className="text-xs text-muted-foreground mt-1.5">
-                                = {((qtyLoose || 0) / activePackSize).toFixed(2)} strips equivalent
-                            </p>
-                        </>
+                        </div>
+
+                        {/* Loose tablets input — shown when allowed */}
+                        {isLooseAllowed && (
+                            <div className={cn('flex-1', qtyMode === 'loose' && 'order-1')}>
+                                <input
+                                    ref={looseInputRef}
+                                    type="number"
+                                    min={0}
+                                    step={1}
+                                    placeholder={`Loose ${activePackUnit}s`}
+                                    value={qtyLoose}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        if (val === '') setQtyLoose('');
+                                        else setQtyLoose(Math.max(0, parseInt(val) || 0));
+                                    }}
+                                    className={cn(
+                                        'w-full h-10 px-3 border rounded-lg focus:outline-none focus:ring-1 text-sm',
+                                        qtyMode === 'loose'
+                                            ? 'border-primary focus:border-primary focus:ring-primary'
+                                            : 'border-slate-300 focus:border-slate-400 focus:ring-slate-300'
+                                    )}
+                                />
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Interpretation line */}
+                    {isLooseAllowed && ((qtyStrips || 0) > 0 || (qtyLoose || 0) > 0) && (
+                        <p className="text-xs font-medium text-indigo-600 mt-1.5">
+                            Interpreted as: {formatQty(qtyStrips || 0, qtyLoose || 0, activePackSize)}
+                        </p>
                     )}
                 </div>
 
@@ -455,7 +492,7 @@ export function AddToCartPanel({ product, onAdd, onClose, maxDiscount }: AddToCa
             <button
                 data-testid="add-to-cart-btn"
                 onClick={handleAdd}
-                disabled={isOutOfStock}
+                disabled={isOutOfStock || totalQty <= 0}
                 className="w-full h-12 flex items-center justify-center gap-2 bg-primary text-white font-semibold rounded-xl text-base transition-all hover:bg-blue-700 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary disabled:active:scale-100"
             >
                 <ShoppingCart className="w-5 h-5" />

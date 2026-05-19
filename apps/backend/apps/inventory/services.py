@@ -73,3 +73,35 @@ def post_stock_ledger_entry(
         running_value  = new_running_value,
     )
     return entry
+
+
+def rebuild_stock_ledger(batch_id: str, from_date):
+    """
+    Recalculate running_qty and running_value for a batch from a specific date forward.
+    This is necessary when historical stock ledger entries are deleted or modified.
+    """
+    entries = StockLedger.objects.filter(
+        batch_id=batch_id,
+        txn_date__gte=from_date
+    ).order_by('txn_date', 'created_at')
+
+    # Get the last entry before the from_date
+    prev = StockLedger.objects.filter(
+        batch_id=batch_id,
+        txn_date__lt=from_date
+    ).order_by('-txn_date', '-created_at').first()
+
+    running_qty = prev.running_qty if prev else Decimal('0')
+    running_value = prev.running_value if prev else Decimal('0')
+
+    for entry in entries:
+        running_qty = running_qty + entry.qty_in - entry.qty_out
+        running_value = running_value + (entry.qty_in * entry.rate) - (entry.qty_out * entry.rate)
+        StockLedger.objects.filter(pk=entry.pk).update(
+            running_qty=running_qty,
+            running_value=running_value
+        )
+    
+    # Sync the final running quantity back to the batch to fix any reconciliation issues
+    Batch.objects.filter(pk=batch_id).update(qty_strips=running_qty)
+

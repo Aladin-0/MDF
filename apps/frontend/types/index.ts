@@ -21,7 +21,7 @@ export type DrugSchedule =
   | 'Veterinary';
 export type DrugType = 'allopathy' | 'ayurveda' | 'homeo' | 'fmcg';
 export type PaymentMode = 'cash' | 'upi' | 'card' | 'credit' | 'split' | 'ledger' | 'cheque' | 'bank_transfer';
-export type SaleMode = 'strip' | 'loose' | 'bottle';
+export type SaleMode = 'strip' | 'loose' | 'bottle' | 'mixed';
 export type AttendanceStatus = 'present' | 'absent' | 'late' | 'half_day' | 'holiday' | 'weekly_off';
 export type PurchaseType = 'cash' | 'credit';
 export type GodownLocation = 'main' | 'cold_storage' | 'secondary';

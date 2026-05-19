@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useOutletId } from '@/hooks/useOutletId';
 import { inventoryApi } from '@/lib/apiClient';
 import { formatCurrency } from '@/lib/gst';
+import { formatQty } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PermissionGate } from '@/components/shared/PermissionGate';
@@ -178,7 +179,17 @@ export default function ProductInventoryPage() {
 
             {/* ─── KPI CARDS ───────────────────────────────────── */}
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 gap-6">
-                <StatCard icon={Package} value={metrics?.totalStrips ?? 0} label="Total Strips In Stock" color="text-indigo-500" highlight={!!isLowStock} />
+                <StatCard
+                    icon={Package}
+                    value={
+                        <span className="text-3xl font-black tracking-tight">
+                            {formatQty(metrics?.totalStrips ?? 0, metrics?.totalLoose ?? 0, product.packSize || 1)}
+                        </span>
+                    }
+                    label="Total Stock In Hand"
+                    color="text-indigo-500"
+                    highlight={!!isLowStock}
+                />
                 <StatCard icon={Layers} value={metrics?.activeBatches ?? 0} label="Active Batches" color="text-emerald-500" />
                 <StatCard icon={AlertTriangle} value={metrics?.expiringSoon ?? 0} label="Expiring ≤ 90 Days" color="text-amber-500" />
                 <StatCard icon={BarChart3} value={formatCurrency(metrics?.totalMrpValue ?? 0)} label="Total MRP Value" color="text-primary" />
@@ -208,7 +219,11 @@ export default function ProductInventoryPage() {
                     </div>
                     <div className="bg-white border-2 border-slate-100 rounded-2xl p-5 shadow-sm">
                         <div className="text-xs font-black uppercase tracking-widest text-slate-400 mb-2">Loose Units</div>
-                        <div className="text-2xl font-black text-slate-900">{metrics?.totalLoose ?? 0}</div>
+                        <div className="text-2xl font-black text-slate-900">
+                            {(metrics?.totalLoose ?? 0) > 0
+                                ? `${metrics?.totalLoose} ${product.packUnit || 'tablet'}${(metrics?.totalLoose ?? 0) !== 1 ? 's' : ''}`
+                                : '0'}
+                        </div>
                         <div className="text-xs text-slate-400 mt-1">below full strip level</div>
                     </div>
                 </div>
@@ -245,8 +260,7 @@ export default function ProductInventoryPage() {
                                     <th className="text-left py-4 px-6 font-black text-xs uppercase tracking-widest text-slate-400">Batch No.</th>
                                     <th className="text-left py-4 px-6 font-black text-xs uppercase tracking-widest text-slate-400">Expiry</th>
                                     <th className="text-left py-4 px-6 font-black text-xs uppercase tracking-widest text-slate-400">Mfg Date</th>
-                                    <th className="text-right py-4 px-6 font-black text-xs uppercase tracking-widest text-slate-400">Strips Left</th>
-                                    <th className="text-right py-4 px-6 font-black text-xs uppercase tracking-widest text-slate-400">Loose Units</th>
+                                    <th className="text-right py-4 px-6 font-black text-xs uppercase tracking-widest text-slate-400">Stock</th>
                                     <th className="text-right py-4 px-6 font-black text-xs uppercase tracking-widest text-slate-400">MRP</th>
                                     <th className="text-right py-4 px-6 font-black text-xs uppercase tracking-widest text-slate-400">Sale Rate</th>
                                     <PermissionGate permission="view_purchase_rates">
@@ -290,10 +304,9 @@ export default function ProductInventoryPage() {
                                                     : <span className="text-slate-300">—</span>}
                                             </td>
                                             <td className="py-4 px-6 text-right">
-                                                <span className="text-2xl font-black text-slate-900">{batch.qtyStrips}</span>
-                                            </td>
-                                            <td className="py-4 px-6 text-right">
-                                                <span className="font-bold text-slate-600">{batch.qtyLoose || 0}</span>
+                                                <span className="text-base font-black text-slate-900">
+                                                    {formatQty(Number(batch.qtyStrips) || 0, Number(batch.qtyLoose) || 0, product.packSize || 1)}
+                                                </span>
                                             </td>
                                             <td className="py-4 px-6 text-right font-bold text-slate-700">{formatCurrency(batch.mrp)}</td>
                                             <td className="py-4 px-6 text-right font-bold text-slate-700">{formatCurrency(batch.saleRate)}</td>
@@ -339,8 +352,9 @@ export default function ProductInventoryPage() {
                             <tfoot>
                                 <tr className="bg-slate-100 border-t-2 border-slate-200">
                                     <td colSpan={3} className="py-4 px-6 font-black text-sm uppercase tracking-widest text-slate-600">Totals</td>
-                                    <td className="py-4 px-6 text-right font-black text-slate-900 text-xl">{metrics?.totalStrips ?? 0}</td>
-                                    <td className="py-4 px-6 text-right font-black text-slate-700">{metrics?.totalLoose ?? 0}</td>
+                                    <td className="py-4 px-6 text-right font-black text-slate-900 text-base">
+                                        {formatQty(metrics?.totalStrips ?? 0, metrics?.totalLoose ?? 0, product.packSize || 1)}
+                                    </td>
                                     <td colSpan={2} className="py-4 px-6"></td>
                                     <PermissionGate permission="view_purchase_rates">
                                         <td className="py-4 px-6"></td>

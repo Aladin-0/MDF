@@ -30,6 +30,7 @@ INSTALLED_APPS = [
     'apps.attendance',
     'apps.reports',
     'rest_framework_simplejwt.token_blacklist',
+    'import_export',
 ]
 
 MIDDLEWARE = [

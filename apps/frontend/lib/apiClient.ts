@@ -1124,6 +1124,14 @@ const realReportsApi = {
         const data = await response.json();
         return data.data;
     },
+    getScheduleReport: async (outletId: string, filters: any) => {
+        const params = new URLSearchParams({ outletId, schedule_type: filters.schedule_type, from: filters.from, to: filters.to });
+        const response = await fetch(`${API_URL}/reports/schedule/?${params}`, {
+            headers: getHeaders(),
+        });
+        await assertOk(response);
+        return response.json();
+    },
 };
 
 const realAccountsApi = {

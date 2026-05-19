@@ -1088,3 +1088,238 @@ class GSTR2AReconciliationView(APIView):
                 'note': 'GSTR-2A data is mocked. Phase 4 will integrate live GSTN API.',
             }
         }, status=status.HTTP_200_OK)
+
+class ScheduleReportView(APIView):
+    """GET /api/v1/reports/schedule/?outletId=&schedule_type=&from=&to=
+    
+    If schedule_type is empty, returns data for ALL scheduled drug types.
+    Returns per-schedule_type summary + full line-item sales & purchases.
+    """
+    permission_classes = [CanAccessReports]
+
+    SCHEDULE_LABELS = {
+        'OTC':       'OTC / General',
+        'G':         'Schedule G',
+        'H':         'Schedule H',
+        'H1':        'Schedule H1 (Narcotic-like)',
+        'X':         'Schedule X',
+        'C':         'Schedule C (Biological)',
+        'Narcotic':  'Narcotic (NDPS)',
+        'Ayurvedic': 'Ayurvedic / Herbal',
+        'Surgical':  'Surgical / Device',
+        'Cosmetic':  'Cosmetic',
+        'Veterinary':'Veterinary',
+    }
+
+    def get(self, request, *args, **kwargs):
+        from apps.billing.models import SaleItem
+        from apps.purchases.models import PurchaseItem
+
+        outlet_id = request.query_params.get('outletId')
+        schedule_type = request.query_params.get('schedule_type', '')  # empty = all
+        from_str = request.query_params.get('from')
+        to_str = request.query_params.get('to')
+
+        if not outlet_id:
+            return Response({'detail': 'Outlet ID required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            outlet = Outlet.objects.get(id=outlet_id)
+        except Outlet.DoesNotExist:
+            return Response({'detail': 'Outlet not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        from_date = None
+        to_date = None
+        if from_str:
+            try:
+                from_date = datetime.strptime(from_str, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+        if to_str:
+            try:
+                to_date = datetime.strptime(to_str, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+
+        # ── Sales ───────────────────────────────────────────────────────────
+        from apps.billing.models import ScheduleHRegister
+
+        sale_qs = SaleItem.objects.filter(
+            invoice__outlet=outlet,
+            qty_strips__gt=0
+        ).select_related(
+            'invoice__customer', 'invoice__doctor', 'invoice__billed_by', 'batch__product'
+        ).prefetch_related('schedule_h_register').order_by('-invoice__invoice_date')
+
+        if schedule_type:
+            sale_qs = sale_qs.filter(batch__product__schedule_type=schedule_type)
+        # else: show ALL schedule types (no filter — include OTC too)
+
+        if from_date:
+            sale_qs = sale_qs.filter(invoice__invoice_date__date__gte=from_date)
+        if to_date:
+            sale_qs = sale_qs.filter(invoice__invoice_date__date__lte=to_date)
+
+        sales_data = []
+        for si in sale_qs:
+            sched = si.batch.product.schedule_type if si.batch and si.batch.product else (si.schedule_type or '')
+            inv = si.invoice
+            cust = inv.customer
+
+            # Schedule H/H1/X register entry (prescription details)
+            try:
+                reg = si.schedule_h_register
+                rx_patient_name    = reg.patient_name or ''
+                rx_patient_age     = reg.patient_age
+                rx_patient_address = reg.patient_address or ''
+                rx_doctor_name     = reg.doctor_name or ''
+                
+                # Smart lookup for Doctor profile if not directly attached
+                doctor_obj = inv.doctor
+                if not doctor_obj and rx_doctor_name:
+                    from apps.accounts.models import Doctor
+                    doctor_obj = Doctor.objects.filter(name__iexact=rx_doctor_name).first()
+                
+                rx_doctor_reg_no   = reg.doctor_reg_no or ''
+                if not rx_doctor_reg_no or rx_doctor_reg_no.strip().upper() == 'N/A':
+                    rx_doctor_reg_no = doctor_obj.registration_no if doctor_obj else ''
+                    
+                rx_prescription_no = reg.prescription_no or ''
+            except Exception:
+                rx_patient_name    = ''
+                rx_patient_age     = None
+                rx_patient_address = ''
+                rx_doctor_name     = ''
+                rx_doctor_reg_no   = inv.doctor.registration_no if inv.doctor else ''
+                rx_prescription_no = ''
+                
+                doctor_obj = inv.doctor
+
+            sales_data.append({
+                # Invoice
+                'date':          inv.invoice_date.isoformat(),
+                'invoiceNo':     inv.invoice_no,
+                'paymentMode':   inv.payment_mode or '',
+                'grandTotal':    float(inv.grand_total),
+                'discountAmount':float(inv.discount_amount),
+                'cgst':          float(inv.cgst_amount),
+                'sgst':          float(inv.sgst_amount),
+                'billedBy':      inv.billed_by.name if inv.billed_by else '',
+                # Customer
+                'customerName':  cust.name if cust else 'Walk-in Customer',
+                'customerPhone': cust.phone if cust else '',
+                'customerAddress': cust.address if cust else '',
+                'customerState': cust.state if cust else '',
+                'customerDob': cust.dob.isoformat() if cust and cust.dob else '',
+                'bloodGroup':    cust.blood_group if cust else '',
+                'allergies':     cust.allergies if cust else [],
+                'chronicConditions': cust.chronic_conditions if cust else [],
+                # Doctor (from invoice relation or smart lookup)
+                'doctorName':    doctor_obj.name if doctor_obj else (rx_doctor_name or 'Self'),
+                'doctorPhone':   doctor_obj.phone if doctor_obj else '',
+                'doctorRegNo':   doctor_obj.registration_no if doctor_obj else '',
+                'doctorDegree':  doctor_obj.degree if doctor_obj else '',
+                'doctorSpecialty': doctor_obj.specialty if doctor_obj else '',
+                'doctorHospital': doctor_obj.hospital_name if doctor_obj else '',
+                'doctorAddress': doctor_obj.address if doctor_obj else '',
+                # Product
+                'productName':   si.product_name,
+                'composition':   si.composition or (si.batch.product.composition if si.batch and si.batch.product else ''),
+                'packSize':      f'{si.pack_size} {si.pack_unit}' if si.pack_size else '',
+                'saleMode':      si.sale_mode or 'strip',
+                'batchNo':       si.batch_no,
+                'expiryDate':    si.expiry_date.isoformat() if si.expiry_date else '',
+                'mrp':           float(si.mrp),
+                'saleRate':      float(si.sale_rate),
+                'discountPct':   float(si.discount_pct),
+                'gstRate':       float(si.gst_rate),
+                'qtyStrips':     si.qty_strips,
+                'qtyLoose':      si.qty_loose or 0,
+                'qty':           si.qty_strips,
+                'amount':        float(si.total_amount),
+                # Schedule
+                'scheduleType':  sched,
+                'scheduleLabel': self.SCHEDULE_LABELS.get(sched, sched),
+                # Prescription / Register (H1 / H / X)
+                'rxPatientName':    rx_patient_name,
+                'rxPatientAge':     rx_patient_age,
+                'rxPatientAddress': rx_patient_address,
+                'rxDoctorName':     rx_doctor_name,
+                'rxDoctorRegNo':    rx_doctor_reg_no,
+                'rxPrescriptionNo': rx_prescription_no,
+            })
+
+        # ── Purchases ────────────────────────────────────────────────────────
+        purchase_qs = PurchaseItem.objects.filter(
+            invoice__outlet=outlet
+        ).select_related(
+            'invoice__distributor', 'master_product'
+        ).order_by('-invoice__invoice_date')
+
+        if schedule_type:
+            purchase_qs = purchase_qs.filter(master_product__schedule_type=schedule_type)
+        # else: show ALL schedule types (no filter — include OTC too)
+
+        if from_date:
+            purchase_qs = purchase_qs.filter(invoice__invoice_date__gte=from_date)
+        if to_date:
+            purchase_qs = purchase_qs.filter(invoice__invoice_date__lte=to_date)
+
+        purchases_data = []
+        for pi in purchase_qs:
+            sched = pi.master_product.schedule_type if pi.master_product else ''
+            dist = pi.invoice.distributor
+            purchases_data.append({
+                'date': pi.invoice.invoice_date.isoformat(),
+                'invoiceNo': pi.invoice.invoice_no,
+                'supplierName': dist.name if dist else '',
+                'supplierPhone': dist.phone if dist else '',
+                'supplierGstin': dist.gstin if dist else '',
+                'supplierCity': dist.city if dist else '',
+                'productName': pi.master_product.name if pi.master_product else (pi.custom_product_name or ''),
+                'batchNo': pi.batch_no,
+                'expiryDate': pi.expiry_date.isoformat() if pi.expiry_date else '',
+                'qty': pi.qty,
+                'actualQty': pi.actual_qty,
+                'purchaseRate': float(pi.purchase_rate),
+                'amount': float(pi.total_amount),
+                'scheduleType': sched,
+                'scheduleLabel': self.SCHEDULE_LABELS.get(sched, sched),
+            })
+
+        # ── Per-schedule summary ─────────────────────────────────────────────
+        from collections import defaultdict
+        sale_summary = defaultdict(lambda: {'count': 0, 'qty': 0, 'amount': 0.0, 'label': ''})
+        for s in sales_data:
+            k = s['scheduleType']
+            sale_summary[k]['count'] += 1
+            sale_summary[k]['qty'] += s['qty']
+            sale_summary[k]['amount'] += s['amount']
+            sale_summary[k]['label'] = s['scheduleLabel']
+
+        purchase_summary = defaultdict(lambda: {'count': 0, 'qty': 0, 'amount': 0.0, 'label': ''})
+        for p in purchases_data:
+            k = p['scheduleType']
+            purchase_summary[k]['count'] += 1
+            purchase_summary[k]['qty'] += p['actualQty']
+            purchase_summary[k]['amount'] += p['amount']
+            purchase_summary[k]['label'] = p['scheduleLabel']
+
+        return Response({
+            'success': True,
+            'data': {
+                'scheduleType': schedule_type or 'ALL',
+                'sales': sales_data,
+                'purchases': purchases_data,
+                'saleSummary': [
+                    {'scheduleType': k, 'label': v['label'], 'invoices': v['count'],
+                     'qty': v['qty'], 'amount': round(v['amount'], 2)}
+                    for k, v in sale_summary.items()
+                ],
+                'purchaseSummary': [
+                    {'scheduleType': k, 'label': v['label'], 'invoices': v['count'],
+                     'qty': v['qty'], 'amount': round(v['amount'], 2)}
+                    for k, v in purchase_summary.items()
+                ],
+            }
+        }, status=status.HTTP_200_OK)

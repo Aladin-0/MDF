@@ -1,4 +1,5 @@
-'use client';
+'use client'
+import { formatQty } from '@/lib/utils';
 
 import { useState, useEffect } from 'react';
 import { useStockList } from '@/hooks/useInventory';
@@ -95,35 +96,23 @@ export function StockTable({ onProductClick, onAdjustClick, onEditClick }: any) 
             header: ({ column }) => <SortableHeader column={column} title="Stock" />,
             cell: ({ row }) => {
                 const p = row.original;
-                // totalStock can be a float (e.g. 204.611) because the backend
-                // adds loose/packSize to strips. Floor it for the strip count display.
-                const qtyStrips = Math.floor(p.totalStock || 0);
-                
-                // Safely calculate total loose items across all batches
-                const qtyLoose = p.batches?.reduce((sum: number, b: any) => sum + (Number(b.qtyLoose) || 0), 0) || 0;
-                
-                // Use dynamic labels based on the packaging setup
-                const packTypeLabel = p.packType ? `${p.packType}s` : 'units';
-                const packUnitLabel = p.packUnit ? `${p.packUnit}s` : 'loose';
+                // totalStock is a float representing total equivalent strips (e.g., 16.7 strips).
+                // Convert back to total loose units, then divide by pack size to get full strips and remainder.
+                const packSize = p.packSize || 1;
+                const totalLooseUnits = Math.round((p.totalStock || 0) * packSize);
+                const qtyStrips = Math.floor(totalLooseUnits / packSize);
+                const qtyLoose = totalLooseUnits % packSize;
 
-                let color = "text-slate-900";
-                if (qtyStrips === 0 && qtyLoose === 0) color = "text-red-600 font-bold";
-                else if (p.isLowStock) color = "text-red-600 font-bold";
+                const isEmpty = qtyStrips === 0 && qtyLoose === 0;
+                const color = isEmpty || p.isLowStock ? "text-red-600 font-bold" : "text-slate-900";
 
                 return (
-                    <div className="w-32 text-right">
-                        {qtyStrips === 0 && qtyLoose === 0 ? (
+                    <div className="w-40 text-right">
+                        {isEmpty ? (
                             <div className={`text-sm ${color}`}>Out of stock</div>
                         ) : (
-                            <div className="flex flex-col items-end">
-                                <div className={`text-sm font-medium ${color}`}>
-                                    {qtyStrips} {packTypeLabel.toLowerCase()}
-                                </div>
-                                {qtyLoose > 0 && (
-                                    <div className="text-xs text-slate-500 mt-0.5 bg-slate-100 px-1.5 py-0.5 rounded">
-                                        + {qtyLoose} {packUnitLabel.toLowerCase()}
-                                    </div>
-                                )}
+                            <div className={`text-sm font-medium ${color}`}>
+                                {formatQty(qtyStrips, qtyLoose, packSize)}
                             </div>
                         )}
                     </div>

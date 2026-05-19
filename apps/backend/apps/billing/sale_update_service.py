@@ -98,9 +98,18 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
                 raise SaleServiceError(f"Customer {customer_id} not found")
 
         # Step 4: Revert old items and restore Batch stock
+        from apps.inventory.models import StockLedger
+        StockLedger.objects.filter(
+            outlet=outlet,
+            voucher_number=sale_invoice.invoice_no,
+            txn_type='SALE_OUT'
+        ).delete()
+        batches_to_rebuild = set()
+
         old_items = sale_invoice.items.all()
         for old_item in old_items:
             batch = old_item.batch
+            batches_to_rebuild.add(batch.pk)
             batch.qty_strips += old_item.qty_strips
             batch.qty_loose += old_item.qty_loose
             # Use batch.pack_size (frozen at purchase time) when restoring stock,
@@ -114,6 +123,10 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
 
         # Step 5: Revert old accounting
         old_customer = sale_invoice.customer
+        old_invoice_date = sale_invoice.invoice_date
+        if isinstance(old_invoice_date, datetime):
+            old_invoice_date = old_invoice_date.date()
+            
         if old_customer:
             old_customer.total_purchases -= sale_invoice.grand_total
             old_customer.save(update_fields=['total_purchases'])
@@ -210,6 +223,26 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
                         doctor_reg_no=schedule_h_data.get('doctorRegNo') if schedule_h_data else '',
                         prescription_no=schedule_h_data.get('prescriptionNo') if schedule_h_data else '',
                     )
+
+                from apps.inventory.services import post_stock_ledger_entry
+                pack_size_dec = Decimal(str(batch.pack_size)) if batch.pack_size else Decimal('1')
+                qty_out = Decimal(str(qty_to_deduct)) + (Decimal(str(loose_to_deduct)) / pack_size_dec if loose_to_deduct else Decimal('0'))
+                
+                post_stock_ledger_entry(
+                    outlet=outlet,
+                    product=product,
+                    batch=batch,
+                    txn_type='SALE_OUT',
+                    txn_date=invoice_date.date() if isinstance(invoice_date, datetime) else invoice_date,
+                    voucher_type='Sale Invoice',
+                    voucher_number=sale_invoice.invoice_no,
+                    party_name=new_customer.name if new_customer else 'Walk-in',
+                    qty_in=Decimal('0'),
+                    qty_out=qty_out,
+                    rate=proposed_rate,
+                    source_object=sale_item,
+                )
+                batches_to_rebuild.add(batch.pk)
 
         # Step 7: Update SaleInvoice
         invoice_date_str = payload['invoiceDate'].rstrip('Z').split('+')[0]
@@ -338,6 +371,10 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
 
         # Post journal
         post_sale_invoice(sale_invoice)
+
+        from apps.inventory.services import rebuild_stock_ledger
+        for batch_id in batches_to_rebuild:
+            rebuild_stock_ledger(batch_id, min(invoice_d, old_invoice_date if 'old_invoice_date' in locals() else invoice_d))
 
         return sale_invoice
 

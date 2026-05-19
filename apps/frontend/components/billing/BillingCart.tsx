@@ -82,31 +82,37 @@ const CartItemRow = ({
     };
 
     // ── Draft state for Qty input ───────────────────────────────────────────
-    const currentQty = item.qtyStrips > 0 ? item.qtyStrips : item.qtyLoose;
-    const [qtyDraft, setQtyDraft] = useState('');
-    const [qtyFocused, setQtyFocused] = useState(false);
+    const [qtyStripsDraft, setQtyStripsDraft] = useState('');
+    const [qtyLooseDraft, setQtyLooseDraft] = useState('');
+    const [qtyFocused, setQtyFocused] = useState<'strips' | 'loose' | null>(null);
 
-    const qtyDisplay = qtyFocused ? qtyDraft : String(currentQty);
+    const stripsDisplay = qtyFocused === 'strips' ? qtyStripsDraft : String(item.qtyStrips);
+    const looseDisplay = qtyFocused === 'loose' ? qtyLooseDraft : String(item.qtyLoose);
 
-    const commitQty = (raw: string) => {
-        const newQty = Math.max(1, parseInt(raw) || 1);
-        const newStrips = item.qtyStrips > 0 ? newQty : 0;
-        const newLoose  = item.qtyStrips > 0 ? 0 : newQty;
-        updateCartItem(item.batchId, { qtyStrips: newStrips, qtyLoose: newLoose, totalQty: newQty });
+    const commitQty = (type: 'strips' | 'loose', raw: string) => {
+        const val = Math.max(0, parseInt(raw) || 0);
+        let newStrips = item.qtyStrips;
+        let newLoose = item.qtyLoose;
+        
+        if (type === 'strips') newStrips = val;
+        else newLoose = val;
+        
+        const newTotal = newStrips + (newLoose / item.packSize);
+        updateCartItem(item.batchId, { qtyStrips: newStrips, qtyLoose: newLoose, totalQty: newTotal });
+        if (backendError) clearBackendRateError(item.batchId);
     };
 
-    const handleQtyStep = (delta: number) => {
-        const isLooseOnly = item.qtyStrips === 0 && item.qtyLoose > 0;
+    const handleQtyStep = (type: 'strips' | 'loose', delta: number) => {
         let newStrips = item.qtyStrips;
-        let newLoose  = item.qtyLoose;
-        let newTotal  = 0;
-        if (isLooseOnly) {
-            newLoose = Math.max(1, item.qtyLoose + delta);
-            newTotal = newLoose / item.packSize;
+        let newLoose = item.qtyLoose;
+        
+        if (type === 'strips') {
+            newStrips = Math.max(0, item.qtyStrips + delta);
         } else {
-            newStrips = Math.max(1, item.qtyStrips + delta);
-            newTotal  = newStrips;
+            newLoose = Math.max(0, item.qtyLoose + delta);
         }
+        
+        const newTotal = newStrips + (newLoose / item.packSize);
         updateCartItem(item.batchId, { qtyStrips: newStrips, qtyLoose: newLoose, totalQty: newTotal });
         if (backendError) clearBackendRateError(item.batchId);
     };
@@ -156,44 +162,64 @@ const CartItemRow = ({
             <div className="flex items-end justify-between mt-2.5">
                 {/* ── Qty stepper ── */}
                 <div className="flex flex-col gap-1">
-                    <div className="flex items-center gap-0.5">
-                        <button
-                            onClick={() => handleQtyStep(-1)}
-                            className="w-7 h-7 rounded border border-slate-200 bg-white flex items-center justify-center text-slate-600 hover:bg-slate-100 active:scale-95"
-                        >
-                            <Minus className="w-3 h-3" />
-                        </button>
-                        <input
-                            data-testid={`qty-strips-${index}`}
-                            inputMode="numeric"
-                            value={qtyDisplay}
-                            className={`w-10 h-7 text-center text-sm font-medium border-y border-slate-200 bg-white focus:outline-none ${noSpin}`}
-                            onFocus={(e) => {
-                                setQtyFocused(true);
-                                setQtyDraft(String(currentQty));
-                                e.target.select();
-                            }}
-                            onChange={(e) => setQtyDraft(e.target.value)}
-                            onBlur={() => {
-                                setQtyFocused(false);
-                                commitQty(qtyDraft);
-                            }}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter') { commitQty(qtyDraft); (e.target as HTMLInputElement).blur(); }
-                                if (e.key === 'ArrowUp')   { e.preventDefault(); handleQtyStep(1); }
-                                if (e.key === 'ArrowDown') { e.preventDefault(); handleQtyStep(-1); }
-                            }}
-                        />
-                        <button
-                            onClick={() => handleQtyStep(1)}
-                            className="w-7 h-7 rounded border border-slate-200 bg-white flex items-center justify-center text-slate-600 hover:bg-slate-100 active:scale-95"
-                        >
-                            <Plus className="w-3 h-3" />
-                        </button>
+                    <div className="flex gap-2">
+                        <div className="flex flex-col items-center">
+                            <div className="flex items-center gap-0.5">
+                                <button onClick={() => handleQtyStep('strips', -1)} className="w-6 h-6 rounded border border-slate-200 bg-white flex items-center justify-center text-slate-600 hover:bg-slate-100 active:scale-95"><Minus className="w-3 h-3" /></button>
+                                <input
+                                    inputMode="numeric"
+                                    value={stripsDisplay}
+                                    className={`w-8 h-6 text-center text-xs font-medium border-y border-slate-200 bg-white focus:outline-none ${noSpin}`}
+                                    onFocus={(e) => {
+                                        setQtyFocused('strips');
+                                        setQtyStripsDraft(String(item.qtyStrips));
+                                        e.target.select();
+                                    }}
+                                    onChange={(e) => setQtyStripsDraft(e.target.value)}
+                                    onBlur={() => {
+                                        setQtyFocused(null);
+                                        commitQty('strips', qtyStripsDraft);
+                                    }}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') { commitQty('strips', qtyStripsDraft); (e.target as HTMLInputElement).blur(); }
+                                        if (e.key === 'ArrowUp')   { e.preventDefault(); handleQtyStep('strips', 1); }
+                                        if (e.key === 'ArrowDown') { e.preventDefault(); handleQtyStep('strips', -1); }
+                                    }}
+                                />
+                                <button onClick={() => handleQtyStep('strips', 1)} className="w-6 h-6 rounded border border-slate-200 bg-white flex items-center justify-center text-slate-600 hover:bg-slate-100 active:scale-95"><Plus className="w-3 h-3" /></button>
+                            </div>
+                            <span className="text-[9px] text-muted-foreground font-medium uppercase mt-0.5 tracking-wider">Strips</span>
+                        </div>
+                        {item.packSize > 1 && (
+                            <div className="flex flex-col items-center">
+                                <div className="flex items-center gap-0.5">
+                                    <button onClick={() => handleQtyStep('loose', -1)} className="w-6 h-6 rounded border border-slate-200 bg-white flex items-center justify-center text-slate-600 hover:bg-slate-100 active:scale-95"><Minus className="w-3 h-3" /></button>
+                                    <input
+                                        inputMode="numeric"
+                                        value={looseDisplay}
+                                        className={`w-8 h-6 text-center text-xs font-medium border-y border-slate-200 bg-white focus:outline-none ${noSpin}`}
+                                        onFocus={(e) => {
+                                            setQtyFocused('loose');
+                                            setQtyLooseDraft(String(item.qtyLoose));
+                                            e.target.select();
+                                        }}
+                                        onChange={(e) => setQtyLooseDraft(e.target.value)}
+                                        onBlur={() => {
+                                            setQtyFocused(null);
+                                            commitQty('loose', qtyLooseDraft);
+                                        }}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') { commitQty('loose', qtyLooseDraft); (e.target as HTMLInputElement).blur(); }
+                                            if (e.key === 'ArrowUp')   { e.preventDefault(); handleQtyStep('loose', 1); }
+                                            if (e.key === 'ArrowDown') { e.preventDefault(); handleQtyStep('loose', -1); }
+                                        }}
+                                    />
+                                    <button onClick={() => handleQtyStep('loose', 1)} className="w-6 h-6 rounded border border-slate-200 bg-white flex items-center justify-center text-slate-600 hover:bg-slate-100 active:scale-95"><Plus className="w-3 h-3" /></button>
+                                </div>
+                                <span className="text-[9px] text-muted-foreground font-medium uppercase mt-0.5 tracking-wider">Loose</span>
+                            </div>
+                        )}
                     </div>
-                    <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
-                        {item.qtyStrips > 0 ? 'Strips' : 'Loose'}
-                    </span>
                 </div>
 
                 {/* ── Rate input ── */}
@@ -392,30 +418,7 @@ export function BillingCart({ onProceedToPayment, onAddDoctorDetails }: BillingC
           }, 0)
         : 0
 
-    const handleQtyChange = (batchId: string, currentTotalQty: number, packSize: number, delta: number, currentStrips: number, currentLoose: number) => {
-        // Find if we are operating in loose or strip mode based on what's in cart.
-        // For simplicity, if qtyStrips > 0 we alter strips, else we alter loose.
-        // If both, prioritizing strips for the `+`/`-` buttons.
-        const isLooseOnly = currentStrips === 0 && currentLoose > 0;
-        
-        let newTotalQty = 0;
-        let newStrips = currentStrips;
-        let newLoose = currentLoose;
-
-        if (isLooseOnly) {
-            newLoose = Math.max(1, currentLoose + delta);
-            newTotalQty = newLoose / packSize;
-        } else {
-            newStrips = Math.max(1, currentStrips + delta);
-            newTotalQty = newStrips;
-        }
-
-        updateCartItem(batchId, { 
-            qtyStrips: newStrips, 
-            qtyLoose: newLoose, 
-            totalQty: newTotalQty 
-        })
-    }
+        // HandleQtyChange is no longer used since we refactored CartItemRow to handle its own step logic.
 
     return (
         <div className="h-full w-full border-l border-slate-200 flex flex-col bg-white shadow-[-4px_0_24px_-16px_rgba(0,0,0,0.1)]">

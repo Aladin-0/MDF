@@ -1135,6 +1135,7 @@ class StockLedgerView(APIView):
                 'product_name': entry.product.name if entry.product else '',
                 'batch_number': entry.batch_number,
                 'expiry_date': entry.expiry_date.isoformat() if entry.expiry_date else None,
+                'pack_size': entry.product.pack_size if entry.product else 1,
                 'qty_in': float(entry.qty_in),
                 'qty_out': float(entry.qty_out),
                 'rate': float(entry.rate),

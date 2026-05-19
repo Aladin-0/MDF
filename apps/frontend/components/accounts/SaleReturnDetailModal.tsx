@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { FileText, Printer, X, ArrowDownLeft, Building2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { formatQty } from '@/lib/utils';
 import {
     Dialog,
     DialogContent,
@@ -183,7 +184,13 @@ export function SaleReturnDetailModal({ open, onOpenChange, returnId }: SaleRetu
                                                 <td className="px-4 py-3 font-medium text-slate-900">{item.productName}</td>
                                                 <td className="px-4 py-3 font-mono text-muted-foreground">{item.batchNo}</td>
                                                 <td className="px-4 py-3 text-right">
-                                                    <span className="font-semibold">{item.qtyReturned}</span>
+                                                    <span className="font-semibold">
+                                                        {formatQty(
+                                                            Math.floor(item.qtyReturned / (item.packSize || 1)),
+                                                            item.qtyReturned % (item.packSize || 1),
+                                                            item.packSize || 1
+                                                        )}
+                                                    </span>
                                                 </td>
                                                 <td className="px-4 py-3 text-right tabular-nums">{formatINR(item.returnRate)}</td>
                                                 <td className="px-4 py-3 text-right tabular-nums font-semibold text-slate-900">{formatINR(item.totalAmount)}</td>
@@ -264,7 +271,13 @@ export function SaleReturnDetailModal({ open, onOpenChange, returnId }: SaleRetu
                                                         <td className="py-1 px-1 border-r border-black text-center">{idx + 1}</td>
                                                         <td className="py-1 px-1 border-r border-black">{item.productName}</td>
                                                         <td className="py-1 px-1 border-r border-black">{item.batchNo}</td>
-                                                        <td className="py-1 px-1 border-r border-black text-right font-medium">{item.qtyReturned}</td>
+                                                        <td className="py-1 px-1 border-r border-black text-right font-medium">
+                                                            {formatQty(
+                                                                Math.floor(item.qtyReturned / (item.packSize || 1)),
+                                                                item.qtyReturned % (item.packSize || 1),
+                                                                item.packSize || 1
+                                                            )}
+                                                        </td>
                                                         <td className="py-1 px-1 border-r border-black text-right">{formatINR(item.returnRate)}</td>
                                                         <td className="py-1 px-1 text-right font-medium">{formatINR(item.totalAmount)}</td>
                                                     </tr>

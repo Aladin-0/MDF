@@ -199,7 +199,7 @@ export function PurchaseDetailModal({ open, onOpenChange, invoice, onEdit }: Pur
                                         <td className="px-4 py-3 font-mono">{item.batchNo}</td>
                                         <td className="px-4 py-3 text-right">{item.expiryDate}</td>
                                         <td className="px-4 py-3 text-right">
-                                            <span className="font-medium">{item.qty}</span>
+                                            <span className="font-medium">{item.qty} strip</span>
                                             {item.freeQty > 0 && <span className="block text-[10px] text-emerald-600 mt-0.5">+{item.freeQty} Free</span>}
                                         </td>
                                         <td className="px-4 py-3 text-right tabular-nums">{formatINR(item.purchaseRate)}</td>
@@ -361,7 +361,7 @@ export function PurchaseDetailModal({ open, onOpenChange, invoice, onEdit }: Pur
                                                 <td className="border-r border-slate-200 px-1 py-0.5 text-center">{item.expiryDate}</td>
                                                 <td className="border-r border-slate-200 px-1 py-0.5 text-right">{formatINR(item.mrp)}</td>
                                                 <td className="border-r border-slate-200 px-1 py-0.5 text-right">
-                                                    {item.qty}
+                                                    {item.qty} strip
                                                     {item.freeQty > 0 && <span className="block text-[9px] text-slate-400">+{item.freeQty} Free</span>}
                                                 </td>
                                                 <td className="border-r border-slate-200 px-1 py-0.5 text-right">{formatINR(item.purchaseRate)}</td>

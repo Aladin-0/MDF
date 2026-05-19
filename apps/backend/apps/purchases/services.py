@@ -634,9 +634,23 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
         # make qty_strips negative and raise ValidationError.
         from django.db.models import F
         from django.db.models.functions import Greatest
-        from apps.inventory.models import Batch as BatchModel
+        from apps.inventory.models import Batch as BatchModel, StockLedger
+
+        from django.contrib.contenttypes.models import ContentType
+        from apps.purchases.models import PurchaseItem
 
         old_items = list(purchase_invoice.items.select_related('batch').all())
+        batches_to_rebuild = set()
+        
+        # Revert old stock ledger entries by exact source object
+        if old_items:
+            pi_ctype = ContentType.objects.get_for_model(PurchaseItem)
+            StockLedger.objects.filter(
+                outlet=outlet,
+                content_type=pi_ctype,
+                object_id__in=[item.pk for item in old_items],
+                txn_type='PURCHASE_IN'
+            ).delete()
         # Save mapping of (batch_no, expiry_date) -> batch pk so Step 6 can update the right batch
         old_batch_pk_map: Dict[tuple, int] = {}
         for old_item in old_items:
@@ -649,6 +663,7 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
                 BatchModel.objects.filter(pk=batch.pk).update(
                     qty_strips=Greatest(F('qty_strips') - total_strips, 0)
                 )
+                batches_to_rebuild.add(batch.pk)
             old_item.delete()
 
         # ─── Step 4: Revert old accounting ────────────────────────────────────────
@@ -836,7 +851,7 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
 
         PurchaseItem.objects.bulk_create(purchase_items)
 
-        from apps.inventory.services import post_stock_ledger_entry
+        from apps.inventory.services import post_stock_ledger_entry, rebuild_stock_ledger
         for pi in purchase_items:
             post_stock_ledger_entry(
                 outlet         = purchase_invoice.outlet,
@@ -852,6 +867,10 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
                 rate           = pi.purchase_rate,
                 source_object  = pi,
             )
+            batches_to_rebuild.add(pi.batch.pk)
+            
+        for batch_id in batches_to_rebuild:
+            rebuild_stock_ledger(batch_id, min(invoice_date.date(), purchase_invoice.invoice_date))
 
         # ─── Step 7: Update LedgerEntry ───────────────────────────────────────────
         ledger_entry = LedgerEntry.objects.filter(

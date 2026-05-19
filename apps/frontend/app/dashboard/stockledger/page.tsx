@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useOutletId } from '@/hooks/useOutletId';
 import { Search, Calendar as Cal, ArrowUpRight, ArrowDownRight, RefreshCw, FileText, Filter, X, ChevronRight, Package } from 'lucide-react';
 import { format } from 'date-fns';
+import { formatDecimalQty } from '@/lib/utils';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL!;
 
@@ -23,14 +24,14 @@ interface LedgerEntry {
   txn_date: string; txn_type: string; txn_type_label: string;
   voucher_type: string; voucher_number: string; party_name: string;
   product_name: string; batch_number: string; expiry_date: string | null;
-  qty_in: number; qty_out: number; rate: number;
+  qty_in: number; qty_out: number; rate: number; pack_size: number;
   value_in: number; value_out: number;
   running_qty: number; running_value: number; created_at: string;
 }
 
 interface BatchSummary {
   batch_id: string; batch_number: string; product_name: string;
-  expiry_date: string | null;
+  expiry_date: string | null; pack_size: number;
   qty_in: number; qty_out: number; qty_remaining: number;
   value_in: number; value_out: number; value_remaining: number;
   entry_count: number;
@@ -98,7 +99,7 @@ export default function StockLedgerPage() {
       if (!m.has(e.batch_id)) {
         m.set(e.batch_id, {
           batch_id: e.batch_id, batch_number: e.batch_number,
-          product_name: e.product_name, expiry_date: e.expiry_date,
+          product_name: e.product_name, expiry_date: e.expiry_date, pack_size: e.pack_size || 1,
           qty_in: 0, qty_out: 0, qty_remaining: 0,
           value_in: 0, value_out: 0, value_remaining: 0, entry_count: 0,
         });
@@ -178,7 +179,7 @@ export default function StockLedgerPage() {
                 <div className="text-xs text-slate-400 font-mono mt-1">{b.batch_number}</div>
                 <div className="flex items-center gap-2 mt-2">
                   <span className={`text-xs font-bold ${b.qty_remaining > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                    {b.qty_remaining.toFixed(1)} left
+                    {formatDecimalQty(b.qty_remaining, b.pack_size)} left
                   </span>
                   {lowStock && b.qty_remaining > 0 && (
                     <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">Low</span>
@@ -236,9 +237,9 @@ export default function StockLedgerPage() {
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {[
-                { label: 'Qty Purchased', value: `${selectedBatch.qty_in.toFixed(2)} strips`, sub: fmt(selectedBatch.value_in), color: 'text-emerald-700', bg: 'bg-emerald-50' },
-                { label: 'Qty Sold', value: `${selectedBatch.qty_out.toFixed(2)} strips`, sub: fmt(selectedBatch.value_out), color: 'text-rose-700', bg: 'bg-rose-50' },
-                { label: 'Qty Remaining', value: `${selectedBatch.qty_remaining.toFixed(2)} strips`, sub: fmt(selectedBatch.value_remaining), color: selectedBatch.qty_remaining > 0 ? 'text-indigo-700' : 'text-red-600', bg: selectedBatch.qty_remaining > 0 ? 'bg-indigo-50' : 'bg-red-50' },
+                { label: 'Qty Purchased', value: formatDecimalQty(selectedBatch.qty_in, selectedBatch.pack_size), sub: fmt(selectedBatch.value_in), color: 'text-emerald-700', bg: 'bg-emerald-50' },
+                { label: 'Qty Sold', value: formatDecimalQty(selectedBatch.qty_out, selectedBatch.pack_size), sub: fmt(selectedBatch.value_out), color: 'text-rose-700', bg: 'bg-rose-50' },
+                { label: 'Qty Remaining', value: formatDecimalQty(selectedBatch.qty_remaining, selectedBatch.pack_size), sub: fmt(selectedBatch.value_remaining), color: selectedBatch.qty_remaining > 0 ? 'text-indigo-700' : 'text-red-600', bg: selectedBatch.qty_remaining > 0 ? 'bg-indigo-50' : 'bg-red-50' },
                 { label: 'Transactions', value: `${selectedBatch.entry_count}`, sub: 'ledger entries', color: 'text-slate-700', bg: 'bg-slate-100' },
               ].map(({ label, value, sub, color, bg }) => (
                 <div key={label} className={`${bg} rounded-xl p-5`}>
@@ -266,25 +267,69 @@ export default function StockLedgerPage() {
         )}
 
         {/* Summary cards (when no batch selected) */}
-        {!selectedBatch && (
-          <div className="px-8 pt-5 grid grid-cols-2 md:grid-cols-4 gap-4 shrink-0">
-            {[
-              { label: 'Total Qty In', value: summary.total_in?.toFixed(2) ?? '0', sub: fmt(summary.total_value_in ?? 0), Icon: ArrowUpRight, bg: 'bg-emerald-100', ic: 'text-emerald-600' },
-              { label: 'Total Qty Out', value: summary.total_out?.toFixed(2) ?? '0', sub: fmt(summary.total_value_out ?? 0), Icon: ArrowDownRight, bg: 'bg-rose-100', ic: 'text-rose-600' },
-              { label: 'Entries', value: String(filtered.length), sub: `${totalRecords} total`, Icon: FileText, bg: 'bg-indigo-100', ic: 'text-indigo-600' },
-              { label: 'Net Value', value: fmt(netValue), sub: 'stock value', Icon: () => <span className="text-base font-bold">₹</span>, bg: 'bg-violet-100', ic: 'text-violet-600' },
-            ].map(({ label, value, sub, Icon, bg, ic }) => (
-              <div key={label} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
-                <div className={`w-12 h-12 rounded-full ${bg} flex items-center justify-center ${ic} shrink-0`}><Icon className="w-5 h-5" /></div>
+        {!selectedBatch && (() => {
+          // Compute base-unit (loose tablet/capsule) totals per-entry using each entry's own
+          // pack_size. This is the only mathematically valid cross-product quantity aggregate.
+          // qty_in/qty_out are stored as fractional strips → multiply by pack_size to get actual units.
+          const totalUnitsIn  = Math.round(filtered.reduce((s, e) => s + e.qty_in  * (e.pack_size || 1), 0));
+          const totalUnitsOut = Math.round(filtered.reduce((s, e) => s + e.qty_out * (e.pack_size || 1), 0));
+          const totalValIn    = filtered.reduce((s, e) => s + e.value_in,  0);
+          const totalValOut   = filtered.reduce((s, e) => s + e.value_out, 0);
+          const fmtUnits = (n: number) => n.toLocaleString('en-IN') + ' tablets';
+          return (
+            <div className="px-8 pt-5 grid grid-cols-2 md:grid-cols-4 gap-4 shrink-0">
+
+              {/* Units In */}
+              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
+                  <ArrowUpRight className="w-5 h-5" />
+                </div>
                 <div>
-                  <div className="text-xs text-slate-500 mb-0.5 uppercase tracking-wide font-medium">{label}</div>
-                  <div className="text-xl font-bold text-slate-900">{value}</div>
-                  <div className="text-sm text-slate-400 mt-0.5">{sub}</div>
+                  <div className="text-xs text-slate-500 mb-0.5 uppercase tracking-wide font-medium">Total Units Received</div>
+                  <div className="text-xl font-bold text-emerald-700">{fmtUnits(totalUnitsIn)}</div>
+                  <div className="text-sm text-slate-400 mt-0.5">{fmt(totalValIn)} purchased</div>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+
+              {/* Units Out */}
+              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full bg-rose-100 flex items-center justify-center text-rose-600 shrink-0">
+                  <ArrowDownRight className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-xs text-slate-500 mb-0.5 uppercase tracking-wide font-medium">Total Units Dispensed</div>
+                  <div className="text-xl font-bold text-rose-700">{fmtUnits(totalUnitsOut)}</div>
+                  <div className="text-sm text-slate-400 mt-0.5">{fmt(totalValOut)} sold</div>
+                </div>
+              </div>
+
+              {/* Entries */}
+              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-xs text-slate-500 mb-0.5 uppercase tracking-wide font-medium">Transactions</div>
+                  <div className="text-xl font-bold text-slate-900">{filtered.length}</div>
+                  <div className="text-sm text-slate-400 mt-0.5">{totalRecords} total in period</div>
+                </div>
+              </div>
+
+              {/* Net Value */}
+              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full bg-violet-100 flex items-center justify-center text-violet-600 shrink-0">
+                  <span className="text-base font-bold">₹</span>
+                </div>
+                <div>
+                  <div className="text-xs text-slate-500 mb-0.5 uppercase tracking-wide font-medium">Net Stock Value</div>
+                  <div className="text-xl font-bold text-slate-900">{fmt(netValue)}</div>
+                  <div className="text-sm text-slate-400 mt-0.5">value of shown entries</div>
+                </div>
+              </div>
+
+            </div>
+          );
+        })()}
 
         {error && <div className="mx-8 mt-4 rounded-xl bg-red-50 border border-red-200 text-red-700 px-5 py-4 text-base shrink-0">{error}</div>}
 
@@ -368,7 +413,7 @@ export default function StockLedgerPage() {
                     <td className="px-5 py-3.5 text-right">
                       {e.qty_in > 0 ? (
                         <div>
-                          <span className="font-bold text-emerald-700">+{e.qty_in.toFixed(2)}</span>
+                          <span className="font-bold text-emerald-700">+{formatDecimalQty(e.qty_in, e.pack_size)}</span>
                           <div className="text-xs text-slate-400 mt-0.5">₹{e.value_in.toFixed(2)}</div>
                         </div>
                       ) : <span className="text-slate-300">—</span>}
@@ -376,14 +421,14 @@ export default function StockLedgerPage() {
                     <td className="px-5 py-3.5 text-right">
                       {e.qty_out > 0 ? (
                         <div>
-                          <span className="font-bold text-rose-700">−{e.qty_out.toFixed(2)}</span>
+                          <span className="font-bold text-rose-700">−{formatDecimalQty(e.qty_out, e.pack_size)}</span>
                           <div className="text-xs text-slate-400 mt-0.5">₹{e.value_out.toFixed(2)}</div>
                         </div>
                       ) : <span className="text-slate-300">—</span>}
                     </td>
                     <td className="px-5 py-3.5 text-right text-slate-500 font-medium">₹{e.rate.toFixed(2)}</td>
                     <td className="px-5 py-3.5 text-right">
-                      <div className="font-bold text-slate-800 text-base">{e.running_qty.toFixed(2)}<span className="font-normal text-slate-400 text-xs ml-1">strips</span></div>
+                      <div className="font-bold text-slate-800 text-sm whitespace-nowrap">{formatDecimalQty(e.running_qty, e.pack_size)}</div>
                       <div className="text-xs text-slate-500 font-medium mt-0.5">₹{e.running_value.toFixed(2)}</div>
                     </td>
                   </tr>

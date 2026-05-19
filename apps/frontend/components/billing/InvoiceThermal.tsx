@@ -4,6 +4,7 @@ import React, { forwardRef } from 'react';
 import { format } from 'date-fns';
 import { SaleInvoice } from '@/types';
 import { useAuthStore } from '@/store/authStore';
+import { formatQty } from '@/lib/utils';
 
 interface InvoiceThermalProps {
     invoice: SaleInvoice;
@@ -44,18 +45,18 @@ export const InvoiceThermal = forwardRef<HTMLDivElement, InvoiceThermalProps>(({
                 </thead>
                 <tbody>
                     {(invoice.items ?? []).map((item, index) => {
-                        const totalQty = (item.qtyStrips ?? 0) + (item.qtyLoose ?? 0);
-                        const amt = totalQty * (item.rate ?? 0) * (1 - (item.discountPct ?? 0) / 100);
+                        const qtyDisplay = formatQty(item.qtyStrips ?? 0, item.qtyLoose ?? 0, item.packSize ?? 1);
+                        const amt = item.totalAmount ?? ((item.totalQty ?? 0) * (item.rate ?? 0) * (1 - (item.discountPct ?? 0) / 100));
                         return (
                             <React.Fragment key={index}>
                                 <tr>
                                     <td colSpan={4} className="pt-2 font-bold truncate">
-                                        {item.productId || `Item ${index+1}`} ({(item.batchId || 'B').slice(0, 5)})
+                                        {item.name || item.productId || `Item ${index+1}`} ({(item.batchNo || 'B').slice(0, 8)})
                                     </td>
                                 </tr>
                                 <tr>
                                     <td></td>
-                                    <td className="text-center">{totalQty}</td>
+                                    <td className="text-center text-[9px] leading-tight whitespace-pre-wrap">{qtyDisplay}</td>
                                     <td className="text-right">{(item.rate ?? 0).toFixed(2)}</td>
                                     <td className="text-right">{amt.toFixed(2)}</td>
                                 </tr>

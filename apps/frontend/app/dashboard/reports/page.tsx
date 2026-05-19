@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { BarChart3, FileText, Package, AlertTriangle, Users, ShoppingCart, Lock } from 'lucide-react';
+import { BarChart3, FileText, Package, AlertTriangle, Users, ShoppingCart, Lock, AlertCircle } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { PermissionGate } from '@/components/shared/PermissionGate';
@@ -13,12 +13,13 @@ import { StockValuationTab } from '@/components/reports/StockValuationTab';
 import { ExpiryReportTab } from '@/components/reports/ExpiryReportTab';
 import { StaffReportTab } from '@/components/reports/StaffReportTab';
 import { PurchaseReportTab } from '@/components/reports/PurchaseReportTab';
+import { ScheduleReportTab } from '@/components/reports/ScheduleReportTab';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { getDefaultDateRange, getDateRangeForPeriod } from '@/hooks/useReports';
 import { DateRangeFilter } from '@/types';
 import { usePermissions } from '@/hooks/usePermissions';
 
-type ReportTab = 'sales' | 'gst' | 'stock' | 'expiry' | 'staff' | 'purchases';
+type ReportTab = 'sales' | 'gst' | 'stock' | 'expiry' | 'staff' | 'purchases' | 'schedule';
 
 export default function ReportsPage() {
     const [activeTab, setActiveTab] = useState<ReportTab>('sales');
@@ -36,6 +37,7 @@ export default function ReportsPage() {
         '4': () => setActiveTab('expiry'),
         '5': () => setActiveTab('staff'),
         '6': () => setActiveTab('purchases'),
+        '7': () => setActiveTab('schedule'),
         'm': () => setDateRange(getDateRangeForPeriod('this_month')),
         'w': () => setDateRange(getDateRangeForPeriod('this_week')),
     });
@@ -86,7 +88,7 @@ export default function ReportsPage() {
 
             {/* Keyboard hint bar */}
             <p className="text-xs text-muted-foreground px-1">
-                <span className="font-mono bg-slate-100 px-1 rounded">1–6</span> Switch tabs
+                <span className="font-mono bg-slate-100 px-1 rounded">1–7</span> Switch tabs
                 · <span className="font-mono bg-slate-100 px-1 rounded">M</span> This month
                 · <span className="font-mono bg-slate-100 px-1 rounded">W</span> This week
                 · <span className="font-mono bg-slate-100 px-1 rounded">E</span> Export
@@ -119,6 +121,10 @@ export default function ReportsPage() {
                         <ShoppingCart className="w-3 h-3 mr-1" />
                         Purchase Report
                     </TabsTrigger>
+                    <TabsTrigger value="schedule">
+                        <AlertCircle className="w-3 h-3 mr-1 text-rose-500" />
+                        Schedule Drugs
+                    </TabsTrigger>
                 </TabsList>
 
                 <div className="mt-6">
@@ -139,6 +145,9 @@ export default function ReportsPage() {
                     </TabsContent>
                     <TabsContent value="purchases" className="mt-0 outline-none">
                         <PurchaseReportTab dateRange={dateRange} />
+                    </TabsContent>
+                    <TabsContent value="schedule" className="mt-0 outline-none">
+                        <ScheduleReportTab />
                     </TabsContent>
                 </div>
             </Tabs>

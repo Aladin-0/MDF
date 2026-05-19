@@ -12,6 +12,7 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
+    atomic = False
 
     dependencies = [
         ('inventory', '0012_migrate_pack_sizes'),

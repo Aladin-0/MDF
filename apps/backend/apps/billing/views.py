@@ -2379,9 +2379,10 @@ class SalesReturnDetailView(APIView):
             'productName': item.product_name,
             'batchNo': item.batch_no,
             'qtyReturned': item.qty_returned,
+            'packSize': item.original_sale_item.pack_size if item.original_sale_item_id else 1,
             'returnRate': float(item.return_rate),
             'totalAmount': float(item.total_amount),
-        } for item in r.items.all()]
+        } for item in r.items.select_related('original_sale_item').all()]
 
         data = {
             'id': str(r.id),
@@ -2423,9 +2424,10 @@ class SalesReturnPrintView(APIView):
             'productName': item.product_name,
             'batchNo': item.batch_no,
             'qtyReturned': item.qty_returned,
+            'packSize': item.original_sale_item.pack_size if item.original_sale_item_id else 1,
             'returnRate': float(item.return_rate),
             'totalAmount': float(item.total_amount),
-        } for item in r.items.all()]
+        } for item in r.items.select_related('original_sale_item').all()]
 
         data = {
             'returnNo': r.return_no,
