@@ -257,7 +257,32 @@ class Command(BaseCommand):
                 else:
                     stats["distributors_existing"] += 1
             except Exception as e:
-                stats["errors"].append(f"Distributor '{name}': {e}")
+                if gstin and "unique constraint" in str(e).lower():
+                    # Same GSTIN exists in this outlet with a different name
+                    # (duplicate entry in Marg). Retry without GSTIN.
+                    try:
+                        _, created = Distributor.objects.get_or_create(
+                            outlet=outlet,
+                            name=name,
+                            defaults=dict(
+                                gstin          = None,
+                                drug_license_no= _str(row[18]) or None,
+                                phone          = phone,
+                                email          = email if email and "@" in email else None,
+                                address        = addr,
+                                city           = city,
+                                state          = "Maharashtra",
+                                credit_days    = crdays,
+                            ),
+                        )
+                        if created:
+                            stats["distributors_created"] += 1
+                        else:
+                            stats["distributors_existing"] += 1
+                    except Exception as e2:
+                        stats["errors"].append(f"Distributor '{name}': {e2}")
+                else:
+                    stats["errors"].append(f"Distributor '{name}': {e}")
 
         wb.close()
         new_errors = len(stats["errors"]) - errors_before
@@ -299,10 +324,7 @@ class Command(BaseCommand):
 
             batch_no    = _str(row[16]) or "NO-BATCH"
             expiry_date = _date(row[18])
-            if expiry_date is None:
-                # Cannot save a batch without expiry date (required field)
-                stats["errors"].append(f"Batch skipped (no expiry): '{product_name}' batch '{batch_no}'")
-                continue
+
 
             mrp           = _dec(row[10])
             purchase_rate = _dec(row[11])
@@ -310,6 +332,11 @@ class Command(BaseCommand):
             qty_strips    = _int(row[3])
             pack_unit_raw = _str(row[2], "tablet")
             rack          = _str(row[22]) or None
+
+            # Medical devices (knee braces, splints etc.) have no expiry date.
+            # Use 2099-12-31 as a "no expiry" placeholder instead of skipping.
+            if expiry_date is None:
+                expiry_date = date_cls(2099, 12, 31)
 
             try:
                 batch, created = Batch.objects.get_or_create(
