@@ -22,7 +22,7 @@ class Distributor(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     outlet = models.ForeignKey('core.Outlet', on_delete=models.CASCADE, related_name='distributors')
     name = models.CharField(max_length=255)
-    gstin = models.CharField(max_length=15, null=True, blank=True, unique=True)
+    gstin = models.CharField(max_length=15, null=True, blank=True)
     drug_license_no = models.CharField(max_length=100, null=True, blank=True)
     food_license_no = models.CharField(max_length=50, null=True, blank=True)
     phone = models.CharField(max_length=20)
@@ -46,6 +46,8 @@ class Distributor(models.Model):
     class Meta:
         db_table = 'purchases_distributor'
         ordering = ['name']
+        # GSTIN is unique per outlet — same supplier can serve multiple outlets
+        unique_together = [['outlet', 'gstin']]
         indexes = [
             models.Index(fields=['outlet', 'is_active']),
             models.Index(fields=['gstin']),
