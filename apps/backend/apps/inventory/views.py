@@ -1108,13 +1108,14 @@ class StockLedgerBatchesView(APIView):
 
         data = []
         for b in batches:
-            qty_remaining = float(b.qty_strips + (b.qty_loose / (b.product.pack_size or 1)))
+            pack_size = (b.product.pack_size if b.product and b.product.pack_size else None) or b.pack_size or 1
+            qty_remaining = float(b.qty_strips + (b.qty_loose / pack_size))
             data.append({
                 'batch_id': str(b.id),
-                'batch_number': b.batch_number,
-                'product_name': b.product.name,
+                'batch_number': b.batch_no,          # b.batch_no is the model field; batch_number is the JSON key frontend expects
+                'product_name': b.product.name if b.product else 'Custom Product',
                 'qty_remaining': qty_remaining,
-                'pack_size': b.product.pack_size or 1,
+                'pack_size': pack_size,
                 'expiry_date': b.expiry_date.isoformat() if b.expiry_date else None,
             })
         return Response(data, status=status.HTTP_200_OK)
