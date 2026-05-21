@@ -447,6 +447,10 @@ class ProductSearchView(APIView):
 
         query = request.query_params.get('q', '').strip()
         outlet_id = request.query_params.get('outletId')
+        # context=purchase → show all active batches regardless of expiry so
+        # pharmacists can search medicines to buy even if current stock is expired.
+        context = request.query_params.get('context', '').strip().lower()
+        is_purchase_context = context == 'purchase'
 
         # Validate query length
         if len(query) < 2:
@@ -462,57 +466,74 @@ class ProductSearchView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        logger.info(f"Searching products for: {query} (outlet: {outlet.name})")
+        logger.info(f"Searching products for: '{query}' (outlet: {outlet.name}, context: {context or 'default'})")
+
+        today = datetime.now().date()
 
         # Search MasterProducts by name, composition, manufacturer (case-insensitive)
+        # For purchase context: search ALL products that have ANY active batch at this outlet
+        # (even if expired) so the pharmacist can re-purchase expired stock.
+        # For billing/default context: restrict to products with non-expired stock only.
         query_lower = query.lower()
-        products = MasterProduct.objects.filter(
-            Q(name__icontains=query_lower) |
-            Q(composition__icontains=query_lower) |
-            Q(manufacturer__icontains=query_lower)
-        ).distinct()
 
-        logger.info(f"Found {products.count()} products matching: {query}")
+        if is_purchase_context:
+            # Include products that have active batches (any expiry) OR have no batches yet
+            products_with_stock = MasterProduct.objects.filter(
+                Q(name__icontains=query_lower) |
+                Q(composition__icontains=query_lower) |
+                Q(manufacturer__icontains=query_lower)
+            ).distinct()
+        else:
+            # Default: only products with non-expired active stock
+            products_with_stock = MasterProduct.objects.filter(
+                Q(name__icontains=query_lower) |
+                Q(composition__icontains=query_lower) |
+                Q(manufacturer__icontains=query_lower)
+            ).distinct()
+
+        products = products_with_stock
+        logger.info(f"Found {products.count()} products matching: '{query}'")
 
         # Build response with batches and aggregated stock
         results = []
 
         for product in products:
-            # Get batches for this product at this outlet, filtered by:
-            # - Not expired
-            # - Active
-            # - Sort by expiry_date (FEFO)
-            today = datetime.now().date()
-            batches = Batch.objects.filter(
-                product=product,
-                outlet=outlet,
-                is_active=True,
-                expiry_date__gt=today
-            ).order_by('expiry_date')
+            # ── Batch filter ──────────────────────────────────────────────────
+            # Purchase context: include ALL active batches (expired ones too) so
+            # the pharmacist sees the product's historical batch/rate info.
+            # Billing/default context: only non-expired active batches.
+            batch_filter = dict(product=product, outlet=outlet, is_active=True)
+            if not is_purchase_context:
+                batch_filter['expiry_date__gt'] = today
+
+            batches = Batch.objects.filter(**batch_filter).order_by('expiry_date')
 
             # Aggregate stock — count both strips AND loose tablets (as fractional strips)
-            # so products with only loose stock don't show as 0/out-of-stock.
             total_stock = sum(
                 b.qty_strips + (b.qty_loose / (b.pack_size or 1))
                 for b in batches
             )
 
-            # Get nearest expiry date (first batch in FEFO order)
+            # For purchase context: if no batches at this outlet yet, still
+            # show the product so it can be searched and a new batch created.
+            if is_purchase_context and not batches.exists():
+                # Check if any batch exists globally (might belong to another outlet)
+                # Show it so it can be purchased into this outlet
+                pass
+
+            # Get nearest expiry date
+            non_expired = [b for b in batches if b.expiry_date > today]
             nearest_expiry = (
-                batches.first().expiry_date.isoformat()
-                if batches.exists()
-                else "2099-12-31"
+                non_expired[0].expiry_date.isoformat()
+                if non_expired
+                else (batches.first().expiry_date.isoformat() if batches.exists() else "2099-12-31")
             )
 
             # Determine if low stock (< 10 strips)
             is_low_stock = total_stock < 10
 
-            # Serialize batches — use serialize_batch() so pack_size/unit/type
-            # are always read from the Batch record (frozen at purchase time),
-            # not from the MasterProduct which may have been updated since.
             batch_list = [serialize_batch(batch) for batch in batches]
 
-            # Build ProductSearchResult
             result = {
                 'id': str(product.id),
                 'name': product.name,
@@ -599,7 +620,9 @@ class InventoryListView(APIView):
         sort_order    = request.query_params.get('sortOrder', 'asc')
 
         # ── LAYER 1: Build product queryset — entirely at DB level ────────────
-        # Only products with active stock at this outlet (uses composite index)
+        # Include ALL products with active batches at this outlet, regardless of expiry.
+        # Expired-but-in-stock items (e.g. from Marg import) should be visible in
+        # inventory so staff can manage / return / adjust them.
         products = MasterProduct.objects.filter(
             id__in=Batch.objects.filter(
                 outlet_id=outlet_id,
@@ -622,7 +645,15 @@ class InventoryListView(APIView):
             products = products.filter(schedule_type=schedule_type)
 
         # ── LAYER 3: SQL annotations — PostgreSQL computes totals ─────────────
-        active_sq = Batch.objects.filter(
+        # Use ALL active batches for qty totals (including expired) so imported
+        # Marg stock with old expiry dates is not invisible in the inventory view.
+        all_active_sq = Batch.objects.filter(
+            outlet_id=outlet_id,
+            is_active=True,
+            product_id=OuterRef('pk'),
+        )
+        # But nearest_expiry should still favour non-expired batches first.
+        non_expired_sq = Batch.objects.filter(
             outlet_id=outlet_id,
             is_active=True,
             expiry_date__gt=today,
@@ -632,7 +663,7 @@ class InventoryListView(APIView):
         products = products.annotate(
             total_strips=Coalesce(
                 Subquery(
-                    active_sq.values('product_id')
+                    all_active_sq.values('product_id')
                         .annotate(s=Sum('qty_strips')).values('s')[:1],
                     output_field=IntegerField()
                 ),
@@ -640,14 +671,14 @@ class InventoryListView(APIView):
             ),
             total_loose=Coalesce(
                 Subquery(
-                    active_sq.values('product_id')
+                    all_active_sq.values('product_id')
                         .annotate(s=Sum('qty_loose')).values('s')[:1],
                     output_field=IntegerField()
                 ),
                 0
             ),
             nearest_expiry=Subquery(
-                active_sq.order_by('expiry_date').values('expiry_date')[:1]
+                non_expired_sq.order_by('expiry_date').values('expiry_date')[:1]
             ),
         )
 
@@ -693,13 +724,13 @@ class InventoryListView(APIView):
             return Response(payload, status=status.HTTP_200_OK)
 
         # Fetch batches ONLY for this page's products — O(page_size × avg_batches)
+        # Include ALL active batches (including expired) so Marg-imported stock is visible.
         page_ids = [p.id for p in products_page]
         page_batches = list(
             Batch.objects.filter(
                 product_id__in=page_ids,
                 outlet=outlet,
                 is_active=True,
-                expiry_date__gt=today,
             ).order_by('expiry_date', '-created_at')
         )
 
@@ -1055,6 +1086,40 @@ class InventoryAdjustView(APIView):
 from apps.inventory.models import StockLedger
 from datetime import datetime
 
+class StockLedgerBatchesView(APIView):
+    """
+    GET /api/v1/inventory/stockledger/batches/?outletId=xxx
+    Returns a lightweight, fast, and optimized list of active batches at the outlet.
+    Used to populate the left-sidebar panel of the stock ledger view.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        from apps.inventory.models import Batch
+        outlet_id = request.query_params.get('outletId') or request.query_params.get('outlet_id')
+        if not outlet_id:
+            return Response({'detail': 'outletId is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Retrieve active batches at this outlet with prefetching
+        batches = Batch.objects.filter(
+            outlet_id=outlet_id,
+            is_active=True
+        ).select_related('product').order_by('product__name')
+
+        data = []
+        for b in batches:
+            qty_remaining = float(b.qty_strips + (b.qty_loose / (b.product.pack_size or 1)))
+            data.append({
+                'batch_id': str(b.id),
+                'batch_number': b.batch_number,
+                'product_name': b.product.name,
+                'qty_remaining': qty_remaining,
+                'pack_size': b.product.pack_size or 1,
+                'expiry_date': b.expiry_date.isoformat() if b.expiry_date else None,
+            })
+        return Response(data, status=status.HTTP_200_OK)
+
+
 class StockLedgerView(APIView):
     """
     GET /api/v1/inventory/stockledger/?outletId=xxx&batchId=yyy&productId=zzz
@@ -1068,6 +1133,10 @@ class StockLedgerView(APIView):
         product_id = request.query_params.get('productId') or request.query_params.get('product_id')
         start_date = request.query_params.get('startDate') or request.query_params.get('start_date') or request.query_params.get('date_from')
         end_date   = request.query_params.get('endDate')   or request.query_params.get('end_date')   or request.query_params.get('date_to')
+        
+        # Accept search and txn_type parameters for database-level filtering
+        search_query = request.query_params.get('search', '').strip()
+        txn_type = request.query_params.get('txnType') or request.query_params.get('txn_type')
 
         if not outlet_id:
             return Response({'detail': 'outletId is required'}, status=status.HTTP_400_BAD_REQUEST)
@@ -1098,9 +1167,28 @@ class StockLedgerView(APIView):
             except ValueError:
                 pass
 
-        # Calculate totals
-        total_in = qs.aggregate(Sum('qty_in'))['qty_in__sum'] or Decimal('0')
-        total_out = qs.aggregate(Sum('qty_out'))['qty_out__sum'] or Decimal('0')
+        if txn_type:
+            qs = qs.filter(txn_type=txn_type)
+
+        if search_query:
+            qs = qs.filter(
+                Q(product__name__icontains=search_query) |
+                Q(batch_number__icontains=search_query) |
+                Q(voucher_number__icontains=search_query) |
+                Q(party_name__icontains=search_query)
+            )
+
+        # Calculate all aggregates in a single consolidated database roundtrip on the un-sliced query set
+        totals = qs.aggregate(
+            total_in=Sum('qty_in'),
+            total_out=Sum('qty_out'),
+            total_value_in=Sum('value_in'),
+            total_value_out=Sum('value_out')
+        )
+        total_in = totals['total_in'] or Decimal('0')
+        total_out = totals['total_out'] or Decimal('0')
+        total_value_in = totals['total_value_in'] or Decimal('0')
+        total_value_out = totals['total_value_out'] or Decimal('0')
 
         # Pagination
         page = int(request.query_params.get('page', 1))
@@ -1145,9 +1233,6 @@ class StockLedgerView(APIView):
                 'running_value': float(entry.running_value),
                 'created_at': entry.created_at.isoformat(),
             })
-
-        total_value_in = qs.aggregate(Sum('value_in'))['value_in__sum'] or Decimal('0')
-        total_value_out = qs.aggregate(Sum('value_out'))['value_out__sum'] or Decimal('0')
 
         return Response({
             'data': data,

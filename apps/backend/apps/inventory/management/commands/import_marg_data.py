@@ -140,6 +140,7 @@ class Command(BaseCommand):
             distributors_created=0, distributors_existing=0,
             batches_created=0, batches_existing=0,
             ledger_created=0,
+            ledger_accounts_created=0,
             errors=[],
         )
 
@@ -147,6 +148,7 @@ class Command(BaseCommand):
             self._import_products(options["item_master"], stats)
             self._import_distributors(options["party"], outlet, stats)
             self._import_stock(options["stock"], skip, outlet, stats)
+            self._create_distributor_ledgers(outlet, stats)
 
             if dry_run:
                 self.stdout.write(self.style.WARNING("\nDRY RUN — rolling back all changes.\n"))
@@ -404,6 +406,53 @@ class Command(BaseCommand):
             f"Errors: {new_errors}\n"
         )
 
+    # ── step 4 : Sundry Creditor Ledger (auto-link distributors to accounts) ──
+
+    def _create_distributor_ledgers(self, outlet, stats):
+        """Create a Sundry Creditors Ledger entry for every distributor
+        that doesn't already have one.  This is required so distributors
+        appear in the LedgerPicker on the New Purchase form."""
+        from apps.accounts.models import Ledger, LedgerGroup
+        from apps.purchases.models import Distributor
+
+        self.stdout.write("→ Linking distributors to Sundry Creditors ledger …")
+
+        sc_group = LedgerGroup.objects.filter(outlet=outlet, name='Sundry Creditors').first()
+        if not sc_group:
+            stats["errors"].append(
+                "No 'Sundry Creditors' LedgerGroup found — distributor ledgers not created."
+            )
+            self.stdout.write(self.style.WARNING(
+                "   WARNING: Sundry Creditors group missing — skipping ledger creation."
+            ))
+            return
+
+        # IDs that already have a linked ledger
+        existing = set(
+            Ledger.objects.filter(outlet=outlet, linked_distributor__isnull=False)
+            .values_list('linked_distributor_id', flat=True)
+        )
+
+        for dist in Distributor.objects.filter(outlet=outlet).exclude(id__in=existing):
+            try:
+                Ledger.objects.create(
+                    outlet=outlet,
+                    linked_distributor=dist,
+                    name=dist.name,
+                    group=sc_group,
+                    phone=dist.phone or '',
+                    gstin=dist.gstin or '',
+                    address=dist.address or '',
+                    state=dist.state or '',
+                )
+                stats["ledger_accounts_created"] += 1
+            except Exception as e:
+                stats["errors"].append(f"Ledger '{dist.name}': {e}")
+
+        self.stdout.write(
+            f"   Created: {stats['ledger_accounts_created']}\n"
+        )
+
     # ── summary ──────────────────────────────────────────────────
 
     def _print_summary(self, stats):
@@ -417,6 +466,7 @@ class Command(BaseCommand):
         self.stdout.write(f"  Batches created                  : {stats['batches_created']}")
         self.stdout.write(f"  Batches already existed          : {stats['batches_existing']}")
         self.stdout.write(f"  StockLedger OPENING entries      : {stats['ledger_created']}")
+        self.stdout.write(f"  Sundry Creditor ledgers created  : {stats['ledger_accounts_created']}")
         self.stdout.write(f"  Errors / Skipped rows            : {len(stats['errors'])}")
 
         if stats["errors"]:

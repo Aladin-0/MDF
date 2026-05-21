@@ -200,9 +200,12 @@ const realSettingsApi = {
 };
 
 const realProductsApi = {
-    search: async (q: string, outletId: string): Promise<ProductSearchResult[]> => {
+    search: async (q: string, outletId: string, context: 'purchase' | 'billing' | '' = 'purchase'): Promise<ProductSearchResult[]> => {
+        // context=purchase → backend shows all active batches regardless of expiry
+        // context=billing  → backend only shows non-expired batches (safe for selling)
+        const contextParam = context ? `&context=${context}` : '';
         const response = await fetch(
-            `${API_URL}/products/search/?q=${encodeURIComponent(q)}&outletId=${outletId}`,
+            `${API_URL}/products/search/?q=${encodeURIComponent(q)}&outletId=${outletId}${contextParam}`,
             { headers: getHeaders() }
         );
         await assertOk(response);

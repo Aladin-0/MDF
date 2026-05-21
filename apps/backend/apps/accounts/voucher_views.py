@@ -255,8 +255,35 @@ class LedgerStatementView(APIView):
 
         raw.sort(key=lambda r: (r['_date'], r['_created_at']))
 
+        # Dynamically calculate the opening balance for the selected date range
+        from django.db.models import Sum
+        opening_balance = float(ledger.opening_balance)
+        if from_date:
+            prev_vouchers = ledger.voucherline_set.filter(
+                voucher__date__lt=from_date
+            ).aggregate(
+                debit=Sum('debit'),
+                credit=Sum('credit')
+            )
+            v_debit = float(prev_vouchers['debit'] or 0)
+            v_credit = float(prev_vouchers['credit'] or 0)
+
+            prev_journals = JournalLine.objects.filter(
+                ledger=ledger,
+                journal_entry__date__lt=from_date
+            ).exclude(
+                journal_entry__source_type='VOUCHER'
+            ).aggregate(
+                debit=Sum('debit_amount'),
+                credit=Sum('credit_amount')
+            )
+            j_debit = float(prev_journals['debit'] or 0)
+            j_credit = float(prev_journals['credit'] or 0)
+
+            opening_balance += (v_debit - v_credit) + (j_debit - j_credit)
+
         transactions = []
-        running = float(ledger.opening_balance)
+        running = opening_balance
         for row in raw:
             running += row['debit'] - row['credit']
             transactions.append({
@@ -273,7 +300,7 @@ class LedgerStatementView(APIView):
 
         return Response({
             'ledger': LedgerSerializer(ledger).data,
-            'openingBalance': float(ledger.opening_balance),
+            'openingBalance': round(opening_balance, 2),
             'closingBalance': round(running, 2),
             'transactions': transactions,
         })
@@ -1243,9 +1270,29 @@ class ProfitLossView(APIView):
         indirect_inc_blocks, total_indirect_inc = build_group_block(INDIRECT_INC_GROUPS, 'cr')
 
         # ── OPENING STOCK ─────────────────────────────────────────────────────
-        # Approximation: opening_stock = 0 (current Batch model has no historical qty).
-        # This is consistent with Marg ERP when no opening entry exists.
-        opening_stock = Decimal('0')
+        # Sum all StockLedger OPENING entries up to to_date.
+        # OPENING entries represent pre-existing stock (e.g. from Marg import).
+        # They are NOT dated to the FY start — they carry the import date —
+        # so we simply include all OPENING entries that exist up to the report end.
+        from apps.inventory.models import StockLedger
+        from django.db.models import Sum as _Sum
+
+        opening_qs = StockLedger.objects.filter(
+            outlet=outlet,
+            txn_type='OPENING',
+            txn_date__lte=to_date,
+        )
+
+        if stock_valuation == 'mrp_rate':
+            opening_stock = Decimal('0')
+            for entry in opening_qs.select_related('batch'):
+                if entry.batch and entry.batch.mrp:
+                    opening_stock += entry.qty_in * entry.batch.mrp
+                else:
+                    opening_stock += entry.value_in
+        else:
+            agg = opening_qs.aggregate(total=_Sum('value_in'))
+            opening_stock = agg['total'] or Decimal('0')
 
         # ── CLOSING STOCK ─────────────────────────────────────────────────────
         closing_stock = Decimal('0')

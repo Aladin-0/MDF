@@ -1009,29 +1009,31 @@ export default function ProfitLossPage() {
                     // ── Build LEFT (Dr) column rows ─────────────────────────
                     const drTradingRows: React.ReactNode[] = [];
 
-                    // Opening Stock — with visible info note (not tracked in current version)
+                    // Opening Stock — from StockLedger OPENING entries (populated via Marg import)
+                    const openingStockVal = ta.dr.opening_stock?.value ?? 0;
                     drTradingRows.push(
                         <div key="op-stock"
                             className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100">
                             <div className="flex items-center gap-2">
                                 <span className="text-sm text-slate-700">Opening Stock</span>
-                                {/* Info badge — always visible so user understands why value is ₹0 */}
-                                <span className="group relative inline-flex items-center">
-                                    <Info className="h-3.5 w-3.5 text-amber-500 cursor-help" />
-                                    {/* Tooltip */}
-                                    <span className="pointer-events-none absolute left-5 top-0 z-50 w-64 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-                                        <strong className="block mb-0.5">Opening Stock not tracked</strong>
-                                        The current inventory system does not record historical batch quantities.
-                                        Opening Stock is set to ₹0.00 and should be entered as a manual journal
-                                        entry if required.
+                                {openingStockVal === 0 && (
+                                    <span className="group relative inline-flex items-center">
+                                        <Info className="h-3.5 w-3.5 text-amber-500 cursor-help" />
+                                        <span className="pointer-events-none absolute left-5 top-0 z-50 w-64 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                                            <strong className="block mb-0.5">No Opening Stock found</strong>
+                                            No OPENING stock entries exist for this period. If you imported
+                                            data from Marg ERP, they will appear here automatically.
+                                        </span>
                                     </span>
-                                </span>
-                                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
-                                    Not tracked
-                                </span>
+                                )}
+                                {openingStockVal === 0 && (
+                                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
+                                        Restocked
+                                    </span>
+                                )}
                             </div>
-                            <span className="font-mono text-sm font-semibold text-slate-400 w-28 text-right pl-print-val">
-                                ₹0.00
+                            <span className={`font-mono text-sm font-semibold w-28 text-right pl-print-val ${openingStockVal > 0 ? 'text-slate-800' : 'text-slate-400'}`}>
+                                {fmt(openingStockVal)}
                             </span>
                         </div>
                     );
