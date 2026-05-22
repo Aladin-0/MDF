@@ -72,6 +72,48 @@ def _hsn(val):
     return _str(val).replace(".", "").strip()
 
 
+# Unit codes from Marg that are tablet/capsule type (strip-based)
+_TAB_UNITS = {'TAB.', 'TAB', 'TABS', 'TABL', 'CAP.', 'CAP', 'CAPS', 'CAPC', 'CAPD',
+              'FTAB', 'RTAB', 'TABC', 'CATA', 'CACP', 'TA', 'T'}
+
+
+def _pack_size(product_name: str, unit_raw: str) -> int:
+    """
+    Extract pack size from Marg product name.
+
+    Strategy:
+      1. Look for trailing 'xS' pattern  : '10S', '15S', '30S'
+      2. Look for 'xTAB' / 'xCAPS' etc  : '10TAB', '15TAB', '10CAPS'
+      3. If unit is TAB/CAP and no match : default 10 (most common in India)
+      4. All other units (SYP, INJ, etc) : always 1 (sold as single unit)
+    """
+    import re
+    unit = unit_raw.strip().upper()
+    name = product_name.strip()
+
+    # Pattern 1: xS  e.g. "CETIRIZINE 10MG 10S" — take LAST match (trailing = actual pack size)
+    matches = re.findall(r'(\d+)\s*S\b', name, re.IGNORECASE)
+    for size_str in reversed(matches):
+        size = int(size_str)
+        if 2 <= size <= 200:
+            return size
+
+    # Pattern 2: xTAB / xTABS / xCAP / xCAPS  e.g. "ABIXIM 10TAB", "ACCUFINE 10CAPS"
+    # Take LAST match so "2B12 TAB 15 TAB" → 15 not 12
+    matches = re.findall(r'(\d+)\s*(?:TABS?|CAPS?)\b', name, re.IGNORECASE)
+    for size_str in reversed(matches):
+        size = int(size_str)
+        if 2 <= size <= 200:
+            return size
+
+    # If it's a tablet/capsule unit but no size found → default 10
+    if unit in _TAB_UNITS:
+        return 10
+
+    # Syrups, injections, creams, drops, devices → 1
+    return 1
+
+
 def _gstin(val):
     """Return a valid 15-char GSTIN or None."""
     s = _str(val)
@@ -333,6 +375,7 @@ class Command(BaseCommand):
             sale_rate     = _dec(row[12]) or mrp
             qty_strips    = _int(row[3])
             pack_unit_raw = _str(row[2], "tablet")
+            pack_size_val = _pack_size(product_name, pack_unit_raw)
             rack          = _str(row[22]) or None
 
             # Medical devices (knee braces, splints etc.) have no expiry date.
@@ -354,7 +397,7 @@ class Command(BaseCommand):
                         qty_strips      = qty_strips,
                         qty_loose       = 0,
                         opening_qty     = Decimal(qty_strips),
-                        pack_size       = 1,
+                        pack_size       = pack_size_val,
                         pack_unit       = pack_unit_raw,
                         pack_type       = "strip",
                         rack_location   = rack,
