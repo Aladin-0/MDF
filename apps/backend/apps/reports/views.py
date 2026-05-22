@@ -1,7 +1,7 @@
 import logging
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from apps.core.permissions import IsAdminStaff, CanAccessReports
+from apps.core.permissions import IsAdminStaff, CanAccessReports, IsAuthenticated
 from rest_framework import status
 from django.db.models import Sum, Count, Q
 from datetime import datetime
@@ -565,7 +565,9 @@ class GSTR3BReportView(APIView):
 
 class InventoryValuationView(APIView):
     """GET /api/v1/reports/inventory/valuation/"""
-    permission_classes = [CanAccessReports]
+    # Open to all authenticated staff so every role (including billing_staff)
+    # can see the total stock value on the inventory dashboard.
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
         from apps.inventory.models import Batch, MasterProduct

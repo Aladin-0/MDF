@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Keyboard, Loader2 } from 'lucide-react'
+import { Keyboard, Loader2, Calculator } from 'lucide-react'
+import { CalculatorWidget } from '@/components/ui/Calculator'
 import { useBillingStore } from '@/store/billingStore'
 import { StaffPinEntry } from '@/components/billing/StaffPinEntry'
 import { StaffActiveBadge } from '@/components/billing/StaffActiveBadge'
@@ -42,6 +43,7 @@ export default function BillingPage() {
     const [showScheduleH, setShowScheduleH] = useState(false)
     const [showPayment, setShowPayment] = useState(false)
     const [showInvoicePreview, setShowInvoicePreview] = useState(false)
+    const [showCalc, setShowCalc] = useState(false)
 
     const desktopSearchRef = useRef<HTMLInputElement>(null)
     const mobileSearchRef = useRef<HTMLInputElement>(null)
@@ -86,6 +88,7 @@ export default function BillingPage() {
         'Ctrl+z': () => {
             if (cart.length > 0) removeFromCart(cart[cart.length - 1].batchId)
         },
+        'Ctrl+Shift+c': () => setShowCalc(prev => !prev),
         '?': () => setShowShortcuts(prev => !prev)
     }, isPinVerified && !showPayment && !showScheduleH && !lastInvoice)
 
@@ -147,6 +150,7 @@ export default function BillingPage() {
     const totals = getTotals()
 
     return (
+        <>
         <div className="h-[calc(100vh-4rem)] flex flex-col overflow-hidden -m-4 sm:-m-6 relative">
 
             {!isPinVerified && <StaffPinEntry />}
@@ -240,6 +244,7 @@ export default function BillingPage() {
                             ['Select Customer', 'F2'],
                             ['Focus Qty', 'F4'],
                             ['Undo Add', 'Ctrl+Z'],
+                            ['Calculator', 'Ctrl+Shift+C'],
                         ].map(([label, key]) => (
                             <div key={key} className="flex justify-between gap-4">
                                 <span className="text-slate-400">{label}</span>
@@ -251,6 +256,17 @@ export default function BillingPage() {
                         Press <kbd className="bg-slate-800 px-1 rounded">?</kbd> to hide this menu
                     </div>
                 </div>
+            )}
+
+            {/* Floating Calculator Button */}
+            {isPinVerified && (
+                <button
+                    title="Calculator (Calc)"
+                    onClick={() => setShowCalc(true)}
+                    className="fixed bottom-6 right-6 lg:right-[calc(24rem+1.5rem)] z-30 w-11 h-11 rounded-full bg-white border border-slate-200 shadow-lg text-slate-500 hover:text-blue-600 hover:border-blue-300 hover:shadow-blue-100 transition-all flex items-center justify-center active:scale-95"
+                >
+                    <Calculator className="w-5 h-5" />
+                </button>
             )}
 
             <ScheduleHModal
@@ -276,5 +292,11 @@ export default function BillingPage() {
                 onNewBill={handleStartNewBill}
             />
         </div>
+
+        {/* Global Calculator Overlay */}
+        {showCalc && (
+            <CalculatorWidget onClose={() => setShowCalc(false)} />
+        )}
+        </>
     )
 }

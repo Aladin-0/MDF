@@ -40,8 +40,8 @@ export default function InventoryPage() {
     const { data: lowStockData } = useLowStockReport();
 
     const totalProducts = stockData?.pagination?.totalRecords ?? stockData?.data?.length ?? 0;
-    const expiringCount = expiringData?.length || 0;
-    const lowStockCount = lowStockData?.length || 0;
+    const expiringCount = expiringData?.pagination?.totalRecords ?? expiringData?.data?.length ?? 0;
+    const lowStockCount = lowStockData?.pagination?.totalRecords ?? lowStockData?.data?.length ?? 0;
 
     const handleAdjustStock = async (payload: any) => {
         try {

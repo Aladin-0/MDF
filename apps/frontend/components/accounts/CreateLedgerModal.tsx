@@ -14,6 +14,10 @@ interface CreateLedgerModalProps {
     initialName?: string;
     outletId: string;
     ledgerToEdit?: Ledger;
+    /**
+     * When set, the Account Group is locked to this value and the field is
+     * shown as a read-only badge (so billing staff never see the dropdown).
+     */
     defaultGroupName?: string;
     onSave: (ledger: Ledger) => void;
     onClose: () => void;
@@ -90,15 +94,16 @@ export function CreateLedgerModal({
     useEffect(() => {
         voucherApi.getLedgerGroups(outletId).then((loaded) => {
             setGroups(loaded);
-            // Pre-select group if defaultGroupName provided and no group already set
-            if (defaultGroupName && !ledgerToEdit) {
+            // Auto-select the group if defaultGroupName is provided (e.g. from billing)
+            // Always apply, even if groupId is already set, to handle the locked-group case.
+            if (defaultGroupName) {
                 const match = loaded.find(
                     (g: LedgerGroup) => g.name.toLowerCase() === defaultGroupName.toLowerCase()
                 );
                 if (match) setGroupId(match.id);
             }
         }).catch(() => {});
-    }, [outletId, defaultGroupName, ledgerToEdit]);
+    }, [outletId, defaultGroupName]);
 
     async function handleSaveNewGroup() {
         if (!newGroupName.trim()) {
@@ -220,27 +225,37 @@ export function CreateLedgerModal({
                             </div>
                             <div className="space-y-1.5">
                                 <Label>Account Group *</Label>
-                                <div className="flex gap-2">
-                                    <select
-                                        className="flex-1 h-10 rounded-md border border-input bg-background px-3 text-sm"
-                                        value={groupId}
-                                        onChange={(e) => setGroupId(e.target.value)}
-                                    >
-                                        <option value="">Select group...</option>
-                                        {groups.map((g) => (
-                                            <option key={g.id} value={g.id}>{g.name}</option>
-                                        ))}
-                                    </select>
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        className="shrink-0 h-10 px-3 text-xs"
-                                        onClick={() => setShowNewGroup(true)}
-                                    >
-                                        + New Group
-                                    </Button>
-                                </div>
+                                {defaultGroupName ? (
+                                    // Locked mode — called from billing / a context that enforces the group.
+                                    // Show a read-only badge so staff don't need to touch this field.
+                                    <div className="flex items-center h-10 px-3 rounded-md border border-input bg-slate-50 text-sm text-slate-700 gap-2">
+                                        <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                                        <span className="font-medium">{defaultGroupName}</span>
+                                        <span className="text-xs text-slate-400 ml-auto">auto-selected</span>
+                                    </div>
+                                ) : (
+                                    <div className="flex gap-2">
+                                        <select
+                                            className="flex-1 h-10 rounded-md border border-input bg-background px-3 text-sm"
+                                            value={groupId}
+                                            onChange={(e) => setGroupId(e.target.value)}
+                                        >
+                                            <option value="">Select group...</option>
+                                            {groups.map((g) => (
+                                                <option key={g.id} value={g.id}>{g.name}</option>
+                                            ))}
+                                        </select>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            className="shrink-0 h-10 px-3 text-xs"
+                                            onClick={() => setShowNewGroup(true)}
+                                        >
+                                            + New Group
+                                        </Button>
+                                    </div>
+                                )}
                             </div>
                             <div className="space-y-1.5">
                                 <Label>Balancing Method</Label>
