@@ -36,6 +36,8 @@ export default function BillingPage() {
         setLastInvoice,
         resetBilling,
         billsToday,
+        editingSaleId,
+        editingReturnInfo,
     } = useBillingStore()
 
     const [selectedProduct, setSelectedProduct] = useState<ProductSearchResult | null>(null)
