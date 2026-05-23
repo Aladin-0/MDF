@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useBillingStore } from '@/store/billingStore';
 import { useAuthStore } from '@/store/authStore';
+import { useSettingsStore } from '@/store/settingsStore';
 import { salesApi } from '@/lib/apiClient';
 import { PaymentSplit } from '@/types';
 
@@ -26,13 +27,17 @@ export function useSaveBill() {
             const scheduleHData = useBillingStore.getState().scheduleHData;
             const totals = useBillingStore.getState().getTotals();
             const extraDiscountPct = useBillingStore.getState().extraDiscountPct || 0;
-            const { outlet, user } = useAuthStore.getState();
+            const { outlet } = useAuthStore.getState();
+            const { selectedOutletId } = useSettingsStore.getState();
+            // Use selectedOutletId if the user has switched outlets in the UI
+            // (matches the outlet used by product search via useOutletId())
+            const resolvedOutletId = selectedOutletId ?? outlet?.id;
 
             // M13: Require a valid session before touching the backend.
             // Never fall back to hardcoded demo values — a bill without a real
             // outletId or billedBy cannot be audited and would pass backend checks
             // silently on a misconfigured tenant.
-            if (!outlet?.id || !activeStaff?.id) {
+            if (!resolvedOutletId || !activeStaff?.id) {
                 throw {
                     type: 'AUTH_ERROR',
                     message: 'Your session has expired. Please log in again.',
@@ -49,7 +54,7 @@ export function useSaveBill() {
             };
 
             const payload = {
-                outletId: outlet.id,
+                outletId: resolvedOutletId,
                 // Ledger-first (Marg-style): prefer partyLedgerId; fall back to legacy customerId
                 partyLedgerId: customerLedger?.id,
                 customerId: customerLedger ? undefined : customer?.id,
