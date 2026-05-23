@@ -65,8 +65,14 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
                     raise SaleServiceError(f"Discount {item_disc}% exceeds your maximum allowed discount of {staff_max_discount}%")
 
         # Parse invoice_date early — it is needed in Step 6 (stock ledger posting)
-        invoice_date_str = payload['invoiceDate'].rstrip('Z').split('+')[0]
-        invoice_date = datetime.fromisoformat(invoice_date_str)
+        # Frontend may not send invoiceDate on edit; fall back to the existing invoice date
+        raw_invoice_date = payload.get('invoiceDate')
+        if raw_invoice_date:
+            invoice_date_str = str(raw_invoice_date).rstrip('Z').split('+')[0]
+            invoice_date = datetime.fromisoformat(invoice_date_str)
+        else:
+            existing_dt = sale_invoice.invoice_date
+            invoice_date = existing_dt if isinstance(existing_dt, datetime) else datetime.combine(existing_dt, datetime.min.time())
         invoice_d = invoice_date.date()
 
         # Validate payments
