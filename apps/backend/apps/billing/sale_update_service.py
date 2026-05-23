@@ -4,10 +4,10 @@ from decimal import Decimal, ROUND_FLOOR
 from django.db import transaction
 from django.db.models import Sum
 
-from apps.core.models import Outlet, Staff
+from apps.core.models import Outlet
 from apps.inventory.models import Batch, MasterProduct
-from apps.billing.models import SaleInvoice, SaleItem, ScheduleHRegister, CreditAccount, CreditTransaction
-from apps.accounts.models import Customer, Ledger, LedgerEntry, JournalEntry
+from apps.billing.models import SaleInvoice, SaleItem, ScheduleHRegister, CreditAccount, CreditTransaction, LedgerEntry
+from apps.accounts.models import Staff, Customer, Ledger, JournalEntry
 from apps.accounts.services import LedgerService
 from apps.accounts.journal_service import _get_ledger, _create_lines_and_update_balances, post_sale_invoice
 from apps.billing.services import validate_sale_price, fefo_batch_select, schedule_h_validate
