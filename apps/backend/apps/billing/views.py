@@ -340,7 +340,9 @@ class SaleCreateView(APIView):
 
                         if batch_id:
                             try:
-                                batch = Batch.objects.get(id=batch_id, outlet=outlet, product=product)
+                                # Lookup by id + outlet only — product is already linked on the batch
+                                # and using product= here would fail if frontend productId ever drifts
+                                batch = Batch.objects.get(id=batch_id, outlet=outlet)
                             except Batch.DoesNotExist:
                                 raise InsufficientStockError(f"Batch {batch_id} not found")
 
