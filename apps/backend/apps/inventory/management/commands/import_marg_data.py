@@ -571,6 +571,15 @@ class Command(BaseCommand):
 
                 if created:
                     stats["batches_created"] += 1
+
+                    # Sync pack info to MasterProduct if still at import default (1 tablet).
+                    # MasterProduct is global so only update when it has the placeholder value.
+                    if product.pack_size == 1 and product.pack_unit in ('tablet', 'Tablet', ''):
+                        product.pack_size = pack_size_val
+                        product.pack_unit = pack_unit_val
+                        product.pack_type = pack_type_val
+                        product.save(update_fields=['pack_size', 'pack_unit', 'pack_type'])
+
                     # Create OPENING StockLedger entry for this batch
                     value = purchase_rate * qty_strips
                     already_has_entry = StockLedger.objects.filter(
