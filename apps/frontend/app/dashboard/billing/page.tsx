@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Keyboard, Loader2, Calculator } from 'lucide-react'
+import { Keyboard, Loader2, Calculator, AlertTriangle } from 'lucide-react'
 import { CalculatorWidget } from '@/components/ui/Calculator'
 import { useBillingStore } from '@/store/billingStore'
 import { StaffPinEntry } from '@/components/billing/StaffPinEntry'
@@ -190,6 +190,29 @@ export default function BillingPage() {
                     </CustomerSelector>
                 </div>
             </div>
+
+            {/* Return Warning Banner — shown when editing a sale that has returns */}
+            {editingSaleId && editingReturnInfo && (
+                <div className="flex-shrink-0 bg-amber-50 border-b border-amber-200 px-4 py-3">
+                    <div className="flex items-start gap-3 max-w-4xl mx-auto">
+                        <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                        <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-amber-800">
+                                ⚠️ This sale has {editingReturnInfo.count} return{editingReturnInfo.count > 1 ? 's' : ''} against it
+                            </p>
+                            <p className="text-xs text-amber-700 mt-0.5">
+                                Total returned: <span className="font-medium">₹{editingReturnInfo.total.toFixed(2)}</span>
+                                {editingReturnInfo.summary.length > 0 && (
+                                    <span className="ml-2">
+                                        ({editingReturnInfo.summary.map(r => r.returnNo).join(', ')})
+                                    </span>
+                                )}
+                                {' '}— Editing may affect return calculations. Proceed carefully.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Mobile Search Bar */}
             <div className="sm:hidden p-3 bg-white border-b shrink-0">

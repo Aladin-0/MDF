@@ -25,6 +25,8 @@ interface BillingState {
     searchQuery: string;
     lastInvoice: SaleInvoice | null;
     editingSaleId: string | null;
+    // Return-warning metadata set when editing a sale that has returns
+    editingReturnInfo: { count: number; total: number; summary: { returnNo: string; returnDate: string; totalAmount: number; reason: string }[] } | null;
 
     extraDiscountPct: number;
 
@@ -46,6 +48,7 @@ interface BillingState {
     toggleCart: () => void;
     setLastInvoice: (inv: SaleInvoice | null) => void;
     setEditingSaleId: (id: string | null) => void;
+    setEditingReturnInfo: (info: BillingState['editingReturnInfo']) => void;
     resetBilling: () => void;
 
     backendRateErrors: Record<string, string>;
@@ -84,6 +87,7 @@ export const useBillingStore = create<BillingState>((set, get) => ({
     searchQuery: '',
     lastInvoice: null,
     editingSaleId: null,
+    editingReturnInfo: null,
     billsToday: 0,
     extraDiscountPct: 0,
     backendRateErrors: {},
@@ -154,6 +158,7 @@ export const useBillingStore = create<BillingState>((set, get) => ({
         prescriptionImageUrl: null,
         extraDiscountPct: 0,
         editingSaleId: null,
+        editingReturnInfo: null,
     }),
 
     setPayment: (updates) => set((state) => ({
@@ -166,6 +171,7 @@ export const useBillingStore = create<BillingState>((set, get) => ({
     toggleCart: () => set((state) => ({ isCartOpen: !state.isCartOpen })),
     setLastInvoice: (inv) => set({ lastInvoice: inv }),
     setEditingSaleId: (id) => set({ editingSaleId: id }),
+    setEditingReturnInfo: (info) => set({ editingReturnInfo: info }),
     resetBilling: () => set({
         cart: [],
         customer: null,
@@ -178,6 +184,7 @@ export const useBillingStore = create<BillingState>((set, get) => ({
         extraDiscountPct: 0,
         lastInvoice: null,
         editingSaleId: null,
+        editingReturnInfo: null,
         // intentionally keeping lastInvoice per requirements
     }),
 

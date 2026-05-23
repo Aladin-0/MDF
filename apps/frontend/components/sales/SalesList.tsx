@@ -82,6 +82,14 @@ export default function SalesList() {
         store.clearCart();
         store.setCustomer(invoice.customer || null);
         store.setEditingSaleId(invoice.id);
+
+        // Store return metadata so the billing page can warn the user
+        const inv = invoice as any;
+        store.setEditingReturnInfo(
+            inv.hasReturns
+                ? { count: inv.returnCount ?? 0, total: inv.returnTotal ?? 0, summary: inv.returnSummary ?? [] }
+                : null
+        );
         
         const totalDiscountAmount = typeof invoice.discountAmount === 'number' ? invoice.discountAmount : 0;
         const totalRateAmount = invoice.items?.reduce((sum, item) => {
@@ -130,6 +138,7 @@ export default function SalesList() {
         setSelectedInvoiceId(null);
         router.push('/dashboard/billing');
     };
+
 
     // When search is active: bypass date filters → search ALL dates (newest first)
     // When search is empty: apply selected date range

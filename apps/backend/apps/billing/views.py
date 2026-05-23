@@ -1813,6 +1813,21 @@ class SaleDetailView(APIView):
                 'gstAmount': float(item.gst_amount),
                 'totalAmount': float(item.total_amount),
             })
+
+        # Check if this sale has any returns against it
+        from apps.billing.models import SalesReturn
+        sale_returns = SalesReturn.objects.filter(original_sale=invoice).order_by('return_date')
+        return_count = sale_returns.count()
+        return_total = float(sale_returns.aggregate(t=Sum('total_amount'))['t'] or 0)
+        return_summary = [
+            {
+                'returnNo': r.return_no,
+                'returnDate': r.return_date.isoformat(),
+                'totalAmount': float(r.total_amount),
+                'reason': r.reason or '',
+            }
+            for r in sale_returns
+        ]
             
         result = {
             'id': str(invoice.id),
@@ -1848,10 +1863,16 @@ class SaleDetailView(APIView):
             'billedBy': str(invoice.billed_by.id) if invoice.billed_by else None,
             'billedByName': invoice.billed_by.name if invoice.billed_by else 'Unknown',
             'items': items_list,
+            # Return metadata — used by billing page to show edit warning
+            'hasReturns': return_count > 0,
+            'returnCount': return_count,
+            'returnTotal': return_total,
+            'returnSummary': return_summary,
             'createdAt': invoice.created_at.isoformat(),
         }
         
         return Response(result, status=status.HTTP_200_OK)
+
 
     def put(self, request, sale_id, *args, **kwargs):
         """Update a sale invoice."""
