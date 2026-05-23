@@ -54,29 +54,109 @@ def _open_rows(path, min_row=1):
         wb.close()
 
 
+# ─────────── Marg unit → MediFlow pack_unit / pack_type ────────────
+
+# Maps Marg unit codes to a base category
+_MARG_UNIT_MAP = {
+    # Tablets
+    'TAB': 'tablet',  'TAB.': 'tablet', 'TABS': 'tablet', 'TABL': 'tablet',
+    'FTAB': 'tablet', 'RTAB': 'tablet', 'TABC': 'tablet', 'CATA': 'tablet',
+    'CACP': 'tablet', 'TA':   'tablet', 'T':    'tablet',
+    # Capsules
+    'CAP':  'capsule', 'CAP.': 'capsule', 'CAPS': 'capsule', 'CAPT': 'capsule',
+    'CAPC': 'capsule', 'CAPD': 'capsule',
+    # Strips (already named)
+    'STRI': 'strip',   'STRIP': 'strip',
+    # Syrups
+    'SYP':  'syrup', 'SYRP': 'syrup', 'SYPT': 'syrup', 'SURP': 'syrup',
+    'SRUP': 'syrup', 'SYRI': 'syrup', 'SYP[': 'syrup',
+    # Drops
+    'DROP': 'drops', 'DRP': 'drops', 'DRPS': 'drops',
+    # Injections / IV
+    'INJ':  'injection', 'INJC': 'injection', 'INJT': 'injection',
+    'INNJ': 'injection', 'INIC': 'injection', 'INJS': 'injection',
+    'IVSI': 'injection', 'IVFI': 'injection', 'IVA':  'injection',
+    # Creams / Gels / Ointments
+    'CRME': 'cream', 'CRM': 'cream', 'OINT': 'ointment', 'GEL': 'gel',
+    # Lotions
+    'LOTO': 'lotion', 'LOT': 'lotion', 'LOTN': 'lotion',
+    # Powder
+    'POWD': 'powder', 'PWD': 'powder',
+    # Surgical / Device / Piece
+    'SURG': 'piece', 'PCS': 'piece', 'PICE': 'piece',
+    # Colostomy / General
+    'COLO': 'piece', 'GNRL': 'piece', 'GNRB': 'piece', 'GNRS': 'piece',
+    'GNEP': 'piece', 'GEN':  'piece', 'GENR': 'piece',
+}
+
+
+def _marg_pack_unit(marg_unit: str, pack_size: int):
+    """
+    Convert a Marg unit code + pack_size into (pack_unit, pack_type) for MediFlow.
+    Examples:
+      TAB  + 15 → ('strip',   'strip')
+      TAB  +  1 → ('tablet',  'strip')
+      CAP  + 10 → ('strip',   'strip')
+      SYRP +  1 → ('syrup',   'bottle')
+      DROP +  1 → ('drops',   'bottle')
+      INJ  +  1 → ('injection','vial')
+      SURG +  1 → ('piece',   'piece')
+    """
+    base = _MARG_UNIT_MAP.get(marg_unit.upper().strip(), 'piece')
+    if base in ('tablet', 'capsule'):
+        if pack_size > 1:
+            return ('strip', 'strip')
+        return (base, 'strip')
+    if base == 'strip':
+        return ('strip', 'strip')
+    if base == 'syrup':
+        return ('syrup', 'bottle')
+    if base == 'drops':
+        return ('drops', 'bottle')
+    if base == 'injection':
+        return ('injection', 'vial')
+    if base in ('cream', 'ointment', 'gel'):
+        return (base, 'tube')
+    if base == 'lotion':
+        return ('lotion', 'bottle')
+    if base == 'powder':
+        return ('powder', 'bottle')
+    return ('piece', 'piece')
+
+
 def _build_pack_lookup(path):
     """
-    Build pack-size lookup dicts from conversion.xlsx (or .xls).
-    conversion.xlsx cols: code(1) billname(3) packing(5) unit(6)
-    Returns: (by_code: {int→int}, by_name: {str→int})
+    Build pack-size lookup dicts from conversion.xlsx.
+    conversion.xlsx cols: code(1)  billname(3)  packing(5)  unit(6)  pack(7)
+
+    KEY FIX: use the `pack` column (index 7) for the numeric pack size
+             (it is already a plain number: 15, 10, 1).
+             Use the `unit` column (index 6) to derive pack_unit / pack_type.
+
+    Returns: (by_code: {int → (size, unit, type)},
+              by_name: {str → (size, unit, type)})
     """
     by_code, by_name = {}, {}
     for row in _open_rows(path, min_row=2):
         code     = row[1]
         billname = str(row[3]).strip() if len(row) > 3 and row[3] else ''
-        packing  = row[5] if len(row) > 5 else None
-        # packing may be '10', '10S', '1S', 10, 1 etc.
-        ps_raw   = str(packing).replace('S', '').replace('s', '').strip() if packing else ''
-        ps       = _int(ps_raw) if ps_raw else 0
+        marg_unit= str(row[6]).strip().upper() if len(row) > 6 and row[6] else ''
+        pack_raw = row[7] if len(row) > 7 else None   # `pack` column — plain number
+
+        ps = _int(pack_raw) if pack_raw is not None else 0
         if ps <= 0:
             ps = 1
+
+        pack_unit_val, pack_type_val = _marg_pack_unit(marg_unit, ps)
+        entry = (ps, pack_unit_val, pack_type_val)
+
         if code:
             try:
-                by_code[int(float(code))] = ps
+                by_code[int(float(code))] = entry
             except (ValueError, TypeError):
                 pass
         if billname:
-            by_name[billname] = ps
+            by_name[billname] = entry
     return by_code, by_name
 
 
@@ -432,27 +512,36 @@ class Command(BaseCommand):
             mrp           = _dec(row[10])
             purchase_rate = _dec(row[11])
             sale_rate     = _dec(row[12]) or mrp
-            qty_strips    = _int(row[3])
-            pack_unit_raw = _str(row[2], "tablet")
             rack          = _str(row[22]) or None
 
-            # Pack size: 1st priority = conversion.xlsx by code
-            #            2nd priority = conversion.xlsx by name
-            #            3rd priority = extract from product name (_pack_size)
+            # Qty: fractional strips mean loose tablets e.g. 4.1 = 4 strips + 1 loose
+            try:
+                qty_raw    = float(str(row[3])) if row[3] else 0.0
+            except (ValueError, TypeError):
+                qty_raw    = 0.0
+            qty_strips     = int(qty_raw)
+            pack_unit_raw  = _str(row[2], "tablet")  # unit from stock file (fallback)
+
+            # Pack info: 1st = conversion.xlsx by code, 2nd = by name, 3rd = name extraction
             try:
                 code_int = int(float(row[0])) if row[0] else None
             except (ValueError, TypeError):
                 code_int = None
 
             if code_int and code_int in pack_by_code:
-                pack_size_val = pack_by_code[code_int]
+                pack_size_val, pack_unit_val, pack_type_val = pack_by_code[code_int]
             elif product_name in pack_by_name:
-                pack_size_val = pack_by_name[product_name]
+                pack_size_val, pack_unit_val, pack_type_val = pack_by_name[product_name]
             else:
+                # Fallback: name-based size extraction + unit from stock file
                 pack_size_val = _pack_size(product_name, pack_unit_raw)
+                pack_unit_val, pack_type_val = _marg_pack_unit(pack_unit_raw, pack_size_val)
 
-            # Medical devices (knee braces, splints etc.) have no expiry date.
-            # Use 2099-12-31 as a "no expiry" placeholder instead of skipping.
+            # Loose units from the fractional part of the Marg quantity
+            loose_fraction = qty_raw - qty_strips
+            qty_loose_val  = round(loose_fraction * pack_size_val)
+
+            # Medical devices etc. have no expiry → use 2099-12-31 placeholder
             if expiry_date is None:
                 expiry_date = date_cls(2099, 12, 31)
 
@@ -468,11 +557,11 @@ class Command(BaseCommand):
                         purchase_rate   = purchase_rate,
                         sale_rate       = sale_rate,
                         qty_strips      = qty_strips,
-                        qty_loose       = 0,
+                        qty_loose       = qty_loose_val,
                         opening_qty     = Decimal(qty_strips),
                         pack_size       = pack_size_val,
-                        pack_unit       = pack_unit_raw,
-                        pack_type       = "strip",
+                        pack_unit       = pack_unit_val,
+                        pack_type       = pack_type_val,
                         rack_location   = rack,
                         is_active       = True,
                         is_opening_stock= True,
