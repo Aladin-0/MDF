@@ -26,8 +26,58 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
 import openpyxl
+try:
+    import xlrd          # for legacy .xls files
+    _HAS_XLRD = True
+except ImportError:
+    _HAS_XLRD = False
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
+
+
+# ───────────────── .xls / .xlsx unified reader ──────────────────
+
+def _open_rows(path, min_row=1):
+    """Yield rows as plain tuples from either .xls or .xlsx files."""
+    if path.lower().endswith('.xls'):
+        if not _HAS_XLRD:
+            raise RuntimeError("xlrd is required to read .xls files. Run: pip install xlrd==1.2.0")
+        wb = xlrd.open_workbook(path)
+        ws = wb.sheet_by_index(0)
+        for i in range(min_row - 1, ws.nrows):
+            yield tuple(ws.row_values(i))
+    else:
+        wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+        ws = wb.active
+        for row in ws.iter_rows(min_row=min_row, values_only=True):
+            yield row
+        wb.close()
+
+
+def _build_pack_lookup(path):
+    """
+    Build pack-size lookup dicts from conversion.xlsx (or .xls).
+    conversion.xlsx cols: code(1) billname(3) packing(5) unit(6)
+    Returns: (by_code: {int→int}, by_name: {str→int})
+    """
+    by_code, by_name = {}, {}
+    for row in _open_rows(path, min_row=2):
+        code     = row[1]
+        billname = str(row[3]).strip() if len(row) > 3 and row[3] else ''
+        packing  = row[5] if len(row) > 5 else None
+        # packing may be '10', '10S', '1S', 10, 1 etc.
+        ps_raw   = str(packing).replace('S', '').replace('s', '').strip() if packing else ''
+        ps       = _int(ps_raw) if ps_raw else 0
+        if ps <= 0:
+            ps = 1
+        if code:
+            try:
+                by_code[int(float(code))] = ps
+            except (ValueError, TypeError):
+                pass
+        if billname:
+            by_name[billname] = ps
+    return by_code, by_name
 
 
 # ─────────────────────────── helpers ────────────────────────────
@@ -136,9 +186,13 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--outlet",      required=True, help="Outlet UUID")
-        parser.add_argument("--item-master", required=True, help="Path to item master xlsx")
-        parser.add_argument("--stock",       required=True, help="Path to stock/batch xlsx")
-        parser.add_argument("--party",       required=True, help="Path to party master xlsx")
+        parser.add_argument("--item-master", required=True, help="Path to item master xlsx/xls")
+        parser.add_argument("--stock",       required=True, help="Path to stock/batch xlsx/xls")
+        parser.add_argument("--party",       required=True, help="Path to party master xlsx/xls")
+        parser.add_argument(
+            "--pack-lookup", default=None,
+            help="(Optional) Path to conversion.xlsx with exact packing column for pack sizes",
+        )
         parser.add_argument(
             "--stock-skip", type=int, default=2,
             help="Header rows to skip in stock file: 2 for Manavata, 4 for SAI",
@@ -170,6 +224,16 @@ class Command(BaseCommand):
             if not os.path.exists(path):
                 raise CommandError(f"{label} file not found: {path}")
 
+        pack_lookup_path = options.get("pack_lookup")
+        pack_lookup = None
+        if pack_lookup_path:
+            if not os.path.exists(pack_lookup_path):
+                raise CommandError(f"Pack lookup file not found: {pack_lookup_path}")
+            self.stdout.write(f"→ Loading pack-size lookup from {os.path.basename(pack_lookup_path)} …")
+            pack_lookup = _build_pack_lookup(pack_lookup_path)
+            total_entries = len(pack_lookup[0]) + len(pack_lookup[1])
+            self.stdout.write(f"   Loaded {len(pack_lookup[0])} code entries + {len(pack_lookup[1])} name entries")
+
         self.stdout.write(self.style.SUCCESS(
             f"\n{'='*60}\n"
             f"Outlet  : {outlet.name}  ({outlet.id})\n"
@@ -189,7 +253,7 @@ class Command(BaseCommand):
         with transaction.atomic():
             self._import_products(options["item_master"], stats)
             self._import_distributors(options["party"], outlet, stats)
-            self._import_stock(options["stock"], skip, outlet, stats)
+            self._import_stock(options["stock"], skip, outlet, stats, pack_lookup=pack_lookup)
             self._create_distributor_ledgers(outlet, stats)
 
             if dry_run:
@@ -204,15 +268,13 @@ class Command(BaseCommand):
         from apps.inventory.models import MasterProduct
 
         self.stdout.write("→ Importing products (item master) …")
-        wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
-        ws = wb.active
 
         # Headers: ItemID(0) Company(1) ItemCode(2) Name(3) HSNCode(4)
         #          LocalTax(5) SGST(6) CGST(7) CentralTax(8) IGST(9)
         #          HsnName(10) OldTax(11) Rate(12) AddLess(13) P.Rate(14)
         #          M.R.P.(15) Stock(16) Tax Diff.(17) Category(18) Salt(19)
 
-        for row in ws.iter_rows(min_row=2, values_only=True):
+        for row in _open_rows(path, min_row=2):
             name = _str(row[3])
             if not name:
                 continue
@@ -258,8 +320,6 @@ class Command(BaseCommand):
         from apps.purchases.models import Distributor
 
         self.stdout.write("→ Importing distributors (party master) …")
-        wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
-        ws = wb.active
 
         # Headers: code(0) type(1) ledger(2) city(3) group(4) name(5)
         #          address1(6) address2(7) address3(8) pin(9) email(10)
@@ -338,13 +398,11 @@ class Command(BaseCommand):
 
     # ── step 3 : Batch + StockLedger OPENING (per outlet) ────────
 
-    def _import_stock(self, path, skip_rows, outlet, stats):
+    def _import_stock(self, path, skip_rows, outlet, stats, pack_lookup=None):
         from datetime import date as date_cls
         from apps.inventory.models import MasterProduct, Batch, StockLedger
 
         self.stdout.write("→ Importing stock batches …")
-        wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
-        ws = wb.active
 
         # Stock file headers (row at index skip_rows-1, data starts at skip_rows):
         # Code(0) Product Name(1) Unit(2) Current Stock(3) …
@@ -354,9 +412,13 @@ class Command(BaseCommand):
         # Build product name → MasterProduct lookup map (faster than per-row DB hit)
         product_map = {p.name: p for p in MasterProduct.objects.all()}
 
+        # Unpack pack_lookup dicts
+        pack_by_code = pack_lookup[0] if pack_lookup else {}
+        pack_by_name = pack_lookup[1] if pack_lookup else {}
+
         errors_before = len(stats["errors"])
 
-        for row in ws.iter_rows(min_row=skip_rows + 1, values_only=True):
+        for row in _open_rows(path, min_row=skip_rows + 1):
             product_name = _str(row[1])
             if not product_name:
                 continue
@@ -369,14 +431,27 @@ class Command(BaseCommand):
             batch_no    = _str(row[16]) or "NO-BATCH"
             expiry_date = _date(row[18])
 
-
             mrp           = _dec(row[10])
             purchase_rate = _dec(row[11])
             sale_rate     = _dec(row[12]) or mrp
             qty_strips    = _int(row[3])
             pack_unit_raw = _str(row[2], "tablet")
-            pack_size_val = _pack_size(product_name, pack_unit_raw)
             rack          = _str(row[22]) or None
+
+            # Pack size: 1st priority = conversion.xlsx by code
+            #            2nd priority = conversion.xlsx by name
+            #            3rd priority = extract from product name (_pack_size)
+            try:
+                code_int = int(float(row[0])) if row[0] else None
+            except (ValueError, TypeError):
+                code_int = None
+
+            if code_int and code_int in pack_by_code:
+                pack_size_val = pack_by_code[code_int]
+            elif product_name in pack_by_name:
+                pack_size_val = pack_by_name[product_name]
+            else:
+                pack_size_val = _pack_size(product_name, pack_unit_raw)
 
             # Medical devices (knee braces, splints etc.) have no expiry date.
             # Use 2099-12-31 as a "no expiry" placeholder instead of skipping.
