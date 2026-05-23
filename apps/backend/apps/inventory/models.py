@@ -18,6 +18,8 @@ class MasterProduct(models.Model):
         ('allopathy', 'Allopathy'),
         ('ayurveda', 'Ayurveda'),
         ('homeo', 'Homeopathy'),
+        ('surgical', 'Surgical / Device'),
+        ('general', 'General / FMCG'),
         ('fmcg', 'FMCG'),
     ]
 

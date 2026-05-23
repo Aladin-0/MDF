@@ -54,6 +54,37 @@ def _open_rows(path, min_row=1):
         wb.close()
 
 
+# ─────────── Marg HsnName → MediFlow drug_type ──────────────────────
+
+_MARG_CATEGORY_MAP = {
+    # Medicine / Allopathy
+    'MEDICINE': 'allopathy', 'MEDICIN': 'allopathy', 'MEDICIN2': 'allopathy',
+    'MEDI':     'allopathy', 'MEDIC':   'allopathy',
+    'SANITIZER':'allopathy', 'GENERAL': 'general',   'GEN': 'general',
+    'GENE':     'general',   'GNE':     'general',   'GNR': 'general',
+    'GNRL':     'general',   'GNEP':    'general',   'GENR': 'general',
+    'HIMALA':   'ayurveda',  'HIMA':    'ayurveda',  'HIM': 'ayurveda',
+    # Surgical / Device
+    'SURG':     'surgical',  'SURGICAL':'surgical',  'SRGYCAL': 'surgical',
+    'SUR':      'surgical',  'COLOBAG': 'surgical',  'COLO':    'surgical',
+    'INJ':      'allopathy',
+}
+
+
+def _marg_drug_type(hsnname: str) -> str:
+    """Map Marg HsnName column value to a MediFlow drug_type choice."""
+    return _MARG_CATEGORY_MAP.get(str(hsnname).strip().upper(), 'allopathy')
+
+
+def _clean_salt(val) -> str:
+    """Return Salt/composition string, filtering out Marg placeholder junk."""
+    s = _str(val)
+    # Marg uses '..' '...' '....' as placeholders meaning 'no data'
+    if not s or all(c in '.,-_ ' for c in s) or s in ('None', 'N/A', '--', '---'):
+        return ''
+    return s
+
+
 # ─────────── Marg unit → MediFlow pack_unit / pack_type ────────────
 
 # Maps Marg unit codes to a base category
@@ -326,7 +357,7 @@ class Command(BaseCommand):
             distributors_created=0, distributors_existing=0,
             batches_created=0, batches_existing=0,
             ledger_created=0,
-            ledger_accounts_created=0,
+             ledger_accounts_created=0,
             errors=[],
         )
 
@@ -347,49 +378,65 @@ class Command(BaseCommand):
     def _import_products(self, path, stats):
         from apps.inventory.models import MasterProduct
 
-        self.stdout.write("→ Importing products (item master) …")
+        self.stdout.write("\u2192 Importing products (item master) \u2026")
 
-        # Headers: ItemID(0) Company(1) ItemCode(2) Name(3) HSNCode(4)
-        #          LocalTax(5) SGST(6) CGST(7) CentralTax(8) IGST(9)
-        #          HsnName(10) OldTax(11) Rate(12) AddLess(13) P.Rate(14)
-        #          M.R.P.(15) Stock(16) Tax Diff.(17) Category(18) Salt(19)
+        # hsncodemaster2.xls / SAI_ITEMS.xlsx share the same column layout:
+        # ItemID(0) Company(1) ItemCode(2) Name(3)     HSNCode(4)
+        # LocalTax(5) SGST(6)  CGST(7)   Central(8)   IGST(9)
+        # HsnName(10) OldTax(11) Rate(12) AddLess(13)  P.Rate(14)
+        # M.R.P.(15)  Stock(16)  TaxDiff(17) Category(18) Salt(19)
 
+        updated = 0
         for row in _open_rows(path, min_row=2):
             name = _str(row[3])
             if not name:
                 continue
 
-            gst = _dec(row[6]) + _dec(row[7])   # SGST + CGST = total GST %
-            hsn = _hsn(row[4])
+            gst          = _dec(row[6]) + _dec(row[7])   # SGST + CGST
+            hsn          = _hsn(row[4])
+            clean_salt   = _clean_salt(row[19])
+            drug_type_val= _marg_drug_type(_str(row[10]))
 
             try:
-                _, created = MasterProduct.objects.get_or_create(
+                product, created = MasterProduct.objects.get_or_create(
                     name=name,
                     defaults=dict(
-                        manufacturer   = _str(row[1]),
-                        hsn_code       = hsn or None,
-                        gst_rate       = gst,
-                        mrp            = _dec(row[15]),
+                        manufacturer      = _str(row[1]),
+                        hsn_code          = hsn or None,
+                        gst_rate          = gst,
+                        mrp               = _dec(row[15]),
                         default_sale_rate = _dec(row[12]),
-                        category       = _str(row[18]),
-                        composition    = _str(row[19]),
-                        drug_type      = "allopathy",   # not in Marg export
-                        schedule_type  = "OTC",          # not in Marg export
-                        pack_size      = 1,              # not in Marg export
-                        pack_unit      = "tablet",       # not in Marg export
-                        pack_type      = "strip",        # not in Marg export
+                        composition       = clean_salt,
+                        drug_type         = drug_type_val,
+                        schedule_type     = "OTC",
+                        pack_size         = 1,
+                        pack_unit         = "tablet",
+                        pack_type         = "strip",
                     ),
                 )
                 if created:
                     stats["products_created"] += 1
                 else:
                     stats["products_existing"] += 1
+                    # Update fields that may be blank/wrong from a previous import
+                    to_update = []
+                    if not product.composition and clean_salt:
+                        product.composition = clean_salt
+                        to_update.append('composition')
+                    # Only correct drug_type from allopathy → surgical (not vice-versa)
+                    if product.drug_type == 'allopathy' and drug_type_val == 'surgical':
+                        product.drug_type = drug_type_val
+                        to_update.append('drug_type')
+                    if to_update:
+                        product.save(update_fields=to_update)
+                        updated += 1
             except Exception as e:
                 stats["errors"].append(f"Product '{name}': {e}")
 
         self.stdout.write(
             f"   Created: {stats['products_created']}  |  "
             f"Already existed: {stats['products_existing']}  |  "
+            f"Updated (enrich): {updated}  |  "
             f"Errors: {len(stats['errors'])}\n"
         )
 
@@ -398,66 +445,71 @@ class Command(BaseCommand):
     def _import_distributors(self, path, outlet, stats):
         from apps.purchases.models import Distributor
 
-        self.stdout.write("→ Importing distributors (party master) …")
+        self.stdout.write("\u2192 Importing distributors (party master) \u2026")
 
-        # Headers: code(0) type(1) ledger(2) city(3) group(4) name(5)
-        #          address1(6) address2(7) address3(8) pin(9) email(10)
-        #          site(11) contact(12) phone1(13) phone2(14) mobile(15)
-        #          resi(16) fax(17) licence(18) tin/gstin(19) …
-        #          crdays(31)
+        # party file cols: code(0) type(1) ledger(2) city(3) group(4) name(5)
+        #   address1(6) address2(7) address3(8) pin(9) email(10)
+        #   site(11) contact(12) phone1(13) phone2(14) mobile(15)
+        #   resi(16) fax(17) licence(18) tin/gstin(19) ...
+        #   crdays(31)
 
         errors_before = len(stats["errors"])
+        updated = 0
 
         for row in _open_rows(path, min_row=2):
             name = _str(row[5])
             if not name:
                 continue
 
-            gstin  = _gstin(row[19])
-            addr   = " ".join(filter(None, [_str(row[6]), _str(row[7]), _str(row[8])]))
-            phone  = _phone(row)
-            email  = _str(row[10]) or None
-            city   = _str(row[3])
-            crdays = _int(row[31])
+            gstin    = _gstin(row[19])
+            addr     = " ".join(filter(None, [_str(row[6]), _str(row[7]), _str(row[8])]))
+            phone    = _phone(row)
+            email    = _str(row[10]) or None
+            city     = _str(row[3])
+            crdays   = _int(row[31])
+            drug_lic = _str(row[18]) or None
 
-            try:
-                _, created = Distributor.objects.get_or_create(
+            def _try_create(gstin_val):
+                return Distributor.objects.get_or_create(
                     outlet=outlet,
                     name=name,
                     defaults=dict(
-                        gstin          = gstin,
-                        drug_license_no= _str(row[18]) or None,
-                        phone          = phone,
-                        email          = email if email and "@" in email else None,
-                        address        = addr,
-                        city           = city,
-                        state          = "Maharashtra",   # not in Marg export
-                        credit_days    = crdays,
+                        gstin           = gstin_val,
+                        drug_license_no = drug_lic,
+                        phone           = phone,
+                        email           = email if email and "@" in email else None,
+                        address         = addr,
+                        city            = city,
+                        state           = "Maharashtra",
+                        credit_days     = crdays,
                     ),
                 )
+
+            try:
+                dist, created = _try_create(gstin)
+                if not created:
+                    # Update drug_license_no if currently blank
+                    to_update = []
+                    if not dist.drug_license_no and drug_lic:
+                        dist.drug_license_no = drug_lic
+                        to_update.append('drug_license_no')
+                    if to_update:
+                        dist.save(update_fields=to_update)
+                        updated += 1
+
                 if created:
                     stats["distributors_created"] += 1
                 else:
                     stats["distributors_existing"] += 1
+
             except Exception as e:
                 if gstin and "unique constraint" in str(e).lower():
-                    # Same GSTIN exists in this outlet with a different name
-                    # (duplicate entry in Marg). Retry without GSTIN.
                     try:
-                        _, created = Distributor.objects.get_or_create(
-                            outlet=outlet,
-                            name=name,
-                            defaults=dict(
-                                gstin          = None,
-                                drug_license_no= _str(row[18]) or None,
-                                phone          = phone,
-                                email          = email if email and "@" in email else None,
-                                address        = addr,
-                                city           = city,
-                                state          = "Maharashtra",
-                                credit_days    = crdays,
-                            ),
-                        )
+                        dist, created = _try_create(None)
+                        if not created and not dist.drug_license_no and drug_lic:
+                            dist.drug_license_no = drug_lic
+                            dist.save(update_fields=['drug_license_no'])
+                            updated += 1
                         if created:
                             stats["distributors_created"] += 1
                         else:
@@ -471,6 +523,7 @@ class Command(BaseCommand):
         self.stdout.write(
             f"   Created: {stats['distributors_created']}  |  "
             f"Already existed: {stats['distributors_existing']}  |  "
+            f"Updated (drug lic): {updated}  |  "
             f"Errors: {new_errors}\n"
         )
 
