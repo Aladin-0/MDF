@@ -792,10 +792,11 @@ class SaleListView(APIView):
                 Q(billed_by__name__icontains=search_q)
             )
 
-        # ── Profit aggregates for the filtered set ───────────────────────────
+        # ── Profit aggregates for the filtered set (EXCLUDE return invoices) ───
         from django.db.models import Sum as dSum, Count as dCount
         agg = SaleInvoice.objects.filter(
             outlet=outlet,
+            is_return=False,
             **({'invoice_date__date__gte': start_dt} if start_date_str else {}),
             **({'invoice_date__date__lte': end_dt}   if end_date_str   else {}),
         ).aggregate(
@@ -809,11 +810,25 @@ class SaleListView(APIView):
             total_bills=dCount('id'),
         )
 
-        # Profit = sale amount - purchase cost for each item
+        # Return invoices — deduct from revenue so net = sales - returns
+        return_agg = SaleInvoice.objects.filter(
+            outlet=outlet,
+            is_return=True,
+            **({'invoice_date__date__gte': start_dt} if start_date_str else {}),
+            **({'invoice_date__date__lte': end_dt}   if end_date_str   else {}),
+        ).aggregate(
+            total_return=dSum('grand_total'),
+            return_count=dCount('id'),
+        )
+        return_revenue = float(return_agg.get('total_return') or 0)
+        return_count   = int(return_agg.get('return_count') or 0)
+
+        # Profit = sale amount - purchase cost for each item (exclude returns)
         from apps.billing.models import SaleItem as SaleItemModel
         from django.db.models import ExpressionWrapper, FloatField, F as dbF
         cost_agg = SaleItemModel.objects.filter(
             invoice__outlet=outlet,
+            invoice__is_return=False,
             **({'invoice__invoice_date__date__gte': start_dt} if start_date_str else {}),
             **({'invoice__invoice_date__date__lte': end_dt}   if end_date_str   else {}),
         ).aggregate(
@@ -825,12 +840,16 @@ class SaleListView(APIView):
             )
         )
 
-        total_revenue = float(agg.get('total_revenue') or 0)
+        gross_revenue = float(agg.get('total_revenue') or 0)
+        total_revenue = gross_revenue - return_revenue   # Net revenue after returns
         total_cost    = float(cost_agg.get('total_cost') or 0)
         total_profit  = total_revenue - total_cost
 
         analytics = {
             'totalRevenue': total_revenue,
+            'grossRevenue': gross_revenue,
+            'salesReturnAmount': return_revenue,
+            'salesReturnCount': return_count,
             'totalCost': round(total_cost, 2),
             'totalProfit': round(total_profit, 2),
             'totalDiscount': float(agg.get('total_discount') or 0),

@@ -84,16 +84,29 @@ class SalesDailyReportView(APIView):
 
         logger.info(f"Generating daily sales report for {outlet.name} on {target_date}")
 
-        # Query sales for the target date
+        # Query sales for the target date (exclude return invoices)
         invoices = SaleInvoice.objects.filter(
             outlet=outlet,
-            invoice_date__date=target_date
+            invoice_date__date=target_date,
+            is_return=False,
         )
 
         # Calculate aggregates
         total_invoices = invoices.count()
         total_sales = invoices.aggregate(total=Sum('grand_total'))['total'] or 0
         total_discount = invoices.aggregate(total=Sum('discount_amount'))['total'] or 0
+
+        # Sale returns for this date
+        from apps.billing.models import SalesReturn
+        return_invoices = SaleInvoice.objects.filter(
+            outlet=outlet,
+            invoice_date__date=target_date,
+            is_return=True,
+        )
+        return_agg = return_invoices.aggregate(total=Sum('grand_total'), cnt=Count('id'))
+        total_return_amount = float(return_agg['total'] or 0)
+        total_return_count  = int(return_agg['cnt'] or 0)
+        net_sales = float(total_sales) - total_return_amount
 
         # Calculate total tax (CGST + SGST + IGST)
         cgst_total = invoices.aggregate(total=Sum('cgst_amount'))['total'] or 0
@@ -113,7 +126,10 @@ class SalesDailyReportView(APIView):
         rows = [{
             'date': target_date.isoformat(),
             'invoiceCount': total_invoices,
-            'totalSales': float(total_sales),
+            'grossSales': float(total_sales),
+            'totalSales': net_sales,          # Net after returns
+            'salesReturnAmount': total_return_amount,
+            'salesReturnCount': total_return_count,
             'totalDiscount': float(total_discount),
             'totalTax': float(total_tax),
             'paymentBreakdown': payment_breakdown,
@@ -124,9 +140,9 @@ class SalesDailyReportView(APIView):
 
         summary = [
             {
-                'label': 'Total Sales',
-                'value': f'₹{total_sales:,.0f}',
-                'change': 0,  # No comparison available for single day
+                'label': 'Net Sales',
+                'value': f'₹{net_sales:,.0f}',
+                'change': 0,
                 'trend': 'neutral',
             },
             {
@@ -148,8 +164,8 @@ class SalesDailyReportView(APIView):
                 'trend': 'neutral',
             },
             {
-                'label': 'Total Discount',
-                'value': f'₹{total_discount:,.0f}',
+                'label': 'Sale Returns',
+                'value': f'₹{total_return_amount:,.0f}',
                 'change': 0,
                 'trend': 'neutral',
             },
@@ -158,7 +174,9 @@ class SalesDailyReportView(APIView):
         # Chart data (single data point for single day)
         chart_data = [{
             'date': target_date.isoformat(),
-            'sales': float(total_sales),
+            'sales': net_sales,
+            'grossSales': float(total_sales),
+            'returns': total_return_amount,
             'bills': total_invoices,
         }]
 
@@ -168,7 +186,7 @@ class SalesDailyReportView(APIView):
             'chartData': chart_data,
         }
 
-        logger.info(f"Daily report: {total_invoices} bills, ₹{total_sales} sales")
+        logger.info(f"Daily report: {total_invoices} bills, gross ₹{total_sales}, returns ₹{total_return_amount}, net ₹{net_sales}")
         return Response(result, status=status.HTTP_200_OK)
 
 
@@ -365,9 +383,30 @@ class SalesSummaryReportView(APIView):
         )
 
         total_invoices = totals['total_invoices'] or 0
-        total_sales = float(totals['total_sales'] or 0)
+        gross_sales = float(totals['total_sales'] or 0)
         total_gst = float((totals['total_cgst'] or 0) + (totals['total_sgst'] or 0) + (totals['total_igst'] or 0))
-        avg_invoice = total_sales / total_invoices if total_invoices > 0 else 0
+
+        # Returns in the same date range
+        return_qs = SaleInvoice.objects.filter(outlet=outlet, is_return=True)
+        if from_str:
+            try:
+                return_qs = return_qs.filter(invoice_date__date__gte=datetime.strptime(from_str, '%Y-%m-%d').date())
+            except ValueError:
+                pass
+        if to_str:
+            try:
+                return_qs = return_qs.filter(invoice_date__date__lte=datetime.strptime(to_str, '%Y-%m-%d').date())
+            except ValueError:
+                pass
+        return_totals = return_qs.aggregate(
+            total_return=Sum('grand_total'),
+            return_count=Count('id'),
+        )
+        total_return_amount = float(return_totals['total_return'] or 0)
+        total_return_count  = int(return_totals['return_count'] or 0)
+        net_sales = gross_sales - total_return_amount
+
+        avg_invoice = gross_sales / total_invoices if total_invoices > 0 else 0
 
         # By day
         from django.db.models.functions import TruncDate
@@ -396,7 +435,10 @@ class SalesSummaryReportView(APIView):
         top_staff = [{'staffName': r['billed_by__name'] or 'Unknown', 'invoiceCount': r['invoiceCount'], 'totalAmount': float(r['totalAmount'] or 0)} for r in top_staff_qs]
 
         data = {
-            'totalSales': total_sales,
+            'grossSales': gross_sales,
+            'totalSales': net_sales,          # Net after returns
+            'salesReturnAmount': total_return_amount,
+            'salesReturnCount': total_return_count,
             'totalInvoices': total_invoices,
             'totalDiscount': float(totals['total_discount'] or 0),
             'totalGST': total_gst,
