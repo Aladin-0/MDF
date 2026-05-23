@@ -1860,7 +1860,7 @@ class SaleDetailView(APIView):
             return Response({'detail': 'outletId is required'}, status=status.HTTP_400_BAD_REQUEST)
             
         updated_by_id = str(request.user.id)
-        from apps.billing.services import atomic_sale_update, SaleServiceError
+        from apps.billing.sale_update_service import atomic_sale_update, SaleServiceError
         
         try:
             invoice = atomic_sale_update(sale_id, request.data, outlet_id, updated_by_id)
