@@ -104,8 +104,8 @@ def _marg_pack_unit(marg_unit: str, pack_size: int):
     """
     base = _MARG_UNIT_MAP.get(marg_unit.upper().strip(), 'piece')
     if base in ('tablet', 'capsule'):
-        if pack_size > 1:
-            return ('strip', 'strip')
+        # pack_unit = tablet/capsule (what's inside), pack_type = strip (container)
+        # → displays as "15 tablet/strip" or "1 tablet/strip"
         return (base, 'strip')
     if base == 'strip':
         return ('strip', 'strip')
