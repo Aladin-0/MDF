@@ -307,7 +307,6 @@ class Command(BaseCommand):
             except Exception as e:
                 stats["errors"].append(f"Product '{name}': {e}")
 
-        wb.close()
         self.stdout.write(
             f"   Created: {stats['products_created']}  |  "
             f"Already existed: {stats['products_existing']}  |  "
@@ -329,7 +328,7 @@ class Command(BaseCommand):
 
         errors_before = len(stats["errors"])
 
-        for row in ws.iter_rows(min_row=2, values_only=True):
+        for row in _open_rows(path, min_row=2):
             name = _str(row[5])
             if not name:
                 continue
@@ -388,7 +387,6 @@ class Command(BaseCommand):
                 else:
                     stats["errors"].append(f"Distributor '{name}': {e}")
 
-        wb.close()
         new_errors = len(stats["errors"]) - errors_before
         self.stdout.write(
             f"   Created: {stats['distributors_created']}  |  "
@@ -515,7 +513,6 @@ class Command(BaseCommand):
             except Exception as e:
                 stats["errors"].append(f"Batch '{product_name}' / '{batch_no}': {e}")
 
-        wb.close()
         new_errors = len(stats["errors"]) - errors_before
         self.stdout.write(
             f"   Created: {stats['batches_created']}  |  "
@@ -595,3 +592,4 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.WARNING(f"  … and {len(stats['errors']) - 30} more."))
 
         self.stdout.write(self.style.SUCCESS("="*60 + "\n"))
+
