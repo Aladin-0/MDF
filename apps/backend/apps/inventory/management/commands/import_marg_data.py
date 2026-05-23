@@ -519,6 +519,7 @@ class Command(BaseCommand):
                 qty_raw    = float(str(row[3])) if row[3] else 0.0
             except (ValueError, TypeError):
                 qty_raw    = 0.0
+            qty_raw        = max(0.0, qty_raw)   # Marg can have negative stock → clamp to 0
             qty_strips     = int(qty_raw)
             pack_unit_raw  = _str(row[2], "tablet")  # unit from stock file (fallback)
 
