@@ -64,6 +64,11 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
                 if item_disc > staff_max_discount:
                     raise SaleServiceError(f"Discount {item_disc}% exceeds your maximum allowed discount of {staff_max_discount}%")
 
+        # Parse invoice_date early — it is needed in Step 6 (stock ledger posting)
+        invoice_date_str = payload['invoiceDate'].rstrip('Z').split('+')[0]
+        invoice_date = datetime.fromisoformat(invoice_date_str)
+        invoice_d = invoice_date.date()
+
         # Validate payments
         cash_paid_val = Decimal(str(payload.get('cashPaid', 0)))
         upi_paid_val = Decimal(str(payload.get('upiPaid', 0)))
@@ -245,9 +250,7 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
                 batches_to_rebuild.add(batch.pk)
 
         # Step 7: Update SaleInvoice
-        invoice_date_str = payload['invoiceDate'].rstrip('Z').split('+')[0]
-        invoice_date = datetime.fromisoformat(invoice_date_str)
-        
+        # (invoice_date and invoice_d already parsed at the top of this function)
         sale_invoice.customer = new_customer
         sale_invoice.invoice_date = invoice_date
         sale_invoice.subtotal = Decimal(str(payload.get('subtotal', 0)))
@@ -328,7 +331,7 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
             new_customer.save(update_fields=['total_purchases'])
 
             # Ledger entries
-            invoice_d = invoice_date.date()
+            # invoice_d is already set at the top of this function
             
             # Sale Entry
             sale_entry = LedgerEntry.objects.filter(outlet=outlet, entity_type='customer', entry_type='sale', reference_no=sale_invoice.invoice_no).first()

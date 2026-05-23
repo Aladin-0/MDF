@@ -23,7 +23,7 @@ import { useAuthStore } from '@/store/authStore';
 const fmt = (n: number | undefined) =>
     '₹' + (n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtShort = (n: number) =>
-    n >= 100000 ? `₹${(n / 100000).toFixed(2)}L` : n >= 1000 ? `₹${(n / 1000).toFixed(1)}K` : '₹' + n.toFixed(0);
+    '₹' + (n || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
 const PAYMENT_COLORS: Record<string, string> = {
     cash: 'bg-emerald-100 text-emerald-700 border-emerald-200',
