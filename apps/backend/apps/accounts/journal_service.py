@@ -514,6 +514,23 @@ def post_sale_invoice(sale_invoice):
             round_off_ledger = _get_ledger(outlet, 'Round Off')
             lines.append(('debit', round_off_ledger, abs(round_off)))
 
+        # ── Auto-balance: absorb sub-₹0.05 floating-point GST rounding drift ──
+        # Item-level gst_amount sums can drift from invoice header cgst/sgst totals
+        # by a few paise due to per-item rounding. Absorb this into Round Off so
+        # that correctly-computed invoices never raise a false imbalance error.
+        _pre_check_dr = sum(amt for t, _, amt in lines if t == 'debit')
+        _pre_check_cr = sum(amt for t, _, amt in lines if t == 'credit')
+        _drift = _pre_check_cr - _pre_check_dr  # positive = Cr heavy; negative = Dr heavy
+        if Decimal('0') < abs(_drift) <= Decimal('0.05'):
+            try:
+                _ro_ledger = _get_ledger(outlet, 'Round Off')
+                if _drift > 0:
+                    lines.append(('debit', _ro_ledger, _drift))
+                else:
+                    lines.append(('credit', _ro_ledger, abs(_drift)))
+            except Ledger.DoesNotExist:
+                pass  # Let the balance check below surface the error if Round Off missing
+
         # ── Verify double-entry balance (strict — all amounts must balance) ──
         total_debit = sum(amt for t, _, amt in lines if t == 'debit')
         total_credit = sum(amt for t, _, amt in lines if t == 'credit')
