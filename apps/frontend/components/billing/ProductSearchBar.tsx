@@ -84,13 +84,13 @@ export const ProductSearchBar = forwardRef<HTMLInputElement, ProductSearchBarPro
             }
         }, [query])
 
-        // Handle auto-scroll for highlighted item
+        // Auto-scroll highlighted item into view
         useEffect(() => {
             if (highlightedIndex >= 0 && dropdownRef.current) {
-                const highlightedEl = dropdownRef.current.children[highlightedIndex] as HTMLElement
-                if (highlightedEl) {
-                    highlightedEl.scrollIntoView({ block: 'nearest' })
-                }
+                const el = dropdownRef.current.querySelector(
+                    `[data-index="${highlightedIndex}"]`
+                ) as HTMLElement
+                el?.scrollIntoView({ block: 'nearest' })
             }
         }, [highlightedIndex])
 
@@ -207,6 +207,7 @@ export const ProductSearchBar = forwardRef<HTMLInputElement, ProductSearchBarPro
                                         <button
                                             key={product.id}
                                             data-testid={`search-result-${index}`}
+                                            data-index={index}
                                             onClick={() => handleSelect(product)}
                                             disabled={outOfStock}
                                             className={cn(
