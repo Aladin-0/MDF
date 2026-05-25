@@ -182,6 +182,8 @@ export function useSaveBill() {
             queryClient.invalidateQueries({ queryKey: ['accounts'] });
             queryClient.invalidateQueries({ queryKey: ['profit-loss'] });
             queryClient.invalidateQueries({ queryKey: ['pl-ledger-stmt'] });
+            // Invalidate product search so next search shows updated stock levels
+            queryClient.invalidateQueries({ queryKey: ['products', 'search'] });
 
             return invoice;
 
