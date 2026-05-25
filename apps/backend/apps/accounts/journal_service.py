@@ -239,10 +239,21 @@ def _build_sale_gst_lines(outlet, sale_invoice):
                     )
 
                 if rate_buckets:
-                    # Post per rate bucket using rate-specific ledgers
-                    for total_rate, bucket_gst in rate_buckets.items():
-                        if bucket_gst <= 0:
-                            continue
+                    # Post per rate bucket using rate-specific ledgers.
+                    # KEY FIX: use invoice header cgst_amount/sgst_amount as the
+                    # authoritative totals (they are server-re-derived), and distribute
+                    # proportionally across rate buckets using item amounts as weights.
+                    # This ensures sum(posted) == header totals exactly — no rounding drift.
+                    header_cgst = cgst_amount  # authoritative, from invoice header
+                    header_sgst = sgst_amount  # authoritative, from invoice header
+                    total_item_gst = sum(v for v in rate_buckets.values() if v > 0)
+
+                    rate_list = [(r, g) for r, g in rate_buckets.items() if g > 0]
+                    posted_cgst = Decimal('0')
+                    posted_sgst = Decimal('0')
+
+                    for idx, (total_rate, bucket_gst) in enumerate(rate_list):
+                        is_last = (idx == len(rate_list) - 1)
 
                         components = GST_RATE_TO_COMPONENTS.get(total_rate)
                         if components:
@@ -251,8 +262,18 @@ def _build_sale_gst_lines(outlet, sale_invoice):
                             half = (total_rate / 2).quantize(Decimal('0.01'))
                             cgst_rate, sgst_rate = half, half
 
-                        bucket_cgst = (bucket_gst / 2).quantize(Decimal('0.01'))
-                        bucket_sgst = bucket_gst - bucket_cgst
+                        if is_last:
+                            # Last bucket absorbs remainder — guarantees exact total
+                            bucket_cgst = header_cgst - posted_cgst
+                            bucket_sgst = header_sgst - posted_sgst
+                        elif total_item_gst > 0:
+                            # Proportional split based on each bucket's share of item GST
+                            proportion = bucket_gst / total_item_gst
+                            bucket_cgst = (header_cgst * proportion).quantize(Decimal('0.01'))
+                            bucket_sgst = (header_sgst * proportion).quantize(Decimal('0.01'))
+                        else:
+                            bucket_cgst = (bucket_gst / 2).quantize(Decimal('0.01'))
+                            bucket_sgst = bucket_gst - bucket_cgst
 
                         if bucket_cgst > 0:
                             cgst_ledger = _get_ledger_safe(
@@ -260,6 +281,7 @@ def _build_sale_gst_lines(outlet, sale_invoice):
                             )
                             if cgst_ledger:
                                 lines.append(('credit', cgst_ledger, bucket_cgst))
+                                posted_cgst += bucket_cgst
 
                         if bucket_sgst > 0:
                             sgst_ledger = _get_ledger_safe(
@@ -267,6 +289,7 @@ def _build_sale_gst_lines(outlet, sale_invoice):
                             )
                             if sgst_ledger:
                                 lines.append(('credit', sgst_ledger, bucket_sgst))
+                                posted_sgst += bucket_sgst
 
                 else:
                     # No items with rates — use invoice-level CGST/SGST totals
