@@ -134,6 +134,7 @@ const CartItemRow = ({
                     onClick={() => {
                         removeFromCart(item.batchId);
                         onRateErrorChange(item.batchId, false);
+                        onFloorErrorChange(item.batchId, false);
                     }}
                     className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-all p-1 -mr-1"
                 >
@@ -548,10 +549,10 @@ export function BillingCart({ onProceedToPayment, onAddDoctorDetails }: BillingC
                     <button
                         data-testid="save-bill-btn"
                         onClick={onProceedToPayment}
-                        disabled={cart.length === 0 || !isPinVerified || hasRateError || hasFloorError}
+                        disabled={cart.length === 0 || !isPinVerified || hasRateError}
                         title={
                             hasRateError ? "Fix pricing errors to continue: rate exceeds MRP" :
-                            hasFloorError ? "Cannot bill below floor rate — adjust item rates" :
+                            hasFloorError ? "Selling below floor rate — review item pricing" :
                             ""
                         }
                         className="w-full h-12 bg-primary text-white rounded-xl font-semibold text-base flex justify-between items-center px-5 transition-transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-700"
