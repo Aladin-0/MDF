@@ -146,8 +146,20 @@ export function AddToCartPanel({ product, onAdd, onClose, maxDiscount }: AddToCa
 
     const isOutOfStock = !selectedBatch || (selectedBatch.qtyStrips === 0 && selectedBatch.qtyLoose === 0)
 
+    // ── Stock sufficiency check ──
+    // Convert everything to loose units for a single comparison
+    const availableTotalLoose = selectedBatch
+        ? (selectedBatch.qtyStrips * activePackSize) + selectedBatch.qtyLoose
+        : 0
+    const requestedTotalLoose = ((qtyStrips || 0) * activePackSize) + (qtyLoose || 0)
+    const isInsufficientStock = requestedTotalLoose > 0 && requestedTotalLoose > availableTotalLoose
+    const stockShortByLoose   = isInsufficientStock ? requestedTotalLoose - availableTotalLoose : 0
+    // Express shortfall in human-friendly strips + loose
+    const shortStrips = Math.floor(stockShortByLoose / activePackSize)
+    const shortLoose  = stockShortByLoose % activePackSize
+
     const handleAdd = () => {
-        if (isOutOfStock || !selectedBatch || totalQty <= 0) return
+        if (isOutOfStock || isInsufficientStock || !selectedBatch || totalQty <= 0) return
 
         const item: CartItem = {
             productId: product.id,
@@ -381,6 +393,36 @@ export function AddToCartPanel({ product, onAdd, onClose, maxDiscount }: AddToCa
                             Interpreted as: {formatQty(qtyStrips || 0, qtyLoose || 0, activePackSize)}
                         </p>
                     )}
+
+                    {/* ── Insufficient Stock Warning ── */}
+                    {isInsufficientStock && selectedBatch && (
+                        <div className="mt-2 p-3 bg-red-50 border border-red-300 rounded-lg animate-in fade-in slide-in-from-top-1">
+                            <div className="flex items-center gap-2 mb-1.5">
+                                <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
+                                <span className="text-sm font-semibold text-red-700">Insufficient stock in this batch</span>
+                            </div>
+                            <div className="text-xs text-red-600 space-y-0.5 pl-6">
+                                <div>
+                                    <span className="font-medium">Available:</span>{' '}
+                                    {selectedBatch.qtyStrips}S + {selectedBatch.qtyLoose}L
+                                    <span className="text-red-400 ml-1">({availableTotalLoose} {activePackUnit}s total)</span>
+                                </div>
+                                <div>
+                                    <span className="font-medium">Requested:</span>{' '}
+                                    {requestedTotalLoose} {activePackUnit}s
+                                </div>
+                                <div className="font-semibold text-red-700 mt-0.5">
+                                    Short by:{' '}
+                                    {shortStrips > 0 && shortLoose > 0
+                                        ? `${shortStrips} strip${shortStrips > 1 ? 's' : ''} + ${shortLoose} ${activePackUnit}${shortLoose > 1 ? 's' : ''}`
+                                        : shortStrips > 0
+                                        ? `${shortStrips} strip${shortStrips > 1 ? 's' : ''}`
+                                        : `${stockShortByLoose} ${activePackUnit}${stockShortByLoose > 1 ? 's' : ''}`
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Discount */}
@@ -492,11 +534,20 @@ export function AddToCartPanel({ product, onAdd, onClose, maxDiscount }: AddToCa
             <button
                 data-testid="add-to-cart-btn"
                 onClick={handleAdd}
-                disabled={isOutOfStock || totalQty <= 0}
-                className="w-full h-12 flex items-center justify-center gap-2 bg-primary text-white font-semibold rounded-xl text-base transition-all hover:bg-blue-700 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary disabled:active:scale-100"
+                disabled={isOutOfStock || isInsufficientStock || totalQty <= 0}
+                className={cn(
+                    "w-full h-12 flex items-center justify-center gap-2 font-semibold rounded-xl text-base transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:active:scale-100",
+                    isInsufficientStock
+                        ? "bg-red-100 text-red-500 border border-red-300 disabled:opacity-100"
+                        : "bg-primary text-white hover:bg-blue-700 disabled:opacity-50 disabled:hover:bg-primary"
+                )}
             >
                 <ShoppingCart className="w-5 h-5" />
-                {isOutOfStock ? "Out of Stock" : `Add ${formatCurrency(totalAmount)} to Cart`}
+                {isOutOfStock
+                    ? "Out of Stock"
+                    : isInsufficientStock
+                    ? "Stock too low — reduce quantity"
+                    : `Add ${formatCurrency(totalAmount)} to Cart`}
             </button>
         </div>
     )
