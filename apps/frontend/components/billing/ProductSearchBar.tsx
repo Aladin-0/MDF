@@ -98,7 +98,9 @@ export const ProductSearchBar = forwardRef<HTMLInputElement, ProductSearchBarPro
             if (!highlight.trim()) {
                 return <span>{text}</span>;
             }
-            const regex = new RegExp(`(${highlight})`, 'gi');
+            // Escape regex metacharacters (*, +, ?, (, ), [, etc.) to prevent crash
+            const escaped = highlight.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+            const regex = new RegExp(`(${escaped})`, 'gi');
             const parts = text.split(regex);
 
             return (
