@@ -73,8 +73,11 @@ export const InvoicePreview = forwardRef<HTMLDivElement, InvoicePreviewProps>(({
 
     const invoiceDate = invoice.invoiceDate || invoice.createdAt;
     const subtotalMRP = invoice.subtotal;
-    const discountAmt = invoice.discountAmount;
     const grandTotal = invoice.grandTotal;
+    // Use stored discountAmount; derive from subtotal−grandTotal for older invoices
+    // where extra-discount was not included (stored as 0)
+    const derivedDiscount = subtotalMRP > 0 ? Math.max(0, subtotalMRP - grandTotal) : 0;
+    const discountAmt = (invoice.discountAmount > 0) ? invoice.discountAmount : derivedDiscount;
 
     // Padding to minimum 8 rows
     const items = invoice.items || [];

@@ -86,7 +86,8 @@ export function useSaveBill() {
                     };
                 }),
                 subtotal: Number(totals.subtotal.toFixed(2)),
-                discountAmount: Number(totals.discountAmount.toFixed(2)),
+                // Total discount = per-item discounts + extra bill-level discount
+                discountAmount: Number((totals.discountAmount + totals.extraDiscountAmount).toFixed(2)),
                 taxableAmount: Number(totals.taxableAmount.toFixed(2)),
                 cgstAmount: Number(totals.cgstAmount.toFixed(2)),
                 sgstAmount: Number(totals.sgstAmount.toFixed(2)),
