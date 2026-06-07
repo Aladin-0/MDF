@@ -828,6 +828,7 @@ class SaleListView(APIView):
         # Profit = sale amount - purchase cost for each item (exclude returns)
         from apps.billing.models import SaleItem as SaleItemModel
         from django.db.models import ExpressionWrapper, FloatField, F as dbF
+        from django.db.models.functions import Coalesce, NullIf
         cost_agg = SaleItemModel.objects.filter(
             invoice__outlet=outlet,
             invoice__is_return=False,
@@ -836,7 +837,10 @@ class SaleListView(APIView):
         ).aggregate(
             total_cost=Sum(
                 ExpressionWrapper(
-                    dbF('batch__purchase_rate') * (dbF('qty_strips') + dbF('qty_loose') * 1.0),
+                    dbF('batch__purchase_rate') * (
+                        dbF('qty_strips') + 
+                        (dbF('qty_loose') * 1.0 / Coalesce(NullIf(dbF('pack_size'), 0), 1))
+                    ),
                     output_field=FloatField()
                 )
             )

@@ -81,6 +81,18 @@ export default function SalesList() {
         const store = useBillingStore.getState();
         store.clearCart();
         store.setCustomer(invoice.customer || null);
+        if (invoice.customer) {
+            // Provide a partial ledger object so the cart UI shows the existing customer
+            store.setCustomerLedger({
+                id: invoice.customer.id,
+                name: invoice.customer.name,
+                groupName: 'Sundry Debtors',
+                currentBalance: 0,
+                isMock: true,
+            } as any);
+        } else {
+            store.setCustomerLedger(null);
+        }
         store.setEditingSaleId(invoice.id);
 
         // Store return metadata so the billing page can warn the user
@@ -93,11 +105,11 @@ export default function SalesList() {
         
         const totalDiscountAmount = typeof invoice.discountAmount === 'number' ? invoice.discountAmount : 0;
         const totalRateAmount = invoice.items?.reduce((sum, item) => {
-            const qty = item.totalQty || (item.qtyStrips || 0) * (item.packSize || 10) + (item.qtyLoose || 0);
+            const qty = item.totalQty || (item.qtyStrips || 0) + ((item.qtyLoose || 0) / (item.packSize || 1));
             return sum + (item.rate * qty);
         }, 0) || 1;
         const itemDiscountAmount = invoice.items?.reduce((sum, item) => {
-            const qty = item.totalQty || (item.qtyStrips || 0) * (item.packSize || 10) + (item.qtyLoose || 0);
+            const qty = item.totalQty || (item.qtyStrips || 0) + ((item.qtyLoose || 0) / (item.packSize || 1));
             return sum + ((item.mrp - item.rate) * qty);
         }, 0) || 0;
         
@@ -125,7 +137,7 @@ export default function SalesList() {
              invoice.items.forEach((item: any) => {
                  store.addToCart({
                      ...item,
-                     totalQty: item.totalQty || (item.qtyStrips || 0) * (item.packSize || 10) + (item.qtyLoose || 0),
+                     totalQty: item.totalQty || (item.qtyStrips || 0) + ((item.qtyLoose || 0) / (item.packSize || 1)),
                      saleMode: item.saleMode || 'mixed',
                      mrp: item.mrp || item.rate,
                      saleRate: item.saleRate || item.rate,

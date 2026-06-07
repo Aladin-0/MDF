@@ -105,3 +105,13 @@ export function useDistributorHistory(distributorId: string | null) {
         staleTime: 30000,
     });
 }
+
+export function useCheckDuplicateInvoice(invoiceNo: string, partyLedgerId: string) {
+    const outletId = useOutletId();
+    return useQuery({
+        queryKey: ['check-invoice', outletId, invoiceNo, partyLedgerId],
+        queryFn: () => purchasesApi.checkInvoice(outletId!, invoiceNo, partyLedgerId),
+        enabled: !!outletId && !!invoiceNo && !!partyLedgerId && invoiceNo.length > 2,
+        staleTime: 1000 * 60,
+    });
+}

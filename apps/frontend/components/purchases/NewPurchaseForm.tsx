@@ -15,7 +15,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import { useCreatePurchase, useUpdatePurchase } from '@/hooks/usePurchases';
+import { useCreatePurchase, useUpdatePurchase, useCheckDuplicateInvoice } from '@/hooks/usePurchases';
 import { LedgerPicker } from '@/components/accounts/LedgerPicker';
 import { useAuthStore } from '@/store/authStore';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -170,6 +170,13 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
 
     const watchedPurchaseType = watch('purchaseType');
     const watchedFreight      = watch('freight') ?? 0;
+    const watchedInvoiceNo    = watch('invoiceNo');
+    const watchedPartyLedgerId = watch('partyLedgerId');
+    
+    // Check for duplicate invoice
+    const duplicateInvoiceQuery = useCheckDuplicateInvoice(watchedInvoiceNo, watchedPartyLedgerId);
+    // Don't show duplicate warning if we are editing that exact invoice
+    const isDuplicate = duplicateInvoiceQuery.data?.exists && (!invoiceToEdit || invoiceToEdit.invoiceNo.toLowerCase() !== watchedInvoiceNo?.toLowerCase());
 
     // Initialize form if editing — must be after useForm so `reset` is in scope
     useEffect(() => {
@@ -520,13 +527,18 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                             Invoice No <span className="text-red-500">*</span>
                         </Label>
                         <Input
-                            className={`h-9 text-sm ${errors.invoiceNo ? 'border-red-400' : ''}`}
+                            className={`h-9 text-sm ${(errors.invoiceNo || isDuplicate) ? 'border-red-400 focus-visible:ring-red-400' : ''}`}
                             {...register('invoiceNo')}
                             placeholder="e.g. AJD-2026-0123"
                         />
-                        {errors.invoiceNo && (
+                        {errors.invoiceNo ? (
                             <p className="text-xs text-red-500">{errors.invoiceNo.message}</p>
-                        )}
+                        ) : isDuplicate ? (
+                            <p className="flex items-center gap-1 text-xs text-red-500">
+                                <AlertTriangle className="h-3 w-3" />
+                                Invoice already exists for this party!
+                            </p>
+                        ) : null}
                     </div>
 
                     {/* Invoice Date */}

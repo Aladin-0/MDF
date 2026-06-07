@@ -771,6 +771,12 @@ const realPurchasesApi = {
         });
         await assertOk(response);
         return response.json();
+    },
+    checkInvoice: async (outletId: string, invoiceNo: string, partyLedgerId: string): Promise<{ exists: boolean }> => {
+        const url = `${API_URL}/purchases/check-invoice/?outletId=${outletId}&invoiceNo=${encodeURIComponent(invoiceNo)}&partyLedgerId=${partyLedgerId}`;
+        const response = await fetch(url, { headers: getHeaders() });
+        await assertOk(response);
+        return response.json();
     }
 };
 

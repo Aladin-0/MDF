@@ -98,6 +98,12 @@ const CartItemRow = ({
         else newLoose = val;
         
         const newTotal = newStrips + (newLoose / item.packSize);
+        if (newTotal === 0) {
+            removeFromCart(item.batchId);
+            onRateErrorChange(item.batchId, false);
+            onFloorErrorChange(item.batchId, false);
+            return;
+        }
         updateCartItem(item.batchId, { qtyStrips: newStrips, qtyLoose: newLoose, totalQty: newTotal });
         if (backendError) clearBackendRateError(item.batchId);
     };
@@ -113,6 +119,12 @@ const CartItemRow = ({
         }
         
         const newTotal = newStrips + (newLoose / item.packSize);
+        if (newTotal === 0) {
+            removeFromCart(item.batchId);
+            onRateErrorChange(item.batchId, false);
+            onFloorErrorChange(item.batchId, false);
+            return;
+        }
         updateCartItem(item.batchId, { qtyStrips: newStrips, qtyLoose: newLoose, totalQty: newTotal });
         if (backendError) clearBackendRateError(item.batchId);
     };

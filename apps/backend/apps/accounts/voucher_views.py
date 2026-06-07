@@ -1012,7 +1012,7 @@ class BalanceSheetView(APIView):
         if stock_scope != 'no_stock':
             batches = Batch.objects.filter(outlet=outlet, is_active=True, qty_strips__gt=0)
             for batch in batches:
-                qty = Decimal(str(batch.qty_strips))
+                qty = Decimal(str(batch.qty_strips)) + (Decimal(str(batch.qty_loose)) / Decimal(str(batch.pack_size or 1)))
                 if stock_valuation == 'mrp_rate':
                     rate = batch.mrp
                 elif stock_valuation == 'sale_rate':
@@ -1299,7 +1299,7 @@ class ProfitLossView(APIView):
         if stock_scope != 'no_stock':
             batches = Batch.objects.filter(outlet=outlet, is_active=True, qty_strips__gt=0)
             for batch in batches:
-                qty = Decimal(str(batch.qty_strips))
+                qty = Decimal(str(batch.qty_strips)) + (Decimal(str(batch.qty_loose)) / Decimal(str(batch.pack_size or 1)))
                 if stock_valuation == 'mrp_rate':
                     rate = batch.mrp
                 elif stock_valuation == 'sale_rate':

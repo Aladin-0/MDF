@@ -56,8 +56,8 @@ export function useSaveBill() {
             const payload = {
                 outletId: resolvedOutletId,
                 // Ledger-first (Marg-style): prefer partyLedgerId; fall back to legacy customerId
-                partyLedgerId: customerLedger?.id,
-                customerId: customerLedger ? undefined : customer?.id,
+                partyLedgerId: (customerLedger && !(customerLedger as any).isMock) ? customerLedger.id : undefined,
+                customerId: (customerLedger && (customerLedger as any).isMock) ? customerLedger.id : (customerLedger ? undefined : customer?.id),
                 doctorId: doctor?.id,
                 billedBy: activeStaff.id,
                 items: cart.map((item: any) => {
