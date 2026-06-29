@@ -83,12 +83,30 @@ export const InvoicePreview = forwardRef<HTMLDivElement, InvoicePreviewProps>(({
     const items = invoice.items || [];
     const padRows = Math.max(0, 8 - items.length);
 
+    const isQuotation = invoice.invoiceNo?.startsWith('QT-');
+
     return (
         <div
             ref={ref}
-            className="bg-white text-slate-900 font-sans text-[11px] leading-tight w-full max-w-2xl print:max-w-none print:w-full mx-auto p-4 border border-slate-400 print:p-3 print:shadow-none print:border-black"
+            className="bg-white relative text-slate-900 font-sans text-[11px] leading-tight w-full max-w-2xl print:max-w-none print:w-full mx-auto p-4 border border-slate-400 print:p-3 print:shadow-none print:border-black"
             style={{ fontFamily: 'Arial, sans-serif' }}
         >
+            {isQuotation && (
+                <>
+                    {/* Watermark overlay */}
+                    <div className="absolute inset-0 pointer-events-none overflow-hidden flex items-center justify-center opacity-10 z-0">
+                        <div className="transform -rotate-45 text-slate-800 text-6xl md:text-8xl font-black whitespace-nowrap">
+                            QUOTATION
+                        </div>
+                    </div>
+                    {/* Header Banner */}
+                    <div className="relative z-10 text-center font-bold text-[15px] mb-4 uppercase border-4 border-dashed border-slate-800 py-2 tracking-[0.2em] bg-slate-100 print:bg-transparent rounded-lg">
+                        Estimate / Quotation 
+                        <span className="text-sm font-semibold block mt-1 tracking-normal normal-case">(Not a Tax Invoice - Not valid for accounting)</span>
+                    </div>
+                </>
+            )}
+            
             {/* ── SECTION 1: OUTLET HEADER ── */}
             <div className="text-center mb-2">
                 {outletLogoUrl && (
@@ -120,9 +138,9 @@ export const InvoicePreview = forwardRef<HTMLDivElement, InvoicePreviewProps>(({
                     </div>
                     {/* Right column */}
                     <div className="px-2 py-1 space-y-0.5">
-                        <p><span className="font-semibold">Bill No :</span> {invoice.invoiceNo}</p>
+                        <p><span className="font-semibold">{isQuotation ? 'Estimate No :' : 'Bill No :'}</span> {invoice.invoiceNo}</p>
                         <p>
-                            <span className="font-semibold">Bill Date :</span>{' '}
+                            <span className="font-semibold">{isQuotation ? 'Date :' : 'Bill Date :'}</span>{' '}
                             {format(new Date(invoiceDate), 'dd-MM-yyyy')}
                             <span className="font-semibold ml-2">TIME:</span>{' '}
                             {format(new Date(invoiceDate), 'hh:mm a')}
@@ -183,7 +201,7 @@ export const InvoicePreview = forwardRef<HTMLDivElement, InvoicePreviewProps>(({
                         const lineTotal = item.totalAmount ?? (item.rate * item.totalQty * (1 - item.discountPct / 100));
 
                         return (
-                            <tr key={item.batchId} className="border-b border-slate-200">
+                            <tr key={`${item.batchId}-${i}`} className="border-b border-slate-200">
                                 <td className="border-r border-slate-200 px-1 py-0.5 text-center">{i + 1}</td>
                                 <td className="border-r border-slate-200 px-1 py-0.5 uppercase font-medium">
                                     {isScheduled && <span className="text-slate-500 mr-0.5">{scheduleMarker}</span>}

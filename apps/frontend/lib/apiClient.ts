@@ -12,11 +12,11 @@ import {
     AttendanceRecord,
 } from '../types';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL!; // Required — set NEXT_PUBLIC_API_URL in .env
+export const API_URL = process.env.NEXT_PUBLIC_API_URL!; // Required — set NEXT_PUBLIC_API_URL in .env
 
 let authToken: string | null = null;
 
-function getStoredToken(): string | null {
+export function getStoredToken(): string | null {
     if (authToken) return authToken;
     if (typeof document === 'undefined') return null;
     // Use substring to avoid splitting on '=' inside the JWT value itself
@@ -24,7 +24,7 @@ function getStoredToken(): string | null {
     return row ? row.substring('access_token='.length) : null;
 }
 
-function getHeaders(includeAuth = true): HeadersInit {
+export function getHeaders(includeAuth = true): HeadersInit {
     const headers: HeadersInit = { 'Content-Type': 'application/json' };
     if (includeAuth) {
         const token = getStoredToken();
@@ -43,7 +43,7 @@ function handle401() {
     }
 }
 
-async function assertOk(response: Response): Promise<void> {
+export async function assertOk(response: Response): Promise<void> {
     if (response.ok) return;
     if (response.status === 401) handle401();
     throw await response.json().catch(() => ({ detail: `HTTP ${response.status}` }));
@@ -266,6 +266,9 @@ const realProductsApi = {
             nearestExpiry: '2099-12-31',
             isLowStock: false,
             batches: [],
+            hasStock: false,
+            totalQtyStrips: 0,
+            totalQtyLoose: 0,
         };
     },
     getStock: async (productId: string, outletId: string) => {
@@ -472,6 +475,60 @@ const realSalesApi = {
     },
     getReturnPdf: async (id: string): Promise<any> => {
         const response = await fetch(`${API_URL}/sales/returns/${id}/print/`, { headers: getHeaders() });
+        await assertOk(response);
+        return response.json();
+    },
+    listQuotations: async (outletId: string): Promise<any> => {
+        const response = await fetch(`${API_URL}/quotations/?outletId=${outletId}`, { headers: getHeaders() });
+        await assertOk(response);
+        const json = await response.json();
+        // DRF pagination returns { count, results, next, previous }; plain list returns an array.
+        const items = Array.isArray(json) ? json : (json.results ?? json.data ?? []);
+        return { data: items };
+    },
+    revise: async (id: string, payload: any): Promise<any> => {
+        const response = await fetch(`${API_URL}/sales/${id}/revise/`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify(payload),
+        });
+        await assertOk(response);
+        const data = await response.json();
+        return {
+            ...data,
+            items: data.items ?? data.sale_items ?? data.saleItems ?? [],
+        };
+    },
+    // Quotations
+    createQuotation: async (payload: any): Promise<any> => {
+        const response = await fetch(`${API_URL}/quotations/`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify(payload),
+        });
+        await assertOk(response);
+        return response.json();
+    },
+    updateQuotation: async (id: string, payload: any): Promise<any> => {
+        const response = await fetch(`${API_URL}/quotations/${id}/`, {
+            method: 'PUT',
+            headers: getHeaders(),
+            body: JSON.stringify(payload),
+        });
+        await assertOk(response);
+        return response.json();
+    },
+    getQuotationById: async (id: string): Promise<any> => {
+        const response = await fetch(`${API_URL}/quotations/${id}/`, { headers: getHeaders() });
+        await assertOk(response);
+        return response.json();
+    },
+    convertQuotation: async (id: string, paymentPayload: any): Promise<any> => {
+        const response = await fetch(`${API_URL}/quotations/${id}/convert/`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify(paymentPayload),
+        });
         await assertOk(response);
         return response.json();
     }
@@ -1141,6 +1198,22 @@ const realReportsApi = {
         await assertOk(response);
         return response.json();
     },
+    getTaxReport: async (outletId: string, filters: any): Promise<any> => {
+        const searchParams = new URLSearchParams({ outletId });
+        if (filters.from) searchParams.append('from', filters.from);
+        if (filters.to) searchParams.append('to', filters.to);
+        const response = await fetch(`${API_URL}/reports/tax/?${searchParams.toString()}`, { headers: getHeaders() });
+        await assertOk(response);
+        return response.json();
+    },
+    getBatchReport: async (outletId: string, filters: any): Promise<any> => {
+        const searchParams = new URLSearchParams({ outletId });
+        if (filters.from) searchParams.append('from', filters.from);
+        if (filters.to) searchParams.append('to', filters.to);
+        const response = await fetch(`${API_URL}/reports/batch-wise/?${searchParams.toString()}`, { headers: getHeaders() });
+        await assertOk(response);
+        return response.json();
+    }
 };
 
 const realAccountsApi = {
@@ -1573,6 +1646,28 @@ const realDoctorsApi = {
             isActive: true,
         };
     },
+};
+
+
+export const auditApi = {
+    getLogs: async (params?: any, signal?: AbortSignal): Promise<any> => {
+        const searchParams = new URLSearchParams(params || {});
+        const response = await fetch(`${API_URL}/audit/?${searchParams.toString()}`, { headers: getHeaders(), signal });
+        await assertOk(response);
+        return response.json();
+    },
+    exportLogs: async (params?: any): Promise<void> => {
+        const searchParams = new URLSearchParams(params || {});
+        const response = await fetch(`${API_URL}/audit/export/?${searchParams.toString()}`, { headers: getHeaders() });
+        await assertOk(response);
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `audit-logs-${new Date().toISOString().split('T')[0]}.csv`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+    }
 };
 
 export const authApi = realAuthApi;

@@ -570,7 +570,7 @@ export default function CustomerDetailPage() {
                     <Button variant="outline" onClick={() => setEditOpen(true)}>
                         <Pencil className="w-4 h-4 mr-2" /> Edit
                     </Button>
-                    <Button onClick={() => { setCustomer(customer as any); router.push('/dashboard/billing'); }}>
+                    <Button onClick={() => { setCustomer(customer as any); router.push('/billing'); }}>
                         <Receipt className="w-4 h-4 mr-2" /> Quick Bill
                     </Button>
                 </div>

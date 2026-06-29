@@ -8,8 +8,13 @@ import { useSettingsStore, rehydrateSettingsForOutlet } from '../store/settingsS
 
 export function Providers({ children }: { children: React.ReactNode }) {
     useEffect(() => {
-        // Rehydrate auth first so we know which outlet we're in
-        useAuthStore.persist.rehydrate();
+        try {
+            useAuthStore.persist.rehydrate();
+        } catch (e) {
+            console.error('Failed to rehydrate auth store:', e);
+        } finally {
+            useAuthStore.getState().setHasHydrated(true);
+        }
 
         // Then re-key settings store to the current outlet's bucket and hydrate
         try {
@@ -19,9 +24,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
                 rehydrateSettingsForOutlet(outletId);
             } else {
                 useSettingsStore.persist.rehydrate();
+                useSettingsStore.getState().setHasHydrated(true);
             }
         } catch {
             useSettingsStore.persist.rehydrate();
+            useSettingsStore.getState().setHasHydrated(true);
         }
     }, []);
 

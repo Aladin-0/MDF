@@ -262,6 +262,41 @@ def generate_invoice_number(outlet_id: str) -> str:
     logger.info(f"Generated invoice number: {invoice_number}")
 
     return invoice_number
+    
+def generate_quotation_number(outlet_id: str) -> str:
+    """Generate the next sequential quotation number for an outlet."""
+    try:
+        outlet = Outlet.objects.get(id=outlet_id)
+    except Outlet.DoesNotExist:
+        raise
+
+    current_year = datetime.now().year
+    
+    from .models import Quotation
+    last_quotation = (
+        Quotation.objects
+        .filter(outlet=outlet)
+        .select_for_update(skip_locked=False)
+        .order_by('-quotation_date', '-created_at')
+        .first()
+    )
+
+    if not last_quotation:
+        sequence_num = 1
+    else:
+        match = re.search(r'QT-(\d{4})-(\d+)', last_quotation.quotation_no)
+        if not match:
+            sequence_num = 1
+        else:
+            last_year = int(match.group(1))
+            last_sequence = int(match.group(2))
+            if last_year != current_year:
+                sequence_num = 1
+            else:
+                sequence_num = last_sequence + 1
+
+    return f"QT-{current_year}-{sequence_num:06d}"
+
 
 
 # NOTE: SaleServiceError, rebuild_customer_ledger, and atomic_sale_update

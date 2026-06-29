@@ -78,7 +78,7 @@ export function BillAdjustmentModal({
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50">
             <div className="bg-background rounded-lg shadow-xl w-full max-w-2xl mx-4 overflow-hidden">
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 py-4 border-b">

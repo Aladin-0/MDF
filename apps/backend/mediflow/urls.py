@@ -24,6 +24,7 @@ urlpatterns = [
     path("api/v1/outlet/", include("apps.core.outlet_urls")),
     path("api/v1/organizations/", include("apps.core.chain_urls")),
     path("api/v1/notifications/low-stock/", LowStockAlertView.as_view(), name='low-stock-alert'),
+    path("api/v1/audit/", include("apps.audit.urls")),
     path("api/v1/", include("apps.accounts.voucher_urls")),
     path("api/v1/migrate/marg/", MargMigrationView.as_view(), name='marg-migration'),
 ]

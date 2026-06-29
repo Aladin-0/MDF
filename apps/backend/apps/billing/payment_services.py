@@ -28,6 +28,7 @@ from apps.billing.models import (
     SalesReturnItem,
 )
 from apps.inventory.models import Batch
+from apps.audit.services import log_activity
 
 logger = logging.getLogger(__name__)
 
@@ -192,6 +193,18 @@ def create_receipt_payment(payload: Dict[str, Any], outlet_id: str, created_by_i
     )
 
     logger.info(f"Receipt {receipt.id} created for customer {customer.name}: ₹{total_amount}")
+    
+    log_activity(
+        action="CREATE",
+        module="payments",
+        entity_type="ReceiptEntry",
+        entity_id=receipt.id,
+        entity_label=f"REC-{receipt.id}",
+        description=f"Recorded receipt of ₹{total_amount} from customer {customer.name}",
+        user=created_by,
+        outlet=outlet
+    )
+
     return receipt
 
 

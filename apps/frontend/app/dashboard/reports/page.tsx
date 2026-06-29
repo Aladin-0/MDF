@@ -14,16 +14,22 @@ import { ExpiryReportTab } from '@/components/reports/ExpiryReportTab';
 import { StaffReportTab } from '@/components/reports/StaffReportTab';
 import { PurchaseReportTab } from '@/components/reports/PurchaseReportTab';
 import { ScheduleReportTab } from '@/components/reports/ScheduleReportTab';
+import { BatchReportTab } from '@/components/reports/BatchReportTab';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { getDefaultDateRange, getDateRangeForPeriod } from '@/hooks/useReports';
 import { DateRangeFilter } from '@/types';
 import { usePermissions } from '@/hooks/usePermissions';
 
-type ReportTab = 'sales' | 'gst' | 'stock' | 'expiry' | 'staff' | 'purchases' | 'schedule';
+type ReportTab = 'sales' | 'gst' | 'stock' | 'expiry' | 'staff' | 'purchases' | 'schedule' | 'batch';
 
 export default function ReportsPage() {
     const [activeTab, setActiveTab] = useState<ReportTab>('sales');
     const [dateRange, setDateRange] = useState<DateRangeFilter>(getDefaultDateRange);
+    const [batchFilters, setBatchFilters] = useState({
+        reportType: 'current_stock',
+        search: '',
+        expiryWithinDays: '90'
+    });
     const { hasPermission } = usePermissions();
 
     const handleExport = useCallback(() => {
@@ -77,7 +83,7 @@ export default function ReportsPage() {
                     </p>
                 </div>
                 <PermissionGate permission="export_reports">
-                    <ExportButton activeTab={activeTab} dateRange={dateRange} />
+                    <ExportButton activeTab={activeTab} dateRange={dateRange} batchFilters={batchFilters} />
                 </PermissionGate>
             </div>
 
@@ -125,6 +131,10 @@ export default function ReportsPage() {
                         <AlertCircle className="w-3 h-3 mr-1 text-rose-500" />
                         Schedule Drugs
                     </TabsTrigger>
+                    <TabsTrigger value="batch">
+                        <Package className="w-3 h-3 mr-1 text-indigo-500" />
+                        Batch Tracking
+                    </TabsTrigger>
                 </TabsList>
 
                 <div className="mt-6">
@@ -148,6 +158,13 @@ export default function ReportsPage() {
                     </TabsContent>
                     <TabsContent value="schedule" className="mt-0 outline-none">
                         <ScheduleReportTab />
+                    </TabsContent>
+                    <TabsContent value="batch" className="mt-0 outline-none">
+                        <BatchReportTab 
+                            dateRange={dateRange} 
+                            filters={batchFilters} 
+                            onFiltersChange={setBatchFilters} 
+                        />
                     </TabsContent>
                 </div>
             </Tabs>

@@ -13,6 +13,7 @@ from datetime import date
 
 from apps.accounts.models import Staff, Customer, Ledger
 from apps.core.models import Outlet
+from apps.audit.services import log_activity
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +72,11 @@ class LoginView(APIView):
             staff = Staff.objects.get(phone=phone)
         except Staff.DoesNotExist:
             logger.warning(f"Login failed: staff not found for phone {phone}")
+            log_activity(
+                action='LOGIN_FAILED',
+                module='auth',
+                description=f"Failed login attempt for phone {phone}",
+            )
             return Response(
                 {'detail': 'Invalid phone or password'},
                 status=status.HTTP_401_UNAUTHORIZED
@@ -79,6 +85,12 @@ class LoginView(APIView):
         # Validate against staff.password (AbstractBaseUser field)
         if not staff.check_password(password):
             logger.warning(f"Login failed: invalid password for staff {staff.id}")
+            log_activity(
+                action='LOGIN_FAILED',
+                module='auth',
+                user=staff,
+                description=f"Invalid password for staff {staff.name} ({phone})",
+            )
             return Response(
                 {'detail': 'Invalid phone or password'},
                 status=status.HTTP_401_UNAUTHORIZED
@@ -93,6 +105,12 @@ class LoginView(APIView):
             )
 
         logger.info(f"Login successful for staff {staff.id} ({staff.name})")
+        log_activity(
+            action='LOGIN',
+            module='auth',
+            user=staff,
+            description=f"Successful login for staff {staff.name}",
+        )
 
         # Generate JWT tokens
         refresh = RefreshToken.for_user(staff)
@@ -431,6 +449,18 @@ class CustomerDetailView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
+        # Safe fields for diff
+        old_state = {
+            'name': customer.name,
+            'phone': customer.phone,
+            'address': customer.address,
+            'state': customer.state,
+            'gstin': customer.gstin,
+            'is_chronic': customer.is_chronic,
+            'fixed_discount': float(customer.fixed_discount),
+            'credit_limit': float(customer.credit_limit),
+        }
+
         # Validate and apply fields
         if 'name' in request.data:
             name = (request.data['name'] or '').strip()
@@ -485,6 +515,24 @@ class CustomerDetailView(APIView):
 
         customer.save()
         logger.info(f"Updated customer {customer_id}")
+
+        new_state = {
+            'name': customer.name,
+            'phone': customer.phone,
+            'address': customer.address,
+            'state': customer.state,
+            'gstin': customer.gstin,
+            'is_chronic': customer.is_chronic,
+            'fixed_discount': float(customer.fixed_discount),
+            'credit_limit': float(customer.credit_limit),
+        }
+        
+        changes = {}
+        for key in old_state:
+            if old_state[key] != new_state[key]:
+                changes[key] = {'old': old_state[key], 'new': new_state[key]}
+
+        pass
 
         # Keep linked Ledger in sync
         from apps.accounts.models import Ledger
@@ -711,6 +759,8 @@ class CustomerListView(APIView):
 
         logger.info(f"Created customer {customer.id} ({customer.name}) and Ledger for outlet {outlet.name}")
 
+        pass
+
         result = {
             'id': str(customer.id),
             'name': customer.name,
@@ -760,6 +810,8 @@ class StaffLookupByPinView(APIView):
             )
 
         from django.contrib.auth.hashers import check_password
+        from django.core.cache import cache
+        
         try:
             outlet = Outlet.objects.get(id=outlet_id)
         except Outlet.DoesNotExist:
@@ -768,7 +820,18 @@ class StaffLookupByPinView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        matched_staff = [s for s in Staff.objects.filter(outlet=outlet, is_active=True) if check_password(pin, s.staff_pin)]
+        matched_staff = []
+        for s in Staff.objects.filter(outlet=outlet, is_active=True):
+            cache_key = f'pin_check:{s.staff_pin}:{pin}'
+            is_valid = cache.get(cache_key)
+            
+            if is_valid is None:
+                is_valid = check_password(pin, s.staff_pin)
+                cache.set(cache_key, is_valid, timeout=86400 * 7)  # Cache for 7 days
+                
+            if is_valid:
+                matched_staff.append(s)
+                
         if not matched_staff:
             return Response(
                 {'error': {'code': 'INVALID_PIN', 'message': 'Invalid PIN'}},
@@ -849,6 +912,16 @@ class StaffListView(APIView):
                 'canAccessReports': s.can_access_reports,
                 'canEditSales': s.can_edit_sales,
                 'canEditPurchases': s.can_edit_purchases,
+                'canModifyDraftBill': s.can_modify_draft_bill,
+                'canModifyUnpaidBill': s.can_modify_unpaid_bill,
+                'canCorrectHeaderFields': s.can_correct_header_fields,
+                'canCorrectRatesDiscounts': s.can_correct_rates_discounts,
+                'canCorrectQuantities': s.can_correct_quantities,
+                'canCorrectCustomer': s.can_correct_customer,
+                'canModifyBillWithReturn': s.can_modify_bill_with_return,
+                'canModifyPaidBill': s.can_modify_paid_bill,
+                'canCancelAndReissueBill': s.can_cancel_and_reissue_bill,
+                'canViewBillRevisionHistory': s.can_view_bill_revision_history,
                 'isActive': s.is_active,
                 'joiningDate': s.joining_date.isoformat() if s.joining_date else None,
                 'lastLogin': s.last_login.isoformat() if s.last_login else None,
@@ -920,8 +993,17 @@ class StaffPinVerifyView(APIView):
             )
 
         from django.contrib.auth.hashers import check_password
+        from django.core.cache import cache
+        
         # Verify PIN
-        if not check_password(pin, staff.staff_pin):
+        cache_key = f'pin_check:{staff.staff_pin}:{pin}'
+        is_valid = cache.get(cache_key)
+        
+        if is_valid is None:
+            is_valid = check_password(pin, staff.staff_pin)
+            cache.set(cache_key, is_valid, timeout=86400 * 7)  # Cache for 7 days
+            
+        if not is_valid:
             return Response(
                 {'error': {'code': 'INVALID_PIN', 'message': 'Invalid PIN'}},
                 status=status.HTTP_400_BAD_REQUEST
@@ -1048,6 +1130,16 @@ def _serialize_staff(s):
         'canAccessReports': s.can_access_reports,
         'canEditSales': s.can_edit_sales,
         'canEditPurchases': s.can_edit_purchases,
+        'canModifyDraftBill': s.can_modify_draft_bill,
+        'canModifyUnpaidBill': s.can_modify_unpaid_bill,
+        'canCorrectHeaderFields': s.can_correct_header_fields,
+        'canCorrectRatesDiscounts': s.can_correct_rates_discounts,
+        'canCorrectQuantities': s.can_correct_quantities,
+        'canCorrectCustomer': s.can_correct_customer,
+        'canModifyBillWithReturn': s.can_modify_bill_with_return,
+        'canModifyPaidBill': s.can_modify_paid_bill,
+        'canCancelAndReissueBill': s.can_cancel_and_reissue_bill,
+        'canViewBillRevisionHistory': s.can_view_bill_revision_history,
         'isActive': s.is_active,
         'joiningDate': s.joining_date.isoformat() if s.joining_date else None,
         'lastLogin': s.last_login.isoformat() if s.last_login else None,
@@ -1105,8 +1197,21 @@ class StaffCreateView(APIView):
             can_access_reports=request.data.get('canAccessReports', False),
             can_edit_sales=request.data.get('canEditSales', False),
             can_edit_purchases=request.data.get('canEditPurchases', False),
+            can_modify_draft_bill=request.data.get('canModifyDraftBill', False),
+            can_modify_unpaid_bill=request.data.get('canModifyUnpaidBill', False),
+            can_correct_header_fields=request.data.get('canCorrectHeaderFields', False),
+            can_correct_rates_discounts=request.data.get('canCorrectRatesDiscounts', False),
+            can_correct_quantities=request.data.get('canCorrectQuantities', False),
+            can_correct_customer=request.data.get('canCorrectCustomer', False),
+            can_modify_bill_with_return=request.data.get('canModifyBillWithReturn', False),
+            can_modify_paid_bill=request.data.get('canModifyPaidBill', False),
+            can_cancel_and_reissue_bill=request.data.get('canCancelAndReissueBill', False),
+            can_view_bill_revision_history=request.data.get('canViewBillRevisionHistory', False),
             is_active=True,
         )
+
+        pass
+
         return Response({'success': True, 'data': _serialize_staff(staff)}, status=status.HTTP_201_CREATED)
 
 
@@ -1115,6 +1220,7 @@ class StaffDetailView(APIView):
     permission_classes = [IsAdminStaff]
 
     def patch(self, request, pk, *args, **kwargs):
+        print("DEBUG PATCH PAYLOAD:", request.data)
         from django.contrib.auth.hashers import make_password
         caller = request.user
         if caller.role not in ('super_admin', 'admin'):
@@ -1138,8 +1244,44 @@ class StaffDetailView(APIView):
             'canAccessReports': 'can_access_reports',
             'canEditSales': 'can_edit_sales',
             'canEditPurchases': 'can_edit_purchases',
+            'canModifyDraftBill': 'can_modify_draft_bill',
+            'canModifyUnpaidBill': 'can_modify_unpaid_bill',
+            'canCorrectHeaderFields': 'can_correct_header_fields',
+            'canCorrectRatesDiscounts': 'can_correct_rates_discounts',
+            'canCorrectQuantities': 'can_correct_quantities',
+            'canCorrectCustomer': 'can_correct_customer',
+            'canModifyBillWithReturn': 'can_modify_bill_with_return',
+            'canModifyPaidBill': 'can_modify_paid_bill',
+            'canCancelAndReissueBill': 'can_cancel_and_reissue_bill',
+            'canViewBillRevisionHistory': 'can_view_bill_revision_history',
             'isActive': 'is_active',
         }
+
+        # Snapshot old state
+        old_state = {
+            'name': staff.name,
+            'email': staff.email,
+            'role': staff.role,
+            'max_discount': float(staff.max_discount),
+            'can_edit_rate': staff.can_edit_rate,
+            'can_view_purchase_rates': staff.can_view_purchase_rates,
+            'can_create_purchases': staff.can_create_purchases,
+            'can_access_reports': staff.can_access_reports,
+            'can_edit_sales': staff.can_edit_sales,
+            'can_edit_purchases': staff.can_edit_purchases,
+            'can_modify_draft_bill': staff.can_modify_draft_bill,
+            'can_modify_unpaid_bill': staff.can_modify_unpaid_bill,
+            'can_correct_header_fields': staff.can_correct_header_fields,
+            'can_correct_rates_discounts': staff.can_correct_rates_discounts,
+            'can_correct_quantities': staff.can_correct_quantities,
+            'can_correct_customer': staff.can_correct_customer,
+            'can_modify_bill_with_return': staff.can_modify_bill_with_return,
+            'can_modify_paid_bill': staff.can_modify_paid_bill,
+            'can_cancel_and_reissue_bill': staff.can_cancel_and_reissue_bill,
+            'can_view_bill_revision_history': staff.can_view_bill_revision_history,
+            'is_active': staff.is_active,
+        }
+
         for camel, snake in camel_map.items():
             if camel in request.data:
                 setattr(staff, snake, request.data[camel])
@@ -1154,6 +1296,39 @@ class StaffDetailView(APIView):
             staff.staff_pin = make_password(str(request.data['pin']))
 
         staff.save()
+
+        # Snapshot new state
+        new_state = {
+            'name': staff.name,
+            'email': staff.email,
+            'role': staff.role,
+            'max_discount': float(staff.max_discount),
+            'can_edit_rate': staff.can_edit_rate,
+            'can_view_purchase_rates': staff.can_view_purchase_rates,
+            'can_create_purchases': staff.can_create_purchases,
+            'can_access_reports': staff.can_access_reports,
+            'can_edit_sales': staff.can_edit_sales,
+            'can_edit_purchases': staff.can_edit_purchases,
+            'can_modify_draft_bill': staff.can_modify_draft_bill,
+            'can_modify_unpaid_bill': staff.can_modify_unpaid_bill,
+            'can_correct_header_fields': staff.can_correct_header_fields,
+            'can_correct_rates_discounts': staff.can_correct_rates_discounts,
+            'can_correct_quantities': staff.can_correct_quantities,
+            'can_correct_customer': staff.can_correct_customer,
+            'can_modify_bill_with_return': staff.can_modify_bill_with_return,
+            'can_modify_paid_bill': staff.can_modify_paid_bill,
+            'can_cancel_and_reissue_bill': staff.can_cancel_and_reissue_bill,
+            'can_view_bill_revision_history': staff.can_view_bill_revision_history,
+            'is_active': staff.is_active,
+        }
+
+        changes = {}
+        for key in old_state:
+            if old_state[key] != new_state[key]:
+                changes[key] = {'old': old_state[key], 'new': new_state[key]}
+
+        pass
+
         return Response({'success': True, 'data': _serialize_staff(staff)}, status=status.HTTP_200_OK)
 
     def delete(self, request, pk, *args, **kwargs):
@@ -1171,6 +1346,9 @@ class StaffDetailView(APIView):
 
         staff.is_active = False
         staff.save(update_fields=['is_active'])
+
+        pass
+
         return Response({'success': True, 'data': {'id': str(staff.id), 'isActive': False}}, status=status.HTTP_200_OK)
 
 
@@ -1633,6 +1811,18 @@ class ChangePinView(APIView):
         staff.set_password(make_password(new_pin))
         staff.save(update_fields=['staff_pin', 'password'])
 
+        log_activity(
+            action="UPDATE",
+            module="staff",
+            entity_type="Staff",
+            entity_id=staff.id,
+            entity_label=staff.name,
+            description=f"Staff {staff.name} changed their PIN",
+            user=staff,
+            outlet=staff.outlet,
+            changes={'staff_pin': {'old': '***', 'new': '***'}}
+        )
+
         return Response({'success': True, 'data': {'message': 'PIN updated successfully'}}, status=status.HTTP_200_OK)
 
 class CustomerOutstandingInvoicesView(APIView):
@@ -1667,3 +1857,23 @@ class CustomerOutstandingInvoicesView(APIView):
             })
             
         return Response({'data': data}, status=status.HTTP_200_OK)
+
+from rest_framework_simplejwt.views import TokenBlacklistView
+
+class LogoutView(TokenBlacklistView):
+    """
+    Subclass TokenBlacklistView to log the LOGOUT event.
+    """
+    def post(self, request, *args, **kwargs):
+        response = super().post(request, *args, **kwargs)
+        if response.status_code == status.HTTP_200_OK:
+            # Note: TokenBlacklistView does not require authentication by default.
+            user = request.user if request.user and request.user.is_authenticated else None
+            desc = f"Successful logout for staff {user.name}" if user else "Successful logout"
+            log_activity(
+                action='LOGOUT',
+                module='auth',
+                user=user,
+                description=desc,
+            )
+        return response

@@ -4,6 +4,8 @@ from django.db import transaction
 from django.core.exceptions import ValidationError
 import logging
 
+from apps.audit.services import log_activity
+
 from apps.accounts.models import (
     LedgerGroup, Ledger, Voucher, VoucherLine, VoucherBillAdjustment,
     DebitNote, DebitNoteItem, CreditNote, CreditNoteItem,

@@ -12,6 +12,7 @@ from decimal import Decimal, InvalidOperation
 from apps.inventory.models import MasterProduct, Batch
 from apps.core.models import Outlet
 from apps.accounts.models import Staff
+from apps.audit.services import log_activity
 
 logger = logging.getLogger(__name__)
 
@@ -469,70 +470,96 @@ class ProductSearchView(APIView):
         logger.info(f"Searching products for: '{query}' (outlet: {outlet.name}, context: {context or 'default'})")
 
         today = datetime.now().date()
-
-        # Search MasterProducts by name, composition, manufacturer (case-insensitive)
-        # For purchase context: search ALL products that have ANY active batch at this outlet
-        # (even if expired) so the pharmacist can re-purchase expired stock.
-        # For billing/default context: restrict to products with non-expired stock only.
         query_lower = query.lower()
 
-        if is_purchase_context:
-            # Include products that have active batches (any expiry) OR have no batches yet
-            products_with_stock = MasterProduct.objects.filter(
-                Q(name__icontains=query_lower) |
-                Q(composition__icontains=query_lower) |
-                Q(manufacturer__icontains=query_lower)
-            ).distinct()
-        else:
-            # Default: only products with non-expired active stock
-            products_with_stock = MasterProduct.objects.filter(
-                Q(name__icontains=query_lower) |
-                Q(composition__icontains=query_lower) |
-                Q(manufacturer__icontains=query_lower)
-            ).distinct()
+        from django.db.models import Sum, F, Case, When, Value, BooleanField, IntegerField, Subquery, OuterRef
+        from django.db.models.functions import Coalesce
 
-        products = products_with_stock
-        logger.info(f"Found {products.count()} products matching: '{query}'")
+        # Search active MasterProducts by name, composition, manufacturer
+        products_query = MasterProduct.objects.filter(
+            is_discontinued=False
+        ).filter(
+            Q(name__icontains=query_lower) |
+            Q(composition__icontains=query_lower) |
+            Q(manufacturer__icontains=query_lower)
+        )
 
-        # Build response with batches and aggregated stock
+        # Build subquery to compute stock per product
+        active_batches_sq = Batch.objects.filter(
+            outlet_id=outlet_id,
+            is_active=True,
+            product_id=OuterRef('pk')
+        )
+        if not is_purchase_context:
+            active_batches_sq = active_batches_sq.filter(expiry_date__gt=today)
+
+        # Annotate total stock and has_stock
+        products_query = products_query.annotate(
+            total_strips=Coalesce(
+                Subquery(
+                    active_batches_sq.values('product_id')
+                    .annotate(s=Sum('qty_strips')).values('s')[:1],
+                    output_field=IntegerField()
+                ),
+                0
+            ),
+            total_loose=Coalesce(
+                Subquery(
+                    active_batches_sq.values('product_id')
+                    .annotate(s=Sum('qty_loose')).values('s')[:1],
+                    output_field=IntegerField()
+                ),
+                0
+            )
+        ).annotate(
+            total_qty=F('total_strips') + F('total_loose'),
+            has_stock=Case(
+                When(total_qty__gt=0, then=Value(True)),
+                default=Value(False),
+                output_field=BooleanField()
+            )
+        ).order_by('-has_stock', 'name')
+
+        # Limit to 5 in-stock and 3 zero-stock
+        all_matched_products = list(products_query[:50])
+        in_stock_products = [p for p in all_matched_products if p.has_stock][:5]
+        no_stock_products = [p for p in all_matched_products if not p.has_stock][:3]
+
+        final_products = in_stock_products + no_stock_products
+
+        logger.info(f"Found {len(all_matched_products)} products matching: '{query}'. Returning {len(final_products)}.")
+
         results = []
 
-        for product in products:
-            # ── Batch filter ──────────────────────────────────────────────────
-            # Purchase context: include ALL active batches (expired ones too) so
-            # the pharmacist sees the product's historical batch/rate info.
-            # Billing/default context: only non-expired active batches.
+        for product in final_products:
             batch_filter = dict(product=product, outlet=outlet, is_active=True)
             if not is_purchase_context:
                 batch_filter['expiry_date__gt'] = today
 
-            batches = Batch.objects.filter(**batch_filter).order_by('expiry_date')
+            batches = list(Batch.objects.filter(**batch_filter).order_by('expiry_date'))
 
-            # Aggregate stock — count both strips AND loose tablets (as fractional strips)
-            total_stock = sum(
-                b.qty_strips + (b.qty_loose / (b.pack_size or 1))
-                for b in batches
-            )
-
-            # For purchase context: if no batches at this outlet yet, still
-            # show the product so it can be searched and a new batch created.
-            if is_purchase_context and not batches.exists():
-                # Check if any batch exists globally (might belong to another outlet)
-                # Show it so it can be purchased into this outlet
-                pass
-
-            # Get nearest expiry date
             non_expired = [b for b in batches if b.expiry_date > today]
             nearest_expiry = (
                 non_expired[0].expiry_date.isoformat()
                 if non_expired
-                else (batches.first().expiry_date.isoformat() if batches.exists() else "2099-12-31")
+                else (batches[0].expiry_date.isoformat() if batches else "2099-12-31")
             )
+            
+            total_stock_strips = getattr(product, 'total_strips', 0)
+            total_stock_loose = getattr(product, 'total_loose', 0)
+            total_stock_fractional = total_stock_strips + (total_stock_loose / (product.pack_size or 1))
 
-            # Determine if low stock (< 10 strips)
-            is_low_stock = total_stock < 10
+            is_low_stock = total_stock_fractional < 10
 
-            batch_list = [serialize_batch(batch) for batch in batches]
+            available_batches = [b for b in batches if (b.qty_strips > 0 or b.qty_loose > 0)]
+
+            if not product.has_stock:
+                available_batches = []
+                total_stock_strips = 0
+                total_stock_loose = 0
+                total_stock_fractional = 0.0
+
+            batch_list = [serialize_batch(batch) for batch in available_batches]
 
             result = {
                 'id': str(product.id),
@@ -554,10 +581,15 @@ class ProductSearchView(APIView):
                 'mrp': float(product.mrp),
                 'saleRate': float(product.default_sale_rate),
                 'outletProductId': str(product.id),
-                'totalStock': total_stock,
+                
+                'has_stock': product.has_stock,
+                'total_qty_strips': total_stock_strips,
+                'total_qty_loose': total_stock_loose,
+                'totalStock': total_stock_fractional,
                 'nearestExpiry': nearest_expiry,
                 'isLowStock': is_low_stock,
                 'batches': batch_list,
+                'available_batches': batch_list,
             }
 
             results.append(result)
@@ -568,7 +600,7 @@ class ProductSearchView(APIView):
 
 class InventoryListView(APIView):
     """
-    GET /api/v1/inventory/?outletId=xxx&search=para&lowStock=true&expiringSoon=true
+    GET /api/v1/inventory/?outletId=xxx&search=para&lowStock=true&expiringSoon=true&export_format=csv
 
     4-layer optimized inventory list:
     1. DB-level LIMIT/OFFSET pagination  — never loads all products into RAM
@@ -699,6 +731,32 @@ class InventoryListView(APIView):
         if sort_order == 'desc':
             db_sort = f'-{db_sort}'
         products = products.order_by(db_sort)
+
+        export_format = request.query_params.get('export_format')
+        if export_format == 'csv':
+            import csv
+            from django.http import StreamingHttpResponse
+            class Echo:
+                def write(self, value): return value
+            
+            def iter_items():
+                yield ['Product Name', 'Composition', 'Manufacturer', 'Schedule', 'Total Strips', 'Total Loose', 'Nearest Expiry', 'Min Qty']
+                for p in products.iterator():
+                    yield [
+                        p.name,
+                        p.composition or '',
+                        p.manufacturer or '',
+                        p.schedule_type or '',
+                        str(p.total_strips),
+                        str(p.total_loose),
+                        p.nearest_expiry.isoformat() if p.nearest_expiry else '',
+                        str(p.min_qty or 0)
+                    ]
+            
+            writer = csv.writer(Echo())
+            response = StreamingHttpResponse((writer.write(r) for r in iter_items()), content_type="text/csv")
+            response['Content-Disposition'] = 'attachment; filename="inventory_export.csv"'
+            return response
 
         # ── DB-level pagination: LIMIT/OFFSET — the critical fix ──────────────
         total_records = products.count()
@@ -974,6 +1032,8 @@ class InventoryAdjustView(APIView):
         # Fetch batch
         try:
             batch = Batch.objects.get(id=batch_id, outlet=outlet)
+            old_qty_strips = batch.qty_strips
+            old_qty_loose = batch.qty_loose
         except Batch.DoesNotExist:
             return Response(
                 {'detail': f'Batch {batch_id} not found'},
@@ -1058,6 +1118,21 @@ class InventoryAdjustView(APIView):
                         rate=batch.purchase_rate,
                         source_object=batch,
                     )
+
+                log_activity(
+                    action="ADJUST",
+                    module="inventory",
+                    entity_type="Batch",
+                    entity_id=batch.id,
+                    entity_label=batch.batch_no,
+                    description=f"Adjusted stock for batch {batch.batch_no} by {qty} ({adjust_unit}). Reason: {reason}",
+                    user=staff or request.user,
+                    outlet=outlet,
+                    changes={
+                        'qty_strips': {'old': old_qty_strips, 'new': batch.qty_strips},
+                        'qty_loose': {'old': old_qty_loose, 'new': batch.qty_loose}
+                    }
+                )
 
         except Exception as e:
             logger.error(f"Error adjusting batch stock: {str(e)}")
@@ -1191,6 +1266,10 @@ class StockLedgerView(APIView):
         total_value_in = totals['total_value_in'] or Decimal('0')
         total_value_out = totals['total_value_out'] or Decimal('0')
 
+        export_format = request.query_params.get('export_format')
+        if export_format == 'xlsx':
+            return self.export_xlsx(qs)
+
         # Pagination
         page = int(request.query_params.get('page', 1))
         page_size = int(request.query_params.get('pageSize') or request.query_params.get('page_size', 50))
@@ -1250,3 +1329,110 @@ class StockLedgerView(APIView):
                 'totalRecords': total_records
             }
         })
+
+    def export_xlsx(self, qs):
+        import openpyxl
+        from django.http import HttpResponse
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Stock Ledger"
+
+        headers = [
+            "Date", "Type", "Voucher No", "Party", "Product", "Batch",
+            "Expiry", "Qty In", "Qty Out", "Rate", "Value In", "Value Out", "Stock Balance"
+        ]
+        ws.append(headers)
+
+        TXN_LABELS = {
+            'OPENING': 'Opening Stock',
+            'PURCHASE_IN': 'Purchase In',
+            'SALE_OUT': 'Sale Out',
+            'PURCHASE_RETURN': 'Purchase Return',
+            'SALE_RETURN': 'Sale Return',
+            'ADJUSTMENT_IN': 'Adjustment In',
+            'ADJUSTMENT_OUT': 'Adjustment Out',
+        }
+
+        for entry in qs:
+            ws.append([
+                entry.txn_date.strftime('%Y-%m-%d') if entry.txn_date else '',
+                TXN_LABELS.get(entry.txn_type, entry.txn_type),
+                entry.voucher_number or '',
+                entry.party_name or '',
+                entry.product.name if entry.product else '',
+                entry.batch_number or '',
+                entry.expiry_date.strftime('%Y-%m-%d') if entry.expiry_date else '',
+                float(entry.qty_in or 0),
+                float(entry.qty_out or 0),
+                float(entry.rate or 0),
+                float(entry.value_in or 0),
+                float(entry.value_out or 0),
+                float(entry.running_qty or 0)
+            ])
+
+        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = 'attachment; filename="stock_ledger_export.xlsx"'
+        wb.save(response)
+        return response
+
+class BatchAvailabilityCheckView(APIView):
+    """
+    POST /api/v1/inventory/batches/availability-check/
+    Payload: [{ "batchId": "uuid", "qtyStrips": 1, "qtyLoose": 0 }]
+    Returns: [
+      {
+        "batchId": "uuid",
+        "availableQtyStrips": 1,
+        "availableQtyLoose": 0,
+        "status": "AVAILABLE" | "LOW_STOCK" | "BATCH_EXPIRED" | "BATCH_UNAVAILABLE"
+      }
+    ]
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        items = request.data
+        if not isinstance(items, list):
+            return Response({"detail": "Expected a list of items."}, status=status.HTTP_400_BAD_REQUEST)
+
+        outlet_id = getattr(request.user, 'outlet_id', None) or getattr(request.user, 'pharmacy_id', None)
+        today = datetime.now().date()
+
+        results = []
+        for item in items:
+            batch_id = item.get("batchId")
+            req_strips = int(item.get("qtyStrips", 0))
+            req_loose = int(item.get("qtyLoose", 0))
+
+            try:
+                batch = Batch.objects.get(id=batch_id, outlet_id=outlet_id)
+                pack_size = batch.pack_size or 1
+
+                req_total = (req_strips * pack_size) + req_loose
+                avail_total = (batch.qty_strips * pack_size) + batch.qty_loose
+
+                if batch.expiry_date and batch.expiry_date < today:
+                    status_val = "BATCH_EXPIRED"
+                elif avail_total <= 0:
+                    status_val = "BATCH_UNAVAILABLE"
+                elif avail_total < req_total:
+                    status_val = "LOW_STOCK"
+                else:
+                    status_val = "AVAILABLE"
+
+                results.append({
+                    "batchId": str(batch.id),
+                    "availableQtyStrips": batch.qty_strips,
+                    "availableQtyLoose": batch.qty_loose,
+                    "status": status_val
+                })
+            except (Batch.DoesNotExist, ValueError, TypeError):
+                results.append({
+                    "batchId": batch_id,
+                    "availableQtyStrips": 0,
+                    "availableQtyLoose": 0,
+                    "status": "BATCH_UNAVAILABLE"
+                })
+
+        return Response(results, status=status.HTTP_200_OK)

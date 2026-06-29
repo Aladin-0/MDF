@@ -102,6 +102,10 @@ def rebuild_stock_ledger(batch_id: str, from_date):
             running_value=running_value
         )
     
-    # Sync the final running quantity back to the batch to fix any reconciliation issues
-    Batch.objects.filter(pk=batch_id).update(qty_strips=running_qty)
+    print(f"DEBUG rebuild_stock_ledger: batch_id={batch_id}, from_date={from_date}")
+    print(f"DEBUG prev={prev.pk if prev else None}, prev_qty={prev.running_qty if prev else 'N/A'}")
+    print(f"DEBUG entries={[f'{e.pk}:{e.txn_type}:in={e.qty_in}:out={e.qty_out}' for e in entries]}")
+    print(f"DEBUG final running_qty={running_qty}")
 
+    # Step 3: Update Batch master
+    Batch.objects.filter(pk=batch_id).update(qty_strips=running_qty)

@@ -6,7 +6,7 @@ export function usePageTitle(): string {
     const pathname = usePathname();
     const titleMap: Record<string, string> = {
         '/dashboard': 'Dashboard',
-        '/dashboard/billing': 'Billing',
+        '/billing': 'Billing',
         '/dashboard/inventory': 'Inventory',
         '/dashboard/purchases': 'Purchases',
         '/dashboard/customers': 'Customers',

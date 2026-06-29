@@ -12,6 +12,20 @@ const nextConfig = {
         ];
         return config;
     },
+    async redirects() {
+        return [
+            {
+                source: '/dashboard/billing',
+                destination: '/billing',
+                permanent: true,
+            },
+            {
+                source: '/dashboard/billing/:path*',
+                destination: '/billing/:path*',
+                permanent: true,
+            },
+        ];
+    },
 };
 
 module.exports = nextConfig;

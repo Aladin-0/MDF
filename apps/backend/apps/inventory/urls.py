@@ -2,7 +2,7 @@ from django.urls import path
 from apps.inventory.views import (
     ProductSearchView, InventoryListView, InventoryAlertsView, InventoryAdjustView,
     ProductListView, ProductDetailView, ProductBatchesView, InventoryExportCSVView,
-    BatchLandingCostView, StockLedgerView, StockLedgerBatchesView
+    BatchLandingCostView, StockLedgerView, StockLedgerBatchesView, BatchAvailabilityCheckView
 )
 
 urlpatterns = [
@@ -17,4 +17,5 @@ urlpatterns = [
     path('inventory/export/csv/', InventoryExportCSVView.as_view(), name='inventory-export-csv'),
     path('inventory/stockledger/batches/', StockLedgerBatchesView.as_view(), name='stockledger-batches'),
     path('inventory/stockledger/', StockLedgerView.as_view(), name='stockledger'),
+    path('inventory/batches/availability-check/', BatchAvailabilityCheckView.as_view(), name='batch-availability-check'),
 ]

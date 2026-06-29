@@ -157,7 +157,7 @@ export default function CustomerGrid({ filters, onEdit }: CustomerGridProps) {
                                 </Button>
                             )}
                             <Button variant="outline" size="sm" className="flex-1 text-xs h-8"
-                                onClick={() => { setCustomer(customer); router.push('/dashboard/billing'); }}>
+                                onClick={() => { setCustomer(customer); router.push('/billing'); }}>
                                 <Receipt className="w-3 h-3 mr-1" /> Quick Bill
                             </Button>
                         </div>

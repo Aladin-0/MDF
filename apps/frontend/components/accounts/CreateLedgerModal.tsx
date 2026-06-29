@@ -197,7 +197,7 @@ export function CreateLedgerModal({
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50">
             <div className="bg-background rounded-lg shadow-xl w-full max-w-3xl mx-4 max-h-[90vh] flex flex-col overflow-hidden">
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 py-4 border-b shrink-0">
@@ -532,7 +532,7 @@ export function CreateLedgerModal({
 
             {/* New Group Modal */}
             {showNewGroup && (
-                <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60">
+                <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60">
                     <div className="bg-background rounded-lg shadow-xl w-full max-w-sm mx-4 overflow-hidden">
                         <div className="flex items-center justify-between px-5 py-4 border-b">
                             <h3 className="font-semibold">New Account Group</h3>

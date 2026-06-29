@@ -1,0 +1,29 @@
+--- /home/asta/coding/MDF/apps/frontend/components/billing-v3/RightBillingRail.tsx
++++ /home/asta/coding/MDF/apps/frontend/components/billing-v3/RightBillingRail.tsx
+@@ -7,6 +7,7 @@
+ import { AlertTriangle, Calculator, DollarSign, Banknote, Percent, FileText } from 'lucide-react';
+ import { CalculatorWidget } from '@/components/ui/Calculator';
+ import { useSaveBill } from '@/hooks/useSaveBill';
++import { useToast } from '@/hooks/use-toast';
+ 
+ export function RightBillingRail() {
+     const state = useBillingStore();
+@@ -20,6 +21,7 @@
+     const [pctFocused, setPctFocused] = useState(false);
+     const [amtFocused, setAmtFocused] = useState(false);
+     const { saveBill, isLoading } = useSaveBill();
++    const { toast } = useToast();
+     const [checkoutError, setCheckoutError] = useState<string | null>(null);
+ 
+     const draft = state.drafts[activeDraftId];
+@@ -107,6 +109,10 @@
+                 cardType: '',
+                 creditGiven: 0
+             });
++            toast({
++                title: 'Success',
++                description: 'Bill Saved Successfully!',
++            });
+             // Success! The app should redirect or show a success screen automatically via useBillingStore state changes.
+         } catch (error: any) {
+             console.error(error);

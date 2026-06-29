@@ -113,6 +113,9 @@ interface SettingsState extends
     updateNotificationSettings: (data: Partial<NotificationSettings>) => void;
     updatePreferences: (data: Partial<AppPreferences>) => void;
     resetToDefaults: () => void;
+    
+    _hasHydrated: boolean;
+    setHasHydrated: (state: boolean) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -121,6 +124,7 @@ export const useSettingsStore = create<SettingsState>()(
             // Legacy
             selectedOutletId: null,
             isSidebarCollapsed: false,
+            _hasHydrated: false,
 
             // Outlet
             ...DEFAULT_OUTLET,
@@ -156,6 +160,7 @@ export const useSettingsStore = create<SettingsState>()(
             setKioskPhotoCapture: (v) => set({ kioskPhotoCapture: v }),
             setKioskAutoResetSeconds: (v) => set({ kioskAutoResetSeconds: v }),
             setAttendanceGraceMinutes: (v) => set({ attendanceGraceMinutes: v }),
+            setHasHydrated: (v) => set({ _hasHydrated: v }),
 
             // ── Grouped actions ───────────────────────────────────────
             updateOutletSettings: (data) => {
@@ -236,4 +241,5 @@ export const useSettingsStore = create<SettingsState>()(
 export function rehydrateSettingsForOutlet(outletId: string) {
     useSettingsStore.persist.setOptions({ name: getStorageKey(outletId) });
     useSettingsStore.persist.rehydrate();
+    useSettingsStore.getState().setHasHydrated(true);
 }

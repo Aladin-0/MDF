@@ -12,6 +12,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER}" ]
       interval: 10s
@@ -49,9 +51,6 @@ services:
       - "sh"
       - "-c"
       - "python manage.py migrate --noinput && python manage.py collectstatic --noinput && gunicorn mediflow.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120 --access-logfile - --error-logfile -"
-    volumes:
-      - static_files:/app/staticfiles
-      - media_files:/app/media
     env_file:
       - ./apps/backend/.env
     environment:
@@ -66,6 +65,10 @@ services:
         condition: service_healthy
     networks:
       - internal
+    volumes:
+      - static_files:/app/staticfiles
+      - media_files:/app/media
+      - ./logs:/app/logs
 
   # ── Next.js Frontend ──────────────────────────────────────────────────
   frontend:
@@ -74,14 +77,19 @@ services:
       dockerfile: docker/frontend.Dockerfile
     container_name: mediflow_frontend
     restart: unless-stopped
-    command: [ "sh", "-c", "npm run build && npx next start -H 0.0.0.0 -p 3000" ]
+    # Use development mode for hot-reloading
+    command: [ "npm", "run", "dev" ]
     env_file:
       - ./apps/frontend/.env.local
     environment:
       TZ: Asia/Kolkata
-      NODE_ENV: production
+      NODE_ENV: development
     ports:
       - "3000:3000"
+    volumes:
+      # Map the host directory so the container sees live file changes
+      - ./apps/frontend:/app/apps/frontend
+      - ./packages:/app/packages
     depends_on:
       - backend
     networks:
@@ -97,6 +105,31 @@ services:
     command: [ "celery", "-A", "mediflow", "worker", "--loglevel=info", "--concurrency=2" ]
     volumes:
       - media_files:/app/media
+      - ./logs:/app/logs
+    env_file:
+      - ./apps/backend/.env
+    environment:
+      TZ: Asia/Kolkata
+      DJANGO_SETTINGS_MODULE: mediflow.settings.prod
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - internal
+
+  # ── Celery Audit Worker ───────────────────────────────────────────────
+  celery-audit:
+    build:
+      context: ./apps/backend
+      dockerfile: ../../docker/backend.Dockerfile
+    container_name: mediflow_celery_audit
+    restart: unless-stopped
+    command: [ "celery", "-A", "mediflow", "worker", "-Q", "audit", "--loglevel=info", "--concurrency=2" ]
+    volumes:
+      - media_files:/app/media
+      - ./logs:/app/logs
     env_file:
       - ./apps/backend/.env
     environment:

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useRef } from 'react';
-import { Printer, Download, FileText, Edit } from 'lucide-react';
+import { Printer, Download, FileText, Edit, History } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -16,9 +16,10 @@ interface InvoicePreviewModalProps {
     invoice: SaleInvoice | null;
     onNewBill?: () => void;
     onEdit?: (invoice: SaleInvoice) => void;
+    onViewHistory?: (invoice: SaleInvoice) => void;
 }
 
-export function InvoicePreviewModal({ isOpen, onClose, invoice, onNewBill, onEdit }: InvoicePreviewModalProps) {
+export function InvoicePreviewModal({ isOpen, onClose, invoice, onNewBill, onEdit, onViewHistory }: InvoicePreviewModalProps) {
     const { printerType } = useSettingsStore();
     const printRef = useRef<HTMLDivElement>(null);
 
@@ -31,6 +32,7 @@ export function InvoicePreviewModal({ isOpen, onClose, invoice, onNewBill, onEdi
     if (!invoice) return null;
 
     const isThermal = printerType?.startsWith('thermal');
+    const isQuotation = invoice.invoiceNo?.startsWith('QT-');
 
     return (
         <Dialog open={isOpen} onOpenChange={(v) => !v && onClose()}>
@@ -68,12 +70,17 @@ export function InvoicePreviewModal({ isOpen, onClose, invoice, onNewBill, onEdi
                             <FileText className="w-5 h-5 text-primary" />
                         </div>
                         <div>
-                            <DialogTitle>Invoice {invoice.invoiceNo}</DialogTitle>
+                            <DialogTitle>{isQuotation ? 'Estimate / Quotation' : 'Invoice'} {invoice.invoiceNo}</DialogTitle>
                             <p className="text-xs text-slate-500 mt-0.5">Preview generated for {isThermal ? 'Thermal Receipt' : 'A4 Paper'}</p>
                         </div>
                     </div>
                     
                     <div className="flex items-center gap-2">
+                        {onViewHistory && (
+                            <Button variant="outline" size="sm" onClick={() => onViewHistory(invoice)}>
+                                <History className="w-4 h-4 mr-2" /> History
+                            </Button>
+                        )}
                         {onEdit && (
                             <Button variant="outline" size="sm" onClick={() => onEdit(invoice)}>
                                 <Edit className="w-4 h-4 mr-2" /> Edit

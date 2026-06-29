@@ -120,6 +120,18 @@ export interface AuthUser {
     canViewPurchaseRates: boolean;
     canCreatePurchases: boolean;
     canAccessReports: boolean;
+    canEditSales?: boolean;
+    canEditPurchases?: boolean;
+    canModifyDraftBill?: boolean;
+    canModifyUnpaidBill?: boolean;
+    canCorrectHeaderFields?: boolean;
+    canCorrectRatesDiscounts?: boolean;
+    canCorrectQuantities?: boolean;
+    canCorrectCustomer?: boolean;
+    canModifyBillWithReturn?: boolean;
+    canModifyPaidBill?: boolean;
+    canCancelAndReissueBill?: boolean;
+    canViewBillRevisionHistory?: boolean;
 }
 
 export interface LoginPayload {
@@ -150,6 +162,16 @@ export interface StaffMember {
     canAccessReports: boolean;
     canEditSales: boolean;
     canEditPurchases: boolean;
+    canModifyDraftBill?: boolean;
+    canModifyUnpaidBill?: boolean;
+    canCorrectHeaderFields?: boolean;
+    canCorrectRatesDiscounts?: boolean;
+    canCorrectQuantities?: boolean;
+    canCorrectCustomer?: boolean;
+    canModifyBillWithReturn?: boolean;
+    canModifyPaidBill?: boolean;
+    canCancelAndReissueBill?: boolean;
+    canViewBillRevisionHistory?: boolean;
     isActive: boolean;
     joiningDate: string;
     lastLogin?: string;
@@ -245,6 +267,10 @@ export interface ProductSearchResult extends MasterProduct {
     nearestExpiry: string;
     isLowStock: boolean;
     batches: Batch[];
+    hasStock: boolean;
+    totalQtyStrips: number;
+    totalQtyLoose: number;
+    availableBatches?: Batch[];
 }
 
 // ─── Customer & Doctor ────────────────────────────────────────────────────────
@@ -347,6 +373,8 @@ export interface CartItem {
     totalQty: number;
     saleMode: SaleMode;
     discountPct: number;
+    discountType?: 'percentage' | 'amount';
+    discountAmount?: number;
     gstRate: number;
     taxableAmount: number;
     gstAmount: number;
@@ -354,6 +382,8 @@ export interface CartItem {
     purchaseRate?: number;
     landingCost?: number;
     freight?: number;       // per-unit freight cost (from purchase) — used for floor rate calculation
+    batchAvailabilityStatus?: 'AVAILABLE' | 'LOW_STOCK' | 'BATCH_EXPIRED' | 'BATCH_UNAVAILABLE';
+    availableStock?: number;
 }
 
 export interface PaymentSplit {
@@ -395,6 +425,32 @@ export interface BillTotals {
     requiresDoctorDetails: boolean;
 }
 
+export type DraftStatus = 'active' | 'draft' | 'held' | 'rx_pending' | 'payment_pending';
+
+export interface DraftBill {
+    id: string;
+    documentMode: 'invoice' | 'quotation';
+    quotationId?: string;
+    sourceQuotationNo?: string;
+    validUntil?: string;
+    customer: Customer | null;
+    customerLedger: Ledger | null;
+    doctor: Doctor | null;
+    hospitalName: string | null;
+    prescriptionNo: string | null;
+    scheduleHData: ScheduleHData | null;
+    prescriptionImageUrl: string | null;
+    cart: CartItem[];
+    payment: PaymentSplit;
+    extraDiscountPct: number;
+    status: DraftStatus;
+    saveStatus?: 'saving' | 'saved' | 'error' | 'offline';
+    isSavedOnServer?: boolean;
+    lastSavedAt?: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
 export interface ScheduleHData {
     patientName: string;
     patientAge: number;
@@ -412,6 +468,9 @@ export interface SaleInvoice {
     customerId?: string;
     customer?: Customer;
     doctorId?: string;
+    doctorName?: string;
+    hospitalName?: string;
+    prescriptionNo?: string;
     subtotal: number;
     discountAmount: number;
     taxableAmount: number;
@@ -435,16 +494,68 @@ export interface SaleInvoice {
     billedByName: string;
     items: CartItem[];
     createdAt: string;
-    doctorName?: string;
-    doctorRegNo?: string;
-    doctorDegree?: string;
-    doctorSpecialty?: string;
     doctorHospitalName?: string;
     doctorAddress?: string;
     doctorQualification?: string;
+    doctorRegNo?: string;
+    doctorDegree?: string;
+    doctorSpecialty?: string;
     patientName?: string;
     patientAddress?: string;
-    prescriptionNo?: string;
+}
+
+export interface Quotation {
+    id: string;
+    outletId: string;
+    quotationNo: string;
+    quotationDate: string;
+    validUntil?: string;
+    status: 'draft' | 'saved' | 'converted' | 'expired' | 'cancelled';
+    customerId?: string;
+    customer?: Customer;
+    customerNameOverride?: string;
+    customerPhoneOverride?: string;
+    doctorName?: string;
+    hospitalName?: string;
+    notes?: string;
+    
+    subtotal: number;
+    discountAmount: number;
+    extraDiscountPct: number;
+    taxableAmount: number;
+    cgstAmount: number;
+    sgstAmount: number;
+    igstAmount: number;
+    roundOff: number;
+    grandTotal: number;
+    
+    convertedToInvoiceId?: string;
+    convertedAt?: string;
+    
+    createdBy?: string;
+    createdAt: string;
+    updatedAt: string;
+    items: QuotationItem[];
+}
+
+export interface QuotationItem {
+    id: string;
+    quotationId: string;
+    medicineName: string;
+    batchId?: string;
+    batchNo?: string;
+    expiryDate?: string;
+    packSize: number;
+    qtyStrips: number;
+    qtyLoose: number;
+    mrp: number;
+    saleRate: number;
+    rate: number;
+    discountPct: number;
+    gstRate: number;
+    taxableAmount: number;
+    gstAmount: number;
+    totalAmount: number;
 }
 
 export interface SaleInvoiceSummary {
@@ -1219,9 +1330,12 @@ export interface ReceiptEntry {
 }
 
 export interface CreateReceiptPayload {
-    customerId: string;
-    date: string;
+    date?: string;
     totalAmount: number;
+    customerId?: string;
+    doctorId?: string;
+    hospitalName?: string;
+    prescriptionNo?: string;
     paymentMode: PaymentMode;
     referenceNo?: string;
     notes?: string;

@@ -1367,3 +1367,121 @@ class ScheduleReportView(APIView):
                 ],
             }
         }, status=status.HTTP_200_OK)
+
+
+class BatchWiseReportView(APIView):
+    """
+    GET /api/v1/reports/batch-wise/
+    """
+    permission_classes = [CanAccessReports]
+
+    def get(self, request, *args, **kwargs):
+        from .services import BatchWiseReportService
+        
+        outlet_id = request.query_params.get('outletId')
+        report_type = request.query_params.get('report_type', 'current_stock')
+        date_from_str = request.query_params.get('date_from')
+        date_to_str = request.query_params.get('date_to')
+        search = request.query_params.get('search')
+        product_id = request.query_params.get('product_id')
+        expiry_within_days = int(request.query_params.get('expiry_within_days', 90))
+        
+        date_from = None
+        date_to = None
+        if date_from_str:
+            try:
+                date_from = datetime.strptime(date_from_str, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+        if date_to_str:
+            try:
+                date_to = datetime.strptime(date_to_str, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+
+        if not outlet_id:
+            return Response({'detail': 'outletId is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            report_data = BatchWiseReportService.get_batch_wise_report(
+                outlet_id=outlet_id,
+                report_type=report_type,
+                date_from=date_from,
+                date_to=date_to,
+                search=search,
+                product_id=product_id,
+                expiry_within_days=expiry_within_days
+            )
+            return Response({'success': True, **report_data}, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.exception("Error generating batch-wise report")
+            return Response({'detail': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class BatchWiseReportExportView(APIView):
+    """
+    GET /api/v1/reports/batch-wise/export/
+    """
+    permission_classes = [CanAccessReports]  # Using same permission
+
+    def get(self, request, *args, **kwargs):
+        from .services import BatchWiseReportService
+        
+        outlet_id = request.query_params.get('outletId')
+        report_type = request.query_params.get('report_type', 'current_stock')
+        date_from_str = request.query_params.get('date_from')
+        date_to_str = request.query_params.get('date_to')
+        search = request.query_params.get('search')
+        product_id = request.query_params.get('product_id')
+        expiry_within_days = int(request.query_params.get('expiry_within_days', 90))
+        export_format = request.query_params.get('export_format', 'csv').lower()
+        
+        date_from = None
+        date_to = None
+        if date_from_str:
+            try:
+                date_from = datetime.strptime(date_from_str, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+        if date_to_str:
+            try:
+                date_to = datetime.strptime(date_to_str, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+
+        if not outlet_id:
+            return Response({'detail': 'outletId is required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        try:
+            outlet = Outlet.objects.get(id=outlet_id)
+        except Outlet.DoesNotExist:
+            return Response({'detail': 'Outlet not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            report_data = BatchWiseReportService.get_batch_wise_report(
+                outlet_id=outlet_id,
+                report_type=report_type,
+                date_from=date_from,
+                date_to=date_to,
+                search=search,
+                product_id=product_id,
+                expiry_within_days=expiry_within_days
+            )
+            
+            if export_format == 'xlsx':
+                return BatchWiseReportService.export_xlsx(report_data)
+            elif export_format == 'pdf':
+                context = {
+                    'outlet': outlet,
+                    'report_type': report_type.replace('_', ' ').title(),
+                    'date_from': date_from,
+                    'date_to': date_to,
+                    'generated_by': getattr(request.user, 'name', None) or getattr(request.user, 'username', 'Unknown')
+                }
+                return BatchWiseReportService.export_pdf(report_data, context)
+            else:
+                return BatchWiseReportService.export_csv(report_data)
+                
+        except Exception as e:
+            logger.exception(f"Error exporting batch-wise report as {export_format}")
+            return Response({'detail': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

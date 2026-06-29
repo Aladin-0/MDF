@@ -21,6 +21,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'corsheaders',
     'django.contrib.postgres',
+    'django_filters',
     # Local apps
     'apps.core',
     'apps.accounts',
@@ -29,6 +30,7 @@ INSTALLED_APPS = [
     'apps.purchases',
     'apps.attendance',
     'apps.reports',
+    'apps.audit',
     'rest_framework_simplejwt.token_blacklist',
     'import_export',
 ]
@@ -40,6 +42,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'apps.audit.middleware.AuditContextMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -145,3 +148,40 @@ CACHES = {
         'KEY_PREFIX': 'mediflow',
     }
 }
+
+CELERY_TASK_ROUTES = {
+    'apps.audit.tasks.create_audit_log_async': {'queue': 'audit'},
+}
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'audit_fallback': {
+            'level': 'ERROR',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': '/app/logs/audit_fallback.log',
+            'maxBytes': 1024 * 1024 * 10,
+            'backupCount': 5,
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'audit.fallback': {
+            'handlers': ['audit_fallback'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+    },
+}
+
+import sys
+if 'test' in sys.argv:
+    CELERY_TASK_ALWAYS_EAGER = True
+    CELERY_TASK_EAGER_PROPAGATES = True

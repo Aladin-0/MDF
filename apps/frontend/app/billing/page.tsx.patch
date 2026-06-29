@@ -1,0 +1,53 @@
+--- /home/asta/coding/MDF/apps/frontend/app/billing/page.tsx
++++ /home/asta/coding/MDF/apps/frontend/app/billing/page.tsx
+@@ -8,11 +8,13 @@
+ import { StaffPinEntry } from '@/components/billing/StaffPinEntry';
+ import { useAutosaveDraft } from '@/hooks/useAutosaveDraft';
+ import { useLoadDrafts } from '@/hooks/useLoadDrafts';
++import { BillSuccessScreen } from '@/components/billing/BillSuccessScreen';
++import { InvoicePreviewModal } from '@/components/billing/InvoicePreviewModal';
++import { useState } from 'react';
+ 
+ export default function FullScreenBillingPage() {
+-    const { isPinVerified, activeDraftId } = useBillingStore();
++    const { isPinVerified, activeDraftId, lastInvoice, setLastInvoice } = useBillingStore();
+     useAutosaveDraft();
+     const draftsLoaded = useLoadDrafts();
++    const [showInvoicePreview, setShowInvoicePreview] = useState(false);
+ 
+     if (!isPinVerified) {
+         return (
+@@ -29,6 +31,19 @@
+         );
+     }
+ 
++    if (lastInvoice && !showInvoicePreview) {
++        return (
++            <div className="flex h-screen w-screen items-center justify-center bg-slate-50">
++                <BillSuccessScreen
++                    invoice={lastInvoice}
++                    onNewBill={() => setLastInvoice(null)}
++                    onPrint={() => setShowInvoicePreview(true)}
++                    onViewInvoice={() => setShowInvoicePreview(true)}
++                />
++            </div>
++        );
++    }
++
+     return (
+         <div className="h-screen w-screen overflow-hidden flex flex-col bg-[#F8FAFC] font-sans">
+             {/* Top Navigation */}
+@@ -47,6 +62,12 @@
+                 {/* Right Area: Checkout & Totals */}
+                 <RightBillingRail />
+             </div>
++            
++            <InvoicePreviewModal
++                isOpen={showInvoicePreview}
++                onClose={() => setShowInvoicePreview(false)}
++                invoice={lastInvoice}
++                onNewBill={() => setLastInvoice(null)}
++            />
+         </div>
+     );
+ }

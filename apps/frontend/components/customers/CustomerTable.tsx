@@ -110,7 +110,7 @@ export default function CustomerTable({ filters, onEdit }: CustomerTableProps) {
                                         </Button>
                                     )}
                                     <Button variant="outline" size="sm" className="h-7 text-xs px-2"
-                                        onClick={() => { setCustomer(c); router.push('/dashboard/billing'); }}>
+                                        onClick={() => { setCustomer(c); router.push('/billing'); }}>
                                         <Receipt className="w-3 h-3" />
                                     </Button>
                                     {c.outstanding > 0 && (

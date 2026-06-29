@@ -11,6 +11,8 @@ from apps.accounts.models import Staff, Customer, Ledger, JournalEntry
 from apps.accounts.services import LedgerService
 from apps.accounts.journal_service import _get_ledger, _create_lines_and_update_balances, post_sale_invoice
 from apps.billing.services import validate_sale_price, fefo_batch_select, schedule_h_validate
+from apps.audit.services import log_activity
+from apps.billing.models import SaleInvoice, SaleItem, ScheduleHRegister, CreditAccount, CreditTransaction, LedgerEntry
 
 class SaleServiceError(Exception):
     pass
@@ -35,6 +37,117 @@ def rebuild_customer_ledger(outlet_id: str, customer_id: str, from_date: date):
         running = running + entry.debit - entry.credit
         LedgerEntry.objects.filter(pk=entry.pk).update(running_balance=running)
 
+def get_sale_modification_constraints(invoice: SaleInvoice, action: str = None) -> Dict[str, Any]:
+    """
+    Returns a dictionary indicating if the invoice can be safely modified.
+    {
+        "can_edit": bool,
+        "code": str,       # Reason code if blocked, None if can_edit
+        "message": str     # Human readable reason
+    }
+    """
+    # 1. Check for Returns
+    if invoice.returns.exists() and action not in ['return_aware_correction', 'header_correction']:
+        return {
+            "can_edit": False,
+            "code": "SALE_EDIT_BLOCKED_HAS_RETURN",
+            "message": "This invoice has one or more sales returns linked to it and cannot be edited directly. Use the correction workflow."
+        }
+        
+    # 2. Check for Later Payments / Allocations
+    if hasattr(invoice, 'receipt_allocations') and invoice.receipt_allocations.exists() and action not in ['header_correction', 'paid_bill_correction']:
+        return {
+            "can_edit": False,
+            "code": "SALE_EDIT_BLOCKED_LATER_PAYMENT",
+            "message": "This invoice has later payments recorded and cannot be edited directly."
+        }
+
+    # 3. Check for fully paid credit sales
+    if invoice.credit_given > 0 and invoice.amount_due <= 0 and action not in ['header_correction', 'paid_bill_correction']:
+        return {
+            "can_edit": False,
+            "code": "SALE_EDIT_BLOCKED_FULLY_PAID",
+            "message": "This invoice is fully paid and cannot be edited directly."
+        }
+
+        
+    return {
+        "can_edit": True,
+        "code": None,
+        "message": None
+    }
+
+@transaction.atomic
+def cancel_invoice(sale_id: str, updated_by_id: str, reason: str):
+    from apps.inventory.models import StockLedger
+    from apps.billing.models import SaleInvoice, CreditTransaction
+    from apps.accounts.journal_service import reverse_journal
+    from django.utils import timezone
+
+    sale_invoice = SaleInvoice.objects.select_for_update().get(id=sale_id)
+    outlet = sale_invoice.outlet
+    
+    if sale_invoice.is_cancelled:
+        raise SaleServiceError("Invoice is already cancelled.")
+
+    # Revert stock
+    StockLedger.objects.filter(
+        outlet=outlet,
+        voucher_number=sale_invoice.invoice_no,
+        txn_type='SALE_OUT'
+    ).delete()
+
+    old_items = sale_invoice.items.all()
+    for old_item in old_items:
+        batch = old_item.batch
+        batch.qty_strips += old_item.qty_strips
+        batch.qty_loose += old_item.qty_loose
+        if batch.pack_size:
+            while batch.qty_loose >= batch.pack_size:
+                batch.qty_strips += 1
+                batch.qty_loose -= batch.pack_size
+        batch.save(update_fields=['qty_strips', 'qty_loose'])
+        # NOTE: DO NOT delete old_item for cancellation
+
+    # Revert accounting
+    old_customer = sale_invoice.customer
+    if old_customer:
+        old_customer.total_purchases -= sale_invoice.grand_total
+        old_customer.save(update_fields=['total_purchases'])
+
+    # Reverse JournalEntry
+    reverse_journal(
+        source_type='SALE',
+        source_id=str(sale_invoice.id),
+        outlet_id=str(outlet.id),
+        narration_prefix=f"CANCELLATION REVERSAL OF"
+    )
+
+    # Reverse CreditTransactions
+    old_credit_txs = CreditTransaction.objects.filter(invoice=sale_invoice)
+    for tx in old_credit_txs:
+        account = tx.credit_account
+        account.total_outstanding -= tx.amount
+        if tx.type == 'debit':
+            account.total_borrowed -= tx.amount
+        account.save(update_fields=['total_outstanding', 'total_borrowed'])
+        CreditTransaction.objects.create(
+            credit_account=account,
+            customer=account.customer,
+            type='credit' if tx.type == 'debit' else 'debit',
+            amount=tx.amount,
+            description=f"Reversal due to invoice cancellation: {sale_invoice.invoice_no}",
+            recorded_by_id=updated_by_id,
+            balance_after=account.total_outstanding
+        )
+
+    # Mark as cancelled
+    sale_invoice.is_cancelled = True
+    sale_invoice.cancellation_reason = reason
+    sale_invoice.cancelled_at = timezone.now()
+    sale_invoice.cancelled_by_id = updated_by_id
+    sale_invoice.save(update_fields=['is_cancelled', 'cancellation_reason', 'cancelled_at', 'cancelled_by'])
+
 @transaction.atomic
 def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, updated_by_id: str) -> SaleInvoice:
     try:
@@ -45,16 +158,65 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
         except SaleInvoice.DoesNotExist:
             raise SaleServiceError(f"Sale {sale_id} not found")
         
+        revision_action = payload.get('revisionAction')
+
+        # Enforce edit constraints
+        constraints = get_sale_modification_constraints(sale_invoice, action=revision_action)
+        if not constraints["can_edit"]:
+            raise SaleServiceError(constraints["message"])
+        
         # Determine Billed By
         try:
             billed_by = Staff.objects.get(id=updated_by_id)
         except Staff.DoesNotExist:
             billed_by = None
+
+        old_state = {
+            'invoice_no': sale_invoice.invoice_no,
+            'customer_id': str(sale_invoice.customer_id) if sale_invoice.customer_id else None,
+            'grand_total': float(sale_invoice.grand_total),
+            'subtotal': float(sale_invoice.subtotal),
+            'discount_amount': float(sale_invoice.discount_amount),
+            'items_count': sale_invoice.items.count(),
+        }
+        
+        old_items_state = {}
+        for item in sale_invoice.items.all():
+            old_items_state[item.product_name] = {
+                'qty_strips': item.qty_strips,
+                'qty_loose': item.qty_loose,
+                'rate': float(item.rate),
+            }
             
         items_data = payload.get('items', [])
         schedule_h_data = payload.get('scheduleHData')
         client_grand_total = Decimal(str(payload.get('grandTotal', 0)))
         extra_discount_pct = Decimal(str(payload.get('extraDiscountPct', 0)))
+
+        if revision_action == 'header_correction':
+            # Ignore commercial payload and keep existing totals and items
+            items_data = [
+                {
+                    'batchId': str(item.batch_id),
+                    'productId': str(item.batch.product_id),
+                    'qtyStrips': item.qty_strips,
+                    'qtyLoose': item.qty_loose,
+                    'rate': float(item.rate),
+                    'discountPct': float(item.discount_pct),
+                    'gstRate': float(item.gst_rate),
+                    'taxableAmount': float(item.taxable_amount),
+                    'gstAmount': float(item.gst_amount),
+                    'totalAmount': float(item.total_amount),
+                    'saleMode': item.sale_mode,
+                }
+                for item in sale_invoice.items.all()
+            ]
+            client_grand_total = sale_invoice.grand_total
+            extra_discount_pct = sale_invoice.extra_discount_pct
+            payload['cashPaid'] = sale_invoice.cash_paid
+            payload['upiPaid'] = sale_invoice.upi_paid
+            payload['cardPaid'] = sale_invoice.card_paid
+            payload['creditGiven'] = sale_invoice.credit_given
 
         # Enforce max discount
         if billed_by:
@@ -82,7 +244,17 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
         credit_given_val = Decimal(str(payload.get('creditGiven', 0)))
         payment_sum = cash_paid_val + upi_paid_val + card_paid_val + credit_given_val
         if abs(payment_sum - client_grand_total) > Decimal('0.01'):
-            raise SaleServiceError(f"Payment amounts ({payment_sum}) do not match grand total ({client_grand_total})")
+            if payment_sum > client_grand_total:
+                # Handle overpayment
+                customer_id_raw = payload.get('customerId')
+                party_ledger_id_raw = payload.get('partyLedgerId')
+                if not customer_id_raw and not party_ledger_id_raw and not sale_invoice.customer:
+                    raise SaleServiceError("Cannot process overpayment for walk-in customer. Please select a customer to store the advance balance.")
+                
+                overpayment = payment_sum - client_grand_total
+                credit_given_val -= overpayment
+            else:
+                raise SaleServiceError(f"Payment amounts ({payment_sum}) are less than grand total ({client_grand_total})")
 
         # Step 2: Validate Schedule H
         cart_items = [{'scheduleType': item.get('scheduleType', 'OTC')} for item in items_data]
@@ -91,9 +263,11 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
         except Exception as e:
             raise SaleServiceError(str(e))
 
-        # Step 3: Identify new Customer
+        # Step 3: Identify new Customer and Doctor
         party_ledger_id = payload.get('partyLedgerId')
         customer_id = payload.get('customerId')
+        doctor_id = payload.get('doctorId')
+        
         new_customer = None
         if party_ledger_id:
             try:
@@ -108,6 +282,14 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
             except Customer.DoesNotExist:
                 raise SaleServiceError(f"Customer {customer_id} not found")
 
+        from apps.accounts.models import Doctor
+        new_doctor = None
+        if doctor_id:
+            try:
+                new_doctor = Doctor.objects.get(id=doctor_id, outlet=outlet)
+            except Doctor.DoesNotExist:
+                raise SaleServiceError(f"Doctor {doctor_id} not found")
+
         # Step 4: Revert old items and restore Batch stock
         from apps.inventory.models import StockLedger
         StockLedger.objects.filter(
@@ -117,7 +299,10 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
         ).delete()
         batches_to_rebuild = set()
 
-        old_items = sale_invoice.items.all()
+        old_items = list(sale_invoice.items.all())
+        existing_items_by_batch = {str(item.batch_id): item for item in old_items}
+        matched_old_item_ids = set()
+
         for old_item in old_items:
             batch = old_item.batch
             batches_to_rebuild.add(batch.pk)
@@ -130,7 +315,7 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
                     batch.qty_strips += 1
                     batch.qty_loose -= batch.pack_size
             batch.save(update_fields=['qty_strips', 'qty_loose'])
-            old_item.delete()
+            # Do NOT delete old_item here, we will update or delete in Step 6
 
         # Step 5: Revert old accounting
         old_customer = sale_invoice.customer
@@ -159,7 +344,7 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
                 LedgerService.update_balance(line.ledger.id, debit=line.credit_amount, credit=line.debit_amount)
             old_je.delete()
 
-        # Step 6: Create new items and deduct stock
+        # Step 6: Create or Update items and deduct stock
         sale_items = []
         for item_data in items_data:
             batch_id = item_data.get('batchId')
@@ -187,6 +372,15 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
                 batch = batch_alloc['batch']
                 qty_to_deduct = batch_alloc.get('qty_to_deduct', 0)
                 loose_to_deduct = batch_alloc.get('loose_to_deduct', 0)
+                
+                # Enforce return constraints
+                existing_item = existing_items_by_batch.get(str(batch.id))
+                if existing_item:
+                    pack_size = existing_item.pack_size or 1
+                    total_loose_new = (qty_to_deduct * pack_size) + loose_to_deduct
+                    if total_loose_new < existing_item.qty_returned:
+                        raise SaleServiceError(f"Cannot reduce quantity of {existing_item.product_name} below already returned quantity ({existing_item.qty_returned} units)")
+
                 batch.qty_strips -= qty_to_deduct
                 batch.qty_loose -= loose_to_deduct
                 while batch.qty_loose < 0:
@@ -199,40 +393,57 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
                 if pricing_check.get('block'):
                     raise SaleServiceError(pricing_check['message'])
 
-                sale_item = SaleItem.objects.create(
-                    invoice=sale_invoice,
-                    batch=batch,
-                    product_name=product.name,
-                    composition=product.composition,
-                    # Snapshot pack_size/pack_unit from batch (frozen at purchase time)
-                    pack_size=batch.pack_size,
-                    pack_unit=batch.pack_unit,
-                    schedule_type=product.schedule_type,
-                    batch_no=batch.batch_no,
-                    expiry_date=batch.expiry_date,
-                    mrp=batch.mrp,
-                    sale_rate=batch.sale_rate,
-                    rate=proposed_rate,
-                    qty_strips=qty_to_deduct,
-                    qty_loose=loose_to_deduct, # Fix: Use loose_to_deduct
-                    sale_mode=item_data.get('saleMode', 'strip'),
-                    discount_pct=Decimal(str(item_data.get('discountPct', 0))),
-                    gst_rate=Decimal(str(item_data.get('gstRate', 0))),
-                    taxable_amount=Decimal(str(item_data.get('taxableAmount', 0))),
-                    gst_amount=Decimal(str(item_data.get('gstAmount', 0))),
-                    total_amount=Decimal(str(item_data.get('totalAmount', 0))),
-                )
-                sale_items.append(sale_item)
+                if existing_item:
+                    existing_item.qty_strips = qty_to_deduct
+                    existing_item.qty_loose = loose_to_deduct
+                    existing_item.rate = proposed_rate
+                    existing_item.discount_pct = Decimal(str(item_data.get('discountPct', 0)))
+                    existing_item.gst_rate = Decimal(str(item_data.get('gstRate', 0)))
+                    existing_item.taxable_amount = Decimal(str(item_data.get('taxableAmount', 0)))
+                    existing_item.gst_amount = Decimal(str(item_data.get('gstAmount', 0)))
+                    existing_item.total_amount = Decimal(str(item_data.get('totalAmount', 0)))
+                    existing_item.sale_mode = item_data.get('saleMode', 'strip')
+                    existing_item.save()
+                    sale_items.append(existing_item)
+                    matched_old_item_ids.add(existing_item.id)
+                    sale_item = existing_item
+                else:
+                    sale_item = SaleItem.objects.create(
+                        invoice=sale_invoice,
+                        batch=batch,
+                        product_name=product.name,
+                        composition=product.composition,
+                        # Snapshot pack_size/pack_unit from batch (frozen at purchase time)
+                        pack_size=batch.pack_size,
+                        pack_unit=batch.pack_unit,
+                        schedule_type=product.schedule_type,
+                        batch_no=batch.batch_no,
+                        expiry_date=batch.expiry_date,
+                        mrp=batch.mrp,
+                        sale_rate=batch.sale_rate,
+                        rate=proposed_rate,
+                        qty_strips=qty_to_deduct,
+                        qty_loose=loose_to_deduct, # Fix: Use loose_to_deduct
+                        sale_mode=item_data.get('saleMode', 'strip'),
+                        discount_pct=Decimal(str(item_data.get('discountPct', 0))),
+                        gst_rate=Decimal(str(item_data.get('gstRate', 0))),
+                        taxable_amount=Decimal(str(item_data.get('taxableAmount', 0))),
+                        gst_amount=Decimal(str(item_data.get('gstAmount', 0))),
+                        total_amount=Decimal(str(item_data.get('totalAmount', 0))),
+                    )
+                    sale_items.append(sale_item)
 
                 if product.schedule_type in ['G', 'H', 'H1', 'X', 'C', 'Narcotic']:
-                    ScheduleHRegister.objects.create(
+                    ScheduleHRegister.objects.update_or_create(
                         sale_item=sale_item,
-                        patient_name=schedule_h_data.get('patientName') if schedule_h_data else None,
-                        patient_age=schedule_h_data.get('patientAge') if schedule_h_data else 0,
-                        patient_address=schedule_h_data.get('patientAddress') if schedule_h_data else '',
-                        doctor_name=schedule_h_data.get('doctorName') if schedule_h_data else None,
-                        doctor_reg_no=schedule_h_data.get('doctorRegNo') if schedule_h_data else '',
-                        prescription_no=schedule_h_data.get('prescriptionNo') if schedule_h_data else '',
+                        defaults={
+                            'patient_name': schedule_h_data.get('patientName') if schedule_h_data else None,
+                            'patient_age': schedule_h_data.get('patientAge') if schedule_h_data else 0,
+                            'patient_address': schedule_h_data.get('patientAddress') if schedule_h_data else '',
+                            'doctor_name': schedule_h_data.get('doctorName') if schedule_h_data else None,
+                            'doctor_reg_no': schedule_h_data.get('doctorRegNo') if schedule_h_data else '',
+                            'prescription_no': schedule_h_data.get('prescriptionNo') if schedule_h_data else '',
+                        }
                     )
 
                 from apps.inventory.services import post_stock_ledger_entry
@@ -255,9 +466,17 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
                 )
                 batches_to_rebuild.add(batch.pk)
 
+        # Step 6.5: Cleanup unmatched old items
+        for old_item in old_items:
+            if old_item.id not in matched_old_item_ids:
+                if old_item.qty_returned > 0:
+                    raise SaleServiceError(f"Cannot remove {old_item.product_name} because {old_item.qty_returned} units have been returned.")
+                old_item.delete()
+
         # Step 7: Update SaleInvoice
         # (invoice_date and invoice_d already parsed at the top of this function)
         sale_invoice.customer = new_customer
+        sale_invoice.doctor = new_doctor
         sale_invoice.invoice_date = invoice_date
         sale_invoice.subtotal = Decimal(str(payload.get('subtotal', 0)))
         sale_invoice.discount_amount = Decimal(str(payload.get('discountAmount', 0)))
@@ -313,10 +532,13 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
         sale_invoice.save()
 
         # Step 9: Credit Transactions
-        if credit_given_val > 0 and new_customer:
+        if credit_given_val != 0 and new_customer:
             credit_account, _ = CreditAccount.objects.get_or_create(outlet=outlet, customer=new_customer)
             credit_account.total_outstanding += credit_given_val
-            credit_account.total_borrowed += credit_given_val
+            if credit_given_val > 0:
+                credit_account.total_borrowed += credit_given_val
+            else:
+                credit_account.total_repaid += abs(credit_given_val)
             credit_account.last_transaction_date = datetime.now()
             credit_account.save()
 
@@ -324,9 +546,9 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
                 credit_account=credit_account,
                 customer=new_customer,
                 invoice=sale_invoice,
-                type='debit',
-                amount=credit_given_val,
-                description=f'Sale on {sale_invoice.invoice_no}',
+                type='debit' if credit_given_val > 0 else 'credit',
+                amount=abs(credit_given_val),
+                description=f"{'Sale' if credit_given_val > 0 else 'Adjustment'} on {sale_invoice.invoice_no}",
                 balance_after=credit_account.total_outstanding,
                 recorded_by=billed_by,
                 date=invoice_date.date(),
@@ -337,9 +559,6 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
             new_customer.save(update_fields=['total_purchases'])
 
             # Ledger entries
-            # invoice_d is already set at the top of this function
-            
-            # Sale Entry
             sale_entry = LedgerEntry.objects.filter(outlet=outlet, entity_type='customer', entry_type='sale', reference_no=sale_invoice.invoice_no).first()
             if sale_entry:
                 LedgerEntry.objects.filter(pk=sale_entry.pk).update(
@@ -355,7 +574,6 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
                     entry_type='sale', reference_no=sale_invoice.invoice_no, debit=sale_invoice.grand_total, credit=Decimal('0'), running_balance=running
                 )
             
-            # Receipt Entry
             total_paid = sale_invoice.amount_paid
             receipt_entry = LedgerEntry.objects.filter(outlet=outlet, entity_type='customer', entry_type='receipt', reference_no=sale_invoice.invoice_no).first()
             
@@ -365,13 +583,11 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
                         credit=total_paid, date=invoice_d, customer=new_customer
                     )
                 else:
-                    # we will rebuild running balance anyway
                     LedgerEntry.objects.create(
                         outlet=outlet, entity_type='customer', customer=new_customer, date=invoice_d,
                         entry_type='receipt', reference_no=sale_invoice.invoice_no, debit=Decimal('0'), credit=total_paid, running_balance=Decimal('0')
                     )
             elif receipt_entry:
-                # Need to delete the receipt entry. But since it's append-only, we can do `.all().delete()`
                 LedgerEntry.objects.filter(pk=receipt_entry.pk).delete()
 
             rebuild_customer_ledger(str(outlet.id), str(new_customer.id), invoice_d)
@@ -384,6 +600,41 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
         from apps.inventory.services import rebuild_stock_ledger
         for batch_id in batches_to_rebuild:
             rebuild_stock_ledger(batch_id, min(invoice_d, old_invoice_date if 'old_invoice_date' in locals() else invoice_d))
+
+        new_state = {
+            'invoice_no': sale_invoice.invoice_no,
+            'customer_id': str(sale_invoice.customer_id) if sale_invoice.customer_id else None,
+            'grand_total': float(sale_invoice.grand_total),
+            'subtotal': float(sale_invoice.subtotal),
+            'discount_amount': float(sale_invoice.discount_amount),
+            'items_count': sale_invoice.items.count(),
+        }
+        
+        new_items_state = {}
+        for item in sale_invoice.items.all():
+            new_items_state[item.product_name] = {
+                'qty_strips': item.qty_strips,
+                'qty_loose': item.qty_loose,
+                'rate': float(item.rate),
+            }
+
+        changes = {k: {'old': old_state[k], 'new': new_state[k]} for k in old_state if old_state[k] != new_state[k]}
+        
+        if old_items_state != new_items_state:
+            changes['items'] = {'old': old_items_state, 'new': new_items_state}
+
+        if changes:
+            log_activity(
+                action="SALE_MODIFIED",
+                module="billing",
+                entity_type="SaleInvoice",
+                entity_id=sale_invoice.id,
+                entity_label=f"INV-{sale_invoice.invoice_no}",
+                description=f"Invoice {sale_invoice.invoice_no} modified",
+                changes=changes,
+                user=billed_by,
+                outlet=outlet
+            )
 
         return sale_invoice
 

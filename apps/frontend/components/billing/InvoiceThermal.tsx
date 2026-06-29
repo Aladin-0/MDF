@@ -13,6 +13,8 @@ interface InvoiceThermalProps {
 export const InvoiceThermal = forwardRef<HTMLDivElement, InvoiceThermalProps>(({ invoice }, ref) => {
     const { outlet, user } = useAuthStore();
     
+    const isQuotation = invoice.invoiceNo?.startsWith('QT-');
+    
     return (
         <div ref={ref} className="bg-white text-black w-[80mm] mx-auto p-4 font-mono text-[11px] leading-snug print:m-0 print:p-2 shadow max-w-[80mm]">
             
@@ -23,9 +25,15 @@ export const InvoiceThermal = forwardRef<HTMLDivElement, InvoiceThermalProps>(({
                 <p>GSTIN: {outlet?.gstin || ''}</p>
             </div>
 
+            {isQuotation && (
+                <div className="text-center font-bold text-[13px] border-y border-black py-1 mb-2">
+                    ESTIMATE (NOT A BILL)
+                </div>
+            )}
+
             <div className="border-t border-b border-black border-dashed py-2 mb-3">
                 <div className="flex justify-between">
-                    <span>INV: {invoice.invoiceNo ?? '—'}</span>
+                    <span>{isQuotation ? 'EST' : 'INV'}: {invoice.invoiceNo ?? '—'}</span>
                     <span>{invoice.createdAt ? format(new Date(invoice.createdAt), 'dd.MM.yy') : '—'}</span>
                 </div>
                 <div className="flex justify-between mt-1">

@@ -51,8 +51,8 @@ export default function HourlySalesChart({ data, isLoading }: HourlySalesChartPr
   }
 
   return (
-    <div style={{ width: '100%', height: 240 }}>
-      <ResponsiveContainer width="100%" height="100%">
+    <div style={{ width: '100%', height: 240 }} className="min-h-0 min-w-0">
+      <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
         <BarChart
           data={data}
           margin={{ top: 5, right: 10, left: 0, bottom: 5 }}

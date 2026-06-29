@@ -9,7 +9,6 @@ import { salesApi } from '@/lib/apiClient';
 import { PaymentSplit } from '@/types';
 
 export function useSaveBill() {
-    const billingStore = useBillingStore();
     const queryClient = useQueryClient();
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -19,24 +18,30 @@ export function useSaveBill() {
         setError(null);
 
         try {
-            const cart = useBillingStore.getState().cart;
-            const customer = useBillingStore.getState().customer;
-            const customerLedger = useBillingStore.getState().customerLedger;
-            const doctor = useBillingStore.getState().doctor;
-            const activeStaff = useBillingStore.getState().activeStaff;
-            const scheduleHData = useBillingStore.getState().scheduleHData;
-            const totals = useBillingStore.getState().getTotals();
-            const extraDiscountPct = useBillingStore.getState().extraDiscountPct || 0;
+            const state = useBillingStore.getState();
+            const activeDraftId = state.activeDraftId;
+            
+            if (!activeDraftId) {
+                throw new Error("No active draft selected.");
+            }
+
+            const draft = state.drafts[activeDraftId];
+            if (!draft) {
+                throw new Error("Draft not found.");
+            }
+
+            const cart = draft.cart;
+            const customer = draft.customer;
+            const customerLedger = draft.customerLedger;
+            const doctor = draft.doctor;
+            const scheduleHData = draft.scheduleHData;
+            const totals = state.getDraftTotals(activeDraftId);
+            const extraDiscountPct = draft.extraDiscountPct || 0;
+            const activeStaff = state.activeStaff;
             const { outlet } = useAuthStore.getState();
             const { selectedOutletId } = useSettingsStore.getState();
-            // Use selectedOutletId if the user has switched outlets in the UI
-            // (matches the outlet used by product search via useOutletId())
             const resolvedOutletId = selectedOutletId ?? outlet?.id;
 
-            // M13: Require a valid session before touching the backend.
-            // Never fall back to hardcoded demo values — a bill without a real
-            // outletId or billedBy cannot be audited and would pass backend checks
-            // silently on a misconfigured tenant.
             if (!resolvedOutletId || !activeStaff?.id) {
                 throw {
                     type: 'AUTH_ERROR',
@@ -55,15 +60,16 @@ export function useSaveBill() {
 
             const payload = {
                 outletId: resolvedOutletId,
-                // Ledger-first (Marg-style): prefer partyLedgerId; fall back to legacy customerId
-                partyLedgerId: (customerLedger && !(customerLedger as any).isMock) ? customerLedger.id : undefined,
-                customerId: (customerLedger && (customerLedger as any).isMock) ? customerLedger.id : (customerLedger ? undefined : customer?.id),
-                doctorId: doctor?.id,
+                partyLedgerId: (customerLedger && customerLedger.id !== 'mock') ? customerLedger.id : undefined,
+                customerId: (customer && customer.id !== 'mock') ? customer.id : undefined,
+                doctorId: (doctor && doctor.id !== 'mock') ? doctor.id : undefined,
+                doctorName: doctor?.name,      // Needed by quotation backend (stores text, not FK)
+                hospitalName: draft.hospitalName,
+                prescriptionNo: draft.prescriptionNo,
                 billedBy: activeStaff.id,
                 items: cart.map((item: any) => {
                     const rawTotal = item.rate * item.totalQty;
                     const gstRate = item.gstRate || 0;
-                    // Apply extra discount before GST extraction (matches getTotals & backend)
                     const discountFactor = extraDiscountPct > 0 ? 1 - extraDiscountPct / 100 : 1;
                     const discountedTotal = rawTotal * discountFactor;
                     const taxable = gstRate > 0
@@ -72,10 +78,16 @@ export function useSaveBill() {
                     const gst = Number((discountedTotal - taxable).toFixed(2));
                     return {
                         batchId: item.batchId,
+                        name: item.name,
+                        batchNo: item.batchNo,
+                        expiryDate: item.expiryDate,
                         productId: item.productId,
                         qtyStrips: item.qtyStrips,
                         qtyLoose: item.qtyLoose,
                         saleMode: item.saleMode,
+                        mrp: item.mrp || 0,            // Snapshot fields for quotation reopen
+                        saleRate: item.saleRate || item.rate || 0,
+                        packSize: item.packSize || 1,
                         rate: item.rate,
                         discountPct: item.discountPct,
                         gstRate: item.gstRate,
@@ -83,10 +95,11 @@ export function useSaveBill() {
                         taxableAmount: taxable,
                         gstAmount: gst,
                         totalAmount: Number(discountedTotal.toFixed(2)),
+                        gstAmount: gst,
+                        totalAmount: Number(discountedTotal.toFixed(2)),
                     };
                 }),
                 subtotal: Number(totals.subtotal.toFixed(2)),
-                // Total discount = per-item discounts + extra bill-level discount
                 discountAmount: Number((totals.discountAmount + totals.extraDiscountAmount).toFixed(2)),
                 taxableAmount: Number(totals.taxableAmount.toFixed(2)),
                 cgstAmount: Number(totals.cgstAmount.toFixed(2)),
@@ -104,24 +117,31 @@ export function useSaveBill() {
                 cardPaid: getPaid('card'),
                 creditGiven: getPaid('credit'),
                 scheduleHData: (totals.requiresDoctorDetails || totals.hasScheduleH) ? scheduleHData : undefined,
+                revisionAction: state.revisionAction,
+                revisionReasonCode: state.revisionReasonCode,
+                revisionReasonText: state.revisionReasonText,
+                quotationId: draft.quotationId,
             };
 
-            // Try to create via API — no offline fallback (C4).
-            // On network failure the cart stays intact and the cashier must retry.
-            const editingSaleId = useBillingStore.getState().editingSaleId;
+            const editingSaleId = state.editingSaleId;
+            const revisionAction = state.revisionAction;
             let invoice;
             try {
-                if (editingSaleId) {
-                    invoice = await salesApi.update(editingSaleId, payload as never);
+                if (draft.documentMode === 'quotation') {
+                    if (draft.quotationId) {
+                        invoice = await salesApi.updateQuotation(draft.quotationId, payload as never);
+                    } else {
+                        invoice = await salesApi.createQuotation(payload as never);
+                    }
                 } else {
-                    invoice = await salesApi.create(payload as never);
-                }
-                // If the create response didn't include items, fetch the full invoice
-                if ((invoice as any).id && !((invoice as any).items?.length)) {
-                    try {
-                        invoice = await salesApi.getById((invoice as any).id, outlet?.id);
-                    } catch {
-                        // fallback to create response
+                    if (editingSaleId) {
+                        if (revisionAction) {
+                            invoice = await salesApi.revise(editingSaleId, payload as never);
+                        } else {
+                            invoice = await salesApi.update(editingSaleId, payload as never);
+                        }
+                    } else {
+                        invoice = await salesApi.create(payload as never);
                     }
                 }
             } catch (err: unknown) {
@@ -133,48 +153,31 @@ export function useSaveBill() {
                         type: 'NETWORK_ERROR',
                         message:
                             'Cannot save bill — no connection to server. ' +
-                            'Please check your internet connection and try again. ' +
-                            'Do NOT dispense medicines until the bill is confirmed.',
+                            'Please check your internet connection and try again.',
                         canRetry: true,
                     };
                 }
-                // Real API error (400, 500, etc.) — propagate as-is
                 throw err;
             }
 
-            // Capture doctor/customer before clearCart clears them
-            const savedDoctor = useBillingStore.getState().doctor;
-            const savedCustomer = useBillingStore.getState().customer;
-            const savedScheduleH = useBillingStore.getState().scheduleHData;
             const enrichedInvoice = {
                 ...invoice,
-                customer: (invoice as any).customer ?? savedCustomer ?? undefined,
-                doctorName: savedDoctor?.name ?? savedScheduleH?.doctorName ?? undefined,
-                doctorRegNo: savedDoctor?.regNo ?? savedScheduleH?.doctorRegNo ?? undefined,
-                doctorDegree: savedDoctor?.degree ?? undefined,
-                doctorSpecialty: savedDoctor?.specialty ?? (savedDoctor as any)?.specialization ?? undefined,
-                doctorHospitalName: savedDoctor?.hospitalName ?? undefined,
-                doctorAddress: savedDoctor?.address ?? undefined,
-                doctorQualification: savedDoctor?.qualification ?? undefined,
-                patientName: savedScheduleH?.patientName ?? undefined,
-                patientAddress: savedScheduleH?.patientAddress ?? undefined,
+                customer: (invoice as any).customer ?? customer ?? undefined,
+                doctorName: doctor?.name ?? scheduleHData?.doctorName ?? undefined,
+                doctorRegNo: doctor?.regNo ?? scheduleHData?.doctorRegNo ?? undefined,
+                doctorDegree: doctor?.degree ?? undefined,
+                patientName: scheduleHData?.patientName ?? undefined,
+                patientAddress: scheduleHData?.patientAddress ?? undefined,
             };
 
-            // On Success (Online or Offline):
-            useBillingStore.getState().setLastInvoice(enrichedInvoice as any);
-            useBillingStore.getState().clearCart();
-            useBillingStore.getState().incrementBillsToday();
+            state.setLastInvoice(enrichedInvoice as any);
+            state.closeDraft(activeDraftId); // Close the draft since it's finalized
+            state.incrementBillsToday();
 
-            // If this was an edit, clear the editing state
             if (editingSaleId) {
-                useBillingStore.getState().setEditingSaleId(null);
+                state.setEditingSaleId(null);
             }
 
-            // Invalidate all related caches so UI reflects changes everywhere:
-            // - sales list (SalesList, P&L drilldown)
-            // - inventory (stock levels changed)
-            // - dashboard stats
-            // - accounts / ledgers (journal entries reversed + re-posted)
             queryClient.invalidateQueries({ queryKey: ['sales'] });
             queryClient.invalidateQueries({ queryKey: ['inventory'] });
             queryClient.invalidateQueries({ queryKey: ['dashboard'] });
@@ -182,15 +185,19 @@ export function useSaveBill() {
             queryClient.invalidateQueries({ queryKey: ['accounts'] });
             queryClient.invalidateQueries({ queryKey: ['profit-loss'] });
             queryClient.invalidateQueries({ queryKey: ['pl-ledger-stmt'] });
-            // Invalidate product search so next search shows updated stock levels
             queryClient.invalidateQueries({ queryKey: ['products', 'search'] });
+            // Refresh quotation list if we saved a quotation
+            if (draft.documentMode === 'quotation') {
+                queryClient.invalidateQueries({ queryKey: ['quotations'] });
+            }
 
             return invoice;
 
         } catch (err: any) {
             const message =
-                err?.message ??          // NETWORK_ERROR shape
-                err?.error?.message ??   // API error shape { error: { message } }
+                err?.message ??
+                err?.error?.message ??
+                err?.detail ??
                 'Failed to save bill. Please try again.';
             setError(message);
             throw err;

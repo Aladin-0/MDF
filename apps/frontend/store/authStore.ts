@@ -53,7 +53,7 @@ export const useAuthStore = create<AuthState>()(
                     console.warn('Auth hydration error:', error);
                     useAuthStore.getState().setHasHydrated(true);
                 } else {
-                    state?.setHasHydrated(true);
+                    useAuthStore.getState().setHasHydrated(true);
                 }
             }
         }

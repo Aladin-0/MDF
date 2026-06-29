@@ -30,6 +30,7 @@ from apps.billing.payment_services import (
     create_receipt_payment, create_expense_entry, create_sales_return,
     ReceiptServiceError, ExpenseServiceError, ReturnServiceError,
 )
+from apps.audit.services import log_activity
 
 class NextInvoiceNumberView(APIView):
     """
@@ -151,6 +152,8 @@ class SaleCreateView(APIView):
         try:
             outlet_id = request.data.get('outletId')
             customer_id = request.data.get('customerId')
+            doctor_id = request.data.get('doctorId')
+            hospital_name = request.data.get('hospitalName')
             items_data = request.data.get('items', [])
             schedule_h_data = request.data.get('scheduleHData')
 
@@ -158,6 +161,7 @@ class SaleCreateView(APIView):
             try:
                 outlet = Outlet.objects.get(id=outlet_id)
             except Outlet.DoesNotExist:
+                print(f"404 ERROR: Outlet {outlet_id} not found")
                 return Response(
                     {'detail': f'Outlet {outlet_id} not found'},
                     status=status.HTTP_404_NOT_FOUND
@@ -172,6 +176,7 @@ class SaleCreateView(APIView):
                         id=party_ledger_id, outlet=outlet
                     )
                 except Ledger.DoesNotExist:
+                    print(f"404 ERROR: Ledger {party_ledger_id} not found")
                     return Response({'detail': f'Ledger {party_ledger_id} not found'}, status=404)
 
                 if party_ledger.linked_customer:
@@ -231,9 +236,13 @@ class SaleCreateView(APIView):
                             is_system=True
                         )
 
-            # Get billed_by staff (from request user - should be Staff instance)
+            # Get billed_by staff (from request payload if PIN verified, fallback to request user)
+            billed_by_id = request.data.get('billedBy')
             try:
-                billed_by = Staff.objects.get(id=request.user.id)
+                if billed_by_id:
+                    billed_by = Staff.objects.get(id=billed_by_id)
+                else:
+                    billed_by = Staff.objects.get(id=request.user.id)
             except (Staff.DoesNotExist, AttributeError):
                 billed_by = None
 
@@ -301,6 +310,9 @@ class SaleCreateView(APIView):
                     invoice_no=invoice_no,
                     invoice_date=datetime.now(),
                     customer=customer,
+                    doctor_id=doctor_id,
+                    hospital_name=hospital_name,
+                    prescription_no=request.data.get('prescriptionNo'),
                     subtotal=Decimal(str(request.data.get('subtotal', 0))),
                     discount_amount=Decimal(str(request.data.get('discountAmount', 0))),
                     extra_discount_pct=extra_discount_pct,
@@ -692,6 +704,21 @@ class SaleCreateView(APIView):
 
             logger.info(f"Sale invoice {invoice_no} created successfully with {len(sale_items)} items")
 
+            # Quotation linking (if converted from UI)
+            quotation_id = request.data.get('quotationId')
+            if quotation_id:
+                try:
+                    from apps.billing.models import Quotation
+                    from django.utils import timezone
+                    quotation = Quotation.objects.get(id=quotation_id)
+                    quotation.status = 'converted'
+                    quotation.converted_at = timezone.now()
+                    quotation.converted_to_invoice_id = sale_invoice.id
+                    quotation.save(update_fields=['status', 'converted_at', 'converted_to_invoice_id'])
+                    logger.info(f"Marked quotation {quotation_id} as converted to sale {sale_invoice.id}")
+                except Exception as e:
+                    logger.error(f"Failed to link quotation {quotation_id} to sale {sale_invoice.id}: {e}")
+
             return Response(response_data, status=status.HTTP_201_CREATED)
 
         except InsufficientStockError as e:
@@ -783,6 +810,15 @@ class SaleListView(APIView):
                 invoices = invoices.filter(customer_id=customer_id)
             except Customer.DoesNotExist:
                 pass
+
+        # ── Optional doctor and hospital filter ──────────────────────────────
+        doctor_id = request.query_params.get('doctorId')
+        hospital_name = request.query_params.get('hospitalName')
+        
+        if doctor_id:
+            invoices = invoices.filter(doctor_id=doctor_id)
+        if hospital_name:
+            invoices = invoices.filter(hospital_name__icontains=hospital_name)
 
         # ── Optional search filter ───────────────────────────────────────────
         search_q = request.query_params.get('search', '').strip()
@@ -891,6 +927,9 @@ class SaleListView(APIView):
                     'name': invoice.customer.name,
                     'phone': getattr(invoice.customer, 'phone', ''),
                 } if invoice.customer else None,
+                'doctorName': invoice.doctor.name if invoice.doctor else None,
+                'hospitalName': invoice.hospital_name,
+                'prescriptionNo': invoice.prescription_no,
                 'subtotal': float(invoice.subtotal),
                 'discountAmount': float(invoice.discount_amount),
                 'taxableAmount': float(invoice.taxable_amount),
@@ -1759,6 +1798,18 @@ class SalePrintView(APIView):
         }
 
         logger.info(f"Retrieved sale {sale_id} for printing")
+
+        log_activity(
+            action="PRINT",
+            module="billing",
+            entity_type="SaleInvoice",
+            entity_id=invoice.id,
+            entity_label=invoice.invoice_no,
+            description=f"Printed sales invoice {invoice.invoice_no}",
+            user=request.user,
+            outlet=outlet,
+        )
+
         return Response(result, status=status.HTTP_200_OK)
 
 class SaleDetailView(APIView):
@@ -1874,6 +1925,7 @@ class SaleDetailView(APIView):
             'returnCount': return_count,
             'returnTotal': return_total,
             'returnSummary': return_summary,
+            'hasLaterPayments': hasattr(invoice, 'receipt_allocations') and invoice.receipt_allocations.exists(),
             'createdAt': invoice.created_at.isoformat(),
         }
         
@@ -1897,6 +1949,155 @@ class SaleDetailView(APIView):
         except Exception as e:
             import logging
             logging.getLogger(__name__).error(f"Error updating sale invoice: {e}", exc_info=True)
+            return Response({'detail': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class SaleReviseView(APIView):
+    """
+    POST /api/v1/billing/sales/<id>/revise/
+    Direct revision of a sale invoice. Takes pre-snapshot, performs update, takes post-snapshot,
+    and records it in the BillRevision and ActivityLog.
+    """
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request, sale_id, *args, **kwargs):
+        outlet_id = request.data.get('outletId') or request.query_params.get('outletId') or request.META.get('HTTP_OUTLETID') or (
+            request.user.outlet_id if hasattr(request.user, 'outlet_id') else None
+        )
+        if not outlet_id:
+            return Response({'detail': 'outletId is required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        try:
+            invoice = SaleInvoice.objects.get(id=sale_id, outlet_id=outlet_id)
+        except SaleInvoice.DoesNotExist:
+            return Response({'detail': 'Invoice not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        if invoice.is_cancelled:
+            return Response({'detail': 'Cannot modify a cancelled invoice.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        action = request.data.get('revisionAction')
+        reason_code = request.data.get('revisionReasonCode')
+        reason_text = request.data.get('revisionReasonText')
+
+        if not action or not reason_code or not reason_text:
+            return Response({'detail': 'Revision context (action, reasonCode, reasonText) is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        from apps.core.permissions import has_bill_revision_permission
+        
+        if action == 'direct_revise':
+            if not has_bill_revision_permission(request.user, 'can_modify_draft_bill'):
+                return Response({'detail': 'Permission denied: Missing can_modify_draft_bill.'}, status=status.HTTP_403_FORBIDDEN)
+            if invoice.amount_paid > 0:
+                return Response({'detail': 'Cannot direct revise a paid bill.'}, status=status.HTTP_400_BAD_REQUEST)
+        elif action == 'commercial_correction':
+            if not has_bill_revision_permission(request.user, 'can_modify_unpaid_bill'):
+                return Response({'detail': 'Permission denied: Missing can_modify_unpaid_bill.'}, status=status.HTTP_403_FORBIDDEN)
+            if invoice.amount_paid > 0:
+                return Response({'detail': 'Cannot commercially correct a paid bill.'}, status=status.HTTP_400_BAD_REQUEST)
+        elif action == 'paid_bill_correction':
+            if not has_bill_revision_permission(request.user, 'can_modify_paid_bill'):
+                return Response({'detail': 'Permission denied: Missing can_modify_paid_bill.'}, status=status.HTTP_403_FORBIDDEN)
+        elif action == 'return_aware_correction':
+            if not has_bill_revision_permission(request.user, 'can_modify_bill_with_return'):
+                return Response({'detail': 'Permission denied: Missing can_modify_bill_with_return.'}, status=status.HTTP_403_FORBIDDEN)
+        elif action == 'header_correction':
+            if not has_bill_revision_permission(request.user, 'can_correct_header_fields'):
+                return Response({'detail': 'Permission denied: Missing can_correct_header_fields.'}, status=status.HTTP_403_FORBIDDEN)
+        elif action == 'cancel_and_reissue':
+            if not has_bill_revision_permission(request.user, 'can_cancel_and_reissue_bill'):
+                return Response({'detail': 'Permission denied: Missing can_cancel_and_reissue_bill.'}, status=status.HTTP_403_FORBIDDEN)
+        else:
+            return Response({'detail': 'Invalid revisionAction.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Eligibility check
+        if invoice.returns.exists() and action not in ['return_aware_correction', 'header_correction']:
+            return Response({'detail': f'Cannot {action.replace("_", " ")} a bill with returns.'}, status=status.HTTP_400_BAD_REQUEST)
+        if hasattr(invoice, 'receipt_allocations') and invoice.receipt_allocations.exists() and action not in ['paid_bill_correction', 'header_correction']:
+            return Response({'detail': f'Cannot {action.replace("_", " ")} a bill with later payments.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        from apps.billing.revision_service import build_invoice_snapshot, create_bill_revision_record
+        from apps.billing.sale_update_service import atomic_sale_update, cancel_invoice, SaleServiceError
+
+        try:
+            # 1. Take pre-update snapshot
+            old_snapshot = build_invoice_snapshot(invoice)
+
+            if action == 'cancel_and_reissue':
+                # 2a. Cancel the old invoice
+                cancel_invoice(str(invoice.id), str(request.user.id), reason_text)
+                invoice.refresh_from_db()
+                
+                # 3a. Create the replacement invoice via the creation view logic
+                # We reuse the post method logic to ensure identical behavior
+                # Set a dummy request data so DRF view post handles it natively
+                from apps.billing.views import SaleCreateView
+                # Clear revisionAction from data to avoid looping or confusing the creation flow
+                data_copy = request.data.copy()
+                data_copy.pop('revisionAction', None)
+                data_copy.pop('revisionReasonCode', None)
+                data_copy.pop('revisionReasonText', None)
+                
+                # Instantiate view directly to preserve DRF authentication context
+                create_view_instance = SaleCreateView()
+                create_view_instance.request = request
+                create_view_instance.format_kwarg = None
+                
+                # Temporarily override request data
+                original_data = request._full_data
+                request._full_data = data_copy
+                try:
+                    response = create_view_instance.post(request)
+                finally:
+                    request._full_data = original_data
+                
+                if response.status_code != 200 and response.status_code != 201:
+                    # Rollback the transaction
+                    raise SaleServiceError(f"Failed to create replacement invoice: {response.data}")
+                
+                new_invoice_id = response.data.get('id')
+                updated_invoice = SaleInvoice.objects.get(id=new_invoice_id)
+                new_snapshot = build_invoice_snapshot(updated_invoice)
+                
+                # 4a. Create revision record linking both
+                revision = create_bill_revision_record(
+                    invoice=invoice,
+                    revision_type=action,
+                    old_snapshot=old_snapshot,
+                    new_snapshot=new_snapshot,
+                    modified_by=request.user,
+                    reason_code=reason_code,
+                    reason_text=reason_text,
+                )
+                revision.resulting_invoice_id = updated_invoice.id
+                revision.save(update_fields=['resulting_invoice_id'])
+                
+            else:
+                # 2b. Perform the actual update using existing robust method
+                updated_invoice = atomic_sale_update(sale_id, request.data, outlet_id, str(request.user.id))
+
+                # 3b. Refresh and take post-update snapshot
+                updated_invoice.refresh_from_db()
+                new_snapshot = build_invoice_snapshot(updated_invoice)
+
+                # 4b. Create revision record
+                revision = create_bill_revision_record(
+                    invoice=updated_invoice,
+                    revision_type=action,
+                    old_snapshot=old_snapshot,
+                    new_snapshot=new_snapshot,
+                    modified_by=request.user,
+                    reason_code=reason_code,
+                    reason_text=reason_text
+                )
+
+            return Response({'id': str(updated_invoice.id), 'message': 'Sale invoice revised successfully', 'revisionId': str(revision.id)}, status=status.HTTP_200_OK)
+
+        except SaleServiceError as e:
+            return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Error revising sale invoice: {e}", exc_info=True)
             return Response({'detail': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -1959,6 +2160,7 @@ class CreditLedgerView(APIView):
         try:
             customer = Customer.objects.get(id=customer_id, outlet=outlet)
         except Customer.DoesNotExist:
+            print(f"404 ERROR: Customer {customer_id} not found")
             return Response({'detail': f'Customer {customer_id} not found'}, status=404)
             
         ledger_entries = LedgerEntry.objects.filter(
@@ -2695,10 +2897,10 @@ class SaleInvoiceSearchView(APIView):
         except Outlet.DoesNotExist:
             return Response({'detail': 'Outlet not found'}, status=404)
 
-        qs = SaleInvoice.objects.filter(outlet=outlet, is_return=False).select_related('customer').prefetch_related('items')
+        qs = SaleInvoice.objects.filter(outlet=outlet, is_return=False).select_related('customer', 'doctor').prefetch_related('items')
         if q:
             qs = qs.filter(
-                Q(invoice_no__icontains=q) | Q(customer__name__icontains=q)
+                Q(invoice_no__icontains=q) | Q(customer__name__icontains=q) | Q(doctor__name__icontains=q) | Q(hospital_name__icontains=q)
             )
         qs = qs.order_by('-invoice_date')[:20]
 
@@ -2738,7 +2940,288 @@ class SaleInvoiceSearchView(APIView):
                 'date': str(inv.invoice_date.date()) if hasattr(inv.invoice_date, 'date') else str(inv.invoice_date),
                 'customerName': inv.customer.name if inv.customer else 'Walk-in',
                 'customerId': str(inv.customer.id) if inv.customer else None,
+                'doctorName': inv.doctor.name if inv.doctor else None,
+                'hospitalName': inv.hospital_name,
                 'grandTotal': float(inv.grand_total),
                 'items': items,
             })
         return Response({'data': results})
+
+from django.shortcuts import get_object_or_404
+
+class SaleModificationOptionsView(APIView):
+    """
+    GET /api/v1/billing/sales/<id>/modification-options/
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, sale_id):
+        outlet_id = request.query_params.get('outletId') or request.META.get('HTTP_OUTLETID') or (request.outlet.id if hasattr(request, 'outlet') else None)
+        if not outlet_id:
+             return Response({'detail': 'outletId is required'}, status=400)
+             
+        invoice = get_object_or_404(SaleInvoice, id=sale_id, outlet_id=outlet_id)
+        user = request.user
+        
+        is_paid = invoice.amount_paid > 0
+        has_returns = invoice.has_return
+        is_draft = invoice.amount_paid == 0 and not has_returns
+        
+        allowed_actions = []
+        block_reason = None
+        
+        from apps.core.permissions import has_bill_revision_permission
+        
+        if has_bill_revision_permission(user, 'can_modify_draft_bill') and is_draft:
+            allowed_actions.append('direct_revise')
+            
+        if has_bill_revision_permission(user, 'can_modify_unpaid_bill') and invoice.amount_paid == 0:
+             allowed_actions.append('commercial_correction')
+             
+        if has_bill_revision_permission(user, 'can_modify_paid_bill') and is_paid:
+             allowed_actions.append('paid_bill_correction')
+             
+        if has_bill_revision_permission(user, 'can_modify_bill_with_return') and has_returns:
+             allowed_actions.append('return_aware_correction')
+             
+        if has_bill_revision_permission(user, 'can_cancel_and_reissue_bill'):
+             allowed_actions.append('cancel_and_reissue')
+             
+        if has_bill_revision_permission(user, 'can_correct_header_fields'):
+             allowed_actions.append('header_correction')
+             
+        if not allowed_actions:
+             block_reason = "You do not have the required permissions to modify this invoice based on its current state."
+
+        return Response({
+            'invoice': {
+                'id': str(invoice.id),
+                'invoiceNo': invoice.invoice_no,
+                'date': invoice.invoice_date,
+                'customerName': invoice.customer.name if invoice.customer else 'Walk-in',
+                'itemCount': invoice.items.count(),
+                'grandTotal': str(invoice.grand_total),
+                'amountPaid': str(invoice.amount_paid),
+                'balanceDue': str(invoice.amount_due),
+                'hasReturns': has_returns,
+                'isPaid': is_paid,
+            },
+            'allowedActions': allowed_actions,
+            'blockReason': block_reason
+        })
+
+from apps.core.permissions import CanViewBillRevisionHistory
+
+class SaleRevisionListView(APIView):
+    """
+    GET /api/v1/billing/revisions/
+    """
+    permission_classes = [IsAuthenticated, CanViewBillRevisionHistory]
+
+    def get(self, request, *args, **kwargs):
+        outlet_id = request.query_params.get('outletId') or request.META.get('HTTP_OUTLETID') or (request.outlet.id if hasattr(request, 'outlet') else None)
+        if not outlet_id:
+            return Response({'detail': 'outletId is required'}, status=400)
+
+        from apps.billing.models import BillRevision
+        from apps.billing.serializers import BillRevisionSerializer
+        
+        revisions = BillRevision.objects.filter(outlet_id=outlet_id).select_related('original_invoice', 'modified_by')
+        
+        # Filters
+        user_id = request.query_params.get('userId')
+        if user_id:
+            revisions = revisions.filter(modified_by_id=user_id)
+            
+        action_type = request.query_params.get('actionType')
+        if action_type:
+            revisions = revisions.filter(revision_type=action_type)
+            
+        from_date = request.query_params.get('fromDate')
+        to_date = request.query_params.get('toDate')
+        if from_date:
+            revisions = revisions.filter(created_at__date__gte=from_date)
+        if to_date:
+            revisions = revisions.filter(created_at__date__lte=to_date)
+            
+        invoice_id = request.query_params.get('invoiceId')
+        if invoice_id:
+            revisions = revisions.filter(original_invoice_id=invoice_id)
+            
+        customer_id = request.query_params.get('customerId')
+        if customer_id:
+            revisions = revisions.filter(original_invoice__customer_id=customer_id)
+            
+        invoice_no = request.query_params.get('invoiceNo')
+        if invoice_no:
+            revisions = revisions.filter(original_invoice__invoice_no__icontains=invoice_no)
+
+        revisions = revisions.order_by('-created_at')
+
+        # CSV Export
+        if request.query_params.get('export') == 'csv':
+            import csv
+            from django.http import HttpResponse
+            response = HttpResponse(content_type='text/csv')
+            response['Content-Disposition'] = 'attachment; filename="revision_history.csv"'
+            writer = csv.writer(response)
+            writer.writerow(['Date', 'Revision Number', 'Invoice Number', 'Type', 'Status', 'Modified By', 'Reason Code', 'Reason Text'])
+            for rev in revisions:
+                writer.writerow([
+                    rev.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                    rev.revision_number,
+                    rev.original_invoice.invoice_no if rev.original_invoice else '',
+                    rev.get_revision_type_display(),
+                    rev.get_revision_status_display(),
+                    rev.modified_by.name if rev.modified_by else 'System',
+                    rev.reason_code,
+                    rev.reason_text
+                ])
+            return response
+
+        # Pagination
+        from rest_framework.pagination import PageNumberPagination
+        paginator = PageNumberPagination()
+        paginator.page_size = int(request.query_params.get('pageSize', 20))
+        paginated_revisions = paginator.paginate_queryset(revisions, request)
+        
+        serializer = BillRevisionSerializer(paginated_revisions, many=True)
+        return paginator.get_paginated_response(serializer.data)
+
+class SaleRevisionDetailView(APIView):
+    """
+    GET /api/v1/billing/sales/<id>/revisions/
+    """
+    permission_classes = [IsAuthenticated, CanViewBillRevisionHistory]
+
+    def get(self, request, sale_id, *args, **kwargs):
+        outlet_id = request.query_params.get('outletId') or request.META.get('HTTP_OUTLETID') or (request.outlet.id if hasattr(request, 'outlet') else None)
+        if not outlet_id:
+            return Response({'detail': 'outletId is required'}, status=400)
+
+        from apps.billing.models import BillRevision, SaleInvoice
+        from apps.billing.serializers import BillRevisionSerializer
+        
+        invoice = get_object_or_404(SaleInvoice, id=sale_id, outlet_id=outlet_id)
+        
+        # Get all revisions related to this invoice
+        # Could be original_invoice or resulting_invoice
+        from django.db.models import Q
+        revisions = BillRevision.objects.filter(
+            Q(original_invoice_id=sale_id) | Q(resulting_invoice_id=sale_id),
+            outlet_id=outlet_id
+        ).order_by('-created_at')
+        
+        serializer = BillRevisionSerializer(revisions, many=True)
+        return Response({
+            'invoice': {
+                'id': str(invoice.id),
+                'invoiceNo': invoice.invoice_no,
+                'createdAt': invoice.created_at,
+                'createdBy': invoice.billed_by.name if invoice.billed_by else 'Unknown',
+                'isCancelled': invoice.is_cancelled,
+                'cancelledAt': invoice.cancelled_at,
+            },
+            'revisions': serializer.data
+        }, status=200)
+
+class SaleRevisionReportView(APIView):
+    """
+    GET /api/v1/billing/revisions/report/
+    """
+    permission_classes = [IsAuthenticated, CanViewBillRevisionHistory]
+
+    def get(self, request, *args, **kwargs):
+        outlet_id = request.query_params.get('outletId') or request.META.get('HTTP_OUTLETID') or (request.outlet.id if hasattr(request, 'outlet') else None)
+        if not outlet_id:
+            return Response({'detail': 'outletId is required'}, status=400)
+
+        from apps.billing.models import BillRevision
+        from django.utils import timezone
+        from django.db.models import Count
+        from datetime import datetime, time
+        
+        revisions = BillRevision.objects.filter(outlet_id=outlet_id)
+        
+        # Date filter
+        from_date_str = request.query_params.get('fromDate')
+        to_date_str = request.query_params.get('toDate')
+        
+        if from_date_str:
+            from_date = datetime.strptime(from_date_str, '%Y-%m-%d').date()
+            revisions = revisions.filter(created_at__gte=datetime.combine(from_date, time.min))
+        else:
+            # Default to last 30 days if no date provided
+            from_date = timezone.now() - timezone.timedelta(days=30)
+            revisions = revisions.filter(created_at__gte=from_date)
+            
+        if to_date_str:
+            to_date = datetime.strptime(to_date_str, '%Y-%m-%d').date()
+            revisions = revisions.filter(created_at__lte=datetime.combine(to_date, time.max))
+
+        # Overall Stats
+        today = timezone.now().date()
+        today_start = timezone.make_aware(datetime.combine(today, time.min))
+        today_end = timezone.make_aware(datetime.combine(today, time.max))
+        
+        modified_today = revisions.filter(created_at__range=(today_start, today_end)).count()
+        total_modified = revisions.count()
+        
+        # Breakdown by Type
+        by_type_qs = revisions.values('revision_type').annotate(count=Count('id')).order_by('-count')
+        breakdown_by_type = {item['revision_type']: item['count'] for item in by_type_qs}
+        
+        # Top modifiers
+        top_modifiers_qs = revisions.values(
+            'modified_by__id', 'modified_by__name'
+        ).annotate(count=Count('id')).order_by('-count')[:5]
+        
+        top_modifiers = [
+            {
+                'id': item['modified_by__id'],
+                'name': item['modified_by__name'] or 'System',
+                'count': item['count']
+            } for item in top_modifiers_qs
+        ]
+        
+        return Response({
+            'summary': {
+                'modifiedToday': modified_today,
+                'totalModified': total_modified,
+                'returnLinked': breakdown_by_type.get('return_aware_correction', 0),
+                'paidBillCorrections': breakdown_by_type.get('paid_bill_correction', 0),
+                'cancelAndReissue': breakdown_by_type.get('cancel_and_reissue', 0),
+                'commercialCorrections': breakdown_by_type.get('commercial_correction', 0),
+                'directRevise': breakdown_by_type.get('direct_revise', 0),
+            },
+            'topModifiers': top_modifiers
+        })
+
+
+from rest_framework import generics
+from apps.billing.models import DraftInvoice
+from apps.billing.serializers import DraftInvoiceSerializer
+
+class DraftInvoiceListCreateView(generics.ListCreateAPIView):
+    serializer_class = DraftInvoiceSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        outlet_id = self.request.query_params.get('outletId')
+        if not outlet_id:
+            return DraftInvoice.objects.none()
+        return DraftInvoice.objects.filter(outlet_id=outlet_id)
+
+    def create(self, request, *args, **kwargs):
+        return super().create(request, *args, **kwargs)
+
+class DraftInvoiceDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = DraftInvoice.objects.all()
+    serializer_class = DraftInvoiceSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        outlet_id = self.request.query_params.get('outletId')
+        if outlet_id:
+            return DraftInvoice.objects.filter(outlet_id=outlet_id)
+        return super().get_queryset()

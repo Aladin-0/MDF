@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from .models import SaleItem, SaleInvoice
+from .models import SaleItem, SaleInvoice, BillRevision
+from apps.accounts.models import Customer, Doctor
 from .utils.pricing import validate_sale_price
 from apps.inventory.models import Batch
 
@@ -59,3 +60,105 @@ class SaleInvoiceSerializer(serializers.ModelSerializer):
         for item_data in items_data:
             SaleItem.objects.create(invoice=invoice, **item_data)
         return invoice
+
+class BillRevisionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BillRevision
+        fields = '__all__'
+        depth = 1
+
+from .models import DraftInvoice, DraftInvoiceItem
+
+class DraftInvoiceItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DraftInvoiceItem
+        fields = '__all__'
+        read_only_fields = ('draft_invoice',)
+
+class DraftInvoiceSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(required=False)
+    items = DraftInvoiceItemSerializer(many=True, required=False)
+    hospital_name = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    customer = serializers.PrimaryKeyRelatedField(queryset=Customer.objects.all(), required=False, allow_null=True)
+    doctor = serializers.PrimaryKeyRelatedField(queryset=Doctor.objects.all(), required=False, allow_null=True)
+    discount_amount = serializers.DecimalField(max_digits=12, decimal_places=2, required=False, default=0)
+    extra_discount_pct = serializers.DecimalField(max_digits=5, decimal_places=2, required=False, default=0)
+    round_off = serializers.DecimalField(max_digits=12, decimal_places=2, required=False, default=0)
+
+    class Meta:
+        model = DraftInvoice
+        fields = '__all__'
+
+    def create(self, validated_data):
+        items_data = validated_data.pop('items', [])
+        draft = DraftInvoice.objects.create(**validated_data)
+        for item_data in items_data:
+            DraftInvoiceItem.objects.create(draft_invoice=draft, **item_data)
+        return draft
+
+    def update(self, instance, validated_data):
+        items_data = validated_data.pop('items', None)
+        
+        # Update header
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        
+        # Replace items fully
+        if items_data is not None:
+            instance.items.all().delete()
+            for item_data in items_data:
+                DraftInvoiceItem.objects.create(draft_invoice=instance, **item_data)
+                
+        return instance
+
+from .models import Quotation, QuotationItem
+
+class QuotationItemSerializer(serializers.ModelSerializer):
+    product = serializers.UUIDField(source='batch.product_id', read_only=True)
+    
+    class Meta:
+        model = QuotationItem
+        fields = '__all__'
+        read_only_fields = ('quotation',)
+
+class QuotationSerializer(serializers.ModelSerializer):
+    items = QuotationItemSerializer(many=True, required=False)
+    
+    class Meta:
+        model = Quotation
+        fields = '__all__'
+
+    def to_representation(self, instance):
+        repr = super().to_representation(instance)
+        if instance.customer:
+            repr['customer'] = {
+                'id': str(instance.customer.id),
+                'name': instance.customer.name,
+                'phone': getattr(instance.customer, 'phone', ''),
+                'gstin': getattr(instance.customer, 'gstin', '')
+            }
+        return repr
+
+    def create(self, validated_data):
+        items_data = validated_data.pop('items', [])
+        quotation = Quotation.objects.create(**validated_data)
+        for item_data in items_data:
+            QuotationItem.objects.create(quotation=quotation, **item_data)
+        return quotation
+
+    def update(self, instance, validated_data):
+        items_data = validated_data.pop('items', None)
+        
+        # Update header
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        
+        # Replace items fully
+        if items_data is not None:
+            instance.items.all().delete()
+            for item_data in items_data:
+                QuotationItem.objects.create(quotation=instance, **item_data)
+                
+        return instance

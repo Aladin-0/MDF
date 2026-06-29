@@ -328,7 +328,7 @@ function LedgerDrilldown({ ledgerId, ledgerName, fromDate, toDate, onClose }: {
 
     const getRoute = (tx: any): { url: string; hasDetail: boolean } => {
         const type = (tx.sourceType || '').toUpperCase();
-        if (type === 'SALE' && tx.sourceId) return { url: `/dashboard/billing/${tx.sourceId}`, hasDetail: true };
+        if (type === 'SALE' && tx.sourceId) return { url: `/billing/${tx.sourceId}`, hasDetail: true };
         if (type === 'PURCHASE') return { url: '/dashboard/purchases', hasDetail: false };
         if (type === 'RETURN') return { url: '/dashboard/accounts/sale-returns', hasDetail: false };
         return { url: '/dashboard/accounts/voucher-entry', hasDetail: false };

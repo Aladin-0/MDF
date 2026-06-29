@@ -30,6 +30,8 @@ export interface SalesFilters {
     page?: number;
     pageSize?: number;
     search?: string;
+    doctorId?: string;
+    hospitalName?: string;
 }
 
 export function useSalesList(filters?: SalesFilters) {
@@ -42,6 +44,8 @@ export function useSalesList(filters?: SalesFilters) {
             startDate: filters?.startDate,
             endDate: filters?.endDate,
             search: filters?.search,
+            doctorId: filters?.doctorId,
+            hospitalName: filters?.hospitalName,
         }),
         enabled: !!outletId,
         staleTime: 30_000,

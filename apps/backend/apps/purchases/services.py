@@ -12,6 +12,7 @@ from apps.accounts.journal_service import post_purchase_invoice
 from apps.inventory.models import MasterProduct, Batch
 from apps.purchases.models import PurchaseInvoice, PurchaseItem, Distributor
 from apps.billing.models import LedgerEntry, PaymentEntry, PaymentAllocation
+from apps.audit.services import log_activity
 
 logger = logging.getLogger(__name__)
 
@@ -367,6 +368,9 @@ def atomic_purchase_save(payload: Dict[str, Any], outlet_id: str, created_by_id:
                 raise
 
         logger.info(f"Purchase {purchase_invoice.invoice_no} completed successfully")
+
+        pass
+
         return purchase_invoice
 
     except PurchaseServiceError:
@@ -549,6 +553,8 @@ def bill_by_bill_payment_allocate(payload: Dict[str, Any], outlet_id: str, creat
         logger.info(f"Created LedgerEntry with running_balance={running_balance}")
         logger.info(f"Payment allocation completed successfully")
 
+        pass
+
         return payment_entry
 
     except OverpaymentError as e:
@@ -602,6 +608,15 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
             purchase_invoice = PurchaseInvoice.objects.select_for_update().get(id=purchase_id, outlet_id=outlet_id)
         except PurchaseInvoice.DoesNotExist:
             raise PurchaseServiceError(f"Purchase {purchase_id} not found")
+
+        old_state = {
+            'invoice_no': purchase_invoice.invoice_no,
+            'distributor_id': str(purchase_invoice.distributor_id),
+            'grand_total': float(purchase_invoice.grand_total),
+            'subtotal': float(purchase_invoice.subtotal),
+            'discount_amount': float(purchase_invoice.discount_amount),
+            'items_count': purchase_invoice.items.count(),
+        }
 
         old_invoice_no = purchase_invoice.invoice_no
         outlet = Outlet.objects.get(id=outlet_id)
@@ -925,6 +940,17 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
                 ('debit',  party_ledger, grand_total),
                 ('credit', cash_ledger,  grand_total),
             ])
+        new_state = {
+            'invoice_no': purchase_invoice.invoice_no,
+            'distributor_id': str(purchase_invoice.distributor_id),
+            'grand_total': float(purchase_invoice.grand_total),
+            'subtotal': float(purchase_invoice.subtotal),
+            'discount_amount': float(purchase_invoice.discount_amount),
+            'items_count': len(purchase_items),
+        }
+        changes = {k: {'old': old_state[k], 'new': new_state[k]} for k in old_state if old_state[k] != new_state[k]}
+
+        pass
 
         return purchase_invoice
 

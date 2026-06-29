@@ -109,3 +109,13 @@ export function usePurchaseReport(dateRange: DateRangeFilter) {
         enabled: !!outletId,
     });
 }
+
+export function useBatchReport(filters: any) {
+    const outletId = useOutletId();
+    return useQuery({
+        queryKey: ['reports', 'batch-wise', outletId, filters],
+        queryFn: () => reportsApi.getBatchReport(outletId, filters),
+        staleTime: 1000 * 60 * 5,
+        enabled: !!outletId,
+    });
+}

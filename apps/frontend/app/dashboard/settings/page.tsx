@@ -14,6 +14,7 @@ import { NotificationsSection } from '@/components/settings/NotificationsSection
 import { PreferencesSection } from '@/components/settings/PreferencesSection';
 import { DataManagementSection } from '@/components/settings/DataManagementSection';
 import { Button } from '@/components/ui/button';
+import { useSettingsStore } from '@/store/settingsStore';
 
 const SECTION_IDS: SectionId[] = [
     'outlet', 'gst', 'printer', 'billing', 'attendance',
@@ -55,6 +56,9 @@ export default function SettingsPage() {
         onSaved: handleSaved,
         discardKey,
     };
+
+    const hasHydrated = useSettingsStore(s => s._hasHydrated);
+    if (!hasHydrated) return null;
 
     // billing_staff / view_only: only preferences
     if (!canManageSettings) {

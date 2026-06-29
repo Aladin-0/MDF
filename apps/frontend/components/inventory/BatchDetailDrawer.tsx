@@ -69,9 +69,9 @@ export function BatchDetailDrawer({ productId, product, isOpen, onClose, onAdjus
                                         {productInfo.drugType.charAt(0).toUpperCase() + productInfo.drugType.slice(1)}
                                     </span>
                                 )}
-                                {batch?.packSize && (
+                                {productInfo?.packSize && (
                                     <span className="px-4 py-2 bg-slate-100 text-slate-700 text-sm font-medium rounded-lg border border-slate-200">
-                                        1 {batch.packType || 'Strip'} = {batch.packSize} {batch.packUnit || 'units'}
+                                        1 {productInfo.packType || 'Strip'} = {productInfo.packSize} {productInfo.packUnit || 'units'}
                                     </span>
                                 )}
                             </div>

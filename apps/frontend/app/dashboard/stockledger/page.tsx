@@ -175,6 +175,37 @@ export default function StockLedgerPage() {
     }
   }, [outletId, startDate, endDate, page, pageSize, selectedBatchId, txnFilter, debouncedSearch]);
 
+  const handleExport = useCallback(async () => {
+    if (!outletId) return;
+    try {
+      const p = new URLSearchParams({
+        outletId,
+        startDate,
+        endDate,
+        export_format: 'xlsx'
+      });
+      if (selectedBatchId) p.append('batchId', selectedBatchId);
+      if (txnFilter) p.append('txnType', txnFilter);
+      if (debouncedSearch) p.append('search', debouncedSearch);
+
+      const res = await fetch(`${API_URL}/inventory/stockledger/?${p}`, { headers: authHeaders() });
+      if (!res.ok) throw new Error("Export failed");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `stock_ledger_export_${format(new Date(), 'yyyyMMdd_HHmmss')}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e: any) {
+      setError(e.message);
+      // fallback alert if needed
+      alert("Failed to export: " + e.message);
+    }
+  }, [outletId, startDate, endDate, selectedBatchId, txnFilter, debouncedSearch]);
+
   useEffect(() => {
     fetchLedger();
   }, [fetchLedger]);
@@ -332,6 +363,14 @@ export default function StockLedgerPage() {
                   className="bg-transparent outline-none text-slate-700 text-sm font-medium"
                 />
               </div>
+              <button
+                onClick={handleExport}
+                className="p-2.5 bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100 transition-colors shadow-sm flex items-center gap-2 font-medium"
+                title="Export to Excel"
+              >
+                <FileText className="w-5 h-5" />
+                <span className="hidden sm:inline">Export</span>
+              </button>
               <button
                 onClick={fetchLedger}
                 disabled={loading}

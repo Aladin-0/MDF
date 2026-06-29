@@ -16,7 +16,15 @@ from apps.billing.views import (
     SendReminderView,
     NextInvoiceNumberView,
     SaleInvoiceSearchView,
+    SaleModificationOptionsView,
+    SaleReviseView,
+    SaleRevisionListView,
+    SaleRevisionDetailView,
+    SaleRevisionReportView,
+    DraftInvoiceListCreateView,
+    DraftInvoiceDetailView,
 )
+from .quotation_views import QuotationListCreateView, QuotationDetailView, QuotationConvertView
 
 # Create a combined view that handles both GET and POST
 class SalesView(SaleListView, SaleCreateView):
@@ -38,7 +46,14 @@ urlpatterns = [
     path('sales/<uuid:sale_id>/print/', SalePrintView.as_view(), name='sale-print'),
     path('sales/<uuid:sale_id>/items/', SaleItemsView.as_view(), name='sale-items'),
     path('sales/<uuid:sale_id>/', SaleDetailView.as_view(), name='sale-detail'),
+    path('sales/<uuid:sale_id>/modification-options/', SaleModificationOptionsView.as_view(), name='sale-modification-options'),
+    path('sales/<uuid:sale_id>/revise/', SaleReviseView.as_view(), name='sale-revise'),
+    path('sales/revisions/report/', SaleRevisionReportView.as_view(), name='sale-revisions-report'),
+    path('sales/<uuid:sale_id>/revisions/', SaleRevisionDetailView.as_view(), name='sale-revisions-detail'),
     path('sales/', SalesView.as_view(), name='sale-list-create'),
+    path('sales/drafts/', DraftInvoiceListCreateView.as_view(), name='draft-list-create'),
+    path('sales/drafts/<uuid:pk>/', DraftInvoiceDetailView.as_view(), name='draft-detail'),
+    path('revisions/', SaleRevisionListView.as_view(), name='sale-revisions-list'),
     # Credit
     path('credit/', CreditAccountListView.as_view(), name='credit-account-list'),
     path('credit/accounts/<uuid:account_id>/', CreditAccountDetailView.as_view(), name='credit-account-detail'),
@@ -52,4 +67,8 @@ urlpatterns = [
     path('credit/<uuid:id>/reminder/', SendReminderView.as_view(), name='credit-reminder'),
     # Dashboard
     path('dashboard/daily/', DashboardDailyView.as_view(), name='dashboard-daily'),
+    # Quotations
+    path('quotations/', QuotationListCreateView.as_view(), name='quotation-list-create'),
+    path('quotations/<uuid:pk>/', QuotationDetailView.as_view(), name='quotation-detail'),
+    path('quotations/<uuid:pk>/convert/', QuotationConvertView.as_view(), name='quotation-convert'),
 ]

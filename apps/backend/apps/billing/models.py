@@ -31,6 +31,8 @@ class SaleInvoice(models.Model):
     customer = models.ForeignKey('accounts.Customer', on_delete=models.SET_NULL, null=True, blank=True)
     doctor = models.ForeignKey('accounts.Doctor', on_delete=models.SET_NULL, null=True, blank=True,
                                help_text='For Schedule H prescriptions')
+    hospital_name = models.CharField(max_length=255, null=True, blank=True)
+    prescription_no = models.CharField(max_length=100, null=True, blank=True)
 
     # Bill amounts
     subtotal = models.DecimalField(max_digits=12, decimal_places=2, help_text='Before discount and tax')
@@ -62,9 +64,13 @@ class SaleInvoice(models.Model):
 
     # Sale type
     is_return = models.BooleanField(default=False, help_text='Sales return/credit note')
+    is_cancelled = models.BooleanField(default=False, help_text='Cancelled/Voided invoice')
 
     # Audit
-    billed_by = models.ForeignKey('accounts.Staff', on_delete=models.SET_NULL, null=True)
+    billed_by = models.ForeignKey('accounts.Staff', on_delete=models.SET_NULL, null=True, related_name='billed_invoices')
+    cancelled_by = models.ForeignKey('accounts.Staff', on_delete=models.SET_NULL, null=True, blank=True, related_name='cancelled_invoices')
+    cancellation_reason = models.TextField(null=True, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     objects = OutletFilteredManager()
@@ -644,3 +650,222 @@ class NotificationLog(models.Model):
 
     def __str__(self):
         return f"{self.channel.upper()} to {self.customer.name}: {self.status}"
+
+
+class BillRevision(models.Model):
+    """Business-level tracking for sales bill modifications and revisions."""
+    
+    REVISION_TYPE_CHOICES = [
+        ('correction', 'Correction (No financial impact)'),
+        ('financial_change', 'Financial Change (Rates, Qty, Items)'),
+        ('cancel_reissue', 'Cancel & Reissue'),
+    ]
+
+    STATUS_CHOICES = [
+        ('draft', 'Draft / Pending'),
+        ('applied', 'Applied / Completed'),
+        ('failed', 'Failed'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    outlet = models.ForeignKey('core.Outlet', on_delete=models.CASCADE, related_name='bill_revisions')
+    original_invoice = models.ForeignKey(SaleInvoice, on_delete=models.CASCADE, related_name='revisions')
+    
+    revision_number = models.CharField(max_length=50, help_text='e.g., INV-2026-00123-R1')
+    revision_type = models.CharField(max_length=50, choices=REVISION_TYPE_CHOICES)
+    revision_status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='applied')
+    
+    modified_by = models.ForeignKey('accounts.Staff', on_delete=models.SET_NULL, null=True, related_name='bill_revisions_created')
+    modified_at = models.DateTimeField(auto_now_add=True)
+    
+    reason_code = models.CharField(max_length=50, help_text='Standardized reason code')
+    reason_text = models.TextField(help_text='Detailed reason or notes provided by the staff')
+    
+    # Snapshots and impact payloads
+    old_snapshot_json = models.JSONField(default=dict, help_text='State of the invoice before modification')
+    new_snapshot_json = models.JSONField(default=dict, help_text='Proposed or applied corrected state')
+    diff_summary_json = models.JSONField(default=dict, help_text='Computed differences between old and new')
+    stock_impact_json = models.JSONField(default=dict, help_text='Summary of items added/removed back to stock')
+    payment_impact_json = models.JSONField(default=dict, help_text='Summary of cash/credit adjustments')
+    return_impact_json = models.JSONField(default=dict, help_text='Any automatic sales returns generated')
+    
+    # Relationships for resulting financial documents
+    resulting_invoice_id = models.UUIDField(null=True, blank=True, help_text='If cancel/reissue, the ID of the new invoice')
+    linked_credit_note_id = models.UUIDField(null=True, blank=True, help_text='Linked credit note if financial values decreased')
+    linked_debit_note_id = models.UUIDField(null=True, blank=True, help_text='Linked debit note if financial values increased')
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    objects = OutletFilteredManager()
+
+    class Meta:
+        db_table = 'billing_billrevision'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['outlet', 'original_invoice']),
+            models.Index(fields=['revision_number', 'outlet']),
+        ]
+        unique_together = [['outlet', 'revision_number']]
+
+    def __str__(self):
+        return f"{self.revision_number} - {self.revision_type}"
+
+
+class DraftInvoice(models.Model):
+    """Temporary storage for un-finalized multi-session billing drafts."""
+
+    DRAFT_STATUS_CHOICES = [
+        ('draft', 'Draft'),
+        ('held', 'Held'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    outlet = models.ForeignKey('core.Outlet', on_delete=models.CASCADE, related_name='draft_invoices')
+    customer = models.ForeignKey('accounts.Customer', on_delete=models.SET_NULL, null=True, blank=True)
+    doctor = models.ForeignKey('accounts.Doctor', on_delete=models.SET_NULL, null=True, blank=True)
+    hospital_name = models.CharField(max_length=255, null=True, blank=True)
+    prescription_no = models.CharField(max_length=100, null=True, blank=True)
+    
+    draft_status = models.CharField(max_length=20, choices=DRAFT_STATUS_CHOICES, default='draft')
+
+    # Bill amounts (can be recomputed on client)
+    subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    extra_discount_pct = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    taxable_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    
+    cgst_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    sgst_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    igst_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    
+    round_off = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    grand_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    # UI State metadata
+    payment_mode = models.CharField(max_length=20, default='cash')
+    schedule_h_json = models.JSONField(null=True, blank=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    objects = OutletFilteredManager()
+
+    class Meta:
+        db_table = 'billing_draftinvoice'
+        ordering = ['-updated_at']
+
+    def __str__(self):
+        return f"Draft {self.id} - ₹{self.grand_total}"
+
+
+class DraftInvoiceItem(models.Model):
+    """Line items for DraftInvoice. Does NOT deduct stock."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    draft_invoice = models.ForeignKey(DraftInvoice, on_delete=models.CASCADE, related_name='items')
+    batch = models.ForeignKey('inventory.Batch', on_delete=models.CASCADE)
+
+    # Quantity
+    qty_strips = models.IntegerField(default=0)
+    qty_loose = models.IntegerField(default=0)
+    
+    # Pricing overrides from UI
+    discount_pct = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+
+    class Meta:
+        db_table = 'billing_draftinvoiceitem'
+
+    def __str__(self):
+        return f"DraftItem: {self.batch.batch_no} x{self.qty_strips}"
+
+class Quotation(models.Model):
+    """Quotation/Estimate document (does not affect stock or accounting)."""
+    
+    STATUS_CHOICES = [
+        ('draft', 'Draft'),
+        ('saved', 'Saved'),
+        ('converted', 'Converted'),
+        ('expired', 'Expired'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    outlet = models.ForeignKey('core.Outlet', on_delete=models.CASCADE, related_name='quotations')
+    quotation_no = models.CharField(max_length=50, help_text='e.g., QT-2026-000001')
+    quotation_date = models.DateTimeField(auto_now_add=True)
+    valid_until = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='saved')
+    
+    customer = models.ForeignKey('accounts.Customer', on_delete=models.SET_NULL, null=True, blank=True)
+    customer_name_override = models.CharField(max_length=255, null=True, blank=True)
+    customer_phone_override = models.CharField(max_length=20, null=True, blank=True)
+    
+    doctor_name = models.CharField(max_length=255, null=True, blank=True)
+    hospital_name = models.CharField(max_length=255, null=True, blank=True)
+    notes = models.TextField(null=True, blank=True)
+    
+    # Amounts
+    subtotal = models.DecimalField(max_digits=12, decimal_places=2, help_text='Before discount and tax')
+    discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    extra_discount_pct = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    taxable_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    
+    cgst_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    sgst_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    igst_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    
+    round_off = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    grand_total = models.DecimalField(max_digits=12, decimal_places=2)
+    
+    converted_to_invoice = models.ForeignKey('billing.SaleInvoice', on_delete=models.SET_NULL, null=True, blank=True, related_name='quotations')
+    converted_at = models.DateTimeField(null=True, blank=True)
+    
+    created_by = models.ForeignKey('accounts.Staff', on_delete=models.SET_NULL, null=True, related_name='created_quotations')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    objects = OutletFilteredManager()
+
+    class Meta:
+        db_table = 'billing_quotation'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['outlet', 'quotation_date']),
+            models.Index(fields=['quotation_no', 'outlet']),
+        ]
+
+    def __str__(self):
+        return f"{self.quotation_no} - ₹{self.grand_total}"
+
+class QuotationItem(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    quotation = models.ForeignKey(Quotation, on_delete=models.CASCADE, related_name='items')
+    
+    # Medicine snapshot
+    medicine_name = models.CharField(max_length=255)
+    
+    # Batch snapshot
+    batch = models.ForeignKey('inventory.Batch', on_delete=models.SET_NULL, null=True, blank=True)
+    batch_no = models.CharField(max_length=100)
+    expiry_date = models.DateField(null=True, blank=True)
+    
+    pack_size = models.IntegerField(default=1)
+    
+    # Qty and pricing
+    qty_strips = models.IntegerField(default=0)
+    qty_loose = models.IntegerField(default=0)
+    
+    mrp = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    sale_rate = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    rate = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    
+    discount_pct = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    gst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    
+    taxable_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    gst_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    class Meta:
+        db_table = 'billing_quotationitem'

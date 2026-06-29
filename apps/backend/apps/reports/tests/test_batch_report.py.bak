@@ -1,0 +1,320 @@
+import pytest
+from decimal import Decimal
+from datetime import date, timedelta
+from unittest.mock import patch
+from django.urls import reverse
+from django.http import HttpResponse
+from rest_framework import status
+from rest_framework.test import APIClient
+from django.utils import timezone
+from apps.inventory.models import Batch, StockLedger, MasterProduct
+from apps.core.models import Outlet, Organization
+from apps.accounts.models import Staff
+from apps.inventory.utils import quantity_to_pack_display
+
+@pytest.mark.django_db
+class TestBatchWiseReport:
+    def setup_method(self):
+        self.api_client = APIClient()
+        self.organization = Organization.objects.create(name="Test Org")
+        self.outlet = Outlet.objects.create(name="Test Outlet", organization=self.organization)
+        
+        self.user = Staff.objects.create(name="Test User", phone="1234567890", outlet=self.outlet, role="admin")
+        self.api_client.force_authenticate(user=self.user)
+        
+        # We need a MasterProduct for Batch
+        self.product = MasterProduct.objects.create(
+            name="Paracetamol",
+            manufacturer="GSK",
+            pack_unit="strips",
+            pack_type="blister",
+            pack_size=10
+        )
+        
+        today = timezone.now().date()
+        
+        # Batch 1: Active, with movement
+        self.batch1 = Batch.objects.create(
+            outlet=self.outlet,
+            product=self.product,
+            batch_no="B001",
+            mrp=Decimal('100.00'),
+            purchase_rate=Decimal('80.00'),
+            sale_rate=Decimal('100.00'),
+            pack_size=10,
+            qty_strips=5,
+            qty_loose=4, # total fractional = 5.4
+            expiry_date=today + timedelta(days=100)
+        )
+        
+        # Create some ledger entries for batch 1 to test movement
+        # Opening before today
+        yesterday = today - timedelta(days=1)
+        StockLedger.objects.create(
+            outlet=self.outlet,
+            product=self.product,
+            batch=self.batch1,
+            txn_type="PURCHASE_IN",
+            txn_date=yesterday,
+            qty_in=Decimal('4.00'),
+            qty_out=Decimal('0.00'),
+            running_qty=Decimal('4.00'),
+            rate=Decimal('80.00'),
+            running_value=Decimal('320.00')
+        )
+        
+        # Movement today
+        StockLedger.objects.create(
+            outlet=self.outlet,
+            product=self.product,
+            batch=self.batch1,
+            txn_type="SALE_OUT",
+            txn_date=today,
+            qty_in=Decimal('0.00'),
+            qty_out=Decimal('1.5'),
+            running_qty=Decimal('2.50'),
+            rate=Decimal('80.00'),
+            running_value=Decimal('200.00')
+        )
+        
+        # Batch 2: Near Expiry
+        self.batch2 = Batch.objects.create(
+            outlet=self.outlet,
+            product=self.product,
+            batch_no="B002",
+            mrp=Decimal('50.00'),
+            purchase_rate=Decimal('40.00'),
+            sale_rate=Decimal('50.00'),
+            pack_size=1,
+            qty_strips=10,
+            qty_loose=0,
+            expiry_date=today + timedelta(days=15)
+        )
+        
+        # Batch 3: Expired
+        self.batch3 = Batch.objects.create(
+            outlet=self.outlet,
+            product=self.product,
+            batch_no="B003",
+            mrp=Decimal('20.00'),
+            purchase_rate=Decimal('15.00'),
+            sale_rate=Decimal('20.00'),
+            pack_size=5,
+            qty_strips=2,
+            qty_loose=0,
+            expiry_date=today - timedelta(days=10)
+        )
+
+    def test_quantity_to_pack_display(self):
+        # 3.4 with pack 10 = 3 strips, 4 loose
+        res = quantity_to_pack_display(Decimal('3.4'), 10)
+        assert res['strips'] == 3
+        assert res['loose'] == 4
+        assert res['text'] == "3 strips + 4 loose"
+        
+        # Negative
+        res = quantity_to_pack_display(Decimal('-1.5'), 10)
+        assert res['strips'] == -1
+        assert res['loose'] == -5
+        
+        # Zero
+        res = quantity_to_pack_display(Decimal('0'), 10)
+        assert res['text'] == "0"
+        
+        # No loose
+        res = quantity_to_pack_display(Decimal('5.0'), 10)
+        assert res['text'] == "5 strips"
+
+    def test_get_current_stock_report(self):
+        url = reverse('batch-wise-report')
+        res = self.api_client.get(url, data={"outletId": self.outlet.id, "report_type": "current_stock"})
+        assert res.status_code == status.HTTP_200_OK
+        data = res.json()['data']
+        # Should return all 3 batches because all have qty > 0
+        assert len(data) == 3
+        
+        # Verify status tags
+        statuses = [b['expiry_status'] for b in data]
+        assert 'ACTIVE' in statuses
+        assert 'NEAR_EXPIRY' in statuses
+        assert 'EXPIRED' in statuses
+
+    def test_movement_report(self):
+        url = reverse('batch-wise-report')
+        today = timezone.now().date().isoformat()
+        res = self.api_client.get(url, data={
+            "outletId": self.outlet.id,
+            "report_type": "movement",
+            "date_from": today,
+            "date_to": today
+        })
+        assert res.status_code == status.HTTP_200_OK
+        data = res.json()['data']
+        
+        # Batch 1 should show opening of 4, sold of 1.5, closing = 2.5
+        b1 = next(b for b in data if b['batch_no'] == 'B001')
+        assert b1['opening_qty_raw'] == 4.0
+        assert b1['sold_qty_raw'] == 1.5
+        assert b1['purchased_qty_raw'] == 0.0
+        assert b1['closing_qty_raw'] == 2.5
+        
+        # closing_qty_display should be 2 strips + 5 loose (pack 10)
+        assert b1['closing_qty_display']['strips'] == 2
+        assert b1['closing_qty_display']['loose'] == 5
+
+    def test_near_expiry_filter(self):
+        url = reverse('batch-wise-report')
+        res = self.api_client.get(url, data={
+            "outletId": self.outlet.id,
+            "report_type": "near_expiry",
+            "expiry_within_days": 30
+        })
+        assert res.status_code == status.HTTP_200_OK
+        data = res.json()['data']
+        assert len(data) == 1
+        assert data[0]['batch_no'] == 'B002'
+
+    def test_expired_filter(self):
+        url = reverse('batch-wise-report')
+        res = self.api_client.get(url, data={
+            "outletId": self.outlet.id,
+            "report_type": "expired"
+        })
+        assert res.status_code == status.HTTP_200_OK
+        data = res.json()['data']
+        assert len(data) == 1
+        assert data[0]['batch_no'] == 'B003'
+
+    def test_export_csv(self):
+        url = reverse('batch-wise-report-export')
+        res = self.api_client.get(url, data={
+            "outletId": self.outlet.id,
+            "export_format": "csv",
+            "report_type": "current_stock"
+        })
+        if res.status_code != 200:
+            print("CSV Export error", res.content)
+        assert res.status_code == status.HTTP_200_OK
+        assert res['Content-Type'] == 'text/csv'
+        assert b'B001' in res.content
+        assert b'B002' in res.content
+
+    def test_export_xlsx(self):
+        url = reverse('batch-wise-report-export')
+        res = self.api_client.get(url, data={
+            "outletId": self.outlet.id,
+            "export_format": "xlsx",
+            "report_type": "current_stock"
+        })
+        assert res.status_code == status.HTTP_200_OK
+        assert res['Content-Type'] == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+
+    @patch('apps.reports.services.BatchWiseReportService.export_pdf')
+    def test_export_pdf(self, mock_export_pdf):
+        mock_export_pdf.return_value = HttpResponse(b'%PDF-dummy', content_type='application/pdf')
+        url = reverse('batch-wise-report-export')
+        res = self.api_client.get(url, data={
+            "outletId": self.outlet.id,
+            "export_format": "pdf",
+            "report_type": "current_stock"
+        })
+        assert res.status_code == status.HTTP_200_OK
+        assert res['Content-Type'] == 'application/pdf'
+        # Basic check to ensure PDF is returned
+        assert res.content.startswith(b'%PDF-')
+
+    def test_movement_columns_not_all_zero(self):
+        url = reverse('batch-wise-report')
+        today = timezone.now().date().isoformat()
+        res = self.api_client.get(url, data={
+            "outletId": self.outlet.id,
+            "report_type": "movement",
+            "date_from": today,
+            "date_to": today
+        })
+        assert res.status_code == status.HTTP_200_OK
+        data = res.json()['data']
+        b1 = next(b for b in data if b['batch_no'] == 'B001')
+        # sold_qty_raw should be > 0 because of our movement today
+        assert b1['sold_qty_raw'] > 0
+
+    def test_closing_not_negative(self):
+        # Let's create a batch with no opening ledger entry, and a sale entry
+        b4 = Batch.objects.create(
+            outlet=self.outlet, product=self.product, batch_no="B004",
+            mrp=Decimal('100.00'), purchase_rate=Decimal('80.00'), sale_rate=Decimal('100.00'),
+            pack_size=10, qty_strips=0, qty_loose=0, expiry_date=timezone.now().date() + timedelta(days=100)
+        )
+        # Sale
+        StockLedger.objects.create(
+            outlet=self.outlet, product=self.product, batch=b4,
+            txn_type="SALE_OUT", txn_date=timezone.now().date(),
+            qty_in=Decimal('0.00'), qty_out=Decimal('5.00'), rate=Decimal('80.00')
+        )
+        url = reverse('batch-wise-report')
+        res = self.api_client.get(url, data={
+            "outletId": self.outlet.id, "report_type": "movement",
+            "date_from": timezone.now().date().isoformat(), "date_to": timezone.now().date().isoformat()
+        })
+        data = res.json()['data']
+        warnings = res.json().get('warnings', [])
+        b4_data = next(b for b in data if b['batch_no'] == 'B004')
+        
+        # In our logic, closing might be negative but it must generate a warning
+        assert b4_data['closing_qty_raw'] == -5.0
+        assert any(w['warning_type'] == 'NEGATIVE_CLOSING_STOCK' and w['batch_id'] == str(b4.id) for w in warnings)
+
+    def test_stock_value_computed_correctly(self):
+        url = reverse('batch-wise-report')
+        res = self.api_client.get(url, data={
+            "outletId": self.outlet.id, "report_type": "current_stock"
+        })
+        data = res.json()['data']
+        b1 = next(b for b in data if b['batch_no'] == 'B001')
+        # closing_qty_raw = 5.4, purchase_rate = 80.00 -> 5.4 * 80 = 432
+        assert abs(b1['stock_value'] - 432.0) < 0.01
+
+    def test_days_to_expiry_computed(self):
+        url = reverse('batch-wise-report')
+        res = self.api_client.get(url, data={
+            "outletId": self.outlet.id, "report_type": "current_stock"
+        })
+        data = res.json()['data']
+        b1 = next(b for b in data if b['batch_no'] == 'B001')
+        assert b1['days_to_expiry'] == 100
+        assert b1['expiry_status'] == 'ACTIVE'
+
+    def test_xlsx_has_metadata_header(self):
+        import openpyxl
+        import io
+        url = reverse('batch-wise-report-export')
+        res = self.api_client.get(url, data={
+            "outletId": self.outlet.id, "export_format": "xlsx", "report_type": "current_stock"
+        })
+        wb = openpyxl.load_workbook(io.BytesIO(res.content))
+        ws = wb.active
+        # Check cell A1
+        assert "Batch Wise Tracking Report" in str(ws['A1'].value)
+
+    def test_xlsx_color_coding(self):
+        import openpyxl
+        import io
+        url = reverse('batch-wise-report-export')
+        res = self.api_client.get(url, data={
+            "outletId": self.outlet.id, "export_format": "xlsx", "report_type": "current_stock"
+        })
+        wb = openpyxl.load_workbook(io.BytesIO(res.content))
+        ws = wb.active
+        # Start searching after metadata (row 9 data starts)
+        # We just need to check if any row has the expected fill colors
+        active_fill = 'FFE5FFCC'
+        expired_fill = 'FFFFCCCC'
+        near_fill = 'FFFFE5CC'
+        fills_found = set()
+        for row in ws.iter_rows(min_row=9):
+            if row[0].fill and row[0].fill.start_color:
+                fills_found.add(row[0].fill.start_color.rgb)
+        
+        assert active_fill in fills_found
+        assert near_fill in fills_found
+        assert expired_fill in fills_found

@@ -340,7 +340,7 @@ export default function LedgerStatementPage() {
         }
 
         if (tx.sourceType === 'SALE') {
-            router.push(`/dashboard/billing/${tx.sourceId}`);
+            router.push(`/billing/${tx.sourceId}`);
             return;
         }
 

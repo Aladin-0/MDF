@@ -61,9 +61,9 @@ export default function PaymentPieChart({ kpi, isLoading }: PaymentPieChartProps
   }
 
   return (
-    <div className="w-full flex flex-col items-center">
-      <div className="relative w-full h-[200px]">
-        <ResponsiveContainer width="100%" height="100%">
+    <div className="w-full flex flex-col items-center min-h-0 min-w-0">
+      <div className="relative w-full h-[200px] min-h-0 min-w-0">
+        <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
           <PieChart>
             <Pie
               data={chartData}

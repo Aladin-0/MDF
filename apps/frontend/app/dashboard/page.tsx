@@ -52,9 +52,9 @@ export default function DashboardPage() {
       <StatCardsRow kpi={kpi} isLoading={kpiLoading} />
 
       {/* Charts row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2">
-          <Card className="h-full">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 min-h-0 min-w-0">
+        <div className="lg:col-span-2 min-h-0 min-w-0">
+          <Card className="h-full min-h-0 min-w-0">
             <CardHeader className="pb-2">
               <CardTitle className="text-base">Hourly Sales</CardTitle>
               <CardDescription>Today&apos;s billing activity</CardDescription>
@@ -68,8 +68,8 @@ export default function DashboardPage() {
           </Card>
         </div>
         
-        <div className="lg:col-span-1">
-          <Card className="h-full">
+        <div className="lg:col-span-1 min-h-0 min-w-0">
+          <Card className="h-full min-h-0 min-w-0">
             <CardHeader className="pb-2">
               <CardTitle className="text-base">Payment Breakdown</CardTitle>
               <CardDescription>Today&apos;s collection</CardDescription>

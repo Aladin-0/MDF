@@ -12,9 +12,22 @@ export const api = axios.create({
     timeout: 10000
 });
 
-// Request Interceptor: forward cookies for cookie-based auth
+// Request Interceptor: forward cookies for cookie-based auth and attach Bearer token
 api.interceptors.request.use(
-    (config) => config,
+    (config) => {
+        if (typeof document !== 'undefined') {
+            const row = document.cookie.split('; ').find(r => r.startsWith('access_token='));
+            const token = row ? row.substring('access_token='.length) : null;
+            if (token && config.headers) {
+                if (typeof config.headers.set === 'function') {
+                    config.headers.set('Authorization', `Bearer ${token}`);
+                } else {
+                    (config.headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
+                }
+            }
+        }
+        return config;
+    },
     (error) => Promise.reject(error)
 );
 

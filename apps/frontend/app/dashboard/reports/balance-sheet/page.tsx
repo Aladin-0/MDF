@@ -446,8 +446,8 @@ function LedgerDrilldown({
     const getRoute = (tx: any): { url: string; hasDetail: boolean } => {
         const type = (tx.sourceType || '').toUpperCase();
         if (type === 'SALE' && tx.sourceId) {
-            // /dashboard/billing/[id] page exists — direct invoice view
-            return { url: `/dashboard/billing/${tx.sourceId}`, hasDetail: true };
+            // /billing/[id] page exists — direct invoice view
+            return { url: `/billing/${tx.sourceId}`, hasDetail: true };
         }
         if (type === 'PURCHASE') {
             // No /purchases/[id] detail page — go to purchases list

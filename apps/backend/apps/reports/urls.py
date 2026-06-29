@@ -4,6 +4,7 @@ from apps.reports.views import (
     SalesSummaryReportView, GSTR2ReportView, GSTR3BReportView, InventoryValuationView,
     InventoryMovementReportView, ExpiryReportView, StaffPerformanceReportView,
     BalanceSheetView, GSTR2AReconciliationView, ScheduleReportView,
+    BatchWiseReportView, BatchWiseReportExportView
 )
 
 urlpatterns = [
@@ -19,4 +20,6 @@ urlpatterns = [
     path('balance-sheet/', BalanceSheetView.as_view(), name='balance-sheet'),
     path('gstr2a/', GSTR2AReconciliationView.as_view(), name='gstr2a-reconciliation'),
     path('schedule/', ScheduleReportView.as_view(), name='schedule-report'),
+    path('batch-wise/', BatchWiseReportView.as_view(), name='batch-wise-report'),
+    path('batch-wise/export/', BatchWiseReportExportView.as_view(), name='batch-wise-report-export'),
 ]

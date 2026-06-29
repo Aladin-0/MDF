@@ -507,10 +507,13 @@ def post_sale_invoice(sale_invoice):
             card_ledger = _get_ledger(outlet, 'Card/POS Settlement')
             lines.append(('debit', card_ledger, card_paid))
 
-        if credit_given > 0:
+        if credit_given != 0:
             customer_ledger = _get_customer_ledger(outlet, sale_invoice.customer)
             if customer_ledger:
-                lines.append(('debit', customer_ledger, credit_given))
+                if credit_given > 0:
+                    lines.append(('debit', customer_ledger, credit_given))
+                else:
+                    lines.append(('credit', customer_ledger, abs(credit_given)))
             else:
                 raise ValueError(
                     f"Sale {sale_invoice.id}: credit_given={credit_given} but no customer "

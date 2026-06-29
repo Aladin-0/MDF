@@ -136,6 +136,30 @@ class LedgerListView(APIView):
                 is_hidden=d.get('isHidden', False),
                 retailio_id=d.get('retailioId', ''),
             )
+
+            # Automatically create a linked Customer if this ledger is intended for a customer
+            # We assume ledgerCategory == 'CUSTOMER' or the group is 'Sundry Debtors'
+            group_name = ledger.group.name.lower()
+            if ledger.ledger_category == 'CUSTOMER' or 'debtor' in group_name:
+                from apps.accounts.models import Customer
+                # Generate a fallback phone if none is provided to avoid unique constraint violations
+                phone_val = ledger.phone.strip()
+                if not phone_val:
+                    phone_val = f"TMP-{str(ledger.id)[:8]}"
+                
+                try:
+                    customer = Customer.objects.create(
+                        outlet=outlet,
+                        name=ledger.name,
+                        phone=phone_val,
+                        address=ledger.address,
+                        gstin=ledger.gstin,
+                    )
+                    ledger.linked_customer = customer
+                    ledger.save(update_fields=['linked_customer'])
+                except Exception as e:
+                    logger.error(f"Failed to auto-create Customer for Ledger {ledger.id}: {e}")
+
             return Response(LedgerSerializer(ledger).data, status=201)
         except Exception as e:
             return Response({'detail': str(e)}, status=400)

@@ -16,15 +16,23 @@ import { LowStockTable } from '@/components/inventory/LowStockTable';
 import { StockAdjustmentModal } from '@/components/inventory/StockAdjustmentModal';
 import { Batch, MasterProduct, ProductSearchResult } from '@/types';
 import { useStockList, useExpiryReport, useLowStockReport } from '@/hooks/useInventory';
-import { inventoryApi } from '@/lib/apiClient';
+import { inventoryApi, getStoredToken } from '@/lib/apiClient';
 import { exportToCSV } from '@/lib/export';
 import { useToast } from '@/hooks/use-toast';
 import { EditProductModal } from '@/components/inventory/EditProductModal';
+import { useAuthStore } from '@/store/authStore';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 export default function InventoryPage() {
     const router = useRouter();
     const { toast } = useToast();
     const { filters, setFilter, clearFilters } = useInventoryFilters();
+    const { outlet } = useAuthStore();
 
     const [activeTab, setActiveTab] = useState<string>('all');
     const [showAdjustmentModal, setShowAdjustmentModal] = useState(false);
@@ -52,24 +60,45 @@ export default function InventoryPage() {
         }
     };
 
-    const handleExport = () => {
-        if (activeTab === 'all' && stockData?.data) {
-             const rows = stockData.data.map((p: any) => ({
-                 name: p.name,
-                 composition: p.composition,
-                 manufacturer: p.manufacturer,
-                 schedule: p.scheduleType,
-                 totalStrips: p.totalStock,
-                 nearestExpiry: p.nearestExpiry,
-             }));
-             exportToCSV(rows, 'stock-report', [
-                 { key: 'name', label: 'Product Name' },
-                 { key: 'composition', label: 'Composition' },
-                 { key: 'manufacturer', label: 'Manufacturer' },
-                 { key: 'schedule', label: 'Schedule' },
-                 { key: 'totalStrips', label: 'Total Strips' },
-                 { key: 'nearestExpiry', label: 'Nearest Expiry' },
-             ]);
+    const handleExport = async () => {
+        if (!outlet) return;
+        if (activeTab === 'all') {
+            try {
+                const token = getStoredToken();
+                const queryParams = new URLSearchParams({ 
+                    outletId: outlet.id,
+                    export_format: 'csv',
+                    ...(filters.search ? { search: filters.search } : {}),
+                    ...(filters.scheduleType && filters.scheduleType !== 'all' ? { scheduleType: filters.scheduleType } : {}),
+                    ...(filters.lowStock ? { lowStock: 'true' } : {}),
+                    ...(filters.expiringSoon ? { expiringSoon: 'true' } : {}),
+                    ...(filters.sortBy ? { sortBy: filters.sortBy } : {}),
+                    ...(filters.sortOrder ? { sortOrder: filters.sortOrder } : {})
+                });
+                
+                const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/inventory/?${queryParams}`, {
+                    headers: {
+                        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                    }
+                });
+                
+                if (!response.ok) throw new Error('Export failed');
+                
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `Product-Summary-Report-${new Date().toISOString().split('T')[0]}.csv`;
+                a.click();
+                URL.revokeObjectURL(url);
+            } catch (error) {
+                console.error("Export error", error);
+                toast({
+                    title: "Export Failed",
+                    description: "Failed to download product summary.",
+                    variant: "destructive",
+                });
+            }
         } else if (activeTab === 'expiring' && expiringData) {
              const rows = expiringData.map((e: any) => ({
                   name: e.product.name,
@@ -101,6 +130,42 @@ export default function InventoryPage() {
         }
     };
 
+    const handleBatchDetailExport = async () => {
+        if (!outlet) return;
+        try {
+            const token = getStoredToken();
+            const queryParams = new URLSearchParams({ 
+                outletId: outlet.id,
+                export_format: 'csv',
+                report_type: 'current_stock',
+                ...(filters.search ? { search: filters.search } : {})
+            });
+            
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/reports/batch-wise/export/?${queryParams}`, {
+                headers: {
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                }
+            });
+            
+            if (!response.ok) throw new Error('Export failed');
+            
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Batch-Detail-Report-${new Date().toISOString().split('T')[0]}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error("Export error", error);
+            toast({
+                title: "Export Failed",
+                description: "Failed to download batch details.",
+                variant: "destructive",
+            });
+        }
+    };
+
     useKeyboardShortcuts({
         '/': () => {
              // For simplicity, we trigger focus using regular DOM in StockTable component or here 
@@ -109,7 +174,6 @@ export default function InventoryPage() {
         },
         'Escape': () => {
              clearFilters();
-             setSelectedProduct(null);
         },
         'e': () => setActiveTab('expiring'),
         'l': () => setActiveTab('low_stock'),
@@ -124,10 +188,22 @@ export default function InventoryPage() {
                      <p className="text-muted-foreground">Stock levels, batches, and expiry tracking</p>
                  </div>
                  <div className="flex gap-2">
-                     <Button variant="outline" onClick={handleExport}>
-                         <Download className="w-4 h-4 mr-2" />
-                         Export
-                     </Button>
+                     <DropdownMenu>
+                         <DropdownMenuTrigger asChild>
+                             <Button variant="outline">
+                                 <Download className="w-4 h-4 mr-2" />
+                                 Export
+                             </Button>
+                         </DropdownMenuTrigger>
+                         <DropdownMenuContent align="end">
+                             <DropdownMenuItem onClick={handleExport}>
+                                 Export Product Summary (CSV)
+                             </DropdownMenuItem>
+                             <DropdownMenuItem onClick={handleBatchDetailExport}>
+                                 Export Batch Detail (CSV)
+                             </DropdownMenuItem>
+                         </DropdownMenuContent>
+                     </DropdownMenu>
                      <PermissionGate permission="create_purchases">
                          <Button onClick={() => router.push('/dashboard/purchases')}>
                              <Plus className="w-4 h-4 mr-2" />

@@ -81,3 +81,13 @@
 .animate-shake {
   animation: shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97);
 }
+
+/* WAI-ARIA Navigation Focus Ring */
+.nav-item {
+  outline: none;
+}
+.nav-item:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
+  border-radius: 4px;
+}

@@ -255,3 +255,54 @@ class CanAccessPurchases(BasePermission):
             check_outlet_access(request)
             return True
         return False
+
+# ─── Sales Bill Revision Permissions ─────────────────────────────────────────
+
+def has_bill_revision_permission(user, permission_flag: str) -> bool:
+    """
+    Helper function to check if a user has a specific bill revision permission.
+    Admins (super_admin, admin) bypass the check and always return True.
+    """
+    if not user or not user.is_authenticated:
+        return False
+    if _is_admin(user):
+        return True
+    return getattr(user, permission_flag, False)
+
+class HasBillRevisionPermission(BasePermission):
+    """
+    Generic permission class for bill revisions.
+    Views using this should set `required_revision_permission` attribute.
+    """
+    message = 'You do not have permission to perform this bill revision action.'
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+            
+        required_perm = getattr(view, 'required_revision_permission', None)
+        if not required_perm:
+            # If no specific permission is required by the view, deny by default
+            return False
+            
+        if not has_bill_revision_permission(request.user, required_perm):
+            return False
+            
+        check_outlet_access(request)
+        return True
+
+class CanViewBillRevisionHistory(BasePermission):
+    """
+    Allows viewing the bill revision history timeline and reports if:
+    - User is admin, OR
+    - User has can_view_bill_revision_history = True
+    """
+    message = 'You do not have permission to view bill revision history.'
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if has_bill_revision_permission(request.user, 'can_view_bill_revision_history'):
+            check_outlet_access(request)
+            return True
+        return False

@@ -29,7 +29,7 @@ export default function RefillAlertsBanner({ isExpanded, onToggle }: RefillAlert
 
     const handleQuickBill = (alert: any) => {
         setCustomer(alert.customer);
-        router.push('/dashboard/billing');
+        router.push('/billing');
     };
 
     const handleWhatsApp = (alert: any) => {

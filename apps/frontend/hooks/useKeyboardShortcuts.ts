@@ -1,37 +1,47 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useId } from 'react';
+import { shortcutRegistry, ShortcutScope, ShortcutDefinition } from '@/lib/shortcuts';
 
 type ShortcutMap = Record<string, () => void>;
 
 export function useKeyboardShortcuts(
-    shortcuts: ShortcutMap,
-    active: boolean = true
+    shortcuts: ShortcutMap | Omit<ShortcutDefinition, 'id'>[],
+    active: boolean = true,
+    scope: ShortcutScope = 'route'
 ) {
+    const idPrefix = useId();
+
     useEffect(() => {
         if (!active) return;
 
-        const handler = (e: KeyboardEvent) => {
-            const target = e.target as HTMLElement;
-            const tag = target.tagName;
+        const registeredIds: string[] = [];
 
-            // Ignore keyboard shortcuts if the user is typing in an input
-            if (['INPUT', 'TEXTAREA', 'SELECT'].includes(tag) || target.isContentEditable) return;
+        if (Array.isArray(shortcuts)) {
+            // New signature
+            shortcuts.forEach((s, idx) => {
+                const id = `${idPrefix}-${idx}`;
+                registeredIds.push(id);
+                shortcutRegistry.register({ ...s, id });
+            });
+        } else {
+            // Backward compatibility
+            Object.entries(shortcuts).forEach(([combo, handler], idx) => {
+                const id = `${idPrefix}-${idx}`;
+                registeredIds.push(id);
+                shortcutRegistry.register({
+                    id,
+                    combo,
+                    scope,
+                    handler,
+                    description: `Shortcut for ${combo}`,
+                    allowInInput: combo.includes('Ctrl') || combo.includes('Alt') // Default heuristic
+                });
+            });
+        }
 
-            const key = [
-                e.ctrlKey && 'Ctrl',
-                e.shiftKey && 'Shift',
-                e.altKey && 'Alt',
-                e.key.length === 1 ? e.key.toLowerCase() : e.key
-            ].filter(Boolean).join('+');
-
-            if (shortcuts[key]) {
-                e.preventDefault();
-                shortcuts[key]();
-            }
+        return () => {
+            registeredIds.forEach(id => shortcutRegistry.unregister(id));
         };
-
-        document.addEventListener('keydown', handler);
-        return () => document.removeEventListener('keydown', handler);
-    }, [shortcuts, active]);
+    }, [shortcuts, active, scope, idPrefix]);
 }

@@ -35,7 +35,7 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
     const createMutation = useCreateStaff();
     const updateMutation = useUpdateStaff();
 
-    const { register, handleSubmit, reset, setValue, watch, formState: { errors } } =
+    const { register, handleSubmit, reset, setValue, watch, getValues, formState: { errors } } =
         useForm({
             defaultValues: {
                 name: '',
@@ -55,6 +55,16 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                 canAccessReports: false,
                 canEditSales: false,
                 canEditPurchases: false,
+                canModifyDraftBill: false,
+                canModifyUnpaidBill: false,
+                canCorrectHeaderFields: false,
+                canCorrectRatesDiscounts: false,
+                canCorrectQuantities: false,
+                canCorrectCustomer: false,
+                canModifyBillWithReturn: false,
+                canModifyPaidBill: false,
+                canCancelAndReissueBill: false,
+                canViewBillRevisionHistory: false,
             }
         });
 
@@ -79,13 +89,24 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                 canAccessReports: editingStaff.canAccessReports ?? false,
                 canEditSales: editingStaff.canEditSales ?? false,
                 canEditPurchases: editingStaff.canEditPurchases ?? false,
+                canModifyDraftBill: editingStaff.canModifyDraftBill ?? false,
+                canModifyUnpaidBill: editingStaff.canModifyUnpaidBill ?? false,
+                canCorrectHeaderFields: editingStaff.canCorrectHeaderFields ?? false,
+                canCorrectRatesDiscounts: editingStaff.canCorrectRatesDiscounts ?? false,
+                canCorrectQuantities: editingStaff.canCorrectQuantities ?? false,
+                canCorrectCustomer: editingStaff.canCorrectCustomer ?? false,
+                canModifyBillWithReturn: editingStaff.canModifyBillWithReturn ?? false,
+                canModifyPaidBill: editingStaff.canModifyPaidBill ?? false,
+                canCancelAndReissueBill: editingStaff.canCancelAndReissueBill ?? false,
+                canViewBillRevisionHistory: editingStaff.canViewBillRevisionHistory ?? false,
             });
         } else {
             reset();
         }
     }, [editingStaff, reset]);
 
-    const onSubmit = (data: any) => {
+    const onSubmit = (submittedData: any) => {
+        const data = { ...getValues(), ...submittedData };
         // Strip confirm fields — never sent to backend
         delete data.confirmPassword;
         delete data.confirmPin;
@@ -340,6 +361,16 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                                 { key: 'canAccessReports', label: 'Can Access Reports', desc: 'View sales, GST, stock reports' },
                                 { key: 'canEditSales', label: 'Can Edit Sales', desc: 'Modify existing sale invoices' },
                                 { key: 'canEditPurchases', label: 'Can Edit Purchases', desc: 'Modify existing purchase invoices' },
+                                { key: 'canModifyDraftBill', label: 'Can Modify Draft Bill', desc: 'Modify saved draft bills' },
+                                { key: 'canModifyUnpaidBill', label: 'Can Modify Unpaid Bill', desc: 'Modify bills that have no payments' },
+                                { key: 'canCorrectHeaderFields', label: 'Can Correct Header Fields', desc: 'Change date, doctor details' },
+                                { key: 'canCorrectRatesDiscounts', label: 'Can Correct Rates/Discounts', desc: 'Change rates and discounts on items' },
+                                { key: 'canCorrectQuantities', label: 'Can Correct Quantities', desc: 'Change quantities of items' },
+                                { key: 'canCorrectCustomer', label: 'Can Correct Customer', desc: 'Change the customer for the bill' },
+                                { key: 'canModifyBillWithReturn', label: 'Can Modify Bill With Return', desc: 'Modify a bill even if it has returns' },
+                                { key: 'canModifyPaidBill', label: 'Can Modify Paid Bill', desc: 'Modify bills with payments/adjustments' },
+                                { key: 'canCancelAndReissueBill', label: 'Can Cancel & Reissue', desc: 'Cancel bill and create a new one' },
+                                { key: 'canViewBillRevisionHistory', label: 'Can View Revision History', desc: 'See full edit history' },
                             ].map(({ key, label, desc }) => (
                                 <div key={key} className="flex items-center justify-between p-3 rounded-lg bg-slate-50">
                                     <div>

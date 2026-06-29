@@ -50,8 +50,7 @@ const DATE_PRESETS = [
     { label: 'Last 30 Days', start: fd(subDays(now, 29)), end: fd(now) },
 ];
 
-// ── Invoice View Modal ────────────────────────────────────────────────────────
-function SaleInvoiceModal({ invoiceId, onClose, onEdit }: { invoiceId: string; onClose: () => void; onEdit?: (invoice: SaleInvoice) => void }) {
+function SaleInvoiceModal({ invoiceId, onClose, onEdit, onViewHistory }: { invoiceId: string; onClose: () => void; onEdit?: (invoice: SaleInvoice) => void; onViewHistory?: () => void }) {
     const { data: invoice } = useSaleById(invoiceId);
 
     return (
@@ -60,6 +59,7 @@ function SaleInvoiceModal({ invoiceId, onClose, onEdit }: { invoiceId: string; o
             onClose={onClose}
             invoice={invoice as any}
             onEdit={onEdit}
+            onViewHistory={onViewHistory ? () => onViewHistory() : undefined}
         />
     );
 }
@@ -73,82 +73,15 @@ export default function SalesList() {
     const [endDate, setEndDate] = useState(fd(now));
     const [activePreset, setActivePreset] = useState('Today');
     const [search, setSearch] = useState('');
+    const [filterDoctorId, setFilterDoctorId] = useState<string>('');
+    const [filterHospital, setFilterHospital] = useState<string>('');
     const [page, setPage] = useState(1);
     const user = useAuthStore((s) => s.user);
-    const canEdit = user?.role === 'super_admin' || user?.role === 'admin' || !!user?.canEditSales;
+    const canEdit = user?.role === 'super_admin' || user?.role === 'admin' || !!user?.canEditSales || !!user?.canModifyDraftBill || !!user?.canModifyUnpaidBill || !!user?.canModifyPaidBill;
 
     const handleEditSale = (invoice: SaleInvoice) => {
-        const store = useBillingStore.getState();
-        store.clearCart();
-        store.setCustomer(invoice.customer || null);
-        if (invoice.customer) {
-            // Provide a partial ledger object so the cart UI shows the existing customer
-            store.setCustomerLedger({
-                id: invoice.customer.id,
-                name: invoice.customer.name,
-                groupName: 'Sundry Debtors',
-                currentBalance: 0,
-                isMock: true,
-            } as any);
-        } else {
-            store.setCustomerLedger(null);
-        }
-        store.setEditingSaleId(invoice.id);
-
-        // Store return metadata so the billing page can warn the user
-        const inv = invoice as any;
-        store.setEditingReturnInfo(
-            inv.hasReturns
-                ? { count: inv.returnCount ?? 0, total: inv.returnTotal ?? 0, summary: inv.returnSummary ?? [] }
-                : null
-        );
-        
-        const totalDiscountAmount = typeof invoice.discountAmount === 'number' ? invoice.discountAmount : 0;
-        const totalRateAmount = invoice.items?.reduce((sum, item) => {
-            const qty = item.totalQty || (item.qtyStrips || 0) + ((item.qtyLoose || 0) / (item.packSize || 1));
-            return sum + (item.rate * qty);
-        }, 0) || 1;
-        const itemDiscountAmount = invoice.items?.reduce((sum, item) => {
-            const qty = item.totalQty || (item.qtyStrips || 0) + ((item.qtyLoose || 0) / (item.packSize || 1));
-            return sum + ((item.mrp - item.rate) * qty);
-        }, 0) || 0;
-        
-        const extraDiscountAmount = Math.max(0, totalDiscountAmount - itemDiscountAmount);
-        const extraDiscountPct = totalRateAmount > 0 ? (extraDiscountAmount / totalRateAmount) * 100 : 0;
-        store.setExtraDiscountPct(extraDiscountPct);
-        
-        store.setPayment({
-            method: invoice.paymentMode as any,
-            amount: invoice.amountPaid || invoice.grandTotal,
-        });
-
-        if (invoice.doctorName || invoice.prescriptionNo) {
-             store.setScheduleHData({
-                 patientName: invoice.patientName || '',
-                 patientAge: 0,
-                 patientAddress: invoice.patientAddress || '',
-                 doctorName: invoice.doctorName || '',
-                 doctorRegNo: invoice.doctorRegNo || '',
-                 prescriptionNo: invoice.prescriptionNo || '',
-             });
-        }
-
-        if (invoice.items) {
-             invoice.items.forEach((item: any) => {
-                 store.addToCart({
-                     ...item,
-                     totalQty: item.totalQty || (item.qtyStrips || 0) + ((item.qtyLoose || 0) / (item.packSize || 1)),
-                     saleMode: item.saleMode || 'mixed',
-                     mrp: item.mrp || item.rate,
-                     saleRate: item.saleRate || item.rate,
-                     cgst: item.cgstRate || (item.gstRate ? item.gstRate / 2 : 0),
-                     sgst: item.sgstRate || (item.gstRate ? item.gstRate / 2 : 0),
-                 });
-             });
-        }
-
         setSelectedInvoiceId(null);
-        router.push('/dashboard/billing');
+        router.push(`/dashboard/sales/modify/${invoice.id}`);
     };
 
 
@@ -161,6 +94,8 @@ export default function SalesList() {
         page,
         pageSize: PAGE_SIZE,
         search: search.trim() || undefined,
+        doctorId: filterDoctorId || undefined,
+        hospitalName: filterHospital.trim() || undefined,
     });
     const invoices: SaleInvoice[] = data?.data ?? [];
     const pagination = data?.pagination;
@@ -200,7 +135,13 @@ export default function SalesList() {
                     <h1 className="text-2xl font-bold text-slate-900">Sales</h1>
                     <p className="text-sm text-muted-foreground mt-0.5">Complete billing & invoice history with revenue analytics</p>
                 </div>
-                <Button onClick={() => router.push('/dashboard/billing')} className="shrink-0">
+                <Button 
+                    onClick={() => {
+                        useBillingStore.getState().resetBilling();
+                        router.push('/billing');
+                    }} 
+                    className="shrink-0"
+                >
                     <PlusCircle className="w-4 h-4 mr-2" />
                     New Sale
                 </Button>
@@ -371,7 +312,7 @@ export default function SalesList() {
             </div>
 
             {/* ── Search ── */}
-            <div className="flex flex-col gap-1 max-w-md">
+            <div className="flex flex-col gap-2 max-w-3xl">
                 <div className={cn(
                     'flex items-center gap-2 bg-white border rounded-lg px-3 py-2 transition-colors focus-within:border-primary/50',
                     isSearching ? 'border-primary/40 bg-primary/5' : 'border-slate-200'
@@ -390,6 +331,22 @@ export default function SalesList() {
                         </button>
                     )}
                 </div>
+                <div className="flex flex-col sm:flex-row gap-3">
+                    <input
+                        type="text"
+                        placeholder="Filter by Doctor ID/Name..."
+                        value={filterDoctorId}
+                        onChange={e => { setFilterDoctorId(e.target.value); setPage(1); }}
+                        className="flex-1 text-sm bg-white border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:border-primary/50 placeholder:text-muted-foreground"
+                    />
+                    <input
+                        type="text"
+                        placeholder="Filter by Hospital Name..."
+                        value={filterHospital}
+                        onChange={e => { setFilterHospital(e.target.value); setPage(1); }}
+                        className="flex-1 text-sm bg-white border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:border-primary/50 placeholder:text-muted-foreground"
+                    />
+                </div>
                 {isSearching && (
                     <p className="text-xs text-primary font-medium px-1">
                         🔍 Searching all dates · date filter paused · latest first
@@ -406,6 +363,8 @@ export default function SalesList() {
                                 <th className="px-4 py-3 font-semibold text-muted-foreground uppercase text-xs">Invoice No</th>
                                 <th className="px-4 py-3 font-semibold text-muted-foreground uppercase text-xs">Date</th>
                                 <th className="px-4 py-3 font-semibold text-muted-foreground uppercase text-xs">Customer</th>
+                                <th className="px-4 py-3 font-semibold text-muted-foreground uppercase text-xs">Doctor</th>
+                                <th className="px-4 py-3 font-semibold text-muted-foreground uppercase text-xs">Hospital</th>
                                 <th className="px-4 py-3 font-semibold text-muted-foreground uppercase text-xs text-right">Items</th>
                                 <th className="px-4 py-3 font-semibold text-muted-foreground uppercase text-xs text-right">Amount</th>
                                 <th className="px-4 py-3 font-semibold text-muted-foreground uppercase text-xs">Payment</th>
@@ -416,14 +375,14 @@ export default function SalesList() {
                         <tbody className="divide-y">
                             {isLoading && [...Array(6)].map((_, i) => (
                                 <tr key={i} className="animate-pulse">
-                                    {[...Array(8)].map((_, j) => (
+                                    {[...Array(10)].map((_, j) => (
                                         <td key={j} className="px-4 py-3"><div className="h-4 bg-slate-100 rounded" /></td>
                                     ))}
                                 </tr>
                             ))}
                             {!isLoading && filteredInvoices.length === 0 && (
                                 <tr>
-                                    <td colSpan={8} className="px-4 py-16 text-center text-muted-foreground">
+                                    <td colSpan={10} className="px-4 py-16 text-center text-muted-foreground">
                                         <ShoppingBag className="w-10 h-10 mx-auto mb-2 text-slate-200" />
                                         <p className="font-medium">No sales found</p>
                                         <p className="text-xs mt-1">Try changing the date range or search query</p>
@@ -440,6 +399,8 @@ export default function SalesList() {
                                             <span className="text-slate-700">{inv.customer?.name ?? 'Walk-in'}</span>
                                         </div>
                                     </td>
+                                    <td className="px-4 py-3 text-slate-600">{inv.doctorName ?? '—'}</td>
+                                    <td className="px-4 py-3 text-slate-600">{inv.hospitalName ?? '—'}</td>
                                     <td className="px-4 py-3 text-right text-slate-600">{inv.items?.length ?? 0}</td>
                                     <td className="px-4 py-3 text-right font-semibold tabular-nums text-slate-900">{fmt(inv.grandTotal)}</td>
                                     <td className="px-4 py-3">
@@ -488,6 +449,7 @@ export default function SalesList() {
                     invoiceId={selectedInvoiceId} 
                     onClose={() => setSelectedInvoiceId(null)} 
                     onEdit={canEdit ? handleEditSale : undefined} 
+                    onViewHistory={() => router.push(`/dashboard/sales/revisions/${selectedInvoiceId}`)}
                 />
             )}
         </div>
