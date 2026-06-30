@@ -62,7 +62,7 @@ export default function RecordCreditPaymentModal({ isOpen, accountId, onClose }:
         if (numAmount > outstanding) { setError(`Amount exceeds outstanding ${formatCurrency(outstanding)}`); return; }
 
         try {
-            await mutation.mutateAsync({
+            const result = await mutation.mutateAsync({
                 accountId: accountId!,
                 payload: {
                     amount: numAmount,
@@ -74,11 +74,13 @@ export default function RecordCreditPaymentModal({ isOpen, accountId, onClose }:
             });
 
             if (sendWhatsApp && customer?.phone) {
+                // The API now returns a voucher_no! We pass it to the template.
                 const msg = WHATSAPP_TEMPLATES.paymentReceipt(
                     customer.name,
                     numAmount,
                     remaining,
-                    outlet?.name || 'Apollo Medical Store'
+                    outlet?.name || 'Apollo Medical Store',
+                    (result as any).voucher_no
                 );
                 openWhatsApp(customer.phone, msg);
             }

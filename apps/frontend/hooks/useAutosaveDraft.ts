@@ -72,10 +72,10 @@ export function useAutosaveDraft() {
 
         const currentString = JSON.stringify(payload);
         
-        // Skip initial autosave for quotation prefill drafts so they only save on manual change
+        // Skip initial autosave for quotation/invoice prefill drafts so they only save on manual change
         if (isInitialLoad.current) {
             isInitialLoad.current = false;
-            const isQuotationPrefill = !!draft.quotationId;
+            const isQuotationPrefill = !!draft.quotationId || !!draft.sourceInvoiceId;
             const isLocal = draft.id.startsWith('local-');
             if (isQuotationPrefill && isLocal) {
                 lastSavedStringRef.current = currentString;

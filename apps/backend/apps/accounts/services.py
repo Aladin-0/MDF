@@ -242,6 +242,51 @@ class VoucherService:
                 line.get('credit', 0),
             )
 
+            # Sync with Billing CreditAccount if a customer ledger is credited
+            line_credit = Decimal(str(line.get('credit', 0)))
+            if line_credit > 0:
+                try:
+                    ledger = Ledger.objects.select_related('linked_customer').get(id=line['ledger_id'])
+                    if ledger.linked_customer:
+                        from apps.billing.models import CreditAccount, CreditTransaction
+                        from datetime import datetime
+                        from django.utils import timezone
+                        
+                        credit_account = CreditAccount.objects.filter(
+                            customer=ledger.linked_customer, 
+                            outlet_id=outlet_id
+                        ).first()
+                        
+                        if credit_account:
+                            # Reduce outstanding & increase repaid
+                            credit_account.total_outstanding -= line_credit
+                            credit_account.total_repaid += line_credit
+                            
+                            # Update status based on outstanding
+                            if credit_account.total_outstanding <= 0:
+                                credit_account.status = 'cleared'
+                            elif credit_account.total_outstanding < credit_account.total_borrowed:
+                                credit_account.status = 'partial'
+                                
+                            credit_account.last_transaction_date = timezone.now()
+                            credit_account.save()
+                            
+                            # Create a credit transaction for the history
+                            CreditTransaction.objects.create(
+                                credit_account=credit_account,
+                                customer=ledger.linked_customer,
+                                type='credit',
+                                amount=line_credit,
+                                description=f"Payment via Voucher {voucher_no}",
+                                balance_after=credit_account.total_outstanding,
+                                recorded_by_id=staff_id,
+                                date=data['date']
+                            )
+                            logger.info(f"Updated CreditAccount for {ledger.linked_customer.name} via Voucher {voucher_no}")
+                except Exception as e:
+                    logger.error(f"Error syncing CreditAccount for Voucher {voucher_no}: {e}")
+
+
         # Process bill adjustments (Receipt/Payment only)
         for adj in data.get('bill_adjustments', []):
             invoice_type = adj.get('invoice_type')

@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useRef, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { format } from 'date-fns';
 import { ArrowLeft, Plus, Trash2, Loader2, Search } from 'lucide-react';
 import Link from 'next/link';
@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { useOutletId } from '@/hooks/useOutletId';
-import { voucherApi, customersApi } from '@/lib/apiClient';
+import { voucherApi, customersApi, salesApi } from '@/lib/apiClient';
 import { cn } from '@/lib/utils';
 
 interface ItemRow {
@@ -45,9 +45,10 @@ function calcTotal(qtyStrips: string, qtyLoose: string, rate: string, packSize: 
     return totalFractionalStrips * r;
 }
 
-export default function NewCreditNotePage() {
+function NewCreditNoteContent() {
     const outletId = useOutletId();
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { toast } = useToast();
 
     const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -71,7 +72,6 @@ export default function NewCreditNotePage() {
         customersApi.list(outletId).then((res: any) => setCustomers(res?.data ?? res ?? [])).catch(() => {});
     }, [outletId]);
 
-    // Close dropdown on outside click
     useEffect(() => {
         function handleClick(e: MouseEvent) {
             if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
@@ -81,6 +81,20 @@ export default function NewCreditNotePage() {
         document.addEventListener('mousedown', handleClick);
         return () => document.removeEventListener('mousedown', handleClick);
     }, []);
+
+    // Handle auto-load from URL
+    useEffect(() => {
+        const urlInvoiceId = searchParams.get('invoiceId');
+        if (urlInvoiceId && outletId) {
+            salesApi.getById(urlInvoiceId, outletId)
+                .then((inv) => {
+                    handleSelectInvoice(inv);
+                })
+                .catch((err) => {
+                    toast({ variant: 'destructive', title: 'Failed to load invoice', description: 'Could not find the original invoice.' });
+                });
+        }
+    }, [searchParams, outletId]);
 
     async function handleInvoiceSearch(q: string) {
         setInvoiceSearch(q);
@@ -104,7 +118,8 @@ export default function NewCreditNotePage() {
     function handleSelectInvoice(inv: any) {
         if (inv.customerId) setCustomerId(inv.customerId);
         setOriginalSaleId(inv.id);
-        setInvoiceSearch(`${inv.invoiceNo} — ${inv.customerName}`);
+        const cName = inv.customerName || inv.customer?.name || 'Walk-in';
+        setInvoiceSearch(`${inv.invoiceNo} — ${cName}`);
         setShowInvoiceDropdown(false);
         if (inv.items && inv.items.length > 0) {
             setItems(inv.items.map((item: any) => {
@@ -113,15 +128,15 @@ export default function NewCreditNotePage() {
                     : calcTotal(String(item.qtyStrips || 0), String(item.qtyLoose || 0), String(item.rate), packSize);
                 return {
                     id: Math.random().toString(36).slice(2),
-                    saleItemId: item.id,
+                    saleItemId: item.saleItemId || item.id,
                     batchId: item.batchId || item.batch_id || item.batch?.id || '',
-                    productName: item.productName,
+                    productName: item.productName || item.name,
                     qtyStrips: String(item.qtyStrips || 0),
                     qtyLoose: String(item.qtyLoose || 0),
                     packSize,
                     rate: String(item.rate),
                     gstRate: String(item.gstRate),
-                    maxTotalUnits: (item.qtyStrips || 0) * packSize + (item.qtyLoose || 0),
+                    maxTotalUnits: ((item.qtyStrips || 0) * packSize + (item.qtyLoose || 0)) - (item.qtyReturned || 0),
                     // Store canonical total from invoice — this is what the customer was charged
                     invoiceTotal: canonicalTotal,
                     total: canonicalTotal,
@@ -160,14 +175,7 @@ export default function NewCreditNotePage() {
     }
 
     const totalAmount = items.reduce((s, i) => {
-        // Use invoiceTotal (canonical from API) when set — avoids unit-mismatch bugs.
-        // Fall back to calcTotal only for manually added rows (no invoiceTotal).
-        if (typeof i.invoiceTotal === 'number') return s + i.invoiceTotal;
-        const qs = parseFloat(i.qtyStrips) || 0;
-        const ql = parseFloat(i.qtyLoose) || 0;
-        const r = parseFloat(i.rate) || 0;
-        const ps = i.packSize || 1;
-        return s + (qs + ql / ps) * r;
+        return s + i.total;
     }, 0);
 
     const gstAmount = items.reduce((s, i) => {
@@ -227,11 +235,11 @@ export default function NewCreditNotePage() {
             // MAGIC HAPPENS HERE: We use your app's built-in API tool!
             await voucherApi.createSalesReturn(payload);
 
-            toast({ title: 'Return Successful', description: 'Stock has been built and restored to the shelf!' });
             router.push('/dashboard/accounts/sale-returns');
-            
-        } catch (err: any) {
-            toast({ variant: 'destructive', title: 'Failed to save', description: err?.response?.data?.detail || err.message || String(err) });
+        } catch (error: any) {
+            console.error('Save Return Error:', error);
+            const msg = error.error?.message || error.detail || error.message || 'Unknown error occurred. Please check console.';
+            toast({ variant: 'destructive', title: 'Failed to save return', description: msg });
         } finally {
             setSaving(false);
         }
@@ -464,5 +472,13 @@ export default function NewCreditNotePage() {
                 </Button>
             </div>
         </div>
+    );
+}
+
+export default function NewCreditNotePage() {
+    return (
+        <Suspense fallback={<div className="p-8 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></div>}>
+            <NewCreditNoteContent />
+        </Suspense>
     );
 }

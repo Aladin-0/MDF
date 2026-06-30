@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { CartItem, Batch, ProductSearchResult } from '@/types';
 import { Input } from '@/components/ui/input';
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/hooks/use-toast';
 import { getExpiryStatus } from '@/utils/expiry';
 import { useQuery } from '@tanstack/react-query';
 import { productsApi } from '@/lib/apiClient';
@@ -80,10 +80,11 @@ export function InlineRowEditor({ item, onSave, onCancel, onRemove }: InlineRowE
     const s = parseInt(qtyStrips) || 0;
     const l = parseInt(qtyLoose) || 0;
     const dVal = parseFloat(discountValue) || 0;
-    const tQty = (s * currentBatch.packSize) + l;
+    const tQtyLoose = (s * currentBatch.packSize) + l;
+    const tQtyFractional = s + (l / currentBatch.packSize);
     
     const saleRate = currentBatch.saleRate ?? currentBatch.mrp;
-    const rawTotal = saleRate * tQty;
+    const rawTotal = saleRate * tQtyFractional;
 
     let dPct = 0;
     let dAmount = 0;
@@ -96,23 +97,21 @@ export function InlineRowEditor({ item, onSave, onCancel, onRemove }: InlineRowE
     }
 
     const rate = saleRate * (1 - (dPct / 100));
-    const sellAmount = rate * tQty;
+    const sellAmount = rate * tQtyFractional;
     
-    // Purchase rate per unit (accounting for packSize)
-    // Actually purchaseRate is usually per strip if packSize is > 1. Let's assume purchaseRate is per pack.
-    const unitPurchaseRate = (currentBatch.purchaseRate || 0) / currentBatch.packSize;
-    const totalCost = unitPurchaseRate * tQty;
+    // Purchase rate per pack
+    const totalCost = (currentBatch.purchaseRate || 0) * tQtyFractional;
     
     const marginAmount = sellAmount - totalCost;
     const marginPct = sellAmount > 0 ? (marginAmount / sellAmount) * 100 : 0;
 
     const isLowMargin = marginPct < 10 && marginPct >= 0;
     const isNegativeMargin = marginPct < 0;
-    const exceedsStock = tQty > (currentBatch.qtyStrips * currentBatch.packSize + currentBatch.qtyLoose);
+    const exceedsStock = tQtyLoose > (currentBatch.qtyStrips * currentBatch.packSize + currentBatch.qtyLoose);
     const isDiscountInvalid = discountType === 'percentage' 
         ? (dVal < 0 || dVal > 100) 
         : (dVal < 0 || dVal > rawTotal);
-    const isQtyZero = tQty === 0;
+    const isQtyZero = tQtyFractional === 0;
 
     const isValid = !isDiscountInvalid && !isQtyZero && !isNegativeMargin;
 
@@ -122,8 +121,8 @@ export function InlineRowEditor({ item, onSave, onCancel, onRemove }: InlineRowE
         const currentBatch = availableBatches.find(b => b.id === selectedBatchId);
         if (!currentBatch) return;
 
-        const taxableAmount = (rate * tQty) / (1 + item.gstRate / 100);
-        const gstAmount = (rate * tQty) - taxableAmount;
+        const taxableAmount = (rate * tQtyFractional) / (1 + item.gstRate / 100);
+        const gstAmount = (rate * tQtyFractional) - taxableAmount;
 
         onSave(item.batchId, {
             ...item,
@@ -132,7 +131,7 @@ export function InlineRowEditor({ item, onSave, onCancel, onRemove }: InlineRowE
             expiryDate: currentBatch.expiryDate,
             qtyStrips: s,
             qtyLoose: l,
-            totalQty: tQty,
+            totalQty: tQtyFractional,
             discountPct: dPct,
             discountType: discountType,
             discountAmount: discountType === 'amount' ? dAmount : undefined,

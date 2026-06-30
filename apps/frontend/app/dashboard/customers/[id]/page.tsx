@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useMemo, Fragment } from 'react';
+import { useState, useMemo, useEffect, Fragment } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
     ArrowLeft, Pencil, Heart, Phone,
     Building2, Receipt,
-    ChevronDown, FileText, Package, AlertCircle, Loader2
+    ChevronDown, FileText, Package, AlertCircle, Loader2, IndianRupee, Repeat
 } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -23,6 +24,8 @@ import { format, startOfMonth, subMonths } from 'date-fns';
 import { Customer, SaleInvoiceSummary, SaleInvoice } from '@/types';
 import { salesApi } from '@/lib/apiClient';
 import { InvoicePreviewModal } from '@/components/billing/InvoicePreviewModal';
+import RecordCreditPaymentModal from '@/components/credit/RecordCreditPaymentModal';
+import { useCreditAccounts } from '@/hooks/useCredit';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL!; // Required — set NEXT_PUBLIC_API_URL in .env
 
@@ -87,11 +90,7 @@ function InvoiceItemsExpanded({ invoiceId }: { invoiceId: string }) {
     if (isLoading) {
         return (
             <div className="px-6 py-4">
-                <div className="space-y-2">
-                    {[0, 1].map((i) => (
-                        <Skeleton key={i} className="h-16 w-full rounded-lg" />
-                    ))}
-                </div>
+                <Skeleton className="h-10 w-full rounded-lg" />
             </div>
         );
     }
@@ -106,73 +105,33 @@ function InvoiceItemsExpanded({ invoiceId }: { invoiceId: string }) {
     }
 
     return (
-        <div className="px-6 py-4">
-            {/* Header */}
-            <div className="flex items-center gap-2 mb-3">
-                <Package className="w-3.5 h-3.5 text-slate-400" />
-                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                    {items.length} Product{items.length !== 1 ? 's' : ''} in this bill
-                </span>
-            </div>
-
-            {/* Item cards */}
-            <div className="space-y-2 ml-1">
-                {items.map((item) => (
-                    <div
-                        key={item.id}
-                        className="flex items-start justify-between bg-white rounded-lg border border-slate-200 px-4 py-3 hover:border-slate-300 transition-colors"
-                    >
-                        {/* Left — product info */}
-                        <div className="flex-1 min-w-0">
-                            <p className="font-medium text-slate-800 text-sm leading-tight">{item.productName}</p>
-                            <div className="flex items-center gap-3 mt-1">
-                                {item.batchNo && (
-                                    <span className="text-xs text-slate-400 font-mono">Batch: {item.batchNo}</span>
-                                )}
-                                {item.expiryDate && (
-                                    <span className="text-xs text-slate-400">
-                                        Exp: {format(new Date(item.expiryDate), 'MMM yyyy')}
-                                    </span>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Middle — qty × rate */}
-                        <div className="text-center px-6">
-                            <p className="text-sm text-slate-700">
-                                {formatQty(item.qtyStrips, item.qtyLoose, item.packSize ?? null)}
-                            </p>
-                            <p className="text-xs text-slate-400 mt-0.5">× {formatINR(item.rate)}</p>
-                        </div>
-
-                        {/* Discount — only if > 0 */}
-                        {item.discountPct > 0 && (
-                            <div className="text-center px-4">
-                                <p className="text-sm text-green-600 font-medium">-{item.discountPct}%</p>
-                                <p className="text-xs text-slate-400 mt-0.5">discount</p>
-                            </div>
-                        )}
-
-                        {/* Right — total */}
-                        <div className="text-right pl-4">
-                            <p className="font-semibold text-slate-900 text-sm">{formatINR(item.totalAmount)}</p>
-                            {item.gstRate != null && item.gstRate > 0 && (
-                                <p className="text-xs text-slate-400 mt-0.5">incl. {item.gstRate}% GST</p>
-                            )}
-                        </div>
-                    </div>
-                ))}
-            </div>
-
-            {/* Footer total — only if 2+ items */}
-            {items.length > 1 && (
-                <div className="flex justify-end mt-2 pr-1">
-                    <span className="text-xs text-slate-500">Bill Total:</span>
-                    <span className="text-xs font-semibold text-slate-800 ml-2">
-                        {formatINR(items.reduce((s, i) => s + i.totalAmount, 0))}
-                    </span>
-                </div>
-            )}
+        <div className="px-6 py-4 bg-slate-50/50">
+            <table className="w-full text-sm text-left border-collapse">
+                <thead>
+                    <tr className="border-b border-slate-200 text-xs text-slate-500 uppercase tracking-wide">
+                        <th className="pb-2 font-medium w-8">#</th>
+                        <th className="pb-2 font-medium">Product</th>
+                        <th className="pb-2 font-medium">Batch</th>
+                        <th className="pb-2 font-medium">Exp</th>
+                        <th className="pb-2 font-medium text-right">MRP</th>
+                        <th className="pb-2 font-medium text-right">Qty</th>
+                        <th className="pb-2 font-medium text-right">Amount</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100/80">
+                    {items.map((item, idx) => (
+                        <tr key={item.id} className="hover:bg-slate-50">
+                            <td className="py-2.5 text-slate-400 text-xs">{idx + 1}</td>
+                            <td className="py-2.5 font-medium text-slate-800">{item.productName}</td>
+                            <td className="py-2.5 text-slate-500 font-mono text-xs">{item.batchNo || '—'}</td>
+                            <td className="py-2.5 text-slate-500 text-xs">{item.expiryDate ? format(new Date(item.expiryDate), 'MM/yy') : '—'}</td>
+                            <td className="py-2.5 text-right text-slate-600">{formatINR(item.rate)}</td>
+                            <td className="py-2.5 text-right text-slate-700">{formatQty(item.qtyStrips, item.qtyLoose, item.packSize ?? null)}</td>
+                            <td className="py-2.5 text-right font-semibold text-slate-900">{formatINR(item.totalAmount)}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
         </div>
     );
 }
@@ -180,10 +139,12 @@ function InvoiceItemsExpanded({ invoiceId }: { invoiceId: string }) {
 // ─── Invoice History Section ───────────────────────────────────────────────────
 
 function InvoiceHistory({ customerId }: { customerId: string }) {
+    const router = useRouter();
     const { data, isLoading } = useCustomerInvoices(customerId);
     const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
     const [period, setPeriod] = useState<PeriodFilter>('this_month');
-    const [expandedId, setExpandedId] = useState<string | null>(null);
+    const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+    const [autoExpandedKey, setAutoExpandedKey] = useState<string>('');
     const [page, setPage] = useState(1);
 
     const [selectedPrintInvoice, setSelectedPrintInvoice] = useState<SaleInvoice | null>(null);
@@ -202,6 +163,121 @@ function InvoiceHistory({ customerId }: { customerId: string }) {
             console.error('Failed to load invoice for printing:', error);
         } finally {
             setIsPrintLoading(null);
+        }
+    };
+
+    const [isRepeatLoading, setIsRepeatLoading] = useState<string | null>(null);
+
+    const handleRepeatOrder = async (invoiceId: string) => {
+        try {
+            const store = useBillingStore.getState();
+            // Check if there is already an active draft for this invoice
+            const existingDraft = Object.values(store.drafts).find(d => d.sourceInvoiceId === invoiceId);
+            if (existingDraft) {
+                store.switchDraft(existingDraft.id);
+                router.push('/dashboard/billing');
+                return;
+            }
+
+            setIsRepeatLoading(invoiceId);
+            const userOutletId = useAuthStore.getState().outlet?.id || '';
+            const invoice = await salesApi.getById(invoiceId, userOutletId);
+            const { API_URL, getHeaders } = await import('@/lib/apiClient');
+            
+            // Call batch availability check
+            const batchCheckPayload = (invoice.items || []).map((item: any) => ({
+                batchId: item.batchId || item.batch,
+                qtyStrips: Number(item.qtyStrips || item.qty_strips || 0),
+                qtyLoose: Number(item.qtyLoose || item.qty_loose || 0)
+            }));
+            
+            let batchStatuses: Record<string, any> = {};
+            if (batchCheckPayload.length > 0) {
+                const checkRes = await fetch(`${API_URL}/inventory/batches/availability-check/`, {
+                    method: 'POST',
+                    headers: getHeaders(),
+                    body: JSON.stringify(batchCheckPayload)
+                });
+                if (checkRes.ok) {
+                    const checkData = await checkRes.json();
+                    checkData.forEach((res: any) => {
+                        batchStatuses[res.batchId] = res;
+                    });
+                }
+            }
+
+            const draftId = store.createDraft();
+            store.switchDraft(draftId);
+            
+            // Set invoice mode
+            store.setDraftDocumentMode(draftId, 'invoice');
+            store.setDraftValidUntil(draftId, undefined);
+            store.updateDraftHeader(draftId, { 
+                sourceInvoiceId: invoice.id,
+                sourceInvoiceNo: invoice.invoiceNo,
+                hospitalName: invoice.hospitalName || null,
+                doctor: invoice.doctorName ? { id: 'mock', name: invoice.doctorName } as any : null,
+                extraDiscountPct: 0 // Note: Re-calculate or default to 0 if unsupported
+            });
+            
+            if (invoice.customer) {
+                store.setCustomer(invoice.customer);
+                store.setCustomerLedger({
+                    id: 'mock',
+                    name: invoice.customer.name || 'Unknown',
+                    groupName: 'Sundry Debtors',
+                    currentBalance: 0,
+                    isMock: true,
+                } as any);
+            }
+            
+            if (invoice.items) {
+                invoice.items.forEach((item: any) => {
+                    const mrp         = Number(item.mrp     || item.rate || 0);
+                    const rate        = Number(item.rate    || 0);
+                    const saleRate    = Number(item.saleRate|| item.rate || 0);
+                    const discountPct = Number(item.discountPct || item.discount_pct || 0);
+                    const gstRate     = Number(item.gstRate || item.gst_rate || 0);
+                    const qtyStrips   = Number(item.qtyStrips || item.qty_strips || 0);
+                    const qtyLoose    = Number(item.qtyLoose  || item.qty_loose  || 0);
+                    const packSize    = Number(item.packSize   || item.pack_size  || 1);
+                    const taxableAmount = Number(item.taxableAmount || item.taxable_amount || 0);
+                    const gstAmount     = Number(item.gstAmount     || item.gst_amount     || 0);
+                    const totalAmount   = Number(item.totalAmount   || item.total_amount   || 0);
+                    const landingRate   = Number(item.landingRate   || item.landing_rate   || 0);
+                    const costRate      = Number(item.costRate      || item.cost_rate      || 0);
+
+                    const batchId = item.batchId || item.batch;
+                    const batchInfo = batchStatuses[batchId];
+
+                    store.addToCart(draftId, {
+                        ...item,
+                        name: item.medicineName || item.medicine_name || item.name || '',
+                        mrp, rate, saleRate, discountPct, gstRate, qtyStrips, qtyLoose, packSize,
+                        taxableAmount, gstAmount, totalAmount, landingRate, costRate,
+                        totalQty: qtyStrips + (qtyLoose / packSize),
+                        saleMode: item.saleMode || 'strip',
+                        cgst: item.cgstRate || (gstRate ? gstRate / 2 : 0),
+                        sgst: item.sgstRate || (gstRate ? gstRate / 2 : 0),
+                        batchId:      batchId,
+                        productId:    item.productId    || item.product,
+                        medicineName: item.medicineName || item.medicine_name,
+                        batchNo:      item.batchNo      || item.batch_no,
+                        expiryDate:   item.expiryDate   || item.expiry_date || '',
+                        batchAvailabilityStatus: batchInfo?.status || 'AVAILABLE',
+                        availableStock: batchInfo ? (batchInfo.availableQtyStrips * packSize + batchInfo.availableQtyLoose) : undefined
+                    } as any);
+                });
+            }
+            
+            router.push('/dashboard/billing');
+            toast({ title: 'Repeat Order', description: 'Invoice loaded into draft.' });
+        } catch (error: any) {
+            console.error('Failed to prepare invoice for repeat:', error);
+            const message = error?.detail || error?.message || 'Failed to prepare invoice for repeat';
+            toast({ title: 'Error', description: message, variant: 'destructive' });
+        } finally {
+            setIsRepeatLoading(null);
         }
     };
 
@@ -238,6 +314,25 @@ function InvoiceHistory({ customerId }: { customerId: string }) {
 
     const resetPage = () => setPage(1);
 
+    // Auto-expand ALL visible invoices on load or filter change
+    useEffect(() => {
+        const currentKey = `${statusFilter}-${period}-${page}-${paginated.length > 0 ? paginated[0].id : 'empty'}`;
+        if (autoExpandedKey !== currentKey) {
+            // Expand all rows in current paginated view
+            setExpandedIds(new Set(paginated.map(inv => inv.id)));
+            setAutoExpandedKey(currentKey);
+        }
+    }, [paginated, statusFilter, period, page, autoExpandedKey]);
+
+    const toggleRow = (id: string) => {
+        setExpandedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
     // Summary cards skeleton
     if (isLoading) {
         return (
@@ -251,33 +346,9 @@ function InvoiceHistory({ customerId }: { customerId: string }) {
     }
 
     return (
-        <div className="space-y-6 mt-6">
-            {/* Summary cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <StatCard
-                    label="Total Bills"
-                    value={String(totalBills)}
-                    sub="All time"
-                    color="text-blue-600"
-                />
-                <StatCard
-                    label="Total Billed"
-                    value={formatINR(totalBilled)}
-                    sub="All invoices"
-                    color="text-emerald-600"
-                />
-                <StatCard
-                    label="Outstanding"
-                    value={totalOutstanding > 0 ? formatINR(totalOutstanding) : '₹0'}
-                    sub={totalOutstanding > 0 ? 'Unpaid amount' : 'All cleared'}
-                    color={totalOutstanding > 0 ? 'text-red-600' : 'text-green-600'}
-                />
-            </div>
-
+        <div className="space-y-4">
             {/* Invoice History Table */}
             <div>
-                <h2 className="text-base font-semibold text-slate-800 mb-4">Invoice History</h2>
-
                 {/* Filter bar */}
                 <div className="flex flex-wrap gap-2 items-center justify-between mb-4">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -322,23 +393,23 @@ function InvoiceHistory({ customerId }: { customerId: string }) {
                 </div>
 
                 {/* Table */}
-                <div className="rounded-xl border border-border overflow-hidden">
+                <div className="rounded-xl border border-slate-300 shadow-sm overflow-hidden bg-white">
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
-                            <thead className="bg-muted/50 border-b border-border sticky top-0 z-10">
+                            <thead className="bg-slate-100 border-b-2 border-slate-200 sticky top-0 z-10 text-slate-700">
                                 <tr>
                                     <th className="w-10" />
-                                    <th className="text-left px-4 py-3 font-medium text-muted-foreground whitespace-nowrap">Date</th>
-                                    <th className="text-left px-4 py-3 font-medium text-muted-foreground whitespace-nowrap">Invoice No</th>
-                                    <th className="text-right px-4 py-3 font-medium text-muted-foreground whitespace-nowrap">Items</th>
-                                    <th className="text-right px-4 py-3 font-medium text-muted-foreground whitespace-nowrap">Total</th>
-                                    <th className="text-right px-4 py-3 font-medium text-muted-foreground whitespace-nowrap">Paid</th>
-                                    <th className="text-right px-4 py-3 font-medium text-muted-foreground whitespace-nowrap">Due</th>
-                                    <th className="text-center px-4 py-3 font-medium text-muted-foreground whitespace-nowrap">Status</th>
-                                    <th className="text-right px-4 py-3 font-medium text-muted-foreground whitespace-nowrap">Actions</th>
+                                    <th className="text-left px-4 py-3.5 font-semibold whitespace-nowrap">Date</th>
+                                    <th className="text-left px-4 py-3.5 font-semibold whitespace-nowrap">Invoice No</th>
+                                    <th className="text-right px-4 py-3.5 font-semibold whitespace-nowrap">Items</th>
+                                    <th className="text-right px-4 py-3.5 font-semibold whitespace-nowrap">Total</th>
+                                    <th className="text-right px-4 py-3.5 font-semibold whitespace-nowrap">Paid</th>
+                                    <th className="text-right px-4 py-3.5 font-semibold whitespace-nowrap">Due</th>
+                                    <th className="text-center px-4 py-3.5 font-semibold whitespace-nowrap">Status</th>
+                                    <th className="text-right px-4 py-3.5 font-semibold whitespace-nowrap">Actions</th>
                                 </tr>
                             </thead>
-                            <tbody>
+                            <tbody className="divide-y divide-slate-200">
                                 {paginated.length === 0 ? (
                                     <tr>
                                         <td colSpan={9}>
@@ -371,75 +442,95 @@ function InvoiceHistory({ customerId }: { customerId: string }) {
                                     paginated.map((inv) => {
                                         const invStatus = getInvoiceStatus(inv);
                                         const cfg = STATUS_CONFIG[invStatus];
-                                        const isExpanded = expandedId === inv.id;
+                                        const isExpanded = expandedIds.has(inv.id);
 
                                         return (
                                             <Fragment key={inv.id}>
                                                 <tr
                                                     className={cn(
-                                                        'cursor-pointer transition-colors hover:bg-slate-50/80 border-b border-slate-100',
-                                                        isExpanded && 'bg-blue-50/30 border-l-2 border-l-blue-400'
+                                                        'cursor-pointer transition-colors hover:bg-slate-50',
+                                                        isExpanded ? 'bg-slate-50' : 'bg-white'
                                                     )}
-                                                    onClick={() => setExpandedId(isExpanded ? null : inv.id)}
+                                                    onClick={() => toggleRow(inv.id)}
                                                 >
-                                                    <td className="pl-3 pr-0 py-3 text-muted-foreground">
+                                                    <td className="pl-3 pr-0 py-3.5 text-slate-400">
                                                         <ChevronDown className={cn(
                                                             'w-4 h-4 transition-transform duration-200',
                                                             !isExpanded && '-rotate-90'
                                                         )} />
                                                     </td>
-                                                    <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+                                                    <td className="px-4 py-3.5 text-slate-600 font-medium whitespace-nowrap">
                                                         {format(new Date(inv.invoiceDate), 'dd MMM yyyy')}
                                                     </td>
-                                                    <td className="px-4 py-3 font-mono text-xs text-foreground whitespace-nowrap">
+                                                    <td className="px-4 py-3.5 font-mono text-xs text-slate-900 font-semibold whitespace-nowrap">
                                                         {inv.invoiceNo}
                                                     </td>
-                                                    <td className="px-4 py-3 text-right tabular-nums text-muted-foreground whitespace-nowrap">
+                                                    <td className="px-4 py-3.5 text-right tabular-nums text-slate-600 whitespace-nowrap">
                                                         {inv.itemsCount} item{inv.itemsCount !== 1 ? 's' : ''}
                                                     </td>
-                                                    <td className="px-4 py-3 text-right tabular-nums font-medium text-foreground whitespace-nowrap">
+                                                    <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-slate-900 whitespace-nowrap">
                                                         {formatINR(inv.grandTotal)}
                                                     </td>
-                                                    <td className="px-4 py-3 text-right tabular-nums text-muted-foreground whitespace-nowrap">
+                                                    <td className="px-4 py-3.5 text-right tabular-nums text-emerald-600 font-medium whitespace-nowrap">
                                                         {formatINR(inv.amountPaid)}
                                                     </td>
                                                     <td className={cn(
-                                                        'px-4 py-3 text-right tabular-nums whitespace-nowrap',
-                                                        inv.amountDue > 0 ? 'text-red-600 font-medium' : 'text-muted-foreground'
+                                                        'px-4 py-3.5 text-right tabular-nums whitespace-nowrap',
+                                                        inv.amountDue > 0 ? 'text-red-600 font-bold' : 'text-slate-400'
                                                     )}>
                                                         {inv.amountDue > 0 ? formatINR(inv.amountDue) : '—'}
                                                     </td>
-                                                    <td className="px-4 py-3 text-center">
+                                                    <td className="px-4 py-3.5 text-center">
                                                         <span className={cn(
-                                                            'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border',
+                                                            'inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold border',
                                                             cfg.classes
                                                         )}>
                                                             {cfg.label}
                                                         </span>
                                                     </td>
-                                                    <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            className="text-slate-500 hover:text-blue-600 gap-1.5 h-8 px-2"
-                                                            disabled={isPrintLoading === inv.id}
-                                                            onClick={async () => {
-                                                                await handlePrintInvoiceClick(inv.id);
-                                                            }}
-                                                        >
-                                                            {isPrintLoading === inv.id ? (
-                                                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                                            ) : (
-                                                                <FileText className="w-3.5 h-3.5" />
-                                                            )}
-                                                            PDF
-                                                        </Button>
+                                                    <td className="px-4 py-3.5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                                        <div className="flex items-center justify-end gap-1">
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                className="text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 gap-1.5 h-8 px-2"
+                                                                disabled={isRepeatLoading === inv.id || isPrintLoading === inv.id}
+                                                                onClick={async () => {
+                                                                    await handleRepeatOrder(inv.id);
+                                                                }}
+                                                            >
+                                                                {isRepeatLoading === inv.id ? (
+                                                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                                ) : (
+                                                                    <Repeat className="w-3.5 h-3.5" />
+                                                                )}
+                                                                Order Again
+                                                            </Button>
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                className="text-slate-600 hover:text-blue-700 hover:bg-blue-50 border-slate-200 gap-1.5 h-8 px-2"
+                                                                disabled={isPrintLoading === inv.id || isRepeatLoading === inv.id}
+                                                                onClick={async () => {
+                                                                    await handlePrintInvoiceClick(inv.id);
+                                                                }}
+                                                            >
+                                                                {isPrintLoading === inv.id ? (
+                                                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                                ) : (
+                                                                    <FileText className="w-3.5 h-3.5" />
+                                                                )}
+                                                                PDF
+                                                            </Button>
+                                                        </div>
                                                     </td>
                                                 </tr>
                                                 {isExpanded && (
-                                                    <tr>
-                                                        <td colSpan={9} className="px-0 py-0 bg-slate-50/60 border-b border-slate-200">
-                                                            <InvoiceItemsExpanded invoiceId={inv.id} />
+                                                    <tr className="bg-slate-50 border-l-4 border-l-primary/60">
+                                                        <td colSpan={9} className="px-0 py-0 border-t border-slate-200 shadow-inner">
+                                                            <div className="pl-8 pr-4 py-4">
+                                                                <InvoiceItemsExpanded invoiceId={inv.id} />
+                                                            </div>
                                                         </td>
                                                     </tr>
                                                 )}
@@ -518,17 +609,27 @@ export default function CustomerDetailPage() {
 
     const { id } = useParams<{ id: string }>();
     const { data: customer, isLoading, isError } = useCustomerById(id);
+    const { data: creditAccountsData } = useCreditAccounts();
     const setCustomer = useBillingStore((s) => s.setCustomer);
     const [editOpen, setEditOpen] = useState(false);
+    const [paymentOpen, setPaymentOpen] = useState(false);
+
+    const creditAccounts = Array.isArray(creditAccountsData) ? creditAccountsData : (creditAccountsData as any)?.data ?? [];
+    const creditAccount = creditAccounts.find((a: any) => a.customer?.id === id);
 
     if (isLoading) {
         return (
             <div className="space-y-6">
                 <Skeleton className="h-10 w-48" />
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
+                <div className="flex gap-6">
+                    <div className="w-1/3 space-y-4">
+                        <Skeleton className="h-48 rounded-xl" />
+                        <Skeleton className="h-48 rounded-xl" />
+                    </div>
+                    <div className="w-2/3">
+                        <Skeleton className="h-96 rounded-xl" />
+                    </div>
                 </div>
-                <Skeleton className="h-64 rounded-xl" />
             </div>
         );
     }
@@ -550,137 +651,130 @@ export default function CustomerDetailPage() {
 
     return (
         <div className="space-y-6">
-            {/* Back + header */}
-            <div className="flex items-center gap-4">
+            {/* Back + compact header */}
+            <div className="flex items-center gap-4 bg-white p-4 rounded-xl border">
                 <Button variant="ghost" size="icon" onClick={() => router.back()}>
                     <ArrowLeft className="w-4 h-4" />
                 </Button>
-                <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                        <h1 className="text-2xl font-bold text-slate-900">{customer.name}</h1>
-                        {customer.isChronic && (
-                            <Badge className="bg-purple-100 text-purple-700 border-purple-200 gap-1">
-                                <Heart className="w-3 h-3 fill-current" /> Chronic
-                            </Badge>
-                        )}
+                <div className="flex-1 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
+                        {customer.name.slice(0, 2).toUpperCase()}
                     </div>
-                    <p className="text-sm text-muted-foreground mt-0.5">Customer profile</p>
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <h1 className="text-lg font-bold text-slate-900 leading-none">{customer.name}</h1>
+                            {customer.isChronic && (
+                                <Badge className="bg-purple-100 text-purple-700 border-purple-200 gap-1 h-5 px-1.5 text-[10px]">
+                                    <Heart className="w-2.5 h-2.5 fill-current" /> Chronic
+                                </Badge>
+                            )}
+                            {customer.outstanding > 0 && (
+                                <Badge className="bg-red-100 text-red-700 border-red-200 gap-1 h-5 px-1.5 text-[10px]">
+                                    Due: {formatCurrency(customer.outstanding)}
+                                </Badge>
+                            )}
+                        </div>
+                        <div className="text-sm text-muted-foreground mt-1 flex items-center gap-2">
+                            <Phone className="w-3.5 h-3.5" /> {customer.phone}
+                        </div>
+                    </div>
                 </div>
                 <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => setEditOpen(true)}>
-                        <Pencil className="w-4 h-4 mr-2" /> Edit
+                    <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+                        <Pencil className="w-3.5 h-3.5 mr-2" /> Edit
                     </Button>
-                    <Button onClick={() => { setCustomer(customer as any); router.push('/billing'); }}>
-                        <Receipt className="w-4 h-4 mr-2" /> Quick Bill
+                    {customer.outstanding > 0 && creditAccount && (
+                        <Button variant="outline" size="sm" className="text-amber-700 border-amber-200 hover:bg-amber-50" onClick={() => setPaymentOpen(true)}>
+                            <IndianRupee className="w-3.5 h-3.5 mr-2" /> Collect Payment
+                        </Button>
+                    )}
+                    <Button size="sm" onClick={() => { setCustomer(customer as any); router.push('/billing'); }}>
+                        <Receipt className="w-3.5 h-3.5 mr-2" /> Quick Bill
                     </Button>
                 </div>
             </div>
 
-            {/* Stat cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard
-                    label="Total Purchases"
-                    value={formatCurrency(customer.totalPurchases)}
-                    sub="Lifetime spend"
-                    color="text-blue-600"
-                />
-                <StatCard
-                    label="Outstanding"
-                    value={customer.outstanding > 0 ? formatCurrency(customer.outstanding) : '₹0'}
-                    sub={customer.outstanding > 0 ? 'Unpaid balance' : 'All clear'}
-                    color={customer.outstanding > 0 ? 'text-red-600' : 'text-green-600'}
-                />
-                <StatCard
-                    label="Credit Limit"
-                    value={customer.creditLimit > 0 ? formatCurrency(customer.creditLimit) : 'No limit'}
-                    sub={customer.creditLimit > 0 ? `${creditUsedPct.toFixed(0)}% used` : undefined}
-                    color="text-amber-600"
-                />
-                <StatCard
-                    label="Fixed Discount"
-                    value={`${customer.fixedDiscount}%`}
-                    sub="On all purchases"
-                    color="text-emerald-600"
-                />
-            </div>
-
-            {/* Credit bar */}
-            {customer.creditLimit > 0 && customer.outstanding > 0 && (
-                <div className="bg-white rounded-xl border p-4">
-                    <div className="flex justify-between text-xs text-muted-foreground mb-2">
-                        <span>Credit used: {formatCurrency(customer.outstanding)}</span>
-                        <span>Limit: {formatCurrency(customer.creditLimit)}</span>
-                    </div>
-                    <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                        <div
-                            className={cn('h-full rounded-full transition-all',
-                                creditUsedPct > 80 ? 'bg-red-500'
-                                : creditUsedPct > 50 ? 'bg-amber-500'
-                                : 'bg-green-500'
+            {/* Two-column layout */}
+            <div className="flex flex-col lg:flex-row gap-6 items-start">
+                {/* Left Column (30%) - Secondary info */}
+                <div className="w-full lg:w-1/3 space-y-4 shrink-0">
+                    <Card className="shadow-sm">
+                        <CardContent className="p-4 space-y-3">
+                            <div className="flex items-center justify-between">
+                                <span className="text-sm text-muted-foreground">Lifetime Spend</span>
+                                <span className="font-semibold">{formatCurrency(customer.totalPurchases)}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <span className="text-sm text-muted-foreground">Outstanding</span>
+                                <span className={cn("font-semibold", customer.outstanding > 0 ? "text-red-600" : "text-green-600")}>
+                                    {formatCurrency(customer.outstanding)}
+                                </span>
+                            </div>
+                            {customer.creditLimit > 0 && (
+                                <div className="space-y-1.5 mt-2 pt-2 border-t">
+                                    <div className="flex justify-between text-xs text-muted-foreground">
+                                        <span>Credit Limit: {formatCurrency(customer.creditLimit)}</span>
+                                        <span>{creditUsedPct.toFixed(0)}% used</span>
+                                    </div>
+                                    <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                                        <div
+                                            className={cn('h-full rounded-full transition-all',
+                                                creditUsedPct > 80 ? 'bg-red-500' : creditUsedPct > 50 ? 'bg-amber-500' : 'bg-green-500'
+                                            )}
+                                            style={{ width: `${creditUsedPct}%` }}
+                                        />
+                                    </div>
+                                </div>
                             )}
-                            style={{ width: `${creditUsedPct}%` }}
-                        />
-                    </div>
-                </div>
-            )}
+                        </CardContent>
+                    </Card>
 
-            {/* Profile details */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card>
-                    <CardContent className="p-5">
-                        <div className="flex items-center gap-2 mb-4">
-                            <Phone className="w-4 h-4 text-muted-foreground" />
-                            <span className="text-sm font-semibold text-slate-700">Contact</span>
-                        </div>
-                        <DetailRow label="Phone" value={customer.phone} />
-                        <DetailRow label="Address" value={customer.address} />
-                        <DetailRow
-                            label="Date of Birth"
-                            value={customer.dob ? format(new Date(customer.dob), 'dd MMM yyyy') : null}
-                        />
-                    </CardContent>
-                </Card>
+                    <Card className="shadow-sm">
+                        <CardContent className="p-4 space-y-2">
+                            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Contact Info</div>
+                            <div className="text-sm"><span className="text-muted-foreground inline-block w-20">Address:</span> {customer.address || '—'}</div>
+                            <div className="text-sm"><span className="text-muted-foreground inline-block w-20">DOB:</span> {customer.dob ? format(new Date(customer.dob), 'dd MMM yyyy') : '—'}</div>
+                        </CardContent>
+                    </Card>
 
-                <Card>
-                    <CardContent className="p-5">
-                        <div className="flex items-center gap-2 mb-4">
-                            <Building2 className="w-4 h-4 text-muted-foreground" />
-                            <span className="text-sm font-semibold text-slate-700">Business & Credit</span>
-                        </div>
-                        <DetailRow label="GSTIN" value={customer.gstin
-                            ? <span className="font-mono text-xs">{customer.gstin}</span>
-                            : null}
-                        />
-                        <DetailRow label="Credit Limit" value={customer.creditLimit > 0 ? formatCurrency(customer.creditLimit) : 'None'} />
-                        <DetailRow label="Fixed Discount" value={`${customer.fixedDiscount}%`} />
-                        <DetailRow
-                            label="Status"
-                            value={
-                                <span className={cn(
-                                    'text-xs font-medium px-2 py-0.5 rounded-full',
-                                    customer.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                                )}>
+                    <Card className="shadow-sm">
+                        <CardContent className="p-4 space-y-2">
+                            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Business</div>
+                            <div className="text-sm"><span className="text-muted-foreground inline-block w-20">GSTIN:</span> {customer.gstin ? <span className="font-mono">{customer.gstin}</span> : '—'}</div>
+                            <div className="text-sm"><span className="text-muted-foreground inline-block w-20">Discount:</span> {customer.fixedDiscount}%</div>
+                            <div className="text-sm">
+                                <span className="text-muted-foreground inline-block w-20">Status:</span> 
+                                <span className={cn('text-xs font-medium px-1.5 py-0.5 rounded-sm', customer.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700')}>
                                     {customer.isActive ? 'Active' : 'Inactive'}
                                 </span>
-                            }
-                        />
-                        <DetailRow
-                            label="Registered on"
-                            value={format(new Date(customer.createdAt), 'dd MMM yyyy')}
-                        />
-                    </CardContent>
-                </Card>
+                            </div>
+                            <div className="text-sm"><span className="text-muted-foreground inline-block w-20">Registered:</span> {format(new Date(customer.createdAt), 'dd MMM yyyy')}</div>
+                        </CardContent>
+                    </Card>
+                </div>
+
+                {/* Right Column (70%) - Main content */}
+                <div className="w-full lg:w-2/3">
+                    {/* Invoice History is now the primary content area */}
+                    <div className="bg-white rounded-xl border p-4 shadow-sm">
+                        <InvoiceHistory customerId={id} />
+                    </div>
+                </div>
             </div>
 
-            {/* Invoice History */}
-            <InvoiceHistory customerId={id} />
-
-            {/* Edit form sheet */}
+            {/* Modals */}
             <CustomerForm
                 open={editOpen}
                 onClose={() => setEditOpen(false)}
                 customer={customer as Customer}
             />
+            {creditAccount && (
+                <RecordCreditPaymentModal
+                    isOpen={paymentOpen}
+                    accountId={creditAccount.id}
+                    onClose={() => setPaymentOpen(false)}
+                />
+            )}
         </div>
     );
 }

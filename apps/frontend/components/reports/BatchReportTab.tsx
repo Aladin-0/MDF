@@ -9,6 +9,7 @@ import { format } from 'date-fns';
 import { DateRangeFilter } from '@/types';
 import { useBatchReport } from '@/hooks/useReports';
 import { ReportSummaryCards } from './ReportSummaryCards';
+import { BatchLedgerDrawer } from '@/components/inventory/BatchLedgerDrawer';
 import { formatCurrency } from '@/lib/gst';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -30,6 +31,7 @@ interface BatchReportTabProps {
 
 export function BatchReportTab({ dateRange, filters, onFiltersChange }: BatchReportTabProps) {
     const [sorting, setSorting] = useState<SortingState>([]);
+    const [selectedBatch, setSelectedBatch] = useState<any>(null);
     
     // Fetch data using hook
     const queryFilters = {
@@ -63,6 +65,8 @@ export function BatchReportTab({ dateRange, filters, onFiltersChange }: BatchRep
                         "px-2 py-1 text-xs font-bold rounded-md",
                         status === 'EXPIRED' ? 'bg-red-100 text-red-700' :
                         status === 'NEAR_EXPIRY' ? 'bg-amber-100 text-amber-700' :
+                        status === 'BLOCKED' ? 'bg-slate-200 text-slate-700' :
+                        status === 'ZERO_STOCK' ? 'bg-slate-100 text-slate-500' :
                         'bg-green-100 text-green-700'
                     )}>
                         {status.replace('_', ' ')}
@@ -70,6 +74,11 @@ export function BatchReportTab({ dateRange, filters, onFiltersChange }: BatchRep
                 )
             }
         }),
+        helper.accessor('supplier_name', { 
+            header: 'Supplier',
+            cell: info => <span className="truncate max-w-[150px] inline-block" title={info.getValue()}>{info.getValue() || '-'}</span> 
+        }),
+        helper.accessor('aging_bucket', { header: 'Aging Bucket' }),
         helper.accessor('mrp', {
             header: 'MRP',
             cell: info => formatCurrency(info.getValue()),
@@ -101,9 +110,21 @@ export function BatchReportTab({ dateRange, filters, onFiltersChange }: BatchRep
                 },
             }),
         ] : []),
+        helper.accessor('sellable_qty_display', {
+            header: 'Sellable',
+            cell: info => {
+                const isManual = info.row.original.is_manual_adjusted;
+                return (
+                    <div className="flex flex-col">
+                        <span className="font-bold text-green-700">{info.getValue()?.text || '0'}</span>
+                        {isManual && <span className="text-[10px] text-amber-600">Manual Adj</span>}
+                    </div>
+                );
+            }
+        }),
         helper.accessor('closing_qty_display', {
             header: 'Closing',
-            cell: info => <span className="font-bold">{info.getValue()?.text || '0'}</span>,
+            cell: info => <span className="font-semibold text-slate-600">{info.getValue()?.text || '0'}</span>,
         }),
     ];
 
@@ -121,6 +142,8 @@ export function BatchReportTab({ dateRange, filters, onFiltersChange }: BatchRep
         { label: 'Active', value: data?.summary?.total_active_batches || 0 },
         { label: 'Near Expiry', value: data?.summary?.total_near_expiry_batches || 0 },
         { label: 'Expired', value: data?.summary?.total_expired_batches || 0 },
+        { label: 'Blocked', value: data?.summary?.total_blocked_batches || 0 },
+        { label: 'Zero Stock', value: data?.summary?.total_zero_stock_batches || 0 },
     ];
 
     return (
@@ -186,7 +209,11 @@ export function BatchReportTab({ dateRange, filters, onFiltersChange }: BatchRep
                         </thead>
                         <tbody className="divide-y text-slate-700">
                             {table.getRowModel().rows.map(row => (
-                                <tr key={row.id} className="hover:bg-slate-50/50">
+                                <tr 
+                                    key={row.id} 
+                                    className="hover:bg-slate-50/50 cursor-pointer transition-colors"
+                                    onClick={() => setSelectedBatch(row.original)}
+                                >
                                     {row.getVisibleCells().map(cell => (
                                         <td key={cell.id} className="px-4 py-3 whitespace-nowrap">
                                             {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -205,6 +232,16 @@ export function BatchReportTab({ dateRange, filters, onFiltersChange }: BatchRep
                     </table>
                 )}
             </div>
+
+            {selectedBatch && (
+                <BatchLedgerDrawer
+                    isOpen={!!selectedBatch}
+                    onClose={() => setSelectedBatch(null)}
+                    batchId={selectedBatch.batch_id}
+                    batchNo={selectedBatch.batch_no}
+                    medicineName={selectedBatch.medicine_name}
+                />
+            )}
         </div>
     );
 }

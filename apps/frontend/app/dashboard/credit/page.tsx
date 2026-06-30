@@ -1,14 +1,15 @@
 'use client';
 
 import { useState, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { Download, UserPlus, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import AgingSummaryCards from '@/components/credit/AgingSummaryCards';
 import CreditAccountsList from '@/components/credit/CreditAccountsList';
 import CustomerCreditDetail from '@/components/credit/CustomerCreditDetail';
-import RecordCreditPaymentModal from '@/components/credit/RecordCreditPaymentModal';
 import EditCreditLimitModal from '@/components/credit/EditCreditLimitModal';
 import BulkReminderModal from '@/components/credit/BulkReminderModal';
+import RecordCreditPaymentModal from '@/components/credit/RecordCreditPaymentModal';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useCreditAccounts, useCreditAgingSummary } from '@/hooks/useCredit';
 import { useAuthStore } from '@/store/authStore';
@@ -19,10 +20,11 @@ import { CreditStatus, CreditAccount } from '@/types';
 import { cn } from '@/lib/utils';
 
 export default function CreditPage() {
+    const router = useRouter();
     const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
-    const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [showLimitModal, setShowLimitModal] = useState(false);
     const [showBulkReminder, setShowBulkReminder] = useState(false);
+    const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [activeFilter, setActiveFilter] = useState<CreditStatus | 'all'>('all');
     const [searchQuery, setSearchQuery] = useState('');
     const searchInputRef = useRef<HTMLInputElement>(null);
@@ -156,8 +158,7 @@ export default function CreditPage() {
                         selectedAccountId={selectedAccountId}
                         onSelect={setSelectedAccountId}
                         onPayClick={(id) => {
-                            setSelectedAccountId(id);
-                            setShowPaymentModal(true);
+                            router.push('/dashboard/accounts/voucher-entry');
                         }}
                         onFilterChange={setActiveFilter}
                         onSearchChange={setSearchQuery}
@@ -171,7 +172,7 @@ export default function CreditPage() {
                         <CustomerCreditDetail
                             accountId={selectedAccountId}
                             onClose={() => setSelectedAccountId(null)}
-                            onPayClick={() => setShowPaymentModal(true)}
+                            onPayClick={() => router.push('/dashboard/accounts/voucher-entry')}
                             onEditLimit={() => setShowLimitModal(true)}
                             onWhatsAppClick={() => handleWhatsApp()}
                         />
@@ -180,12 +181,6 @@ export default function CreditPage() {
             </div>
 
             {/* Modals */}
-            <RecordCreditPaymentModal
-                isOpen={showPaymentModal}
-                accountId={selectedAccountId}
-                onClose={() => setShowPaymentModal(false)}
-            />
-
             <EditCreditLimitModal
                 isOpen={showLimitModal}
                 accountId={selectedAccountId}
@@ -196,6 +191,14 @@ export default function CreditPage() {
                 isOpen={showBulkReminder}
                 onClose={() => setShowBulkReminder(false)}
             />
+
+            {selectedAccountId && (
+                <RecordCreditPaymentModal
+                    isOpen={showPaymentModal}
+                    accountId={selectedAccountId}
+                    onClose={() => setShowPaymentModal(false)}
+                />
+            )}
         </div>
     );
 }

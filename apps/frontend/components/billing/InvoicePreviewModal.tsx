@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useRef } from 'react';
-import { Printer, Download, FileText, Edit, History } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Printer, Download, FileText, Edit, History, Undo2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -22,6 +23,7 @@ interface InvoicePreviewModalProps {
 export function InvoicePreviewModal({ isOpen, onClose, invoice, onNewBill, onEdit, onViewHistory }: InvoicePreviewModalProps) {
     const { printerType } = useSettingsStore();
     const printRef = useRef<HTMLDivElement>(null);
+    const router = useRouter();
 
     const handlePrint = () => {
         if (typeof window !== 'undefined') {
@@ -79,6 +81,11 @@ export function InvoicePreviewModal({ isOpen, onClose, invoice, onNewBill, onEdi
                         {onViewHistory && (
                             <Button variant="outline" size="sm" onClick={() => onViewHistory(invoice)}>
                                 <History className="w-4 h-4 mr-2" /> History
+                            </Button>
+                        )}
+                        {!isQuotation && (
+                            <Button variant="outline" size="sm" onClick={() => { onClose(); router.push(`/dashboard/accounts/sale-returns/new?invoiceId=${invoice.id}`); }}>
+                                <Undo2 className="w-4 h-4 mr-2" /> Return
                             </Button>
                         )}
                         {onEdit && (

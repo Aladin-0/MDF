@@ -61,11 +61,22 @@ class BatchWiseReportService:
             # Generally, current stock only shows >0 unless specified otherwise
             qs = qs.filter(current_fractional_qty__gt=0)
             
-        # Supplier annotation
+        # Supplier annotation & Invoice trace
         supplier_sq = PurchaseItem.objects.filter(
             batch=OuterRef('pk')
-        ).values('invoice__distributor__name')[:1]
-        qs = qs.annotate(supplier_name_annotated=Subquery(supplier_sq))
+        ).order_by('created_at')
+        qs = qs.annotate(
+            supplier_name_annotated=Subquery(supplier_sq.values('invoice__distributor__name')[:1]),
+            purchase_invoice_no_annotated=Subquery(supplier_sq.values('invoice__invoice_no')[:1]),
+            purchase_date_annotated=Subquery(supplier_sq.values('invoice__invoice_date')[:1])
+        )
+        
+        # Last sale date
+        last_sale_sq = StockLedger.objects.filter(
+            batch=OuterRef('pk'),
+            txn_type='SALE_OUT'
+        ).order_by('-txn_date')
+        qs = qs.annotate(last_sale_date_annotated=Subquery(last_sale_sq.values('txn_date')[:1]))
 
         # Let's annotate movements if it's movement report
         if report_type == 'movement':
@@ -142,13 +153,28 @@ class BatchWiseReportService:
         total_near_expiry_batches = 0
         total_expired_batches = 0
         total_zero_stock_batches = 0
+        total_blocked_batches = 0
+        total_manual_adjusted_batches = 0
         total_closing_qty_raw = Decimal('0')
+        total_sellable_qty_raw = Decimal('0')
         total_stock_value = Decimal('0')
         
         for b in batches:
             days_to_expiry = (b.expiry_date - today).days if b.expiry_date else None
             
-            if days_to_expiry is not None and days_to_expiry < 0:
+            is_manual_adjusted = False
+            if hasattr(b, 'adjustment_in_qty_raw') and hasattr(b, 'adjustment_out_qty_raw'):
+                if b.adjustment_in_qty_raw > 0 or b.adjustment_out_qty_raw > 0:
+                    is_manual_adjusted = True
+                    total_manual_adjusted_batches += 1
+            
+            if not getattr(b, 'is_active', True):
+                expiry_status = 'BLOCKED'
+                total_blocked_batches += 1
+            elif b.closing_qty_raw <= 0:
+                expiry_status = 'ZERO_STOCK'
+                total_zero_stock_batches += 1
+            elif days_to_expiry is not None and days_to_expiry < 0:
                 expiry_status = 'EXPIRED'
                 total_expired_batches += 1
             elif days_to_expiry is not None and days_to_expiry <= 90:
@@ -158,10 +184,21 @@ class BatchWiseReportService:
                 expiry_status = 'ACTIVE'
                 total_active_batches += 1
                 
-            if b.closing_qty_raw <= 0:
-                total_zero_stock_batches += 1
-                
+            sellable_qty_raw = b.closing_qty_raw if expiry_status not in ['EXPIRED', 'BLOCKED'] else Decimal('0')
+            total_sellable_qty_raw += sellable_qty_raw
             total_closing_qty_raw += Decimal(str(b.closing_qty_raw))
+            
+            # Aging
+            purchase_dt = getattr(b, 'purchase_date_annotated', None) or b.created_at.date()
+            days_since_purchase = (today - purchase_dt).days if purchase_dt else 0
+            if days_since_purchase <= 30:
+                aging_bucket = '0-30 days'
+            elif days_since_purchase <= 90:
+                aging_bucket = '31-90 days'
+            elif days_since_purchase <= 180:
+                aging_bucket = '91-180 days'
+            else:
+                aging_bucket = '180+ days'
             
             stock_value = float(b.closing_qty_raw) * float(b.purchase_rate)
             total_stock_value += Decimal(str(stock_value))
@@ -204,9 +241,14 @@ class BatchWiseReportService:
                 'batch_no': b.batch_no,
                 'manufacturer_name': b.product.manufacturer if b.product else None,
                 'supplier_name': getattr(b, 'supplier_name_annotated', None) or '',
+                'purchase_invoice_no': getattr(b, 'purchase_invoice_no_annotated', None) or '',
+                'purchase_date': getattr(b, 'purchase_date_annotated', None) or (b.created_at.date().isoformat() if b.created_at else None),
+                'last_sale_date': getattr(b, 'last_sale_date_annotated', None),
                 'mfg_date': b.mfg_date.isoformat() if b.mfg_date else None,
                 'expiry_date': b.expiry_date.isoformat() if b.expiry_date else None,
                 'days_to_expiry': days_to_expiry,
+                'days_since_purchase': days_since_purchase,
+                'aging_bucket': aging_bucket,
                 'expiry_status': expiry_status,
                 'mrp': float(b.mrp),
                 'purchase_rate': float(b.purchase_rate),
@@ -235,6 +277,10 @@ class BatchWiseReportService:
                 'adjustment_in_qty_display': quantity_to_pack_display(b.adjustment_in_qty_raw, ps),
                 'adjustment_out_qty_display': quantity_to_pack_display(b.adjustment_out_qty_raw, ps),
                 'closing_qty_display': quantity_to_pack_display(b.closing_qty_raw, ps),
+                
+                'sellable_qty_raw': float(sellable_qty_raw),
+                'sellable_qty_display': quantity_to_pack_display(sellable_qty_raw, ps),
+                'is_manual_adjusted': is_manual_adjusted,
             })
             
         return {
@@ -245,8 +291,11 @@ class BatchWiseReportService:
                 'total_active_batches': total_active_batches,
                 'total_near_expiry_batches': total_near_expiry_batches,
                 'total_expired_batches': total_expired_batches,
+                'total_blocked_batches': total_blocked_batches,
                 'total_zero_stock_batches': total_zero_stock_batches,
+                'total_manual_adjusted_batches': total_manual_adjusted_batches,
                 'total_closing_qty_raw': float(total_closing_qty_raw),
+                'total_sellable_qty_raw': float(total_sellable_qty_raw),
                 'total_stock_value': float(total_stock_value),
                 'report_generated_at': timezone.now().isoformat(),
             }

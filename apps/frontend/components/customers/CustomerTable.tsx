@@ -1,8 +1,9 @@
 'use client';
 
-import { Heart, Eye, Receipt, IndianRupee, Pencil } from 'lucide-react';
+import { Heart, Eye, Receipt, IndianRupee, Pencil, MoreHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useCustomerList } from '@/hooks/useCustomers';
 import { useBillingStore } from '@/store/billingStore';
 import { useRouter } from 'next/navigation';
@@ -37,12 +38,11 @@ export default function CustomerTable({ filters, onEdit }: CustomerTableProps) {
                 <thead>
                     <tr className="border-b bg-slate-50">
                         <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase">Customer</th>
-                        <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase hidden md:table-cell">Address</th>
-                        <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground uppercase">Purchases</th>
+                        <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground uppercase hidden lg:table-cell">Total Bills</th>
                         <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground uppercase">Outstanding</th>
                         <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground uppercase hidden lg:table-cell">Credit Limit</th>
-                        <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground uppercase hidden lg:table-cell">Last Visit</th>
-                        <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground uppercase">Actions</th>
+                        <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground uppercase hidden lg:table-cell">Registered</th>
+                        <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground uppercase w-12"></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -64,15 +64,20 @@ export default function CustomerTable({ filters, onEdit }: CustomerTableProps) {
                                         <div className="flex items-center gap-1.5">
                                             <span className="font-medium text-slate-900">{c.name}</span>
                                             {c.isChronic && <Heart className="w-3 h-3 text-purple-500 fill-purple-500" />}
+                                            {c.outstanding > 0 && (
+                                                <span className="ml-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 uppercase tracking-wider">
+                                                    Due
+                                                </span>
+                                            )}
                                         </div>
                                         <div className="text-xs text-muted-foreground">{c.phone}</div>
                                     </div>
                                 </div>
                             </td>
-                            <td className="px-4 py-3 text-muted-foreground text-xs truncate max-w-[200px] hidden md:table-cell">
-                                {c.address || '—'}
+                            <td className="px-4 py-3 text-right text-muted-foreground hidden lg:table-cell">
+                                <div className="font-medium text-slate-900">{c.totalVisits || 0}</div>
+                                {c.totalPurchases > 0 && <div className="text-xs">{formatCurrency(c.totalPurchases)}</div>}
                             </td>
-                            <td className="px-4 py-3 text-right font-medium">{formatCurrency(c.totalPurchases)}</td>
                             <td className="px-4 py-3 text-right">
                                 {c.outstanding > 0
                                     ? <span className="text-red-600 font-semibold">{formatCurrency(c.outstanding)}</span>
@@ -98,28 +103,28 @@ export default function CustomerTable({ filters, onEdit }: CustomerTableProps) {
                                 {c.createdAt ? formatDistanceToNow(new Date(c.createdAt), { addSuffix: true }) : '—'}
                             </td>
                             <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                                <div className="flex gap-1 justify-end">
-                                    <Button variant="ghost" size="sm" className="h-7 text-xs px-2"
-                                        onClick={() => router.push(`/dashboard/customers/${c.id}`)}>
-                                        <Eye className="w-3 h-3" />
-                                    </Button>
-                                    {onEdit && (
-                                        <Button variant="ghost" size="sm" className="h-7 text-xs px-2"
-                                            onClick={() => onEdit(c)}>
-                                            <Pencil className="w-3 h-3" />
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-slate-200">
+                                            <MoreHorizontal className="w-4 h-4 text-slate-500" />
                                         </Button>
-                                    )}
-                                    <Button variant="outline" size="sm" className="h-7 text-xs px-2"
-                                        onClick={() => { setCustomer(c); router.push('/billing'); }}>
-                                        <Receipt className="w-3 h-3" />
-                                    </Button>
-                                    {c.outstanding > 0 && (
-                                        <Button variant="outline" size="sm" className="h-7 text-xs px-2"
-                                            onClick={() => router.push('/dashboard/credit')}>
-                                            <IndianRupee className="w-3 h-3" />
-                                        </Button>
-                                    )}
-                                </div>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-40">
+                                        {onEdit && (
+                                            <DropdownMenuItem onClick={() => onEdit(c)} className="cursor-pointer">
+                                                <Pencil className="w-4 h-4 mr-2" /> Edit
+                                            </DropdownMenuItem>
+                                        )}
+                                        <DropdownMenuItem onClick={() => { setCustomer(c); router.push('/billing'); }} className="cursor-pointer text-blue-600">
+                                            <Receipt className="w-4 h-4 mr-2" /> Quick Bill
+                                        </DropdownMenuItem>
+                                        {c.outstanding > 0 && (
+                                            <DropdownMenuItem onClick={() => router.push('/dashboard/credit')} className="cursor-pointer text-amber-600">
+                                                <IndianRupee className="w-4 h-4 mr-2" /> Collect
+                                            </DropdownMenuItem>
+                                        )}
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
                             </td>
                         </tr>
                     ))}

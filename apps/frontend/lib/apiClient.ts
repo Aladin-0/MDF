@@ -346,6 +346,13 @@ const realInventoryApi = {
         const data = await response.json();
         return Array.isArray(data) ? data : (data.data || []);
     },
+    getStockLedger: async (outletId: string, batchId?: string) => {
+        let url = `${API_URL}/inventory/stockledger/?outletId=${outletId}`;
+        if (batchId) url += `&batchId=${batchId}`;
+        const response = await fetch(url, { headers: getHeaders() });
+        await assertOk(response);
+        return response.json();
+    },
     getExpiryReport: async (outletId: string) => {
         const response = await fetch(
             `${API_URL}/inventory/?outletId=${outletId}&expiringSoon=true`,
@@ -550,8 +557,8 @@ const realCreditApi = {
         const data = await response.json();
         return data.data || [];
     },
-    getTransactions: async (accountId: string) => {
-        const response = await fetch(`${API_URL}/credit/${accountId}/transactions/`, {
+    getTransactions: async (accountId: string, outletId: string) => {
+        const response = await fetch(`${API_URL}/credit/${accountId}/transactions/?outletId=${outletId}`, {
             headers: getHeaders(),
         });
         await assertOk(response);

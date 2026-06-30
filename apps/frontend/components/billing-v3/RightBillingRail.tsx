@@ -11,7 +11,7 @@ export function RightBillingRail() {
     
     const draft = activeDraftId ? drafts[activeDraftId] : null;
     const isQuotation = draft?.documentMode === 'quotation';
-    const [localPaymentMethod, setLocalPaymentMethod] = useState<'cash' | 'upi' | 'card'>('cash');
+    const [localPaymentMethod, setLocalPaymentMethod] = useState<'cash' | 'upi' | 'card' | 'credit'>('cash');
     const [cashReceived, setCashReceived] = useState<string>('');
     
     const { saveBill, isLoading } = useSaveBill();
@@ -57,7 +57,15 @@ export function RightBillingRail() {
     const balance = Math.max(0, tenderAmount - totals.grandTotal);
     
     const isTenderInvalid = localPaymentMethod === 'cash' && cashReceived !== '' && Number(cashReceived) < totals.grandTotal;
-    const canCheckout = cart.length > 0 && isScheduleHValid && !isTenderInvalid && !isLoading;
+    
+    // Header Info Validation
+    const hasCustomer = Boolean(activeDraft?.customer && activeDraft.customer.id !== 'mock');
+    const hasDoctor = Boolean(activeDraft?.doctor && activeDraft.doctor.id !== 'mock');
+    const isHeaderValid = hasCustomer && hasDoctor;
+
+    const isCreditInvalid = localPaymentMethod === 'credit' && !hasCustomer;
+
+    const canCheckout = cart.length > 0 && isScheduleHValid && !isTenderInvalid && !isLoading && isHeaderValid && !isCreditInvalid;
 
     const handleCheckout = async () => {
         setCheckoutError(null);
@@ -202,7 +210,7 @@ export function RightBillingRail() {
                         <div className="mb-4">
                             <span className="text-xs font-semibold text-slate-400 block mb-2">Payment Mode</span>
                             <div className="flex gap-2">
-                                {['cash', 'upi', 'card'].map((mode) => (
+                                {['cash', 'upi', 'card', 'credit'].map((mode) => (
                                     <button
                                         key={mode}
                                         onClick={() => setLocalPaymentMethod(mode as any)}
@@ -263,6 +271,8 @@ export function RightBillingRail() {
                         {isLoading ? 'Processing...' : (
                             isQuotation ? (
                                 <>SAVE QUOTATION</>
+                            ) : localPaymentMethod === 'credit' ? (
+                                <>SAVE ON CREDIT <span className="text-blue-200 text-xs font-normal ml-1 border border-blue-400/30 px-1 rounded bg-blue-500/20">[F8]</span></>
                             ) : (
                                 <>COLLECT PAYMENT <span className="text-blue-200 text-xs font-normal ml-1 border border-blue-400/30 px-1 rounded bg-blue-500/20">[F8]</span></>
                             )
@@ -283,6 +293,12 @@ export function RightBillingRail() {
                     )}
                     {cart.length > 0 && isScheduleHValid && isTenderInvalid && !checkoutError && (
                         <span className="text-xs font-bold text-red-400">Tender amount cannot be less than total</span>
+                    )}
+                    {cart.length > 0 && isCreditInvalid && !checkoutError && (
+                        <span className="text-xs font-bold text-red-400">Customer is required for credit bills</span>
+                    )}
+                    {cart.length > 0 && !isHeaderValid && !checkoutError && (
+                        <span className="text-xs font-bold text-red-400">Customer and Doctor are required</span>
                     )}
                 </div>
             </div>

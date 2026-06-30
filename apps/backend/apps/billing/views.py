@@ -305,6 +305,12 @@ class SaleCreateView(APIView):
                         status=status.HTTP_400_BAD_REQUEST
                     )
 
+                if credit_given_val > 0 and not customer:
+                    return Response(
+                        {'detail': 'A customer must be selected for credit bills'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
                 sale_invoice = SaleInvoice.objects.create(
                     outlet=outlet,
                     invoice_no=invoice_no,
@@ -848,8 +854,8 @@ class SaleListView(APIView):
             total_bills=dCount('id'),
         )
 
-        # Return invoices — deduct from revenue so net = sales - returns
-        return_agg = SaleInvoice.objects.filter(
+        # Legacy return invoices — deduct from revenue so net = sales - returns
+        legacy_return_agg = SaleInvoice.objects.filter(
             outlet=outlet,
             is_return=True,
             **({'invoice_date__date__gte': start_dt} if start_date_str else {}),
@@ -858,8 +864,19 @@ class SaleListView(APIView):
             total_return=dSum('grand_total'),
             return_count=dCount('id'),
         )
-        return_revenue = float(return_agg.get('total_return') or 0)
-        return_count   = int(return_agg.get('return_count') or 0)
+        
+        from apps.billing.models import SalesReturn
+        new_return_agg = SalesReturn.objects.filter(
+            outlet=outlet,
+            **({'return_date__gte': start_dt} if start_date_str else {}),
+            **({'return_date__lte': end_dt}   if end_date_str   else {}),
+        ).aggregate(
+            total_return=dSum('total_amount'),
+            return_count=dCount('id'),
+        )
+
+        return_revenue = float(legacy_return_agg.get('total_return') or 0) + float(new_return_agg.get('total_return') or 0)
+        return_count   = int(legacy_return_agg.get('return_count') or 0) + int(new_return_agg.get('return_count') or 0)
 
         # Profit = sale amount - purchase cost for each item (exclude returns)
         from apps.billing.models import SaleItem as SaleItemModel
@@ -1122,84 +1139,80 @@ class CustomerCreditPaymentView(APIView):
 
             logger.info(f"Recording credit payment from {credit_account.customer.name}: ₹{amount}")
 
-            # Use transaction.atomic() for consistency
-            with transaction.atomic():
-                # Step 1: Update CreditAccount
-                credit_account.total_outstanding -= amount
-                credit_account.total_repaid += amount
+            # Use VoucherService to create a proper receipt voucher
+            # This automatically updates CreditAccount and Ledger via the new hooks in VoucherService
+            try:
+                from apps.accounts.services import VoucherService
+                from apps.accounts.models import Ledger
+                
+                # Resolve customer ledger
+                customer_ledger = Ledger.objects.filter(
+                    linked_customer=credit_account.customer, 
+                    outlet=outlet
+                ).first()
+                if not customer_ledger:
+                    return Response(
+                        {'error': {'code': 'LEDGER_NOT_FOUND', 'message': 'Customer ledger not found'}},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
 
-                # Update status based on outstanding
-                if credit_account.total_outstanding <= 0:
-                    credit_account.status = 'cleared'
-                elif credit_account.total_outstanding < credit_account.total_borrowed:
-                    credit_account.status = 'partial'
-
-                credit_account.last_transaction_date = datetime.now()
-                credit_account.save()
-
-                logger.info(f"Updated CreditAccount: outstanding={credit_account.total_outstanding}, status={credit_account.status}")
-
-                # Step 2: Create CreditTransaction
-                credit_transaction = CreditTransaction.objects.create(
-                    credit_account=credit_account,
-                    customer=credit_account.customer,
-                    type='credit',
-                    amount=amount,
-                    description=f"Payment via {payment_mode or 'cash'}",
-                    balance_after=credit_account.total_outstanding,
-                    recorded_by_id=created_by_id,
-                    date=datetime.fromisoformat(payment_date).date() if payment_date else None,
-                )
-
-                logger.info(f"Created CreditTransaction {credit_transaction.id}")
-
-                # Step 3: Create LedgerEntry for customer
-                # Query last ledger entry to calculate running balance
-                last_ledger = LedgerEntry.objects.filter(
-                    outlet=outlet,
-                    customer=credit_account.customer,
-                    entity_type='customer',
-                ).order_by('-date', '-created_at').first()
-
-                if last_ledger:
-                    running_balance = last_ledger.running_balance - amount
+                # Resolve payment mode ledger
+                mode = (payment_mode or 'cash').lower()
+                if mode in ('upi', 'upi_transfer', 'phonepe', 'gpay', 'paytm', 'neft', 'imps'):
+                    collection_ledger = Ledger.objects.filter(name='UPI Collections', outlet=outlet).first()
+                elif mode in ('card', 'pos', 'swipe', 'credit_card', 'debit_card'):
+                    collection_ledger = Ledger.objects.filter(name='Card/POS Settlement', outlet=outlet).first()
                 else:
-                    running_balance = -amount
+                    collection_ledger = Ledger.objects.filter(name='Cash', outlet=outlet).first()
 
-                ledger_entry = LedgerEntry.objects.create(
-                    outlet=outlet,
-                    entity_type='customer',
-                    customer=credit_account.customer,
-                    date=datetime.fromisoformat(payment_date).date() if payment_date else datetime.now().date(),
-                    entry_type='receipt',
-                    reference_no=reference_no or str(credit_transaction.id)[:20],
-                    description=f"Credit payment from {credit_account.customer.name}",
-                    debit=Decimal('0'),
-                    credit=amount,
-                    running_balance=running_balance,
+                if not collection_ledger:
+                    return Response(
+                        {'error': {'code': 'LEDGER_NOT_FOUND', 'message': f'Collection ledger for {mode} not found'}},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                voucher_data = {
+                    'voucher_type': 'receipt',
+                    'date': payment_date if payment_date else datetime.now().date().isoformat(),
+                    'narration': notes or f"Credit payment received from {credit_account.customer.name}",
+                    'total_amount': amount,
+                    'payment_mode': mode,
+                    'lines': [
+                        {
+                            'ledger_id': str(collection_ledger.id),
+                            'debit': amount,
+                            'credit': 0,
+                            'description': f"Collection via {mode}"
+                        },
+                        {
+                            'ledger_id': str(customer_ledger.id),
+                            'debit': 0,
+                            'credit': amount,
+                            'description': reference_no or "Credit payment"
+                        }
+                    ]
+                }
+
+                voucher = VoucherService.create_voucher(
+                    outlet_id=outlet.id,
+                    staff_id=created_by_id,
+                    data=voucher_data
                 )
-
-                logger.info(f"Created LedgerEntry with running_balance={running_balance}")
-
-                # Step 4: Post double-entry journal for this payment collection
-                try:
-                    from apps.accounts.journal_service import post_credit_payment
-                    post_credit_payment(
-                        outlet=outlet,
-                        customer=credit_account.customer,
-                        amount=amount,
-                        payment_mode=payment_mode or 'cash',
-                        source_id=credit_transaction.id,
-                        narration=f"Credit payment received - {credit_account.customer.name}",
-                    )
-                except Exception as e:
-                    logger.error(
-                        f"Journal posting failed for credit payment {credit_transaction.id}: {e}"
-                    )
-                    raise  # Re-raise to rollback entire transaction
+                logger.info(f"Created Voucher {voucher.voucher_no} for credit payment")
+                
+                # Refresh credit account to get updated balances
+                credit_account.refresh_from_db()
+                
+            except Exception as e:
+                logger.error(f"Failed to create voucher for credit payment: {e}")
+                return Response(
+                    {'error': {'code': 'VOUCHER_ERROR', 'message': str(e)}},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
 
             # Serialize response matching CreditAccount shape
             result = self._serialize_credit_account(credit_account)
+            result['voucher_no'] = voucher.voucher_no
             return Response(result, status=status.HTTP_201_CREATED)
 
         except Exception as e:
@@ -1338,18 +1351,30 @@ class DashboardDailyView(APIView):
             total_bills = aggregates['total_bills'] or 0
             
             # Sales Returns
-            return_sales = SaleInvoice.objects.filter(
+            from apps.billing.models import SalesReturn
+            legacy_return_sales = SaleInvoice.objects.filter(
                 outlet=outlet,
                 invoice_date__date__gte=target_start,
                 invoice_date__date__lte=target_end,
                 is_return=True
             )
-            return_aggregates = return_sales.aggregate(
+            legacy_return_aggregates = legacy_return_sales.aggregate(
                 total_returns=Sum('grand_total'),
                 return_count=Count('id')
             )
-            total_returns = float(return_aggregates['total_returns'] or 0)
-            return_count = return_aggregates['return_count'] or 0
+
+            new_return_sales = SalesReturn.objects.filter(
+                outlet=outlet,
+                return_date__gte=target_start,
+                return_date__lte=target_end
+            )
+            new_return_aggregates = new_return_sales.aggregate(
+                total_returns=Sum('total_amount'),
+                return_count=Count('id')
+            )
+
+            total_returns = float(legacy_return_aggregates['total_returns'] or 0) + float(new_return_aggregates['total_returns'] or 0)
+            return_count = (legacy_return_aggregates['return_count'] or 0) + (new_return_aggregates['return_count'] or 0)
             
             # Derive cash and bank net flows strictly from JournalLine
             from apps.accounts.models import JournalLine, Ledger
@@ -1861,6 +1886,8 @@ class SaleDetailView(APIView):
                 'rate': float(item.rate),
                 'qtyStrips': item.qty_strips,
                 'qtyLoose': item.qty_loose,
+                'qtyReturned': item.qty_returned,
+                'saleItemId': str(item.id),
                 # totalQty = total loose units = (strips × pack_size) + loose
                 'totalQty': (item.qty_strips * (item.pack_size or 1)) + item.qty_loose,
                 'saleMode': item.sale_mode,
@@ -2532,8 +2559,12 @@ class CreateSalesReturnView(APIView):
         )
         created_by_id = request.user.id
         try:
+            with open('/app/scratch_error.log', 'a') as f:
+                f.write(f"PAYLOAD: {request.data}\n")
             sales_return = create_sales_return(request.data, outlet_id, created_by_id)
         except ReturnServiceError as e:
+            with open('/app/scratch_error.log', 'a') as f:
+                f.write(f"ERROR: {e}\n")
             return Response({'error': {'code': 'RETURN_ERROR', 'message': str(e)}}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             logger.error(f"Error creating sales return: {e}", exc_info=True)
@@ -2923,6 +2954,7 @@ class SaleInvoiceSearchView(APIView):
                     'expiry': str(item.expiry_date),
                     'qtyStrips': item.qty_strips,
                     'qtyLoose': item.qty_loose,
+                    'qtyReturned': item.qty_returned,
                     'packSize': item.pack_size,
                     'qty': (item.qty_strips * pack_size) + item.qty_loose,
                     # rate = effective per-strip rate from actual charged total

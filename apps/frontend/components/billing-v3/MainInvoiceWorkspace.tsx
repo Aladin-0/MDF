@@ -2,9 +2,10 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useBillingStore } from '@/store/billingStore';
-import { Search, Package, AlertTriangle, X, Loader2, FileText } from 'lucide-react';
+import { Search, Package, AlertTriangle, X, Loader2, FileText, Repeat } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/hooks/use-toast';
 import { getExpiryStatus } from '@/utils/expiry';
 import { useProductSearch } from '@/hooks/useProductSearch';
 import { Batch, ProductSearchResult } from '@/types';
@@ -191,9 +192,10 @@ export function MainInvoiceWorkspace() {
             return; // Needs qty
         }
 
-        const totalQty = (s * quickAddBatch.packSize) + l;
+        const totalQtyLoose = (s * quickAddBatch.packSize) + l;
+        const totalQtyFractional = s + (l / quickAddBatch.packSize);
         
-        if (totalQty > (quickAddBatch.qtyStrips * quickAddBatch.packSize + quickAddBatch.qtyLoose)) {
+        if (totalQtyLoose > (quickAddBatch.qtyStrips * quickAddBatch.packSize + quickAddBatch.qtyLoose)) {
             alert('Warning: Added quantity exceeds available stock.');
         }
 
@@ -201,8 +203,8 @@ export function MainInvoiceWorkspace() {
         const dPct = parseFloat(discountPct) || 0;
         const baseRate = saleRate * (1 - (dPct / 100));
         
-        const taxableAmount = (baseRate * totalQty) / (1 + quickAddProduct.gstRate / 100);
-        const gstAmount = (baseRate * totalQty) - taxableAmount;
+        const taxableAmount = (baseRate * totalQtyFractional) / (1 + quickAddProduct.gstRate / 100);
+        const gstAmount = (baseRate * totalQtyFractional) - taxableAmount;
 
         addToCart(activeDraftId, {
             batchId: quickAddBatch.id,
@@ -221,13 +223,13 @@ export function MainInvoiceWorkspace() {
             rate: baseRate,
             qtyStrips: s,
             qtyLoose: l,
-            totalQty: totalQty,
+            totalQty: totalQtyFractional,
             saleMode: 'strip',
             discountPct: dPct,
             gstRate: quickAddProduct.gstRate,
             taxableAmount,
             gstAmount,
-            totalAmount: baseRate * totalQty,
+            totalAmount: baseRate * totalQtyFractional,
             purchaseRate: quickAddBatch.purchaseRate,
         });
 
@@ -350,9 +352,9 @@ export function MainInvoiceWorkspace() {
                                     const s = parseInt(qtyStrips) || 0;
                                     const l = parseInt(qtyLoose) || 0;
                                     const d = parseFloat(discountPct) || 0;
-                                    const tQty = (s * quickAddBatch.packSize) + l;
+                                    const tQtyFractional = s + (l / quickAddBatch.packSize);
                                     const rate = quickAddBatch.saleRate ?? quickAddBatch.mrp;
-                                    return ((rate * (1 - d/100)) * tQty).toFixed(2);
+                                    return ((rate * (1 - d/100)) * tQtyFractional).toFixed(2);
                                 })()}
                             </div>
                         </div>
@@ -369,6 +371,8 @@ export function MainInvoiceWorkspace() {
         );
     };
 
+    const itemsNeedingReview = activeDraft.cart.filter(c => c.batchAvailabilityStatus && c.batchAvailabilityStatus !== 'AVAILABLE').length;
+
     return (
         <div className="flex flex-col h-full bg-white relative z-10 border-t border-slate-200">
             {/* Quotation Banner */}
@@ -378,6 +382,20 @@ export function MainInvoiceWorkspace() {
                     <span className="text-sm font-medium text-blue-900">
                         Pre-filled from Quotation {activeDraft.sourceQuotationNo} — Review items and save as Invoice
                     </span>
+                </div>
+            )}
+            {/* Repeat Invoice Banner */}
+            {activeDraft.documentMode === 'invoice' && activeDraft.sourceInvoiceId && activeDraft.sourceInvoiceNo && (
+                <div className="bg-emerald-50 border-b border-emerald-200 px-4 py-2 flex items-center shadow-sm">
+                    <Repeat className="w-4 h-4 text-emerald-600 mr-2" />
+                    <span className="text-sm font-medium text-emerald-900 flex-1">
+                        Pre-filled from Invoice {activeDraft.sourceInvoiceNo} — Batch and stock revalidated.
+                    </span>
+                    {itemsNeedingReview > 0 && (
+                        <Badge variant="destructive" className="ml-4 whitespace-nowrap bg-red-600 hover:bg-red-700">
+                            {itemsNeedingReview} item{itemsNeedingReview > 1 ? 's' : ''} need review
+                        </Badge>
+                    )}
                 </div>
             )}
             {/* Search Bar Area */}

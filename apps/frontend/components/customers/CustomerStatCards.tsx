@@ -33,35 +33,27 @@ export default function CustomerStatCards({ onFilterChronic, onFilterOutstanding
             title: 'Total Customers',
             value: String(total),
             subtitle: 'Registered patients',
-            icon: Users,
-            iconBg: 'bg-blue-100',
-            iconColor: 'text-blue-600',
+            onClick: undefined,
+            pulse: false,
         },
         {
-            title: 'Chronic Patients',
-            value: String(chronicCount),
-            subtitle: 'On regular medicines',
-            icon: Heart,
-            iconBg: 'bg-purple-100',
-            iconColor: 'text-purple-600',
-            onClick: onFilterChronic,
-        },
-        {
-            title: 'Outstanding',
-            value: formatCurrency(outstandingAmount),
-            subtitle: `${outstandingCount} customers with dues`,
-            icon: IndianRupee,
-            iconBg: 'bg-amber-100',
-            iconColor: 'text-amber-600',
+            title: 'Customers with Dues',
+            value: String(outstandingCount),
+            subtitle: 'Customers owing money',
             onClick: onFilterOutstanding,
+            pulse: false,
+        },
+        {
+            title: 'Total Outstanding',
+            value: formatCurrency(outstandingAmount),
+            subtitle: 'Total unpaid amount',
+            onClick: onFilterOutstanding,
+            pulse: false,
         },
         {
             title: 'Refills Due',
-            value: `${refillCount} due`,
-            subtitle: 'Chronic medicine refills',
-            icon: RefreshCw,
-            iconBg: 'bg-green-100',
-            iconColor: 'text-green-600',
+            value: String(refillCount),
+            subtitle: 'Chronic refills due',
             onClick: onShowRefills,
             pulse: hasOverdue,
         },
@@ -69,27 +61,20 @@ export default function CustomerStatCards({ onFilterChronic, onFilterOutstanding
 
     return (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {cards.map((card) => {
-                const Icon = card.icon;
-                return (
-                    <Card
-                        key={card.title}
-                        className={cn(
-                            'rounded-xl p-4 cursor-pointer transition-all hover:shadow-md',
-                            card.pulse && 'animate-pulse'
-                        )}
-                        onClick={card.onClick}
-                    >
-                        <div className="flex items-center gap-3 mb-3">
-                            <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center', card.iconBg)}>
-                                <Icon className={cn('w-5 h-5', card.iconColor)} />
-                            </div>
-                        </div>
-                        <div className="text-2xl font-bold text-slate-900">{card.value}</div>
-                        <div className="text-xs text-muted-foreground mt-1">{card.subtitle}</div>
-                    </Card>
-                );
-            })}
+            {cards.map((card) => (
+                <Card
+                    key={card.title}
+                    className={cn(
+                        'rounded-xl p-4 cursor-pointer transition-all hover:shadow-md flex flex-col justify-center',
+                        card.pulse && 'animate-pulse'
+                    )}
+                    onClick={card.onClick}
+                >
+                    <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">{card.title}</div>
+                    <div className="text-2xl font-bold text-slate-900">{card.value}</div>
+                    <div className="text-xs text-muted-foreground mt-1">{card.subtitle}</div>
+                </Card>
+            ))}
         </div>
     );
 }

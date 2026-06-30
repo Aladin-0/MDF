@@ -432,6 +432,8 @@ export interface DraftBill {
     documentMode: 'invoice' | 'quotation';
     quotationId?: string;
     sourceQuotationNo?: string;
+    sourceInvoiceId?: string;
+    sourceInvoiceNo?: string;
     validUntil?: string;
     customer: Customer | null;
     customerLedger: Ledger | null;

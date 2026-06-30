@@ -23,10 +23,12 @@ export const WHATSAPP_TEMPLATES = {
         customerName: string,
         amountPaid: number,
         remainingBalance: number,
-        outletName: string
+        outletName: string,
+        voucherNo?: string
     ) => encodeURIComponent(
         `Dear ${customerName},\n\n` +
         `We have received your payment of ₹${amountPaid.toLocaleString('en-IN')}.\n` +
+        (voucherNo ? `Receipt No: ${voucherNo}\n` : '') +
         `Remaining balance: ₹${remainingBalance.toLocaleString('en-IN')}\n\n` +
         `Thank you!\n— ${outletName}`
     ),

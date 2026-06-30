@@ -95,8 +95,6 @@ export function useSaveBill() {
                         taxableAmount: taxable,
                         gstAmount: gst,
                         totalAmount: Number(discountedTotal.toFixed(2)),
-                        gstAmount: gst,
-                        totalAmount: Number(discountedTotal.toFixed(2)),
                     };
                 }),
                 subtotal: Number(totals.subtotal.toFixed(2)),

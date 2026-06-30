@@ -25,6 +25,16 @@ export function useProductBatches(productId: string | null) {
     });
 }
 
+export function useStockLedger(batchId: string | null) {
+    const outletId = useOutletId();
+
+    return useQuery({
+        queryKey: ['inventory', 'stockledger', outletId, batchId],
+        queryFn: () => inventoryApi.getStockLedger(outletId, batchId!),
+        enabled: !!batchId,
+    });
+}
+
 export function useExpiryReport(daysAhead: number = 90) {
     const outletId = useOutletId();
 

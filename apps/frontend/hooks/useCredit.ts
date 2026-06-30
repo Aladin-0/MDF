@@ -16,10 +16,11 @@ export function useCreditAccounts(filters?: any) {
 }
 
 export function useCreditTransactions(accountId: string) {
+    const outletId = useOutletId();
     return useQuery({
-        queryKey: ['credit', 'transactions', accountId],
-        queryFn: () => creditApi.getTransactions(accountId),
-        enabled: !!accountId,
+        queryKey: ['credit', 'transactions', accountId, outletId],
+        queryFn: () => creditApi.getTransactions(accountId, outletId!),
+        enabled: !!accountId && !!outletId,
         staleTime: 1000 * 60,
     });
 }
