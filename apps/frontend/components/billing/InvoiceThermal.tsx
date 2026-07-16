@@ -34,11 +34,11 @@ export const InvoiceThermal = forwardRef<HTMLDivElement, InvoiceThermalProps>(({
             <div className="border-t border-b border-black border-dashed py-2 mb-3">
                 <div className="flex justify-between">
                     <span>{isQuotation ? 'EST' : 'INV'}: {invoice.invoiceNo ?? '—'}</span>
-                    <span>{invoice.createdAt ? format(new Date(invoice.createdAt), 'dd.MM.yy') : '—'}</span>
+                    <span>{invoice.createdAt && !isNaN(new Date(invoice.createdAt).getTime()) ? format(new Date(invoice.createdAt), 'dd.MM.yy') : '—'}</span>
                 </div>
                 <div className="flex justify-between mt-1">
                     <span>Staff: {user?.name?.split(' ')[0] || 'Admin'}</span>
-                    <span>{invoice.createdAt ? format(new Date(invoice.createdAt), 'hh:mm a') : '—'}</span>
+                    <span>{invoice.createdAt && !isNaN(new Date(invoice.createdAt).getTime()) ? format(new Date(invoice.createdAt), 'hh:mm a') : '—'}</span>
                 </div>
             </div>
 

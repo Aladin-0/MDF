@@ -137,7 +137,7 @@ export function MainInvoiceWorkspace() {
         // Filter out expired batches and batches with no stock
         console.log("validBatches calculation started, availableBatches:", availableBatches);
         const validBatches = availableBatches.filter(b => {
-            const isExpired = new Date(b.expiryDate) < new Date();
+            const isExpired = b.expiryDate ? new Date(b.expiryDate) < new Date() : false;
             return !isExpired && b.qtyStrips > 0;
         });
 
@@ -270,7 +270,7 @@ export function MainInvoiceWorkspace() {
                         <div className="text-xs font-bold uppercase text-slate-500 tracking-wider">Select a Batch:</div>
                         <div className="flex gap-3 overflow-x-auto pb-2">
                             {quickAddProduct.batches.map((batch, idx) => {
-                                const isExpired = new Date(batch.expiryDate) < new Date();
+                                const isExpired = batch.expiryDate ? new Date(batch.expiryDate) < new Date() : false;
                                 return (
                                     <button 
                                         key={batch.id}
@@ -283,7 +283,7 @@ export function MainInvoiceWorkspace() {
                                     >
                                         <span className="font-mono font-bold text-slate-800 text-sm mb-1">{batch.batchNo}</span>
                                         <div className="flex justify-between text-xs w-full mb-1">
-                                            <span className={cn(isExpired ? "text-red-500 font-bold" : "text-slate-500")}>Exp: {format(new Date(batch.expiryDate), 'MM/yy')}</span>
+                                            <span className={cn(isExpired ? "text-red-500 font-bold" : "text-slate-500")}>Exp: {batch.expiryDate && !isNaN(new Date(batch.expiryDate).getTime()) ? format(new Date(batch.expiryDate), 'MM/yy') : String(batch.expiryDate || '—')}</span>
                                         </div>
                                         <div className="flex justify-between text-xs w-full mt-auto pt-2 border-t border-slate-200/50">
                                             <span className="font-bold text-slate-700">₹{batch.mrp.toFixed(2)}</span>
@@ -581,10 +581,10 @@ export function MainInvoiceWorkspace() {
                                         </td>
                                         <td className="px-2 py-1.5 text-[11px] font-bold text-slate-600 border-r border-slate-100">{item.batchNo}</td>
                                         <td className="px-2 py-1.5 text-[10px] font-semibold text-slate-500 text-center border-r border-slate-100 whitespace-nowrap">
-                                            {item.expiryDate 
-                                                ? (item.expiryDate.includes('-') && item.expiryDate.length > 7 
-                                                    ? format(new Date(item.expiryDate), 'MM/yy') 
-                                                    : item.expiryDate)
+                                            {item.expiryDate
+                                                ? (typeof item.expiryDate === 'string' && item.expiryDate.includes('-') && item.expiryDate.length > 7 && !isNaN(new Date(item.expiryDate).getTime())
+                                                    ? format(new Date(item.expiryDate), 'MM/yy')
+                                                    : String(item.expiryDate))
                                                 : '—'}
                                             {expiryStatus === 'expired' && (
                                                 <span className="ml-1 inline-flex items-center px-[6px] py-[2px] rounded-full text-[9px] font-bold uppercase bg-red-100 text-red-700">

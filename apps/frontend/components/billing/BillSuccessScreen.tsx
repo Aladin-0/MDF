@@ -39,7 +39,7 @@ export function BillSuccessScreen({ invoice, onNewBill, onPrint, onViewInvoice }
                         ₹{Number(invoice.grandTotal).toFixed(2)} &mdash; <span className="uppercase text-slate-500">{invoice.paymentMode}</span>
                     </p>
                     <p className="text-xs text-slate-400">
-                        {format(new Date(invoice.createdAt), 'hh:mm a, dd MMM yyyy')}
+                        {invoice.createdAt && !isNaN(new Date(invoice.createdAt).getTime()) ? format(new Date(invoice.createdAt), 'hh:mm a, dd MMM yyyy') : '—'}
                     </p>
                 </div>
             </div>
