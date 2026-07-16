@@ -23,17 +23,8 @@ export function useLoadDrafts() {
                 const { outlet } = useAuthStore.getState();
                 if (!outlet) return;
 
-                // ──────────────────────────────────────────────────────────────────
-                // If the store already has drafts (e.g. quotation prefill from the
-                // QuotationsList page), do NOT overwrite them with server data.
-                // The server drafts will be loaded next time the page is visited
-                // from a clean state.
-                // ──────────────────────────────────────────────────────────────────
                 const currentDrafts = useBillingStore.getState().drafts;
-                if (Object.keys(currentDrafts).length > 0) {
-                    setIsLoaded(true);
-                    return;
-                }
+                const currentActiveId = useBillingStore.getState().activeDraftId;
 
                 const { getHeaders, assertOk, API_URL } = await import('@/lib/apiClient');
                 // We hit the backend to get drafts for this outlet
@@ -44,15 +35,18 @@ export function useLoadDrafts() {
                 const data = await res.json(); // Expected to be an array of DraftInvoiceSerializer
 
                 if (!Array.isArray(data) || data.length === 0) {
-                    createDraft();
+                    if (Object.keys(currentDrafts).length === 0) {
+                        createDraft();
+                    }
                     setIsLoaded(true);
                     return;
                 }
 
-                const newDrafts: Record<string, DraftBill> = {};
-                let firstId: string | null = null;
+                const newDrafts: Record<string, DraftBill> = { ...currentDrafts };
+                let firstId: string | null = currentActiveId;
 
                 data.forEach((draft: any) => {
+                    if (newDrafts[draft.id]) return;
                     if (!firstId) firstId = draft.id;
                     const items: CartItem[] = draft.items.map((item: any) => ({
                         batchId: item.batch,
