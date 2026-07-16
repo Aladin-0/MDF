@@ -192,10 +192,18 @@ export function useSaveBill() {
             return invoice;
 
         } catch (err: any) {
+            console.error(JSON.stringify({
+                event: "SAVE_BILL_FAILED",
+                error: err?.message || err?.detail || String(err),
+                outletId: resolvedOutletId,
+                draftId: activeDraftId,
+                editingSaleId: state.editingSaleId,
+            }));
+
             const message =
+                err?.detail ??
                 err?.message ??
                 err?.error?.message ??
-                err?.detail ??
                 'Failed to save bill. Please try again.';
             setError(message);
             throw err;
