@@ -1,0 +1,10 @@
+#!/bin/sh
+'''exec' /home/asta/.gemini/antigravity/brain/4d7d6536-4f96-4c09-babb-88be5677650d/.system_generated/worktrees/subagent-REVISIONS-API-REPAIR-developer-4a4dd35e/apps/backend/venv/bin/python3 "$0" "$@"
+' '''
+# -*- coding: utf-8 -*-
+import re
+import sys
+from celery.__main__ import main
+if __name__ == '__main__':
+    sys.argv[0] = re.sub(r'(-script\.pyw|\.exe)?$', '', sys.argv[0])
+    sys.exit(main())

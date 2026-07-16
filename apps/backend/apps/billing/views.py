@@ -2992,7 +2992,11 @@ class SaleModificationOptionsView(APIView):
         if not outlet_id:
              return Response({'detail': 'outletId is required'}, status=400)
              
-        invoice = get_object_or_404(SaleInvoice, id=sale_id, outlet_id=outlet_id)
+        from django.core.exceptions import ValidationError
+        try:
+            invoice = get_object_or_404(SaleInvoice, id=sale_id, outlet_id=outlet_id)
+        except ValidationError:
+            return Response({'detail': 'Invalid ID'}, status=404)
         user = request.user
         
         is_paid = invoice.amount_paid > 0
@@ -3058,7 +3062,11 @@ class SaleRevisionListView(APIView):
         from apps.billing.models import BillRevision
         from apps.billing.serializers import BillRevisionSerializer
         
-        revisions = BillRevision.objects.filter(outlet_id=outlet_id).select_related('original_invoice', 'modified_by')
+        from django.core.exceptions import ValidationError
+        try:
+            revisions = BillRevision.objects.filter(outlet_id=outlet_id).select_related('original_invoice', 'modified_by')
+        except ValidationError:
+            return Response({'detail': 'Invalid outletId'}, status=400)
         
         # Filters
         user_id = request.query_params.get('userId')
@@ -3134,7 +3142,11 @@ class SaleRevisionDetailView(APIView):
         from apps.billing.models import BillRevision, SaleInvoice
         from apps.billing.serializers import BillRevisionSerializer
         
-        invoice = get_object_or_404(SaleInvoice, id=sale_id, outlet_id=outlet_id)
+        from django.core.exceptions import ValidationError
+        try:
+            invoice = get_object_or_404(SaleInvoice, id=sale_id, outlet_id=outlet_id)
+        except ValidationError:
+            return Response({'detail': 'Invalid ID'}, status=404)
         
         # Get all revisions related to this invoice
         # Could be original_invoice or resulting_invoice
