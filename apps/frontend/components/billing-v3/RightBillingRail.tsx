@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useBillingStore } from '@/store/billingStore';
 import { cn } from '@/lib/utils';
-import { useSaveBill } from '@/hooks/useSaveBill';
+import { useCheckout } from '@/hooks/useCheckout';
 import { useToast } from '@/hooks/use-toast';
 import { RevisionReasonModal } from './RevisionReasonModal';
 
@@ -23,10 +23,7 @@ export function RightBillingRail() {
         useBillingStore.getState().setPayment({ cashTendered: val === '' ? 0 : Number(val) });
     };
     
-    const { saveBill, isLoading } = useSaveBill();
-    const { toast } = useToast();
-    const [checkoutError, setCheckoutError] = useState<string | null>(null);
-    const [reasonModalOpen, setReasonModalOpen] = useState(false);
+    
 
     if (!activeDraftId) return null;
     const activeDraft = drafts[activeDraftId];
@@ -59,53 +56,19 @@ export function RightBillingRail() {
     const totalLoose = cart.reduce((sum, item) => sum + item.qtyLoose, 0);
     const qtyCountStr = totalStrips > 0 ? `${totalStrips} Strips${totalLoose > 0 ? ` ${totalLoose} Loose` : ''}` : `${totalLoose} Quantities`;
 
-    const hasScheduleH = useBillingStore(state => state.hasScheduleHItems(activeDraftId));
-    const scheduleHData = activeDraft.scheduleHData;
-    const isScheduleHValid = !hasScheduleH || (scheduleHData && scheduleHData.patientName && scheduleHData.doctorName);
-
-    const tenderAmount = cashReceived === '' ? totals.grandTotal : Number(cashReceived);
-    const balance = Math.max(0, tenderAmount - totals.grandTotal);
-    
-    const isTenderInvalid = paymentMethod === 'cash' && cashReceived !== '' && Number(cashReceived) < totals.grandTotal;
-    
-    // Header Info Validation
-    const hasCustomer = Boolean(activeDraft?.customer && activeDraft.customer.id !== 'mock');
-    const hasDoctor = Boolean(activeDraft?.doctor && activeDraft.doctor.id !== 'mock');
-    // We don't strictly require Customer or Doctor for every bill (e.g. OTC cash)
-    const isHeaderValid = true;
-
-    const isCreditInvalid = paymentMethod === 'credit' && !hasCustomer;
-
-    const canCheckout = cart.length > 0 && isScheduleHValid && !isTenderInvalid && !isLoading && isHeaderValid && !isCreditInvalid;
-
-    const executeCheckout = async () => {
-        setCheckoutError(null);
-        try {
-            // Ensure final grandTotal is updated before saving
-            useBillingStore.getState().setPayment({
-                amount: totals.grandTotal,
-                cashReturned: paymentMethod === 'cash' ? balance : 0,
-            });
-            await saveBill();
-            toast({
-                title: 'Success',
-                description: 'Bill Saved Successfully!',
-            });
-        } catch (error: any) {
-            console.error("Checkout failed:", error);
-            const message = error?.message ?? error?.error?.message ?? error?.detail ?? 'Failed to save bill. Please try again.';
-            setCheckoutError(message);
-            alert(message);
-        }
-    };
-
-    const handleCheckout = async () => {
-        if (activeDraft?.editingSaleId && activeDraft?.revisionAction) {
-            setReasonModalOpen(true);
-        } else {
-            executeCheckout();
-        }
-    };
+    const {
+        handleCheckout,
+        executeCheckout,
+        canCheckout,
+        checkoutError,
+        reasonModalOpen,
+        setReasonModalOpen,
+        isLoading,
+        balance,
+        isScheduleHValid,
+        isTenderInvalid,
+        isCreditInvalid
+    } = useCheckout();
 
     return (
         <div className="flex flex-col h-full bg-white relative overflow-hidden border-l border-slate-200">

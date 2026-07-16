@@ -11,6 +11,7 @@ import { useOutletId } from '@/hooks/useOutletId';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Check, X, Trash2, Loader2, AlertTriangle } from 'lucide-react';
+import { calculateRowTotals } from '@/lib/cartUtils';
 
 interface InlineRowEditorProps {
     item: CartItem;
@@ -76,44 +77,22 @@ export function InlineRowEditor({ item, onSave, onCancel, onRemove }: InlineRowE
         qtyInputRef.current?.select();
     }, []);
 
-    // Live Calculations
-    const s = parseInt(qtyStrips) || 0;
-    const l = parseInt(qtyLoose) || 0;
-    const dVal = parseFloat(discountValue) || 0;
-    const tQtyLoose = (s * currentBatch.packSize) + l;
-    const tQtyFractional = s + (l / currentBatch.packSize);
-    
-    const saleRate = currentBatch.saleRate ?? currentBatch.mrp;
-    const rawTotal = saleRate * tQtyFractional;
+    // Live Calculations using Cart Utility
+    const totals = calculateRowTotals(
+        currentBatch,
+        qtyStrips,
+        qtyLoose,
+        discountType,
+        discountValue,
+        item.gstRate
+    );
 
-    let dPct = 0;
-    let dAmount = 0;
-    if (discountType === 'percentage') {
-        dPct = dVal;
-        dAmount = rawTotal * (dPct / 100);
-    } else {
-        dAmount = dVal;
-        dPct = rawTotal > 0 ? (dAmount / rawTotal) * 100 : 0;
-    }
-
-    const rate = saleRate * (1 - (dPct / 100));
-    const sellAmount = rate * tQtyFractional;
-    
-    // Purchase rate per pack
-    const totalCost = (currentBatch.purchaseRate || 0) * tQtyFractional;
-    
-    const marginAmount = sellAmount - totalCost;
-    const marginPct = sellAmount > 0 ? (marginAmount / sellAmount) * 100 : 0;
-
-    const isLowMargin = marginPct < 10 && marginPct >= 0;
-    const isNegativeMargin = marginPct < 0;
-    const exceedsStock = tQtyLoose > (currentBatch.qtyStrips * currentBatch.packSize + currentBatch.qtyLoose);
-    const isDiscountInvalid = discountType === 'percentage' 
-        ? (dVal < 0 || dVal > 100) 
-        : (dVal < 0 || dVal > rawTotal);
-    const isQtyZero = tQtyFractional === 0;
-
-    const isValid = !isDiscountInvalid && !isQtyZero && !isNegativeMargin;
+    const {
+        tQtyFractional, tQtyLoose, rate, sellAmount, dPct, dAmount,
+        marginPct, isLowMargin, isNegativeMargin, exceedsStock,
+        isDiscountInvalid, isQtyZero, isValid, taxableAmount, gstAmount,
+        totalCost, marginAmount
+    } = totals;
 
     const commitSave = () => {
         if (!isValid) return;
@@ -121,16 +100,13 @@ export function InlineRowEditor({ item, onSave, onCancel, onRemove }: InlineRowE
         const currentBatch = availableBatches.find(b => b.id === selectedBatchId);
         if (!currentBatch) return;
 
-        const taxableAmount = (rate * tQtyFractional) / (1 + item.gstRate / 100);
-        const gstAmount = (rate * tQtyFractional) - taxableAmount;
-
         onSave(item.batchId, {
             ...item,
             batchId: currentBatch.id,
             batchNo: currentBatch.batchNo,
             expiryDate: currentBatch.expiryDate,
-            qtyStrips: s,
-            qtyLoose: l,
+            qtyStrips: parseInt(qtyStrips) || 0,
+            qtyLoose: parseInt(qtyLoose) || 0,
             totalQty: tQtyFractional,
             discountPct: dPct,
             discountType: discountType,
@@ -138,7 +114,7 @@ export function InlineRowEditor({ item, onSave, onCancel, onRemove }: InlineRowE
             rate: rate,
             totalAmount: sellAmount,
             mrp: currentBatch.mrp,
-            saleRate: saleRate,
+            saleRate: currentBatch.saleRate ?? currentBatch.mrp,
             purchaseRate: currentBatch.purchaseRate,
             packSize: currentBatch.packSize,
             packUnit: currentBatch.packUnit,

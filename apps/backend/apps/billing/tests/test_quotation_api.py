@@ -163,7 +163,7 @@ class QuotationAPITestCase(BaseRevisionTestCase):
             schedule_type='H',
             pack_size=10,
             pack_unit='tablet',
-            mrp=Decimal('100.0'),
+            mrp=Decimal('100.0'), purchase_rate=Decimal('80.0'),
             default_sale_rate=Decimal('90.0')
         )
         batch_h = Batch.objects.create(
@@ -173,7 +173,7 @@ class QuotationAPITestCase(BaseRevisionTestCase):
             expiry_date="2030-12-31",
             pack_size=10,
             qty_strips=10,
-            mrp=Decimal('100.0'),
+            mrp=Decimal('100.0'), purchase_rate=Decimal('80.0'),
             sale_rate=Decimal('90.0')
         )
         doctor = Doctor.objects.create(

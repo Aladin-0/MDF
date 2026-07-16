@@ -10,7 +10,7 @@ describe('InvoiceThermal', () => {
             grandTotal: 100,
             createdAt: null,
         };
-        render(<InvoiceThermal invoice={mockInvoice as any} user={null as any} />);
+        render(<InvoiceThermal invoice={mockInvoice as any} />);
     });
 
     it('renders without crashing when createdAt is malformed', () => {
@@ -20,6 +20,6 @@ describe('InvoiceThermal', () => {
             grandTotal: 100,
             createdAt: 'invalid-date-string',
         };
-        render(<InvoiceThermal invoice={mockInvoice as any} user={null as any} />);
+        render(<InvoiceThermal invoice={mockInvoice as any} />);
     });
 });

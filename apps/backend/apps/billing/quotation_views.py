@@ -273,7 +273,7 @@ class QuotationConvertView(APIView):
         payload = {
             "outletId": str(quotation.outlet_id),
             "customerId": str(quotation.customer_id) if quotation.customer_id else None,
-            "doctorId": request.data.get("doctorId"),
+            "doctorId": request.data.get("doctorId") or (str(quotation.doctor_id) if quotation.doctor_id else None),
             "doctorName": request.data.get("doctorName") or quotation.doctor_name,
             "hospitalName": request.data.get("hospitalName") or quotation.hospital_name,
             "prescriptionNo": request.data.get("prescriptionNo"),
@@ -296,12 +296,12 @@ class QuotationConvertView(APIView):
             "items": []
         }
 
-        for item in quotation.items.all():
+        for item in quotation.items.select_related('batch', 'batch__product').all():
             product_id = None
             schedule_type = "OTC"
-            if item.batch_id and hasattr(item, 'batch') and getattr(item, 'batch'):
+            if item.batch_id and item.batch:
                 product_id = str(item.batch.product_id)
-                if hasattr(item.batch, 'product') and getattr(item.batch, 'product'):
+                if item.batch.product:
                     schedule_type = item.batch.product.schedule_type or "OTC"
 
             payload["items"].append({

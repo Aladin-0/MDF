@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useBillingStore } from '@/store/billingStore';
 import { useAuthStore } from '@/store/authStore';
 import { useSettingsStore } from '@/store/settingsStore';
+import { logger } from '@/lib/logger';
 import { salesApi } from '@/lib/apiClient';
 import { PaymentSplit } from '@/types';
 
@@ -17,10 +18,13 @@ export function useSaveBill() {
         setIsLoading(true);
         setError(null);
 
+        const state = useBillingStore.getState();
+        const activeDraftId = state.activeDraftId;
+        const { outlet } = useAuthStore.getState();
+        const { selectedOutletId } = useSettingsStore.getState();
+        const resolvedOutletId = selectedOutletId ?? outlet?.id;
+
         try {
-            const state = useBillingStore.getState();
-            const activeDraftId = state.activeDraftId;
-            
             if (!activeDraftId) {
                 throw new Error("No active draft selected.");
             }
@@ -38,9 +42,7 @@ export function useSaveBill() {
             const totals = state.getDraftTotals(activeDraftId);
             const extraDiscountPct = draft.extraDiscountPct || 0;
             const activeStaff = state.activeStaff;
-            const { outlet } = useAuthStore.getState();
-            const { selectedOutletId } = useSettingsStore.getState();
-            const resolvedOutletId = selectedOutletId ?? outlet?.id;
+    
 
             if (!resolvedOutletId || !activeStaff?.id) {
                 throw {
@@ -192,13 +194,11 @@ export function useSaveBill() {
             return invoice;
 
         } catch (err: any) {
-            console.error(JSON.stringify({
-                event: "SAVE_BILL_FAILED",
-                error: err?.message || err?.detail || String(err),
-                outletId: resolvedOutletId,
+            logger.error("SAVE_BILL_FAILED", err, {
                 draftId: activeDraftId,
+                outletId: resolvedOutletId,
                 editingSaleId: state.editingSaleId,
-            }));
+            });
 
             const message =
                 err?.detail ??

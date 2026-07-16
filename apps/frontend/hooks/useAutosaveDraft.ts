@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { useBillingStore } from '@/store/billingStore';
+import { logger } from '@/lib/logger';
 import { useAuthStore } from '@/store/authStore';
 import { salesApi } from '@/lib/apiClient';
 import { DraftBill } from '@/types';
@@ -113,6 +114,10 @@ export function useAutosaveDraft() {
             }
             
             isSavingRef.current = true;
+            // Failsafe timeout to release the lock in case of catastrophic network hang
+            const safetyTimeout = setTimeout(() => {
+                isSavingRef.current = false;
+            }, 15000);
             
             const { getHeaders, assertOk, API_URL } = await import('@/lib/apiClient');
             
@@ -190,17 +195,16 @@ export function useAutosaveDraft() {
                     useBillingStore.getState().setDraftSaveStatus(responseData.id, 'saved', new Date().toISOString());
                 }
             } catch (err: any) {
-                console.error(JSON.stringify({
-                    event: "AUTOSAVE_FAILED",
-                    error: err?.message || err?.detail || String(err),
+                logger.error("AUTOSAVE_FAILED", err, {
                     draftId: draft.id,
                     outletId: payload.outlet,
-                }));
+                });
                 useBillingStore.getState().setDraftSaveStatus(draft.id, 'error');
                 // Block retry loop to avoid spamming the same failing payload
                 lastSavedStringRef.current = currentString;
                 lastQueuedStringRef.current = currentString;
             } finally {
+                clearTimeout(safetyTimeout);
                 isSavingRef.current = false;
             }
         }, AUTOSAVE_DELAY);

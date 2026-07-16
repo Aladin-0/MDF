@@ -72,6 +72,25 @@ jobs:
         npx wait-on http://localhost:8000/api/v1/health/ || sleep 10
         npx wait-on http://localhost:3000/ || sleep 10
 
+    - name: Run Backend Smoke Tests
+      working-directory: apps/backend
+      run: python manage.py test --tag=smoke
+
+    - name: Run Backend Regression Tests
+      working-directory: apps/backend
+      run: python manage.py test --tag=regression
+      continue-on-error: false # Block on regression failure
+
+    - name: Run Frontend Smoke Tests
+      working-directory: apps/frontend
+      run: npm test -- -t "@smoke"
+      continue-on-error: true # Keep fast smoke isolated
+
+    - name: Run Frontend Regression Tests
+      working-directory: apps/frontend
+      run: npm test -- -t "@regression|@integration"
+      continue-on-error: false # Block on regression failure
+
     - name: Run Playwright tests
       working-directory: apps/frontend
       run: npx playwright test
