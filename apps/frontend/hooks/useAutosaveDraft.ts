@@ -17,7 +17,9 @@ export function useAutosaveDraft() {
     // Use refs to avoid infinite loops
     const timeoutRef = useRef<NodeJS.Timeout | null>(null);
     const lastSavedStringRef = useRef<string>('');
+    const lastQueuedStringRef = useRef<string>('');
     const isInitialLoad = useRef<boolean>(true);
+    const isSavingRef = useRef<boolean>(false);
 
     // We only want to trigger auto-save when the ACTUAL data changes, not when saveStatus changes.
     // So we compute the payload string outside the effect or use a ref.
@@ -85,6 +87,12 @@ export function useAutosaveDraft() {
         
         // If the payload hasn't changed since the last successful save, do nothing.
         if (currentString === lastSavedStringRef.current) return;
+        
+        // Remove redundant effect churn (stringification loops):
+        // If we've already queued this exact payload string, don't clear and reset the timer.
+        if (currentString === lastQueuedStringRef.current) return;
+        
+        lastQueuedStringRef.current = currentString;
 
         // Debounce
         if (timeoutRef.current) {
@@ -97,6 +105,15 @@ export function useAutosaveDraft() {
         }
 
         timeoutRef.current = setTimeout(async () => {
+            if (isSavingRef.current) {
+                // Lock active: postpone this save.
+                // Clear lastQueued so a re-render will queue it again
+                lastQueuedStringRef.current = '';
+                return;
+            }
+            
+            isSavingRef.current = true;
+            
             const { getHeaders, assertOk, API_URL } = await import('@/lib/apiClient');
             
             try {
@@ -127,7 +144,14 @@ export function useAutosaveDraft() {
                         }
                         
                         const responseData = await postRes.json();
-                        lastSavedStringRef.current = currentString;
+                        
+                        // Update last saved and queued refs with the newly assigned UUID 
+                        // to prevent a redundant PUT request on the next render.
+                        const updatedPayload = { ...payload, id: responseData.id };
+                        const updatedString = JSON.stringify(updatedPayload);
+                        lastSavedStringRef.current = updatedString;
+                        lastQueuedStringRef.current = updatedString;
+                        
                         useBillingStore.getState().replaceDraftId(draft.id, responseData.id);
                         useBillingStore.getState().setDraftSaveStatus(responseData.id, 'saved', new Date().toISOString());
                     } else if (!response.ok) {
@@ -135,6 +159,7 @@ export function useAutosaveDraft() {
                     } else {
                         // Success
                         lastSavedStringRef.current = currentString;
+                        lastQueuedStringRef.current = currentString;
                         useBillingStore.getState().setDraftSaveStatus(draft.id, 'saved', new Date().toISOString());
                     }
                 } else {
@@ -155,7 +180,12 @@ export function useAutosaveDraft() {
                     
                     // Success on POST
                     const responseData = await postRes.json();
-                    lastSavedStringRef.current = currentString;
+                    
+                    const updatedPayload = { ...payload, id: responseData.id };
+                    const updatedString = JSON.stringify(updatedPayload);
+                    lastSavedStringRef.current = updatedString;
+                    lastQueuedStringRef.current = updatedString;
+                    
                     useBillingStore.getState().replaceDraftId(draft.id, responseData.id);
                     useBillingStore.getState().setDraftSaveStatus(responseData.id, 'saved', new Date().toISOString());
                 }
@@ -164,16 +194,23 @@ export function useAutosaveDraft() {
                 useBillingStore.getState().setDraftSaveStatus(draft.id, 'error');
                 // Block retry loop to avoid spamming the same failing payload
                 lastSavedStringRef.current = currentString;
+                lastQueuedStringRef.current = currentString;
+            } finally {
+                isSavingRef.current = false;
             }
         }, AUTOSAVE_DELAY);
 
-        return () => {
-            if (timeoutRef.current) clearTimeout(timeoutRef.current);
-        };
         // We omit `draft` from the dependency array because we only want to run this when
         // the stringified payload changes, but since we compute payload inside the effect, 
         // React hooks lint wants `draft`. We'll use a JSON.stringify on the relevant parts.
         // Or simply ignore the exhaustive-deps if we have to, but since we have `if (currentString === ...)` 
         // and we check `draft.saveStatus !== 'saving'`, the infinite loop is broken.
     }, [draft, activeDraftId, getDraftTotals]);
+
+    // Clear timeout on unmount
+    useEffect(() => {
+        return () => {
+            if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        };
+    }, []);
 }
