@@ -273,8 +273,11 @@ class QuotationConvertView(APIView):
         payload = {
             "outletId": str(quotation.outlet_id),
             "customerId": str(quotation.customer_id) if quotation.customer_id else None,
-            "doctorName": quotation.doctor_name,
-            "hospitalName": quotation.hospital_name,
+            "doctorId": request.data.get("doctorId"),
+            "doctorName": request.data.get("doctorName") or quotation.doctor_name,
+            "hospitalName": request.data.get("hospitalName") or quotation.hospital_name,
+            "prescriptionNo": request.data.get("prescriptionNo"),
+            "scheduleHData": request.data.get("scheduleHData"),
             "subtotal": quotation.subtotal,
             "discountAmount": quotation.discount_amount,
             "extraDiscountPct": quotation.extra_discount_pct,
@@ -294,9 +297,17 @@ class QuotationConvertView(APIView):
         }
 
         for item in quotation.items.all():
+            product_id = None
+            schedule_type = "OTC"
+            if item.batch_id and hasattr(item, 'batch') and getattr(item, 'batch'):
+                product_id = str(item.batch.product_id)
+                if hasattr(item.batch, 'product') and getattr(item.batch, 'product'):
+                    schedule_type = item.batch.product.schedule_type or "OTC"
+
             payload["items"].append({
                 "batchId": str(item.batch_id) if item.batch_id else None,
-                "productId": str(item.batch.product_id) if item.batch_id and hasattr(item, 'batch') and getattr(item, 'batch') else None,
+                "productId": product_id,
+                "scheduleType": schedule_type,
                 "qtyStrips": item.qty_strips,
                 "qtyLoose": item.qty_loose,
                 "rate": item.rate,
