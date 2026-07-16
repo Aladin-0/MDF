@@ -230,11 +230,7 @@ export function InlineRowEditor({ item, onSave, onCancel, onRemove }: InlineRowE
                                             <div className="flex justify-between items-center mb-1">
                                                 <span className="font-mono font-bold text-slate-800 text-sm">{batch.batchNo}</span>
                                                 <span className={cn("text-xs font-bold flex items-center gap-1", isExpired ? "text-red-500" : "text-slate-600")}>
-                                                    Exp: {batch.expiryDate 
-                                                        ? (batch.expiryDate.includes('-') && batch.expiryDate.length > 7 
-                                                            ? format(new Date(batch.expiryDate), 'MM/yy') 
-                                                            : batch.expiryDate)
-                                                        : '—'}
+                                                    Exp: {batch.expiryDate ? (typeof batch.expiryDate === 'string' && batch.expiryDate.includes('-') && batch.expiryDate.length > 7 && !isNaN(new Date(batch.expiryDate).getTime()) ? format(new Date(batch.expiryDate), 'MM/yy') : String(batch.expiryDate)) : '—'}
                                                     {batchExpiryStatus === 'expired' && (
                                                         <span className="inline-flex items-center px-1 py-0.5 rounded text-[8px] font-bold uppercase bg-red-100 text-red-700">Expired</span>
                                                     )}
