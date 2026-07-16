@@ -1,4 +1,3 @@
-from django.urls import path
 from apps.billing.views import (
     SaleCreateView, SaleListView,
     CustomerCreditPaymentView,
