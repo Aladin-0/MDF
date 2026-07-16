@@ -1349,6 +1349,29 @@ class ScheduleReportView(APIView):
             purchase_summary[k]['amount'] += p['amount']
             purchase_summary[k]['label'] = p['scheduleLabel']
 
+        export_format = request.query_params.get('export_format', '').lower()
+        if export_format == 'csv':
+            import csv
+            from django.http import HttpResponse
+            response = HttpResponse(content_type='text/csv')
+            response['Content-Disposition'] = f'attachment; filename="schedule_{schedule_type or "all"}_report.csv"'
+            writer = csv.writer(response)
+            writer.writerow([
+                'Date', 'Invoice No', 'Type', 'Schedule', 'Product', 'Batch', 'Expiry Date',
+                'Qty', 'Amount', 'Customer/Supplier', 'Doctor/City', 'Rx Prescription No'
+            ])
+            for s in sales_data:
+                writer.writerow([
+                    s['date'], s['invoiceNo'], 'Sale', s['scheduleLabel'], s['productName'], s['batchNo'], s['expiryDate'],
+                    s['qty'], s['amount'], s['customerName'], s['doctorName'], s['rxPrescriptionNo']
+                ])
+            for p in purchases_data:
+                writer.writerow([
+                    p['date'], p['invoiceNo'], 'Purchase', p['scheduleLabel'], p['productName'], p['batchNo'], p['expiryDate'],
+                    p['actualQty'], p['amount'], p['supplierName'], p['supplierCity'], ''
+                ])
+            return response
+
         return Response({
             'success': True,
             'data': {

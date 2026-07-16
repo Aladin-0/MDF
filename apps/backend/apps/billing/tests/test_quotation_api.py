@@ -260,7 +260,7 @@ class QuotationAPITestCase(BaseRevisionTestCase):
         }
         
         sale_res = self.client.post(sale_url, sale_payload, format='json')
-        self.assertEqual(sale_res.status_code, status.HTTP_200_OK, sale_res.data)
+        self.assertEqual(sale_res.status_code, status.HTTP_201_CREATED, sale_res.data)
         
         # Verify Quotation state is converted
         quotation = Quotation.objects.get(id=quotation_id)

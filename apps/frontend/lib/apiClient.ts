@@ -1388,6 +1388,28 @@ const realAccountsApi = {
         await assertOk(response);
         return response.json();
     },
+    
+    // Dashboard endpoints
+    getDashboardKPIs: async (outletId: string) => {
+        const response = await fetch(`${API_URL}/dashboard/kpis/?outletId=${outletId}`, { headers: getHeaders() });
+        await assertOk(response);
+        return response.json();
+    },
+    getDashboardAging: async (outletId: string) => {
+        const response = await fetch(`${API_URL}/dashboard/aging/?outletId=${outletId}`, { headers: getHeaders() });
+        await assertOk(response);
+        return response.json();
+    },
+    getDashboardUrgentActions: async (outletId: string) => {
+        const response = await fetch(`${API_URL}/dashboard/urgent/?outletId=${outletId}`, { headers: getHeaders() });
+        await assertOk(response);
+        return response.json();
+    },
+    getDashboardAuditAlerts: async (outletId: string) => {
+        const response = await fetch(`${API_URL}/dashboard/audit-alerts/?outletId=${outletId}`, { headers: getHeaders() });
+        await assertOk(response);
+        return response.json();
+    },
 };
 
 const realChainApi = {
@@ -1504,15 +1526,43 @@ const realVoucherApi = {
         await assertOk(response);
         return response.json();
     },
+    updateVoucher: async (id: string, payload: any) => {
+        const response = await fetch(`${API_URL}/vouchers/${id}/`, {
+            method: 'PUT',
+            headers: getHeaders(),
+            body: JSON.stringify(payload),
+        });
+        await assertOk(response);
+        return response.json();
+    },
+    getVoucherHistory: async (id: string) => {
+        const response = await fetch(`${API_URL}/vouchers/${id}/history/`, { headers: getHeaders() });
+        await assertOk(response);
+        return response.json();
+    },
     getDebitNotes: async (outletId: string) => {
         const response = await fetch(`${API_URL}/debit-notes/?outletId=${outletId}`, { headers: getHeaders() });
         await assertOk(response);
         const data = await response.json();
         return data.data || [];
     },
+    getDebitNote: async (id: string) => {
+        const response = await fetch(`${API_URL}/debit-notes/${id}/`, { headers: getHeaders() });
+        await assertOk(response);
+        return response.json();
+    },
     createDebitNote: async (payload: any) => {
         const response = await fetch(`${API_URL}/debit-notes/`, {
             method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify(payload),
+        });
+        await assertOk(response);
+        return response.json();
+    },
+    updateDebitNote: async (id: string, payload: any) => {
+        const response = await fetch(`${API_URL}/debit-notes/${id}/`, {
+            method: 'PUT',
             headers: getHeaders(),
             body: JSON.stringify(payload),
         });
@@ -1584,11 +1634,10 @@ const realVoucherApi = {
         await assertOk(response);
         return response.json();
     },
-    getPendingBills: async (outletId: string, ledgerId: string) => {
-        const response = await fetch(
-            `${API_URL}/ledgers/${ledgerId}/pending-bills/?outletId=${outletId}`,
-            { headers: getHeaders() }
-        );
+    getPendingBills: async (outletId: string, ledgerId: string, excludeVoucherId?: string) => {
+        let url = `${API_URL}/ledgers/${ledgerId}/pending-bills/?outletId=${outletId}`;
+        if (excludeVoucherId) url += `&exclude_voucher_id=${excludeVoucherId}`;
+        const response = await fetch(url, { headers: getHeaders() });
         await assertOk(response);
         const data = await response.json();
         return data.data || [];
@@ -1596,6 +1645,15 @@ const realVoucherApi = {
     createSalesReturn: async (payload: any) => {
         const response = await fetch(`${API_URL}/sales/return/`, {
             method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify(payload),
+        });
+        await assertOk(response);
+        return response.json();
+    },
+    updateSalesReturn: async (id: string, payload: any) => {
+        const response = await fetch(`${API_URL}/sales/returns/${id}/`, {
+            method: 'PUT',
             headers: getHeaders(),
             body: JSON.stringify(payload),
         });
@@ -1659,13 +1717,13 @@ const realDoctorsApi = {
 export const auditApi = {
     getLogs: async (params?: any, signal?: AbortSignal): Promise<any> => {
         const searchParams = new URLSearchParams(params || {});
-        const response = await fetch(`${API_URL}/audit/?${searchParams.toString()}`, { headers: getHeaders(), signal });
+        const response = await fetch(`${API_URL}/audit/logs/?${searchParams.toString()}`, { headers: getHeaders(), signal });
         await assertOk(response);
         return response.json();
     },
     exportLogs: async (params?: any): Promise<void> => {
         const searchParams = new URLSearchParams(params || {});
-        const response = await fetch(`${API_URL}/audit/export/?${searchParams.toString()}`, { headers: getHeaders() });
+        const response = await fetch(`${API_URL}/audit/logs/export/?${searchParams.toString()}`, { headers: getHeaders() });
         await assertOk(response);
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);

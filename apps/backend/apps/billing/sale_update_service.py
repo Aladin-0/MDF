@@ -11,7 +11,7 @@ from apps.accounts.models import Staff, Customer, Ledger, JournalEntry
 from apps.accounts.services import LedgerService
 from apps.accounts.journal_service import _get_ledger, _create_lines_and_update_balances, post_sale_invoice
 from apps.billing.services import validate_sale_price, fefo_batch_select, schedule_h_validate
-from apps.audit.services import log_activity
+from apps.billing.services import validate_sale_price, fefo_batch_select, schedule_h_validate
 from apps.billing.models import SaleInvoice, SaleItem, ScheduleHRegister, CreditAccount, CreditTransaction, LedgerEntry
 
 class SaleServiceError(Exception):
@@ -171,52 +171,64 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
         except Staff.DoesNotExist:
             billed_by = None
 
-        old_state = {
-            'invoice_no': sale_invoice.invoice_no,
-            'customer_id': str(sale_invoice.customer_id) if sale_invoice.customer_id else None,
-            'grand_total': float(sale_invoice.grand_total),
-            'subtotal': float(sale_invoice.subtotal),
-            'discount_amount': float(sale_invoice.discount_amount),
-            'items_count': sale_invoice.items.count(),
-        }
-        
-        old_items_state = {}
-        for item in sale_invoice.items.all():
-            old_items_state[item.product_name] = {
-                'qty_strips': item.qty_strips,
-                'qty_loose': item.qty_loose,
-                'rate': float(item.rate),
-            }
-            
         items_data = payload.get('items', [])
         schedule_h_data = payload.get('scheduleHData')
         client_grand_total = Decimal(str(payload.get('grandTotal', 0)))
         extra_discount_pct = Decimal(str(payload.get('extraDiscountPct', 0)))
 
         if revision_action == 'header_correction':
-            # Ignore commercial payload and keep existing totals and items
-            items_data = [
-                {
-                    'batchId': str(item.batch_id),
-                    'productId': str(item.batch.product_id),
-                    'qtyStrips': item.qty_strips,
-                    'qtyLoose': item.qty_loose,
-                    'rate': float(item.rate),
-                    'discountPct': float(item.discount_pct),
-                    'gstRate': float(item.gst_rate),
-                    'taxableAmount': float(item.taxable_amount),
-                    'gstAmount': float(item.gst_amount),
-                    'totalAmount': float(item.total_amount),
-                    'saleMode': item.sale_mode,
-                }
-                for item in sale_invoice.items.all()
-            ]
-            client_grand_total = sale_invoice.grand_total
-            extra_discount_pct = sale_invoice.extra_discount_pct
-            payload['cashPaid'] = sale_invoice.cash_paid
-            payload['upiPaid'] = sale_invoice.upi_paid
-            payload['cardPaid'] = sale_invoice.card_paid
-            payload['creditGiven'] = sale_invoice.credit_given
+            # Header corrections ONLY update non-financial header fields.
+            # They must NEVER touch stock, items, payments, or ledger entries.
+            # We validate the client is not sneaking in financial changes.
+            if abs(client_grand_total - sale_invoice.grand_total) > Decimal('0.01') and client_grand_total != Decimal('0'):
+                raise SaleServiceError(
+                    f"You cannot modify the grand total during a Header Correction. "
+                    f"(Client Total: {client_grand_total}, DB Total: {sale_invoice.grand_total})"
+                )
+
+            # Resolve customer/doctor from payload (allowed header changes)
+            party_ledger_id = payload.get('partyLedgerId')
+            customer_id = payload.get('customerId')
+            doctor_id = payload.get('doctorId')
+
+            new_customer = sale_invoice.customer  # default: keep existing
+            if party_ledger_id:
+                try:
+                    party_ledger = Ledger.objects.select_related('linked_customer').get(id=party_ledger_id, outlet=outlet)
+                    if party_ledger.linked_customer:
+                        new_customer = party_ledger.linked_customer
+                except Ledger.DoesNotExist:
+                    raise SaleServiceError(f"Ledger {party_ledger_id} not found")
+            elif customer_id:
+                try:
+                    new_customer = Customer.objects.get(id=customer_id, outlet=outlet)
+                except Customer.DoesNotExist:
+                    raise SaleServiceError(f"Customer {customer_id} not found")
+
+            from apps.accounts.models import Doctor
+            new_doctor = sale_invoice.doctor  # default: keep existing
+            if doctor_id:
+                try:
+                    new_doctor = Doctor.objects.get(id=doctor_id, outlet=outlet)
+                except Doctor.DoesNotExist:
+                    raise SaleServiceError(f"Doctor {doctor_id} not found")
+
+            # Parse invoice_date if provided
+            raw_invoice_date = payload.get('invoiceDate')
+            if raw_invoice_date:
+                invoice_date_str = str(raw_invoice_date).rstrip('Z').split('+')[0]
+                new_invoice_date = datetime.fromisoformat(invoice_date_str)
+            else:
+                new_invoice_date = sale_invoice.invoice_date
+
+            # Apply ONLY header field updates — no stock, no payments, no items
+            sale_invoice.customer = new_customer
+            sale_invoice.doctor = new_doctor
+            sale_invoice.invoice_date = new_invoice_date
+            sale_invoice.billed_by = billed_by
+            sale_invoice.save(update_fields=['customer', 'doctor', 'invoice_date', 'billed_by'])
+
+            return sale_invoice
 
         # Enforce max discount
         if billed_by:
@@ -600,41 +612,6 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
         from apps.inventory.services import rebuild_stock_ledger
         for batch_id in batches_to_rebuild:
             rebuild_stock_ledger(batch_id, min(invoice_d, old_invoice_date if 'old_invoice_date' in locals() else invoice_d))
-
-        new_state = {
-            'invoice_no': sale_invoice.invoice_no,
-            'customer_id': str(sale_invoice.customer_id) if sale_invoice.customer_id else None,
-            'grand_total': float(sale_invoice.grand_total),
-            'subtotal': float(sale_invoice.subtotal),
-            'discount_amount': float(sale_invoice.discount_amount),
-            'items_count': sale_invoice.items.count(),
-        }
-        
-        new_items_state = {}
-        for item in sale_invoice.items.all():
-            new_items_state[item.product_name] = {
-                'qty_strips': item.qty_strips,
-                'qty_loose': item.qty_loose,
-                'rate': float(item.rate),
-            }
-
-        changes = {k: {'old': old_state[k], 'new': new_state[k]} for k in old_state if old_state[k] != new_state[k]}
-        
-        if old_items_state != new_items_state:
-            changes['items'] = {'old': old_items_state, 'new': new_items_state}
-
-        if changes:
-            log_activity(
-                action="SALE_MODIFIED",
-                module="billing",
-                entity_type="SaleInvoice",
-                entity_id=sale_invoice.id,
-                entity_label=f"INV-{sale_invoice.invoice_no}",
-                description=f"Invoice {sale_invoice.invoice_no} modified",
-                changes=changes,
-                user=billed_by,
-                outlet=outlet
-            )
 
         return sale_invoice
 

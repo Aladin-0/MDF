@@ -171,8 +171,8 @@ class VoucherService:
         total_debit = sum(Decimal(str(l.get('debit', 0))) for l in lines_data)
         total_credit = sum(Decimal(str(l.get('credit', 0))) for l in lines_data)
 
-        if voucher_type == 'journal' and total_debit != total_credit:
-            raise ValidationError('Journal voucher: total debit must equal total credit.')
+        if total_debit != total_credit:
+            raise ValidationError(f"Total debit (₹{total_debit}) must equal total credit (₹{total_credit}) for all vouchers.")
 
         # ── Direction guard for Receipt and Payment vouchers ──────────────────
         # Receipt: money comes IN → cash/bank ledger is DEBITED, party (income/customer) is CREDITED.
@@ -342,10 +342,25 @@ class VoucherService:
             logger.error(f"Journal posting failed for voucher {voucher.id}: {e}")
             raise  # Re-raise to rollback entire transaction
 
+        from apps.audit.core import flags, orchestrator
+        from apps.audit.core.registry import SnapshotBuilderRegistry
+        if flags.is_v2_write_enabled():
+            new_snapshot_v2 = SnapshotBuilderRegistry.build_snapshot(voucher)
+            orchestrator.record_mutation(
+                entity=voucher,
+                action="CREATE",
+                module="accounts",
+                old_snapshot={},
+                new_snapshot=new_snapshot_v2,
+                reason_code="CREATED",
+                reason_text="Voucher created",
+                metadata={"payload": data}
+            )
+
         return voucher
 
     @staticmethod
-    def get_pending_bills(outlet_id, ledger_id):
+    def get_pending_bills(outlet_id, ledger_id, exclude_voucher_id=None):
         """
         Return unpaid/partially paid invoices for a ledger.
         For Sundry Debtor ledgers: returns SaleInvoices for linked customer.
@@ -369,9 +384,10 @@ class VoucherService:
                 payment_mode='credit',
             ).order_by('invoice_date')
             for inv in invoices:
-                already_adjusted = VoucherBillAdjustment.objects.filter(
-                    sale_invoice_id=inv.id
-                ).aggregate(total=Sum('adjusted_amount'))['total'] or D('0')
+                adj_qs = VoucherBillAdjustment.objects.filter(sale_invoice_id=inv.id)
+                if exclude_voucher_id:
+                    adj_qs = adj_qs.exclude(voucher_id=exclude_voucher_id)
+                already_adjusted = adj_qs.aggregate(total=Sum('adjusted_amount'))['total'] or D('0')
                 outstanding = max(D('0'), inv.grand_total - already_adjusted)
                 if outstanding > 0:
                     result.append({
@@ -385,20 +401,35 @@ class VoucherService:
 
         elif group_name == 'Sundry Creditors' and ledger.linked_distributor_id:
             from apps.purchases.models import PurchaseInvoice
-            invoices = PurchaseInvoice.objects.filter(
-                outlet_id=outlet_id,
-                distributor_id=ledger.linked_distributor_id,
-                outstanding__gt=0,
-            ).order_by('invoice_date')
+            from django.db.models import Q
+            
+            query = Q(outlet_id=outlet_id, distributor_id=ledger.linked_distributor_id)
+            if exclude_voucher_id:
+                query &= (Q(outstanding__gt=0) | Q(bill_adjustments__voucher_id=exclude_voucher_id))
+            else:
+                query &= Q(outstanding__gt=0)
+                
+            invoices = PurchaseInvoice.objects.filter(query).distinct().order_by('invoice_date')
+            
             for inv in invoices:
-                result.append({
-                    'id': str(inv.id),
-                    'invoiceNo': inv.invoice_no,
-                    'date': str(inv.invoice_date),
-                    'grandTotal': float(inv.grand_total),
-                    'outstanding': float(inv.outstanding),
-                    'invoiceType': 'purchase',
-                })
+                current_outstanding = inv.outstanding
+                if exclude_voucher_id:
+                    adj = VoucherBillAdjustment.objects.filter(
+                        purchase_invoice_id=inv.id, 
+                        voucher_id=exclude_voucher_id
+                    ).first()
+                    if adj:
+                        current_outstanding += adj.adjusted_amount
+                
+                if current_outstanding > 0:
+                    result.append({
+                        'id': str(inv.id),
+                        'invoiceNo': inv.invoice_no,
+                        'date': str(inv.invoice_date),
+                        'grandTotal': float(inv.grand_total),
+                        'outstanding': float(current_outstanding),
+                        'invoiceType': 'purchase',
+                    })
 
         return result
 
@@ -498,6 +529,34 @@ class DebitNoteService:
                     f"Insufficient strip stock for '{item['product_name']}' after loose conversion."
                 )
             batch.save(update_fields=['qty_strips', 'qty_loose'])
+
+            from django.contrib.contenttypes.models import ContentType
+            from apps.inventory.models import StockLedger
+            from apps.inventory.services import rebuild_stock_ledger
+            
+            ct = ContentType.objects.get_for_model(note)
+            dist_name = note.distributor.name if hasattr(note, 'distributor') and note.distributor else ''
+            
+            StockLedger.objects.create(
+                outlet_id=outlet_id,
+                product_id=batch.product_id,
+                batch_id=batch.id,
+                txn_type='PURCHASE_RETURN',
+                txn_date=note.date,
+                voucher_type='Debit Note',
+                voucher_number=note.debit_note_no,
+                party_name=dist_name,
+                content_type=ct,
+                object_id=note.id,
+                batch_number=batch.batch_no,
+                expiry_date=batch.expiry_date,
+                qty_in=0,
+                qty_out=qty,
+                rate=item.get('rate', 0),
+                value_in=0,
+                value_out=Decimal(str(qty)) * Decimal(str(item.get('rate', 0)))
+            )
+            rebuild_stock_ledger(batch.id, note.date)
 
         # Reduce distributor outstanding if linked to invoice
         if data.get('purchase_invoice_id'):

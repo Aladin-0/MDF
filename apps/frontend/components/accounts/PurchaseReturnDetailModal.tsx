@@ -1,7 +1,9 @@
 'use client';
 
+import { useState } from 'react';
 import { format } from 'date-fns';
-import { Printer, X, ArrowUpRight } from 'lucide-react';
+import { Printer, X, ArrowUpRight, Pencil } from 'lucide-react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -11,11 +13,13 @@ import {
 import { DebitNote } from '@/types';
 import { useAuthStore } from '@/store/authStore';
 import { useSettingsStore } from '@/store/settingsStore';
+import { PurchaseReturnEditModal } from './PurchaseReturnEditModal';
 
 interface PurchaseReturnDetailModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     note: DebitNote | null;
+    onNoteUpdated?: (updated: DebitNote) => void;
 }
 
 const formatINR = (n: number | undefined) =>
@@ -27,17 +31,23 @@ const STATUS_LABELS: Record<string, string> = {
     refunded: 'Refunded',
 };
 
-export function PurchaseReturnDetailModal({ open, onOpenChange, note }: PurchaseReturnDetailModalProps) {
+export function PurchaseReturnDetailModal({ open, onOpenChange, note, onNoteUpdated }: PurchaseReturnDetailModalProps) {
+    const [editOpen, setEditOpen] = useState(false);
+    const [localNote, setLocalNote] = useState<DebitNote | null>(null);
     const { outlet } = useAuthStore();
     const settings = useSettingsStore();
 
-    if (!note) return null;
+    // Use localNote (after edits) or the original prop
+    const displayNote = localNote || note;
+
+    if (!displayNote) return null;
 
     const handlePrint = () => {
         window.print();
     };
 
     return (
+        <>
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="invoice-print-container max-w-4xl max-h-[90vh] overflow-y-auto p-0 print:max-h-none print:overflow-visible print:p-0 print:border-none border-t-4 border-t-blue-500 gap-0">
                 
@@ -73,22 +83,34 @@ export function PurchaseReturnDetailModal({ open, onOpenChange, note }: Purchase
                         <div>
                             <DialogTitle className="text-xl">Purchase Return Details</DialogTitle>
                             <div className="text-sm text-muted-foreground flex items-center gap-2 mt-0.5">
-                                Return #{note.debitNoteNo}
+                                Return #{displayNote.debitNoteNo}
                             </div>
                         </div>
                     </div>
                     
                     <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm" onClick={handlePrint}>
-                            <Printer className="w-4 h-4 mr-2" />
-                            Print / PDF
-                        </Button>
+                        {displayNote && (
+                            <>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setEditOpen(true)}
+                                    className="border-amber-400 text-amber-700 hover:bg-amber-50"
+                                >
+                                    <Pencil className="w-4 h-4 mr-2" />
+                                    Edit
+                                </Button>
+                                <Button variant="outline" size="sm" onClick={handlePrint}>
+                                    <Printer className="w-4 h-4 mr-2" />
+                                    Print / PDF
+                                </Button>
+                            </>
+                        )}
                         <Button variant="ghost" size="icon" className="h-8 w-8 ml-2" onClick={() => onOpenChange(false)}>
                             <X className="w-4 h-4" />
                         </Button>
                     </div>
                 </div>
-
                 <div className="bg-white">
                     {/* ── Screen View (Hidden when printing) ── */}
                     <div className="p-8 print:hidden">
@@ -97,24 +119,24 @@ export function PurchaseReturnDetailModal({ open, onOpenChange, note }: Purchase
                             <div className="space-y-4">
                                 <div>
                                     <h3 className="text-muted-foreground font-medium mb-1 text-xs uppercase tracking-wide">Distributor Info</h3>
-                                    <p className="font-semibold text-lg text-foreground">{note.distributorName}</p>
+                                    <p className="font-semibold text-lg text-foreground">{displayNote.distributorName}</p>
                                 </div>
                                 <div className="bg-slate-50 border rounded-lg p-3">
                                     <h3 className="text-muted-foreground font-medium mb-2 text-xs uppercase tracking-wide">Return details</h3>
                                     <div className="grid grid-cols-2 gap-y-3">
                                         <div>
                                             <p className="text-muted-foreground text-xs">Return Date</p>
-                                            <p className="font-medium">{format(new Date(note.date), 'dd MMM yyyy')}</p>
+                                            <p className="font-medium">{format(new Date(displayNote.date), 'dd MMM yyyy')}</p>
                                         </div>
                                         <div>
                                             <p className="text-muted-foreground text-xs">Status</p>
-                                            <p className="font-medium">{STATUS_LABELS[note.status] || note.status}</p>
+                                            <p className="font-medium">{STATUS_LABELS[displayNote.status] || displayNote.status}</p>
                                         </div>
                                     </div>
-                                    {note.reason && (
+                                    {displayNote.reason && (
                                         <div className="mt-3 pt-3 border-t">
                                             <p className="text-muted-foreground text-xs">Reason</p>
-                                            <p className="text-slate-700 italic">{note.reason}</p>
+                                            <p className="text-slate-700 italic">{displayNote.reason}</p>
                                         </div>
                                     )}
                                 </div>
@@ -124,12 +146,12 @@ export function PurchaseReturnDetailModal({ open, onOpenChange, note }: Purchase
                             <div className="space-y-4 flex flex-col justify-end">
                                 <div className="bg-slate-50 text-slate-900 border border-slate-200 rounded-lg p-4">
                                     <p className="text-slate-500 text-xs font-medium uppercase mb-1">Total Return Amount</p>
-                                    <p className="font-bold text-2xl">{formatINR(note.totalAmount)}</p>
+                                    <p className="font-bold text-2xl">{formatINR(displayNote.totalAmount)}</p>
                                     <div className="text-xs text-muted-foreground mt-2 grid grid-cols-2 gap-1 border-t pt-2">
                                         <span>Subtotal:</span>
-                                        <span className="text-right font-medium text-slate-700">{formatINR(note.subtotal)}</span>
+                                        <span className="text-right font-medium text-slate-700">{formatINR(displayNote.subtotal)}</span>
                                         <span>GST Amount:</span>
-                                        <span className="text-right font-medium text-slate-700">{formatINR(note.gstAmount)}</span>
+                                        <span className="text-right font-medium text-slate-700">{formatINR(displayNote.gstAmount)}</span>
                                     </div>
                                 </div>
                             </div>
@@ -148,7 +170,7 @@ export function PurchaseReturnDetailModal({ open, onOpenChange, note }: Purchase
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y text-slate-700">
-                                    {note.items?.map((item: any, idx: number) => (
+                                    {displayNote.items?.map((item: any, idx: number) => (
                                         <tr key={idx} className="hover:bg-slate-50">
                                             <td className="px-4 py-3 font-medium text-slate-900">{item.productName}</td>
                                             {/* Debit note items typically have a batchId but maybe no batchNo directly in payload, let's render appropriately */}
@@ -160,7 +182,7 @@ export function PurchaseReturnDetailModal({ open, onOpenChange, note }: Purchase
                                             <td className="px-4 py-3 text-right tabular-nums font-semibold text-slate-900">{formatINR(item.total)}</td>
                                         </tr>
                                     ))}
-                                    {(!note.items || note.items.length === 0) && (
+                                    {(!displayNote.items || displayNote.items.length === 0) && (
                                         <tr>
                                             <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground italic">
                                                 No items found for this return.
@@ -207,12 +229,12 @@ export function PurchaseReturnDetailModal({ open, onOpenChange, note }: Purchase
 
                                     <div className="flex justify-between items-start mb-3 border-b border-black pb-2">
                                         <div className="w-1/2 pr-2">
-                                            <p><span className="font-semibold">Return No:</span> <span className="font-bold">{note.debitNoteNo}</span></p>
-                                            <p><span className="font-semibold">Return Date:</span> {format(new Date(note.date), 'dd MMM yyyy')}</p>
+                                            <p><span className="font-semibold">Return No:</span> <span className="font-bold">{displayNote.debitNoteNo}</span></p>
+                                            <p><span className="font-semibold">Return Date:</span> {format(new Date(displayNote.date), 'dd MMM yyyy')}</p>
                                         </div>
                                         <div className="w-1/2 pl-2">
-                                            <p><span className="font-semibold">Distributor:</span> {note.distributorName}</p>
-                                            {note.reason && <p><span className="font-semibold">Reason:</span> {note.reason}</p>}
+                                            <p><span className="font-semibold">Distributor:</span> {displayNote.distributorName}</p>
+                                            {displayNote.reason && <p><span className="font-semibold">Reason:</span> {displayNote.reason}</p>}
                                         </div>
                                     </div>
 
@@ -228,7 +250,7 @@ export function PurchaseReturnDetailModal({ open, onOpenChange, note }: Purchase
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {note.items?.map((item: any, idx: number) => (
+                                            {displayNote.items?.map((item: any, idx: number) => (
                                                 <tr key={idx} className="border-b border-gray-300 last:border-b-black">
                                                     <td className="py-1 px-1 border-r border-black text-center">{idx + 1}</td>
                                                     <td className="py-1 px-1 border-r border-black">{item.productName}</td>
@@ -245,15 +267,15 @@ export function PurchaseReturnDetailModal({ open, onOpenChange, note }: Purchase
                                         <div className="w-1/2 min-w-[200px]">
                                             <div className="flex justify-between font-medium text-xs pt-1 mt-1">
                                                 <span>Subtotal</span>
-                                                <span>{formatINR(note.subtotal)}</span>
+                                                <span>{formatINR(displayNote.subtotal)}</span>
                                             </div>
                                             <div className="flex justify-between font-medium text-xs pt-1">
                                                 <span>Total GST</span>
-                                                <span>{formatINR(note.gstAmount)}</span>
+                                                <span>{formatINR(displayNote.gstAmount)}</span>
                                             </div>
                                             <div className="flex justify-between font-bold text-xs pt-1 border-t border-black border-dashed mt-1">
                                                 <span>Total Return Amount</span>
-                                                <span>{formatINR(note.totalAmount)}</span>
+                                                <span>{formatINR(displayNote.totalAmount)}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -274,5 +296,15 @@ export function PurchaseReturnDetailModal({ open, onOpenChange, note }: Purchase
                 </div>
             </DialogContent>
         </Dialog>
+        <PurchaseReturnEditModal
+            open={editOpen}
+            onOpenChange={setEditOpen}
+            note={displayNote}
+            onSaved={(updated) => {
+                setLocalNote(updated);
+                onNoteUpdated?.(updated);
+            }}
+        />
+        </>
     );
 }

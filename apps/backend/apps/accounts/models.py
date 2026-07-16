@@ -59,6 +59,18 @@ class Staff(AbstractBaseUser, PermissionsMixin):
     can_edit_sales = models.BooleanField(default=False)
     can_edit_purchases = models.BooleanField(default=False)
     
+    # Granular modification permissions (Priority 2)
+    can_edit_sale_returns = models.BooleanField(default=False)
+    can_edit_purchase_returns = models.BooleanField(default=False)
+    can_edit_vouchers = models.BooleanField(default=False)
+    can_view_audit_history = models.BooleanField(default=False)
+    can_void_records = models.BooleanField(default=False)
+    
+    # Post-settlement modification permissions (Priority 3)
+    can_modify_paid_purchases = models.BooleanField(default=False)
+    can_modify_settled_vouchers = models.BooleanField(default=False)
+    can_modify_settled_returns = models.BooleanField(default=False)
+    
     # Granular bill modification permissions (Phase 1 Sales Bill Revision)
     can_modify_draft_bill = models.BooleanField(default=False)
     can_modify_unpaid_bill = models.BooleanField(default=False)
@@ -396,8 +408,19 @@ class Voucher(models.Model):
     narration = models.TextField(blank=True)
     total_amount = models.DecimalField(max_digits=12, decimal_places=2)
     payment_mode = models.CharField(max_length=20, choices=PAYMENT_MODES, default='cash')
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ('draft', 'Draft'),
+            ('posted', 'Posted'),
+            ('reversed', 'Reversed'),
+            ('cancelled', 'Cancelled')
+        ],
+        default='posted'
+    )
     created_by = models.ForeignKey('accounts.Staff', on_delete=models.PROTECT, related_name='vouchers_created')
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     objects = OutletFilteredManager()
 
@@ -471,6 +494,7 @@ class DebitNote(models.Model):
     )
     created_by = models.ForeignKey('accounts.Staff', on_delete=models.PROTECT, related_name='debit_notes_created')
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     objects = OutletFilteredManager()
 

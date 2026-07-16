@@ -3,21 +3,17 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { OfflineBanner } from '@/components/shared/OfflineBanner';
-import { Sidebar } from '@/components/shared/Sidebar';
-import { Header } from '@/components/shared/Header';
 import { DashboardSkeleton } from '@/components/shared/DashboardSkeleton';
-import { Sheet, SheetContent } from '@/components/ui/sheet';
-import { useSettingsStore } from '@/store/settingsStore';
+import { GlobalNavigation } from '@/components/layout/GlobalNavigation';
 import { useAuthStore } from '@/store/authStore';
 import { authApi } from '@/lib/apiClient';
-import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
+import { useGlobalNavigationShortcuts } from '@/hooks/useGlobalNavigationShortcuts';
+import { ShortcutHelpModal } from '@/components/shared/ShortcutHelpModal';
 import { GlobalOverlays } from '@/components/shared/GlobalOverlays';
 import { cn } from '@/lib/utils';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-    const { isSidebarCollapsed, toggleSidebar } = useSettingsStore();
     const { isAuthenticated, _hasHydrated } = useAuthStore();
-    const [isMobileSheetOpen, setIsMobileSheetOpen] = useState(false);
     const router = useRouter();
 
     useEffect(() => {
@@ -25,66 +21,41 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             router.push('/login');
         } else if (_hasHydrated && isAuthenticated) {
             authApi.me().then(data => {
-                if (data?.user) {
+                if (data && data.user) {
                     useAuthStore.getState().setUser(data.user);
+                } else if (data && data.id) {
+                    useAuthStore.getState().setUser(data);
+                    if (data.outlet) {
+                        useAuthStore.getState().setOutlet(data.outlet);
+                    }
                 }
             }).catch(console.error);
         }
     }, [_hasHydrated, isAuthenticated, router]);
 
-    useKeyboardShortcuts({
-        'b': () => router.push('/billing'),
-        'Ctrl+s': () => { /* Save handled by individual components */ },
-        'Escape': () => { /* Escape handled by individual components */ },
-    });
-
+    const { isHelpOpen, setIsHelpOpen } = useGlobalNavigationShortcuts();
     if (!_hasHydrated || !isAuthenticated) {
         return <DashboardSkeleton />;
     }
 
     return (
-        <div className="min-h-[100dvh] bg-slate-50 relative">
+        <div className="min-h-[100dvh] bg-slate-50 relative flex flex-col">
             <OfflineBanner />
 
-            {/* Desktop Sidebar */}
-            <div className="hidden lg:block print:hidden">
-                <div className="fixed top-0 left-0 h-full z-30">
-                    <Sidebar
-                        isCollapsed={isSidebarCollapsed}
-                        onToggle={toggleSidebar}
-                    />
-                </div>
+            {/* Global Top Navigation */}
+            <div className="sticky top-0 z-50 w-full flex flex-col">
+                <GlobalNavigation />
             </div>
 
-            {/* Mobile Sidebar (Sheet) */}
-            <Sheet open={isMobileSheetOpen} onOpenChange={setIsMobileSheetOpen}>
-                <SheetContent side="left" className="p-0 w-64 border-none">
-                    <Sidebar
-                        isCollapsed={false}
-                        onToggle={() => setIsMobileSheetOpen(false)}
-                        isMobile={true}
-                    />
-                </SheetContent>
-            </Sheet>
-
             {/* Main content area */}
-            <div className={cn(
-                "transition-all duration-200 flex flex-col min-h-[100dvh]",
-                "lg:ml-64 print:ml-0",
-                isSidebarCollapsed && "lg:ml-16 print:ml-0"
-            )}>
-                <div className="print:hidden">
-                    <Header
-                        onMobileMenuToggle={() => setIsMobileSheetOpen(true)}
-                        isSidebarCollapsed={isSidebarCollapsed}
-                    />
-                </div>
-                <main className="flex-1 p-4 sm:p-6 print:p-0 overflow-x-hidden print:overflow-visible">
+            <div className="flex-1 w-full max-w-[1600px] mx-auto overflow-x-hidden flex flex-col">
+                <main className="flex-1 p-4 sm:p-6 print:p-0">
                     {children}
                 </main>
             </div>
             
             <GlobalOverlays />
+            <ShortcutHelpModal open={isHelpOpen} onOpenChange={setIsHelpOpen} />
         </div>
     );
 }

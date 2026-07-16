@@ -2,7 +2,9 @@ from decimal import Decimal
 from unittest.mock import patch, MagicMock
 from django.utils import timezone
 from django.test import TestCase
-from apps.billing.models import SaleInvoice, SaleItem, BillRevision
+from apps.billing.models import SaleInvoice, SaleItem 
+from apps.audit.models import DocumentRevision
+from django.contrib.contenttypes.models import ContentType
 from apps.billing.revision_service import (
     build_invoice_snapshot,
     compute_bill_revision_diff,
@@ -79,9 +81,11 @@ class TestRevisionService(TestCase):
         rev_num = generate_revision_number(self.invoice)
         self.assertEqual(rev_num, "INV-100-R1")
         
-        BillRevision.objects.create(
+        DocumentRevision.objects.create(
+            content_type=ContentType.objects.get_for_model(SaleInvoice),
+            object_id=self.invoice.id,
             outlet=self.invoice.outlet,
-            original_invoice=self.invoice,
+
             revision_number=rev_num,
             revision_type="correction"
         )

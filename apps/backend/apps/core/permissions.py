@@ -256,6 +256,76 @@ class CanAccessPurchases(BasePermission):
             return True
         return False
 
+class CanEditSaleReturns(BasePermission):
+    message = 'You do not have permission to edit sale returns. Contact your admin to enable this.'
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if _is_admin(request.user):
+            check_outlet_access(request)
+            return True
+        if not getattr(request.user, 'can_edit_sale_returns', False):
+            return False
+        check_outlet_access(request)
+        return True
+
+class CanEditPurchaseReturns(BasePermission):
+    message = 'You do not have permission to edit purchase returns. Contact your admin to enable this.'
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if _is_admin(request.user):
+            check_outlet_access(request)
+            return True
+        if not getattr(request.user, 'can_edit_purchase_returns', False):
+            return False
+        check_outlet_access(request)
+        return True
+
+class CanEditVouchers(BasePermission):
+    message = 'You do not have permission to edit vouchers. Contact your admin to enable this.'
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if _is_admin(request.user):
+            check_outlet_access(request)
+            return True
+        if not getattr(request.user, 'can_edit_vouchers', False):
+            return False
+        check_outlet_access(request)
+        return True
+
+class CanViewAuditHistory(BasePermission):
+    message = 'You do not have permission to view revision history. Contact your admin to enable this.'
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if _is_admin(request.user):
+            check_outlet_access(request)
+            return True
+        if not getattr(request.user, 'can_view_audit_history', False):
+            return False
+        check_outlet_access(request)
+        return True
+
+class CanVoidRecords(BasePermission):
+    message = 'You do not have permission to void/cancel records. Contact your admin to enable this.'
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if _is_admin(request.user):
+            check_outlet_access(request)
+            return True
+        if not getattr(request.user, 'can_void_records', False):
+            return False
+        check_outlet_access(request)
+        return True
+
 # ─── Sales Bill Revision Permissions ─────────────────────────────────────────
 
 def has_bill_revision_permission(user, permission_flag: str) -> bool:

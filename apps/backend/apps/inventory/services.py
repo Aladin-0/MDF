@@ -108,4 +108,41 @@ def rebuild_stock_ledger(batch_id: str, from_date):
     print(f"DEBUG final running_qty={running_qty}")
 
     # Step 3: Update Batch master
-    Batch.objects.filter(pk=batch_id).update(qty_strips=running_qty)
+    batch = Batch.objects.filter(pk=batch_id).first()
+    if batch:
+        pack_size = batch.pack_size or 1
+        total_loose = int(running_qty * pack_size)
+        qty_strips = total_loose // pack_size
+        qty_loose = total_loose % pack_size
+        Batch.objects.filter(pk=batch_id).update(qty_strips=qty_strips, qty_loose=qty_loose)
+
+def reverse_stock_ledger_entry(outlet, txn_type, source_object, product=None, batch=None):
+    """
+    Deletes stock ledger entries for a given source object and rebuilds the stock ledger.
+    """
+    content_type = ContentType.objects.get_for_model(source_object)
+    
+    entries = StockLedger.objects.filter(
+        outlet=outlet,
+        content_type=content_type,
+        object_id=source_object.pk,
+        txn_type=txn_type
+    )
+    
+    if product:
+        entries = entries.filter(product=product)
+    if batch:
+        entries = entries.filter(batch=batch)
+        
+    entries_to_delete = list(entries)
+    if not entries_to_delete:
+        return
+        
+    # Get the earliest date and batch to rebuild
+    min_date = min(e.txn_date for e in entries_to_delete)
+    batch_ids = set(e.batch_id for e in entries_to_delete if e.batch_id)
+    
+    entries.delete()
+    
+    for b_id in batch_ids:
+        rebuild_stock_ledger(b_id, min_date)

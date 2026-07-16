@@ -281,6 +281,11 @@ def create_sales_return(payload: Dict[str, Any], outlet_id: str, created_by_id: 
     except SaleInvoice.DoesNotExist:
         raise ReturnServiceError(f"Sale invoice {original_sale_id} not found for this outlet")
 
+    if SalesReturn.objects.filter(original_sale=original_sale).exists():
+        raise ReturnServiceError(
+            "This invoice already has an active return. Please modify the existing return instead."
+        )
+
     items_payload = payload.get('items', [])
     if not items_payload:
         raise ReturnServiceError("Return must have at least one item")

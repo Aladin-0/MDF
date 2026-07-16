@@ -1,0 +1,18 @@
+{
+  "cookies": [],
+  "origins": [
+    {
+      "origin": "http://localhost:3000",
+      "localStorage": [
+        {
+          "name": "mediflow-settings-default",
+          "value": "{\"state\":{\"selectedOutletId\":null,\"isSidebarCollapsed\":false,\"_hasHydrated\":true,\"outletName\":\"\",\"outletAddress\":\"\",\"outletCity\":\"\",\"outletState\":\"Maharashtra\",\"outletPincode\":\"\",\"outletPhone\":\"\",\"outletEmail\":\"\",\"outletGstin\":\"\",\"outletDrugLicenseNo\":\"\",\"outletLogoUrl\":null,\"invoiceFooter\":\"Thank you for your purchase!\",\"invoiceHeader\":\"\",\"gstType\":\"intrastate\",\"enableGST\":true,\"defaultGSTRate\":12,\"roundOffInvoice\":true,\"showGSTBreakup\":true,\"outletStateCode\":\"27\",\"printerType\":\"a4\",\"thermalWidth\":\"80mm\",\"autoPrintAfterBill\":false,\"printCopies\":1,\"showMRPOnInvoice\":true,\"showBatchOnInvoice\":true,\"showDoctorOnInvoice\":true,\"defaultDiscountPct\":0,\"allowNegativeStock\":false,\"requirePinForEveryBill\":true,\"pinSessionTimeoutMins\":30,\"enableLooseTablets\":true,\"defaultQuantityMode\":\"loose\",\"enableCreditSales\":true,\"creditWarningThresholdPct\":80,\"enableWhatsAppReceipt\":true,\"attendanceGraceMinutes\":10,\"kioskPhotoCapture\":true,\"kioskAutoResetSeconds\":5,\"enableAttendance\":true,\"workingHoursPerDay\":8,\"notifyLowStock\":true,\"lowStockThreshold\":10,\"notifyExpiryDays\":90,\"notifyOverdueCredit\":true,\"notifyRefillDue\":true,\"whatsappNotifications\":false,\"theme\":\"light\",\"language\":\"en\",\"dateFormat\":\"dd/MM/yyyy\",\"compactMode\":false,\"sidebarCollapsed\":false},\"version\":3}"
+        },
+        {
+          "name": "mediflow-auth",
+          "value": "{\"state\":{\"user\":null,\"outlet\":null,\"isAuthenticated\":false},\"version\":0}"
+        }
+      ]
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { format } from 'date-fns';
 import { ArrowLeft, Plus, Trash2, Loader2, Search } from 'lucide-react';
 import Link from 'next/link';
@@ -41,14 +41,18 @@ function calcTotal(qty: string, rate: string, gstRate: string) {
 export default function NewDebitNotePage() {
     const outletId = useOutletId();
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { toast } = useToast();
 
     const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
     const [distributors, setDistributors] = useState<Distributor[]>([]);
     const [distributorId, setDistributorId] = useState('');
     const [reason, setReason] = useState('');
+    const [revisionReasonCode, setRevisionReasonCode] = useState('');
+    const [revisionReasonText, setRevisionReasonText] = useState('');
     const [items, setItems] = useState<ItemRow[]>([newItem()]);
     const [saving, setSaving] = useState(false);
+    const [existingReturnId, setExistingReturnId] = useState<string | undefined>();
 
     // Invoice search state
     const [invoiceSearch, setInvoiceSearch] = useState('');
@@ -73,6 +77,46 @@ export default function NewDebitNotePage() {
         return () => document.removeEventListener('mousedown', handleClick);
     }, []);
 
+    // Handle auto-load from URL
+    useEffect(() => {
+        const urlInvoiceNo = searchParams.get('invoiceNo');
+        const editId = searchParams.get('editId');
+        
+        if (editId) {
+            voucherApi.getDebitNote(editId).then(note => {
+                setExistingReturnId(note.id);
+                setDate(note.date);
+                setDistributorId(note.distributorId);
+                setReason(note.reason || '');
+                if (note.items && note.items.length > 0) {
+                    setItems(note.items.map((i: any) => ({
+                        id: Math.random().toString(36).slice(2),
+                        batchId: i.batchId,
+                        productName: i.productName,
+                        qty: String(i.qty),
+                        rate: String(i.rate),
+                        gstRate: String(i.gstRate || 0),
+                        total: parseFloat(i.totalAmount || i.total || 0),
+                    })));
+                }
+            }).catch(err => {
+                toast({ variant: 'destructive', title: 'Failed to load return', description: String(err) });
+            });
+        } else if (urlInvoiceNo && outletId) {
+            // Wait slightly for distributors to be loaded or just search
+            handleInvoiceSearch(urlInvoiceNo).then(results => {
+                if (results && results.length > 0) {
+                    // Exact match or first match
+                    const match = results.find((r: any) => r.invoiceNo === urlInvoiceNo) || results[0];
+                    handleSelectInvoice(match);
+                } else {
+                    toast({ variant: 'destructive', title: 'Invoice not found', description: `Could not find invoice ${urlInvoiceNo}.` });
+                }
+            });
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [searchParams, outletId]);
+
     async function handleInvoiceSearch(q: string) {
         setInvoiceSearch(q);
         if (!q.trim() || !outletId) {
@@ -85,8 +129,10 @@ export default function NewDebitNotePage() {
             const results = await voucherApi.searchPurchaseInvoices(outletId, q);
             setInvoiceResults(results);
             setShowInvoiceDropdown(results.length > 0);
+            return results;
         } catch {
             setInvoiceResults([]);
+            return [];
         } finally {
             setSearchLoading(false);
         }
@@ -113,6 +159,7 @@ export default function NewDebitNotePage() {
                     total: calcTotal(String(maxAllowed), String(item.rate), String(item.gstRate)),
                 };
             }));
+            setExistingReturnId(inv.existingReturnId);
         }
     }
 
@@ -161,28 +208,64 @@ export default function NewDebitNotePage() {
             toast({ variant: 'destructive', title: 'Add at least one item' });
             return;
         }
+        
+        if (existingReturnId) {
+            if (!revisionReasonCode) {
+                toast({ variant: 'destructive', title: 'Select a reason for modification' });
+                return;
+            }
+            if (!revisionReasonText || revisionReasonText.length < 5) {
+                toast({ variant: 'destructive', title: 'Provide details for modification (min 5 characters)' });
+                return;
+            }
+        }
 
         setSaving(true);
         try {
-            await voucherApi.createDebitNote({
-                outletId,
-                date,
-                distributor_id: distributorId,
-                reason,
-                subtotal,
-                gst_amount: gstAmount,
-                total_amount: totalAmount,
-                items: validItems.map((i) => ({
-                    batch_id: i.batchId || '00000000-0000-0000-0000-000000000000',
-                    product_name: i.productName,
-                    qty: parseFloat(i.qty),
-                    rate: parseFloat(i.rate),
-                    gst_rate: parseFloat(i.gstRate) || 0,
-                    total: i.total,
-                })),
-            });
-            toast({ title: 'Debit note created', description: 'Stock has been restored' });
-            router.push('/dashboard/accounts/purchase-returns');
+            if (existingReturnId) {
+                // If a return already exists, submit a revision to append items
+                await voucherApi.updateDebitNote(existingReturnId, {
+                    outletId,
+                    date,
+                    distributor_id: distributorId,
+                    reason,
+                    subtotal,
+                    gst_amount: gstAmount,
+                    total_amount: totalAmount,
+                    revisionReasonCode: revisionReasonCode,
+                    revisionReasonText: revisionReasonText,
+                    items: validItems.map((i) => ({
+                        batch_id: i.batchId || '00000000-0000-0000-0000-000000000000',
+                        product_name: i.productName,
+                        qty: parseFloat(i.qty),
+                        rate: parseFloat(i.rate),
+                        gst_rate: parseFloat(i.gstRate) || 0,
+                        total: i.total,
+                    })),
+                });
+                toast({ title: 'Return Appended', description: 'Stock has been updated successfully' });
+                router.push(`/dashboard/accounts/purchase-returns/revisions/${existingReturnId}`);
+            } else {
+                await voucherApi.createDebitNote({
+                    outletId,
+                    date,
+                    distributor_id: distributorId,
+                    reason,
+                    subtotal,
+                    gst_amount: gstAmount,
+                    total_amount: totalAmount,
+                    items: validItems.map((i) => ({
+                        batch_id: i.batchId || '00000000-0000-0000-0000-000000000000',
+                        product_name: i.productName,
+                        qty: parseFloat(i.qty),
+                        rate: parseFloat(i.rate),
+                        gst_rate: parseFloat(i.gstRate) || 0,
+                        total: i.total,
+                    })),
+                });
+                toast({ title: 'Debit note created', description: 'Stock has been restored' });
+                router.push('/dashboard/accounts/purchase-returns');
+            }
         } catch (err: any) {
             toast({ variant: 'destructive', title: 'Failed to save', description: err?.detail || String(err) });
         } finally {
@@ -227,19 +310,19 @@ export default function NewDebitNotePage() {
                                 <button
                                     key={inv.id}
                                     type="button"
+                                    className="w-full text-left px-4 py-2 hover:bg-muted focus:bg-muted outline-none transition-colors"
                                     onClick={() => handleSelectInvoice(inv)}
-                                    className="w-full text-left px-4 py-3 hover:bg-muted/50 transition-colors border-b last:border-0"
                                 >
-                                    <div className="flex justify-between items-start">
-                                        <div>
-                                            <span className="font-medium text-sm">{inv.invoiceNo}</span>
-                                            <span className="text-xs text-muted-foreground ml-2">{inv.distributorName}</span>
-                                        </div>
-                                        <div className="text-right text-xs text-muted-foreground">
-                                            <div>{inv.date}</div>
-                                            <div className="font-medium text-slate-700">₹{inv.grandTotal?.toFixed(2)}</div>
-                                        </div>
+                                    <div className="font-medium text-sm flex items-center justify-between">
+                                        <span>{inv.invoiceNo}</span>
+                                        <span className="text-muted-foreground text-xs">{inv.date}</span>
                                     </div>
+                                    <div className="text-xs text-muted-foreground mt-0.5">{inv.distributorName}</div>
+                                    {inv.existingReturnId && (
+                                        <div className="text-xs text-amber-600 font-medium mt-1">
+                                            Warning: A return document already exists for this invoice. Submitting this form will append items to it.
+                                        </div>
+                                    )}
                                 </button>
                             ))}
                         </div>
@@ -354,6 +437,37 @@ export default function NewDebitNotePage() {
                     onChange={(e) => setReason(e.target.value)}
                 />
             </div>
+
+            {existingReturnId && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-amber-50/50 p-4 rounded-lg border border-amber-100">
+                    <div className="space-y-2">
+                        <Label>Reason for Modification <span className="text-red-500">*</span></Label>
+                        <select
+                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                            value={revisionReasonCode}
+                            onChange={(e) => setRevisionReasonCode(e.target.value)}
+                        >
+                            <option value="">Select a reason...</option>
+                            <option value="ENTRY_MISTAKE">Entry Mistake</option>
+                            <option value="RATE_CORRECTION">Rate Correction</option>
+                            <option value="QTY_CORRECTION">Quantity Correction</option>
+                            <option value="DATE_CORRECTION">Date Correction</option>
+                            <option value="ITEM_ADDED">Added Missing Item</option>
+                            <option value="ITEM_REMOVED">Removed Wrong Item</option>
+                            <option value="OTHER">Other</option>
+                        </select>
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Modification Details <span className="text-red-500">*</span></Label>
+                        <Textarea
+                            placeholder="Briefly explain what you changed and why..."
+                            value={revisionReasonText}
+                            onChange={(e) => setRevisionReasonText(e.target.value)}
+                            rows={2}
+                        />
+                    </div>
+                </div>
+            )}
 
             {/* Summary */}
             <div className="rounded-lg bg-muted/30 p-4 space-y-2 text-sm max-w-xs ml-auto">

@@ -50,7 +50,7 @@ services:
     command:
       - "sh"
       - "-c"
-      - "python manage.py migrate --noinput && python manage.py collectstatic --noinput && gunicorn mediflow.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120 --access-logfile - --error-logfile -"
+      - "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
     env_file:
       - ./apps/backend/.env
     environment:
@@ -66,9 +66,11 @@ services:
     networks:
       - internal
     volumes:
+      - ./apps/backend:/app
       - static_files:/app/staticfiles
       - media_files:/app/media
       - ./logs:/app/logs
+
 
   # ── Next.js Frontend ──────────────────────────────────────────────────
   frontend:

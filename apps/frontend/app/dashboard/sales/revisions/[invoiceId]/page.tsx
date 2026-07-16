@@ -21,7 +21,7 @@ export default function RevisionDetailPage({ params }: { params: { invoiceId: st
 
     useEffect(() => {
         if (!outlet) return;
-        api.get(`/sales/${invoiceId}/revisions/`, { params: { outletId: outlet.id } })
+        api.get(`/audit/revisions/sale/${invoiceId}/`, { params: { outletId: outlet.id } })
             .then(res => {
                 setData(res.data);
                 setLoading(false);
@@ -37,7 +37,7 @@ export default function RevisionDetailPage({ params }: { params: { invoiceId: st
     if (error) return <div className="p-8 text-center text-red-500">{error}</div>;
     if (!data) return null;
 
-    const { invoice, revisions } = data;
+    const { record: invoice, revisions } = data;
 
     return (
         <div className="space-y-6 max-w-5xl mx-auto p-4 md:p-6 lg:p-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -108,12 +108,12 @@ export default function RevisionDetailPage({ params }: { params: { invoiceId: st
                                             
                                             <div className="flex justify-between items-center">
                                                 <span className="text-sm text-gray-600">Old Total</span>
-                                                <span className="font-mono">₹{rev.old_snapshot_json?.grand_total || '0.00'}</span>
+                                                <span className="font-mono">₹{rev.old_snapshot_json?.financial?.grand_total || '0.00'}</span>
                                             </div>
                                             
                                             <div className="flex justify-between items-center">
                                                 <span className="text-sm text-gray-600">New Total</span>
-                                                <span className="font-mono">₹{rev.new_snapshot_json?.grand_total || '0.00'}</span>
+                                                <span className="font-mono">₹{rev.new_snapshot_json?.financial?.grand_total || '0.00'}</span>
                                             </div>
                                             
                                             <Separator />
@@ -121,14 +121,14 @@ export default function RevisionDetailPage({ params }: { params: { invoiceId: st
                                             <div className="flex justify-between items-center font-medium">
                                                 <span>Difference</span>
                                                 <span className={
-                                                    (parseFloat(rev.new_snapshot_json?.grand_total || '0') - parseFloat(rev.old_snapshot_json?.grand_total || '0')) > 0
+                                                    (parseFloat(rev.new_snapshot_json?.financial?.grand_total || '0') - parseFloat(rev.old_snapshot_json?.financial?.grand_total || '0')) > 0
                                                         ? 'text-red-600'
-                                                        : (parseFloat(rev.new_snapshot_json?.grand_total || '0') - parseFloat(rev.old_snapshot_json?.grand_total || '0')) < 0
+                                                        : (parseFloat(rev.new_snapshot_json?.financial?.grand_total || '0') - parseFloat(rev.old_snapshot_json?.financial?.grand_total || '0')) < 0
                                                             ? 'text-green-600'
                                                             : 'text-gray-600'
                                                 }>
-                                                    {((parseFloat(rev.new_snapshot_json?.grand_total || '0') - parseFloat(rev.old_snapshot_json?.grand_total || '0')) > 0 ? '+' : '')}
-                                                    ₹{(parseFloat(rev.new_snapshot_json?.grand_total || '0') - parseFloat(rev.old_snapshot_json?.grand_total || '0')).toFixed(2)}
+                                                    {((parseFloat(rev.new_snapshot_json?.financial?.grand_total || '0') - parseFloat(rev.old_snapshot_json?.financial?.grand_total || '0')) > 0 ? '+' : '')}
+                                                    ₹{(parseFloat(rev.new_snapshot_json?.financial?.grand_total || '0') - parseFloat(rev.old_snapshot_json?.financial?.grand_total || '0')).toFixed(2)}
                                                 </span>
                                             </div>
                                         </div>

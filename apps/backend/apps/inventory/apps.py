@@ -6,6 +6,4 @@ class InventoryConfig(AppConfig):
 
     def ready(self):
         from .models import MasterProduct, Batch
-        from apps.audit.registry import register_audit
-        register_audit(MasterProduct, 'inventory')
-        register_audit(Batch, 'inventory')
+        from .models import MasterProduct, Batch

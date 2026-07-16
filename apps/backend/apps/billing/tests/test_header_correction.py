@@ -2,7 +2,9 @@ from rest_framework import status
 from django.urls import reverse
 from apps.billing.tests.base import BaseRevisionTestCase
 from apps.billing.tests.factories import make_test_invoice
-from apps.billing.models import BillRevision, LedgerEntry
+from apps.billing.models import  LedgerEntry
+from apps.audit.models import DocumentRevision
+from django.contrib.contenttypes.models import ContentType
 from apps.accounts.models import Doctor
 
 class HeaderCorrectionTestCase(BaseRevisionTestCase):
@@ -42,7 +44,7 @@ class HeaderCorrectionTestCase(BaseRevisionTestCase):
         self.batch.refresh_from_db()
         self.assertEqual(self.batch.qty_strips, batch_qty_before)
         
-        revision = BillRevision.objects.filter(original_invoice=invoice).first()
+        revision = DocumentRevision.objects.filter(object_id=invoice.id).first()
         self.assertIsNotNone(revision)
         self.assertEqual(revision.revision_type, 'header_correction')
         self.assertIn('doctor_id', str(revision.diff_summary_json))
@@ -71,7 +73,7 @@ class HeaderCorrectionTestCase(BaseRevisionTestCase):
         url = reverse('sale-revise', kwargs={'sale_id': invoice.id})
         response = self.client.post(url, payload, format='json')
         
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         
         invoice.refresh_from_db()
         self.assertEqual(invoice.grand_total, grand_total_before) # Unchanged

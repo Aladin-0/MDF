@@ -14,7 +14,9 @@ from apps.accounts.voucher_views import (
     VoucherNextNoView,
     VoucherListView,
     VoucherDetailView,
+    VoucherRevisionDetailView,
     DebitNoteListView,
+    DebitNoteDetailView,
     CreditNoteListView,
 )
 
@@ -34,9 +36,11 @@ urlpatterns = [
     # Vouchers
     path('vouchers/', VoucherListView.as_view(), name='voucher-list'),
     path('vouchers/<uuid:voucher_id>/', VoucherDetailView.as_view(), name='voucher-detail'),
+    path('vouchers/<uuid:pk>/history/', VoucherRevisionDetailView.as_view(), name='voucher-history'),
 
     # Debit Notes (Purchase Returns)
     path('debit-notes/', DebitNoteListView.as_view(), name='debit-note-list'),
+    path('debit-notes/<uuid:pk>/', DebitNoteDetailView.as_view(), name='debit-note-detail'),
 
     # Credit Notes (Sale Returns)
     path('credit-notes/', CreditNoteListView.as_view(), name='credit-note-list'),

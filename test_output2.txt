@@ -1,0 +1,27 @@
+Creating test database for alias 'default'...
+Found 1 test(s).
+System check identified no issues (0 silenced).
+
+Outlet: Test Outlet
+  Primary groups created:    21
+  Tax sub-groups created:    3
+  Standard ledgers created:  112
+  Rate-specific GST ledgers: 28
+  Customers synced:          0
+  Distributors synced:       0
+
+Done. Total groups in DB: 24, Total ledgers in DB: 140
+F
+======================================================================
+FAIL: test_paid_correction_success (apps.billing.tests.test_revise_api.SaleReviseAPITests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/app/apps/billing/tests/test_revise_api.py", line 230, in test_paid_correction_success
+    self.assertEqual(response.status_code, status.HTTP_200_OK, f"Response: {response.data}")
+AssertionError: 400 != 200 : Response: {'detail': 'Payment amounts (90.0) do not match grand total (80.0)'}
+
+----------------------------------------------------------------------
+Ran 1 test in 0.986s
+
+FAILED (failures=1)
+Destroying test database for alias 'default'...

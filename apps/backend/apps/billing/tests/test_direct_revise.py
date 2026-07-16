@@ -2,7 +2,8 @@ from unittest.mock import patch
 from django.test import override_settings
 from django.urls import reverse
 from rest_framework import status
-from apps.billing.models import BillRevision
+from apps.audit.models import DocumentRevision
+from django.contrib.contenttypes.models import ContentType
 from apps.audit.models import ActivityLog
 from apps.billing.tests.factories import make_test_invoice
 from apps.billing.tests.test_revision_permissions import BaseRevisionTestCase
@@ -48,7 +49,7 @@ class DirectReviseTestCase(BaseRevisionTestCase):
         self.batch.refresh_from_db()
         self.assertEqual(self.batch.qty_strips, batch_qty_before + 2) # 2 strips restored
         
-        revisions = BillRevision.objects.filter(original_invoice=invoice).order_by('created_at')
+        revisions = DocumentRevision.objects.filter(object_id=invoice.id).order_by('created_at')
         self.assertTrue(revisions.exists())
         revision = revisions.first()
         self.assertTrue(revision.revision_number.endswith('R1'))
@@ -138,8 +139,8 @@ class DirectReviseTestCase(BaseRevisionTestCase):
         response = self.client.post(url, payload, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         
-        self.assertEqual(BillRevision.objects.filter(original_invoice=invoice).count(), 2)
-        r2 = BillRevision.objects.filter(original_invoice=invoice).order_by('-revision_number').first()
+        self.assertEqual(DocumentRevision.objects.filter(object_id=invoice.id).count(), 2)
+        r2 = DocumentRevision.objects.filter(object_id=invoice.id).order_by('-revision_number').first()
         self.assertTrue(r2.revision_number.endswith('R2'))
         
         invoice.refresh_from_db()

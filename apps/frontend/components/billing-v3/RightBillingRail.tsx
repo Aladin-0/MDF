@@ -5,9 +5,10 @@ import { useBillingStore } from '@/store/billingStore';
 import { cn } from '@/lib/utils';
 import { useSaveBill } from '@/hooks/useSaveBill';
 import { useToast } from '@/hooks/use-toast';
+import { RevisionReasonModal } from './RevisionReasonModal';
 
 export function RightBillingRail() {
-    const { drafts, activeDraftId, getDraftTotals, setDraftDocumentMode } = useBillingStore();
+    const { drafts, activeDraftId, getDraftTotals, setDraftDocumentMode, setRevisionContext } = useBillingStore();
     
     const draft = activeDraftId ? drafts[activeDraftId] : null;
     const isQuotation = draft?.documentMode === 'quotation';
@@ -17,6 +18,7 @@ export function RightBillingRail() {
     const { saveBill, isLoading } = useSaveBill();
     const { toast } = useToast();
     const [checkoutError, setCheckoutError] = useState<string | null>(null);
+    const [reasonModalOpen, setReasonModalOpen] = useState(false);
 
     if (!activeDraftId) return null;
     const activeDraft = drafts[activeDraftId];
@@ -61,13 +63,14 @@ export function RightBillingRail() {
     // Header Info Validation
     const hasCustomer = Boolean(activeDraft?.customer && activeDraft.customer.id !== 'mock');
     const hasDoctor = Boolean(activeDraft?.doctor && activeDraft.doctor.id !== 'mock');
-    const isHeaderValid = hasCustomer && hasDoctor;
+    // We don't strictly require Customer or Doctor for every bill (e.g. OTC cash)
+    const isHeaderValid = true;
 
     const isCreditInvalid = localPaymentMethod === 'credit' && !hasCustomer;
 
     const canCheckout = cart.length > 0 && isScheduleHValid && !isTenderInvalid && !isLoading && isHeaderValid && !isCreditInvalid;
 
-    const handleCheckout = async () => {
+    const executeCheckout = async () => {
         setCheckoutError(null);
         try {
             await saveBill({
@@ -84,11 +87,19 @@ export function RightBillingRail() {
                 title: 'Success',
                 description: 'Bill Saved Successfully!',
             });
-            // Success! The app should redirect or show a success screen automatically via useBillingStore state changes.
         } catch (error: any) {
-            console.error(error);
+            console.error("Checkout failed:", error);
             const message = error?.message ?? error?.error?.message ?? error?.detail ?? 'Failed to save bill. Please try again.';
             setCheckoutError(message);
+            alert(message);
+        }
+    };
+
+    const handleCheckout = async () => {
+        if (activeDraft?.editingSaleId && activeDraft?.revisionAction) {
+            setReasonModalOpen(true);
+        } else {
+            executeCheckout();
         }
     };
 
@@ -101,7 +112,7 @@ export function RightBillingRail() {
 
             {/* Quick Stats */}
             <div className="px-5 py-3 border-b border-slate-200 flex justify-between items-center bg-slate-50/50 shrink-0">
-                <div className="text-sm font-medium text-slate-600">
+                <div className="text-sm font-medium text-slate-600" data-testid="cart-summary-items">
                     {totals.itemCount} Items | {cart.reduce((s, i) => s + (i.qtyStrips * i.packSize + i.qtyLoose), 0)} Quantities
                 </div>
                 <div className="text-sm font-bold text-blue-600">
@@ -297,11 +308,20 @@ export function RightBillingRail() {
                     {cart.length > 0 && isCreditInvalid && !checkoutError && (
                         <span className="text-xs font-bold text-red-400">Customer is required for credit bills</span>
                     )}
-                    {cart.length > 0 && !isHeaderValid && !checkoutError && (
-                        <span className="text-xs font-bold text-red-400">Customer and Doctor are required</span>
-                    )}
                 </div>
             </div>
+            <RevisionReasonModal 
+                open={reasonModalOpen} 
+                onOpenChange={setReasonModalOpen} 
+                onSubmit={async (code, text) => {
+                    setRevisionContext(activeDraft?.revisionAction || null, code, text);
+                    setReasonModalOpen(false);
+                    // Use setTimeout to ensure the zustand store updates before saveBill reads it
+                    setTimeout(() => {
+                        executeCheckout();
+                    }, 0);
+                }}
+            />
         </div>
     );
 }

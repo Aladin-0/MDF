@@ -6,7 +6,4 @@ class PurchasesConfig(AppConfig):
 
     def ready(self):
         from .models import PurchaseInvoice, PurchaseItem, Distributor
-        from apps.audit.registry import register_audit
-        register_audit(PurchaseInvoice, 'purchases')
-        register_audit(PurchaseItem, 'purchases')
-        register_audit(Distributor, 'purchases')
+        from .models import PurchaseInvoice, PurchaseItem, Distributor

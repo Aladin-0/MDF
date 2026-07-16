@@ -1,3 +1,5 @@
+from apps.audit.models import DocumentRevision
+from django.contrib.contenttypes.models import ContentType
 from django.test import TestCase
 from django.contrib.auth.models import AnonymousUser
 from apps.accounts.models import Staff

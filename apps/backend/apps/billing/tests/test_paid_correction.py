@@ -3,7 +3,9 @@ from django.urls import reverse
 from decimal import Decimal
 from apps.billing.tests.base import BaseRevisionTestCase
 from apps.billing.tests.factories import make_test_invoice, make_test_receipt
-from apps.billing.models import BillRevision, LedgerEntry, ReceiptEntry
+from apps.billing.models import  LedgerEntry, ReceiptEntry
+from apps.audit.models import DocumentRevision
+from django.contrib.contenttypes.models import ContentType
 from apps.accounts.models import Customer
 import json
 
@@ -52,12 +54,12 @@ class PaidCorrectionTestCase(BaseRevisionTestCase):
         self.assertEqual(invoice.grand_total, 700)
         
         # Check that revision was logged
-        self.assertEqual(invoice.revisions.count(), 1)
+        self.assertEqual(DocumentRevision.objects.filter(object_id=invoice.id).count(), 1)
         
         credit_account.refresh_from_db()
         self.assertEqual(credit_account.total_outstanding, Decimal('-300.00'))
         
-        revision = BillRevision.objects.filter(original_invoice=invoice).first()
+        revision = DocumentRevision.objects.filter(object_id=invoice.id).first()
         self.assertIsNotNone(revision)
         
         payment_impact = str(revision.payment_impact_json)

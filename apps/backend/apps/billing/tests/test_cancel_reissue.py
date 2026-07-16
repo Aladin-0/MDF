@@ -2,7 +2,9 @@ from rest_framework import status
 from django.urls import reverse
 from apps.billing.tests.base import BaseRevisionTestCase
 from apps.billing.tests.factories import make_test_invoice
-from apps.billing.models import BillRevision, SaleInvoice
+from apps.billing.models import SaleInvoice
+from apps.audit.models import DocumentRevision
+from django.contrib.contenttypes.models import ContentType
 from apps.audit.models import ActivityLog
 import unittest
 
@@ -43,11 +45,11 @@ class CancelReissueTestCase(BaseRevisionTestCase):
         invoice.refresh_from_db()
         self.assertTrue(invoice.is_cancelled)
         
-        revision = BillRevision.objects.filter(original_invoice=invoice).first()
+        revision = DocumentRevision.objects.filter(object_id=invoice.id).first()
         self.assertIsNotNone(revision)
-        self.assertIsNotNone(revision.resulting_invoice_id)
+        self.assertIsNotNone(revision.resulting_document_id)
         
-        replacement = SaleInvoice.objects.get(id=revision.resulting_invoice_id)
+        replacement = SaleInvoice.objects.get(id=revision.resulting_document_id)
         
         # Check if replaces_invoice and reissued_as exist, if so check them
         if hasattr(replacement, 'replaces_invoice'):

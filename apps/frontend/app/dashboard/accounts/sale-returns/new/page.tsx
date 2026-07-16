@@ -19,6 +19,7 @@ interface ItemRow {
     id: string;
     saleItemId?: string;
     batchId: string;
+    alreadyReturned?: number;
     productName: string;
     qtyStrips: string;
     qtyLoose: string;
@@ -58,6 +59,7 @@ function NewCreditNoteContent() {
     const [refundMode, setRefundMode] = useState<'cash' | 'adjust'>('cash');
     const [items, setItems] = useState<ItemRow[]>([newItem()]);
     const [saving, setSaving] = useState(false);
+    const [existingReturnId, setExistingReturnId] = useState<string | undefined>();
     const [originalSaleId, setOriginalSaleId] = useState('');
     
     // Invoice search state
@@ -122,26 +124,38 @@ function NewCreditNoteContent() {
         setInvoiceSearch(`${inv.invoiceNo} — ${cName}`);
         setShowInvoiceDropdown(false);
         if (inv.items && inv.items.length > 0) {
-            setItems(inv.items.map((item: any) => {
+            const newItems: any[] = [];
+            inv.items.forEach((item: any) => {
                 const packSize = item.packSize || 1;
-                const canonicalTotal = typeof item.totalAmount === 'number' ? item.totalAmount
-                    : calcTotal(String(item.qtyStrips || 0), String(item.qtyLoose || 0), String(item.rate), packSize);
-                return {
-                    id: Math.random().toString(36).slice(2),
-                    saleItemId: item.saleItemId || item.id,
-                    batchId: item.batchId || item.batch_id || item.batch?.id || '',
-                    productName: item.productName || item.name,
-                    qtyStrips: String(item.qtyStrips || 0),
-                    qtyLoose: String(item.qtyLoose || 0),
-                    packSize,
-                    rate: String(item.rate),
-                    gstRate: String(item.gstRate),
-                    maxTotalUnits: ((item.qtyStrips || 0) * packSize + (item.qtyLoose || 0)) - (item.qtyReturned || 0),
-                    // Store canonical total from invoice — this is what the customer was charged
-                    invoiceTotal: canonicalTotal,
-                    total: canonicalTotal,
-                };
-            }));
+                const maxUnits = ((item.qtyStrips || 0) * packSize + (item.qtyLoose || 0)) - (item.qtyReturned || 0);
+                
+                // Only add item if there are units available to return
+                if (maxUnits > 0) {
+                    const remainingStrips = Math.floor(maxUnits / packSize);
+                    const remainingLoose = maxUnits % packSize;
+                    
+                    const canonicalTotal = typeof item.totalAmount === 'number' ? item.totalAmount
+                        : calcTotal(String(remainingStrips), String(remainingLoose), String(item.rate), packSize);
+                    
+                    newItems.push({
+                        id: Math.random().toString(36).slice(2),
+                        saleItemId: item.saleItemId || item.id,
+                        batchId: item.batchId || item.batch_id || item.batch?.id || '',
+                        alreadyReturned: item.qtyReturned || 0,
+                        productName: item.productName || item.name,
+                        qtyStrips: String(remainingStrips),
+                        qtyLoose: String(remainingLoose),
+                        packSize,
+                        rate: String(item.rate),
+                        gstRate: String(item.gstRate),
+                        maxTotalUnits: maxUnits,
+                        invoiceTotal: canonicalTotal,
+                        total: canonicalTotal,
+                    });
+                }
+            });
+            setItems(newItems);
+            setExistingReturnId(inv.existingReturnId);
         }
     }
 
@@ -212,30 +226,71 @@ function NewCreditNoteContent() {
             return;
         }
 
+        // Validate max returnable quantities
+        for (const i of validItems) {
+            const totalUnits = (parseFloat(i.qtyStrips) || 0) * (i.packSize || 1) + (parseFloat(i.qtyLoose) || 0);
+            if (i.maxTotalUnits !== undefined && totalUnits > i.maxTotalUnits) {
+                toast({ 
+                    variant: 'destructive', 
+                    title: `Cannot return ${totalUnits} units of ${i.productName}`, 
+                    description: `Only ${i.maxTotalUnits} unit(s) are available to return.` 
+                });
+                return;
+            }
+        }
+
         setSaving(true);
         try {
-            // Build the exact payload for the Strip Builder
-            const payload = {
-                outletId: outletId,
-                originalSaleId: originalSaleId, 
-                returnDate: date,          
-                refundMode: refundMode,    
-                reason: reason,
-                items: validItems.map((i) => {
-                    const totalUnits = (parseFloat(i.qtyStrips) || 0) * (i.packSize || 1) + (parseFloat(i.qtyLoose) || 0);
-                    return {
-                        saleItemId: i.saleItemId, 
-                        batchId: i.batchId,       
-                        qtyReturned: totalUnits, // Sends total units
-                        returnRate: parseFloat(i.rate),
-                    };
-                }),
-            };
+            if (existingReturnId) {
+                // If a return already exists, we submit a revision to append the new items
+                const payload = {
+                    outletId: outletId,
+                    originalSaleId: originalSaleId, 
+                    returnDate: date,          
+                    refundMode: refundMode,    
+                    reason: reason,
+                    totalAmount: totalAmount, // Absolute new total
+                    revisionReasonCode: 'APPEND_RETURN',
+                    revisionReasonText: 'Added items to existing return via New Return UI',
+                    items: validItems.map((i) => {
+                        const totalUnitsEntered = (parseFloat(i.qtyStrips) || 0) * (i.packSize || 1) + (parseFloat(i.qtyLoose) || 0);
+                        const absoluteTotalUnits = totalUnitsEntered + (i.alreadyReturned || 0);
+                        
+                        return {
+                            originalSaleItemId: i.saleItemId, 
+                            batchId: i.batchId,       
+                            qtyReturned: absoluteTotalUnits,
+                            returnRate: parseFloat(i.rate),
+                            totalAmount: absoluteTotalUnits * (parseFloat(i.rate) / (i.packSize || 1))
+                        };
+                    }),
+                };
+                                const res = await voucherApi.updateSalesReturn(existingReturnId, payload);
+                router.push(`/dashboard/accounts/sale-returns/${existingReturnId}`);
+            } else {
+                // Build the exact payload for the Strip Builder
+                const payload = {
+                    outletId: outletId,
+                    originalSaleId: originalSaleId, 
+                    returnDate: date,          
+                    refundMode: refundMode,    
+                    reason: reason,
+                    items: validItems.map((i) => {
+                        const totalUnits = (parseFloat(i.qtyStrips) || 0) * (i.packSize || 1) + (parseFloat(i.qtyLoose) || 0);
+                        return {
+                            saleItemId: i.saleItemId, 
+                            batchId: i.batchId,       
+                            qtyReturned: totalUnits, // Sends total units
+                            returnRate: parseFloat(i.rate),
+                            gstRate: parseFloat(i.gstRate) || 0,
+                        };
+                    }),
+                };
 
-            // MAGIC HAPPENS HERE: We use your app's built-in API tool!
-            await voucherApi.createSalesReturn(payload);
-
-            router.push('/dashboard/accounts/sale-returns');
+                // MAGIC HAPPENS HERE: We use your app's built-in API tool!
+                const res = await voucherApi.createSalesReturn(payload);
+                router.push(`/dashboard/accounts/sale-returns/${res.data.id}`);
+            }
         } catch (error: any) {
             console.error('Save Return Error:', error);
             const msg = error.error?.message || error.detail || error.message || 'Unknown error occurred. Please check console.';
@@ -446,6 +501,13 @@ function NewCreditNoteContent() {
             </div>
 
             {/* Summary */}
+            {/* Existing Return Banner */}
+            {existingReturnId && (
+                <div className="bg-blue-50 border border-blue-200 text-blue-800 p-3 rounded-md text-sm mb-4">
+                    <strong>Note:</strong> This invoice already has a return in progress. Any further items returned here will be added as a new revision to the existing return.
+                </div>
+            )}
+
             <div className="rounded-lg bg-muted/30 p-4 space-y-2 text-sm max-w-xs ml-auto">
                 <div className="flex justify-between">
                     <span className="text-muted-foreground">Subtotal</span>

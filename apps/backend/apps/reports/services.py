@@ -184,7 +184,7 @@ class BatchWiseReportService:
                 expiry_status = 'ACTIVE'
                 total_active_batches += 1
                 
-            sellable_qty_raw = b.closing_qty_raw if expiry_status not in ['EXPIRED', 'BLOCKED'] else Decimal('0')
+            sellable_qty_raw = Decimal(str(b.closing_qty_raw)) if expiry_status not in ['EXPIRED', 'BLOCKED'] else Decimal('0')
             total_sellable_qty_raw += sellable_qty_raw
             total_closing_qty_raw += Decimal(str(b.closing_qty_raw))
             

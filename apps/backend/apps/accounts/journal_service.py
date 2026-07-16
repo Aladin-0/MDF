@@ -858,6 +858,14 @@ def reverse_journal(source_type, source_id, outlet_id, narration_prefix='REVERSA
             source_id=source_id
         )
 
+        # Check if it already exists to make it idempotent
+        if JournalEntry.objects.filter(
+            outlet_id=outlet_id,
+            source_type='RETURN',
+            source_id=source_id
+        ).exists():
+            return
+
         # Create reversal JournalEntry
         reversal_je = JournalEntry.objects.create(
             outlet_id=outlet_id,

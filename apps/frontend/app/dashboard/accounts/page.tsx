@@ -1,7 +1,5 @@
-'use client';
-
-import { AccountsPage } from '@/components/accounts/AccountsPage';
+import { redirect } from 'next/navigation';
 
 export default function AccountsRoute() {
-    return <AccountsPage />;
+    redirect('/dashboard/accounts/vouchers');
 }

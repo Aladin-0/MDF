@@ -143,3 +143,45 @@ export function useCustomerLedger(customerId: string) {
         enabled: !!customerId,
     });
 }
+
+// ─── Dashboard ─────────────────────────────────────────────────────────────────
+
+export function useDashboardKPIs() {
+    const outletId = useOutletId();
+    return useQuery({
+        queryKey: ['accounts-dashboard', 'kpis', outletId],
+        queryFn: () => accountsApi.getDashboardKPIs(outletId).then(r => r.data),
+        staleTime: 1000 * 60 * 5,
+        enabled: !!outletId,
+    });
+}
+
+export function useDashboardAging() {
+    const outletId = useOutletId();
+    return useQuery({
+        queryKey: ['accounts-dashboard', 'aging', outletId],
+        queryFn: () => accountsApi.getDashboardAging(outletId).then(r => r.data),
+        staleTime: 1000 * 60 * 5,
+        enabled: !!outletId,
+    });
+}
+
+export function useDashboardUrgentActions() {
+    const outletId = useOutletId();
+    return useQuery({
+        queryKey: ['accounts-dashboard', 'urgent', outletId],
+        queryFn: () => accountsApi.getDashboardUrgentActions(outletId).then(r => r.data),
+        staleTime: 1000 * 60 * 5,
+        enabled: !!outletId,
+    });
+}
+
+export function useDashboardAuditAlerts() {
+    const outletId = useOutletId();
+    return useQuery({
+        queryKey: ['accounts-dashboard', 'audit-alerts', outletId],
+        queryFn: () => accountsApi.getDashboardAuditAlerts(outletId).then(r => r.data),
+        staleTime: 1000 * 60 * 5,
+        enabled: !!outletId,
+    });
+}

@@ -46,8 +46,9 @@ class RevisionBlocksTestCase(BaseRevisionTestCase):
         self.assertEqual(self.batch.qty_strips, batch_qty_before)
         
         # Check that it didn't create a BillRevision
-        from apps.billing.models import BillRevision
-        self.assertEqual(BillRevision.objects.filter(original_invoice=invoice).count(), 0)
+        from apps.audit.models import DocumentRevision
+        from django.contrib.contenttypes.models import ContentType
+        self.assertEqual(DocumentRevision.objects.filter(object_id=invoice.id).count(), 0)
 
     def test_block_edit_fully_paid_invoice(self):
         invoice = make_test_invoice(
@@ -104,7 +105,9 @@ class RevisionBlocksTestCase(BaseRevisionTestCase):
         
         self.batch.refresh_from_db()
         batch_qty_before = self.batch.qty_strips
-        from apps.billing.models import BillRevision, LedgerEntry
+        from apps.billing.models import LedgerEntry
+        from apps.audit.models import DocumentRevision
+        from django.contrib.contenttypes.models import ContentType
         journal_count_before = LedgerEntry.objects.count()
 
         self.authenticate_as(self.billing_staff)

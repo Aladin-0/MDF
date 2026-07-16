@@ -154,8 +154,8 @@ export default function RevisionHistoryPage() {
                                         <TableCell>{rev.revision_number}</TableCell>
                                         <TableCell>{getRevisionTypeBadge(rev.revision_type)}</TableCell>
                                         <TableCell>
-                                            <Button variant="link" className="p-0 h-auto" onClick={() => router.push(`/dashboard/sales/revisions/${rev.original_invoice.id}`)}>
-                                                {rev.original_invoice.invoice_no}
+                                            <Button variant="link" className="p-0 h-auto" onClick={() => router.push(`/dashboard/sales/revisions/${rev.old_snapshot_json?.id || rev.original_document_id}`)}>
+                                                {rev.old_snapshot_json?.invoice_no || 'Unknown Invoice'}
                                             </Button>
                                         </TableCell>
                                         <TableCell>
@@ -170,7 +170,7 @@ export default function RevisionHistoryPage() {
                                             <Button 
                                                 variant="ghost" 
                                                 size="sm" 
-                                                onClick={() => router.push(`/dashboard/sales/revisions/${rev.original_invoice.id}`)}
+                                                onClick={() => router.push(`/dashboard/sales/revisions/${rev.old_snapshot_json?.id || rev.original_document_id}`)}
                                                 className="opacity-0 group-hover:opacity-100 transition-opacity"
                                             >
                                                 <Eye className="h-4 w-4 mr-2" />

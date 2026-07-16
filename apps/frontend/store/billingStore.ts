@@ -503,29 +503,16 @@ export const useBillingStore = create<BillingState>((set, get) => ({
 
     // --- Global UI Actions ---
 
-    setBackendRateError: (batchId, errorMsg) => set((state) => ({
-        backendRateErrors: { ...state.backendRateErrors, [batchId]: errorMsg }
-    })),
-    clearBackendRateError: (batchId) => set((state) => {
-        const { [batchId]: _, ...rest } = state.backendRateErrors;
-        return { backendRateErrors: rest };
+    setEditingSaleId: (id) => set((state) => {
+        if (!state.activeDraftId) return state;
+        const draft = state.drafts[state.activeDraftId];
+        return {
+            drafts: {
+                ...state.drafts,
+                [state.activeDraftId]: { ...draft, editingSaleId: id || undefined }
+            }
+        };
     }),
-    clearAllBackendRateErrors: () => set({ backendRateErrors: {} }),
-    
-    setRevisionContext: (action, reasonCode, reasonText) => set({ 
-        revisionAction: action, 
-        revisionReasonCode: reasonCode, 
-        revisionReasonText: reasonText 
-    }),
-
-    setActiveStaff: (staff) => set({ activeStaff: staff, isPinVerified: true }),
-    clearPin: () => set({ activeStaff: null, isPinVerified: false }),
-
-    setSearchQuery: (q) => set({ searchQuery: q }),
-    toggleCart: () => set((state) => ({ isCartOpen: !state.isCartOpen })),
-    setCustomerSelectorOpen: (open) => set({ isCustomerSelectorOpen: open }),
-    setLastInvoice: (inv) => set({ lastInvoice: inv }),
-    setEditingSaleId: (id) => set({ editingSaleId: id }),
     setEditingReturnInfo: (info) => set({ editingReturnInfo: info }),
     
     resetBilling: () => set({
@@ -547,4 +534,38 @@ export const useBillingStore = create<BillingState>((set, get) => ({
     }),
 
     incrementBillsToday: () => set((state) => ({ billsToday: state.billsToday + 1 })),
+
+    setBackendRateError: (batchId, errorMsg) => set((state) => ({
+        backendRateErrors: { ...state.backendRateErrors, [batchId]: errorMsg }
+    })),
+    clearBackendRateError: (batchId) => set((state) => {
+        const { [batchId]: _, ...rest } = state.backendRateErrors;
+        return { backendRateErrors: rest };
+    }),
+    clearAllBackendRateErrors: () => set({ backendRateErrors: {} }),
+    
+    setRevisionContext: (action, reasonCode, reasonText) => set((state) => {
+        if (!state.activeDraftId) return state;
+        const draft = state.drafts[state.activeDraftId];
+        return {
+            drafts: {
+                ...state.drafts,
+                [state.activeDraftId]: { 
+                    ...draft, 
+                    revisionAction: action || undefined, 
+                    revisionReasonCode: reasonCode || undefined, 
+                    revisionReasonText: reasonText || undefined 
+                }
+            }
+        };
+    }),
+
+    setActiveStaff: (staff) => set({ activeStaff: staff, isPinVerified: true }),
+    clearPin: () => set({ activeStaff: null, isPinVerified: false }),
+
+    setSearchQuery: (q) => set({ searchQuery: q }),
+    toggleCart: () => set((state) => ({ isCartOpen: !state.isCartOpen })),
+    setCustomerSelectorOpen: (open) => set({ isCustomerSelectorOpen: open }),
+    setLastInvoice: (inv) => set({ lastInvoice: inv }),
+
 }));

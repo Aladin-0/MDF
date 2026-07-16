@@ -8,7 +8,9 @@ from apps.core.models import Outlet, Organization
 from apps.accounts.models import Staff
 from apps.inventory.models import MasterProduct, Batch
 from apps.purchases.models import Distributor
-from apps.billing.models import SaleInvoice, SaleItem, BillRevision
+from apps.billing.models import SaleInvoice, SaleItem 
+from apps.audit.models import DocumentRevision
+from django.contrib.contenttypes.models import ContentType
 from django.utils import timezone
 from apps.billing.sale_update_service import atomic_sale_update, get_sale_modification_constraints, SaleServiceError
 
@@ -155,9 +157,9 @@ class SaleReviseAPITests(APITestCase):
         self.assertEqual(self.invoice.grand_total, Decimal('180.00'))
         
         # Verify BillRevision was created
-        self.assertEqual(BillRevision.objects.count(), 1)
-        revision = BillRevision.objects.first()
-        self.assertEqual(revision.original_invoice, self.invoice)
+        self.assertEqual(DocumentRevision.objects.count(), 1)
+        revision = DocumentRevision.objects.first()
+        self.assertEqual(revision.object_id, self.invoice.id)
         self.assertEqual(revision.revision_type, 'direct_revise')
         self.assertEqual(revision.reason_code, 'ENTRY_ERROR_QTY')
         self.assertEqual(revision.new_snapshot_json['grand_total'], '180.00')
@@ -250,7 +252,7 @@ class SaleReviseAPITests(APITestCase):
         self.assertEqual(self.invoice.credit_given, Decimal('-10.00'))
         
         # Verify BillRevision was created and has payment_impact
-        revision = BillRevision.objects.get(original_invoice=self.invoice)
+        revision = DocumentRevision.objects.get(object_id=self.invoice.id)
         self.assertEqual(revision.revision_type, 'paid_bill_correction')
         self.assertEqual(revision.payment_impact_json['refund_required'], '10.00')
 
@@ -346,8 +348,8 @@ class SaleReviseAPITests(APITestCase):
         self.assertTrue(self.invoice.is_cancelled)
         
         # Assert BillRevision created properly linking both
-        revision = BillRevision.objects.get(original_invoice=self.invoice, revision_type='cancel_and_reissue')
-        self.assertEqual(str(revision.resulting_invoice_id), str(new_invoice.id))
+        revision = DocumentRevision.objects.get(object_id=self.invoice.id, revision_type='cancel_and_reissue')
+        self.assertEqual(str(revision.resulting_document_id), str(new_invoice.id))
         
         # Assert stock is correct: 
         # Started at 5 + 1 (reverted from old item during cancel) = 6
@@ -373,9 +375,11 @@ class SaleReviseAPITests(APITestCase):
 
     def test_sale_revision_history_api(self):
         # Create a revision
-        revision = BillRevision.objects.create(
+        revision = DocumentRevision.objects.create(
+            content_type=ContentType.objects.get_for_model(SaleInvoice),
+            object_id=self.invoice.id,
             outlet=self.outlet,
-            original_invoice=self.invoice,
+
             revision_type='direct_revise',
             reason_code='ENTRY_ERROR_QTY',
             reason_text='Wrong quantity',
@@ -390,19 +394,21 @@ class SaleReviseAPITests(APITestCase):
         self.assertEqual(response.data['results'][0]['id'], str(revision.id))
         
         # Test Detail API
-        url_detail = reverse('sale-revisions-detail', kwargs={'sale_id': self.invoice.id}) + f'?outletId={self.outlet.id}'
+        url_detail = reverse('unified-revisions', kwargs={'record_type': 'sale', 'record_id': self.invoice.id}) + f'?outletId={self.outlet.id}'
         response = self.client.get(url_detail)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn('invoice', response.data)
+        self.assertIn('record', response.data)
         self.assertIn('revisions', response.data)
         self.assertEqual(len(response.data['revisions']), 1)
         self.assertEqual(response.data['revisions'][0]['id'], str(revision.id))
 
     def test_sale_revision_report_and_export(self):
         # Create a revision
-        revision = BillRevision.objects.create(
+        revision = DocumentRevision.objects.create(
+            content_type=ContentType.objects.get_for_model(SaleInvoice),
+            object_id=self.invoice.id,
             outlet=self.outlet,
-            original_invoice=self.invoice,
+
             revision_type='direct_revise',
             reason_code='ENTRY_ERROR_QTY',
             reason_text='Wrong quantity',

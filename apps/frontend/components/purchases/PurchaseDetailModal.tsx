@@ -1,7 +1,7 @@
 'use client';
 
 import { format } from 'date-fns';
-import { FileText, Printer, X, Edit } from 'lucide-react';
+import { FileText, Printer, X, Edit, History, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -16,6 +16,7 @@ import { Separator } from '@/components/ui/separator';
 import { usePurchaseById } from '@/hooks/usePurchases';
 import { useAuthStore } from '@/store/authStore';
 import { useSettingsStore } from '@/store/settingsStore';
+import { useRouter } from 'next/navigation';
 
 interface PurchaseDetailModalProps {
     onEdit?: (invoice: PurchaseInvoiceFull) => void;
@@ -29,14 +30,19 @@ const formatINR = (n: number | undefined) =>
 
 export function PurchaseDetailModal({ open, onOpenChange, invoice, onEdit }: PurchaseDetailModalProps) {
     const { data: fullInvoiceRes, isLoading } = usePurchaseById(open && invoice ? invoice.id : '');
-    const { outlet } = useAuthStore();
+    const { outlet, user } = useAuthStore();
     const settings = useSettingsStore();
+    const router = useRouter();
 
     if (!invoice) return null;
 
     const displayInvoice = fullInvoiceRes || invoice;
     const status = getPurchaseStatus(displayInvoice);
     const cfg = STATUS_CONFIG[status];
+    
+    const canEditPaid = user?.role === 'super_admin' || user?.role === 'admin' || !!user?.canModifyPaidPurchases;
+    const isPaid = displayInvoice.paymentStatus === 'paid';
+    const showEditBtn = onEdit && (!isPaid || canEditPaid);
 
     const ledgerAdj        = Number(displayInvoice.ledgerAdjustment ?? 0);
     const ledgerAdjDisplay = Math.abs(ledgerAdj);
@@ -93,12 +99,20 @@ export function PurchaseDetailModal({ open, onOpenChange, invoice, onEdit }: Pur
 
                     <div className="flex items-center gap-2">
 
-                        {onEdit && (
+                        {showEditBtn && (
                             <Button variant="outline" size="sm" onClick={() => onEdit(displayInvoice)}>
                                 <Edit className="w-4 h-4 mr-2" />
                                 Edit
                             </Button>
                         )}
+                        <Button variant="outline" size="sm" onClick={() => { onOpenChange(false); router.push(`/dashboard/purchases/revisions/${displayInvoice.id}`); }}>
+                            <History className="w-4 h-4 mr-2" />
+                            History
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => { onOpenChange(false); router.push(`/dashboard/accounts/purchase-returns/new?invoiceNo=${displayInvoice.invoiceNo}`); }}>
+                            <Undo2 className="w-4 h-4 mr-2" />
+                            Return
+                        </Button>
                         <Button variant="outline" size="sm" onClick={handlePrint}>
                             <Printer className="w-4 h-4 mr-2" />
                             Print / PDF

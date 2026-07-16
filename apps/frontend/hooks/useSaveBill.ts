@@ -60,7 +60,7 @@ export function useSaveBill() {
 
             const payload = {
                 outletId: resolvedOutletId,
-                partyLedgerId: (customerLedger && customerLedger.id !== 'mock') ? customerLedger.id : undefined,
+                partyLedgerId: (customerLedger && customerLedger.id !== 'mock' && !(customerLedger as any).isMock) ? customerLedger.id : undefined,
                 customerId: (customer && customer.id !== 'mock') ? customer.id : undefined,
                 doctorId: (doctor && doctor.id !== 'mock') ? doctor.id : undefined,
                 doctorName: doctor?.name,      // Needed by quotation backend (stores text, not FK)
@@ -115,14 +115,14 @@ export function useSaveBill() {
                 cardPaid: getPaid('card'),
                 creditGiven: getPaid('credit'),
                 scheduleHData: (totals.requiresDoctorDetails || totals.hasScheduleH) ? scheduleHData : undefined,
-                revisionAction: state.revisionAction,
-                revisionReasonCode: state.revisionReasonCode,
-                revisionReasonText: state.revisionReasonText,
+                revisionAction: draft.revisionAction,
+                revisionReasonCode: draft.revisionReasonCode,
+                revisionReasonText: draft.revisionReasonText,
                 quotationId: draft.quotationId,
             };
 
-            const editingSaleId = state.editingSaleId;
-            const revisionAction = state.revisionAction;
+            const editingSaleId = draft.editingSaleId;
+            const revisionAction = draft.revisionAction;
             let invoice;
             try {
                 if (draft.documentMode === 'quotation') {

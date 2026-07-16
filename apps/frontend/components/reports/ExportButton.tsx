@@ -57,12 +57,15 @@ export function ExportButton({ activeTab, dateRange, batchFilters }: ExportButto
                 exportPurchaseReportCSV([], dateRange); // Phase 2: NOT_IMPLEMENTED
                 break;
             case 'batch':
-                handleBackendExport('csv');
+                handleBackendExport('csv', 'batch-wise');
+                break;
+            case 'schedule':
+                handleBackendExport('csv', 'schedule');
                 break;
         }
     };
 
-    const handleBackendExport = async (format: 'csv' | 'xlsx' | 'pdf') => {
+    const handleBackendExport = async (format: 'csv' | 'xlsx' | 'pdf', endpointPrefix: string = 'batch-wise') => {
         if (!outlet) return;
         setPdfLoading(true);
         try {
@@ -77,7 +80,19 @@ export function ExportButton({ activeTab, dateRange, batchFilters }: ExportButto
             if (batchFilters?.search) queryParams.append('search', batchFilters.search);
             if (batchFilters?.expiryWithinDays) queryParams.append('expiry_within_days', batchFilters.expiryWithinDays.toString());
             
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/reports/batch-wise/export/?${queryParams}`, {
+            // For schedule reports
+            if (endpointPrefix === 'schedule') {
+                if (batchFilters?.schedule_type) queryParams.append('schedule_type', batchFilters.schedule_type);
+                if (dateRange?.from) queryParams.append('from', dateRange.from);
+                if (dateRange?.to) queryParams.append('to', dateRange.to);
+            }
+            
+            // Determine endpoint
+            const endpoint = endpointPrefix === 'schedule' 
+                ? `/reports/schedule/?${queryParams}`
+                : `/reports/${endpointPrefix}/export/?${queryParams}`;
+                
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${endpoint}`, {
                 headers: {
                     ...(token ? { 'Authorization': `Bearer ${token}` } : {})
                 }

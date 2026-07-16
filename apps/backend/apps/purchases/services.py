@@ -12,7 +12,6 @@ from apps.accounts.journal_service import post_purchase_invoice
 from apps.inventory.models import MasterProduct, Batch
 from apps.purchases.models import PurchaseInvoice, PurchaseItem, Distributor
 from apps.billing.models import LedgerEntry, PaymentEntry, PaymentAllocation
-from apps.audit.services import log_activity
 
 logger = logging.getLogger(__name__)
 
@@ -371,7 +370,22 @@ def atomic_purchase_save(payload: Dict[str, Any], outlet_id: str, created_by_id:
 
         pass
 
-        return purchase_invoice
+        from apps.audit.core import flags, orchestrator
+        from apps.audit.core.registry import SnapshotBuilderRegistry
+        if flags.is_v2_write_enabled():
+            new_snapshot_v2 = SnapshotBuilderRegistry.build_snapshot(purchase_invoice)
+            orchestrator.record_mutation(
+                entity=purchase_invoice,
+                action="CREATE",
+                module="purchases",
+                old_snapshot={},
+                new_snapshot=new_snapshot_v2,
+                reason_code="CREATED",
+                reason_text="Purchase Invoice created",
+                metadata={"payload": payload}
+            )
+
+        return purchase_invoice  # return created invoice
 
     except PurchaseServiceError:
         # Re-raise our custom exceptions as-is
@@ -609,14 +623,22 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
         except PurchaseInvoice.DoesNotExist:
             raise PurchaseServiceError(f"Purchase {purchase_id} not found")
 
-        old_state = {
-            'invoice_no': purchase_invoice.invoice_no,
-            'distributor_id': str(purchase_invoice.distributor_id),
-            'grand_total': float(purchase_invoice.grand_total),
-            'subtotal': float(purchase_invoice.subtotal),
-            'discount_amount': float(purchase_invoice.discount_amount),
-            'items_count': purchase_invoice.items.count(),
-        }
+        from apps.accounts.models import Staff
+        staff = Staff.objects.filter(id=updated_by_id).first()
+        if purchase_invoice.outstanding <= 0:
+            if not staff or (staff.role not in ('admin', 'super_admin') and not staff.can_modify_paid_purchases):
+                raise PurchaseServiceError("Cannot modify a fully paid purchase invoice. Missing 'can_modify_paid_purchases' permission.")
+
+        # --- Reason Code and Old Snapshot ---
+        reason_code = payload.get('revisionReasonCode')
+        reason_text = payload.get('revisionReasonText')
+        if not reason_code or not reason_text:
+            raise PurchaseServiceError("Editing a purchase invoice requires a reason code and explanation.")
+        if len(reason_text.strip()) < 10:
+            raise PurchaseServiceError("Reason explanation must be at least 10 characters.")
+
+        from apps.audit.core.registry import SnapshotBuilderRegistry
+        old_snapshot = SnapshotBuilderRegistry.build_snapshot(purchase_invoice)
 
         old_invoice_no = purchase_invoice.invoice_no
         outlet = Outlet.objects.get(id=outlet_id)
@@ -656,6 +678,36 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
 
         old_items = list(purchase_invoice.items.select_related('batch').all())
         batches_to_rebuild = set()
+
+        # --- Over-Consumption Validation ---
+        # Map old items to their quantities
+        old_batch_qtys = {}
+        for old_item in old_items:
+            if old_item.batch:
+                bkey = (old_item.batch.batch_no, str(old_item.batch.expiry_date)[:10] if old_item.batch.expiry_date else None)
+                old_batch_qtys[bkey] = {
+                    'purchased': old_item.qty + old_item.free_qty,
+                    'current_stock': old_item.batch.qty_strips
+                }
+
+        # Calculate new quantities from payload
+        new_batch_qtys = {}
+        for p_item in payload.get('items', []):
+            expiry = p_item.get('expiryDate')
+            if expiry:
+                expiry = str(expiry)[:10]  # Just take YYYY-MM-DD
+            bkey = (p_item.get('batchNo'), expiry)
+            new_qty = int(p_item.get('qty', 0)) + int(p_item.get('freeQty', 0))
+            new_batch_qtys[bkey] = new_batch_qtys.get(bkey, 0) + new_qty
+
+        # Validate that new_qty is not less than consumed_qty
+        for bkey, qtys in old_batch_qtys.items():
+            consumed = qtys['purchased'] - qtys['current_stock']
+            if consumed > 0:
+                new_qty = new_batch_qtys.get(bkey, 0)
+                if new_qty < consumed:
+                    raise PurchaseServiceError(f"stock error: Cannot reduce stock below already consumed quantity (consumed: {consumed}).")
+
         
         # Revert old stock ledger entries by exact source object
         if old_items:
@@ -666,7 +718,6 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
                 object_id__in=[item.pk for item in old_items],
                 txn_type='PURCHASE_IN'
             ).delete()
-        # Save mapping of (batch_no, expiry_date) -> batch pk so Step 6 can update the right batch
         old_batch_pk_map: Dict[tuple, int] = {}
         for old_item in old_items:
             batch = old_item.batch
@@ -675,9 +726,6 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
                 bkey = (batch.batch_no, batch.expiry_date)
                 old_batch_pk_map[bkey] = batch.pk
                 logger.info(f"[EDIT] Reverting batch {batch.batch_no}: removing {total_strips} strips, will update mrp/saleRate on re-apply")
-                BatchModel.objects.filter(pk=batch.pk).update(
-                    qty_strips=Greatest(F('qty_strips') - total_strips, 0)
-                )
                 batches_to_rebuild.add(batch.pk)
             old_item.delete()
 
@@ -805,14 +853,13 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
                         batch = None
 
                 if batch is not None:
-                    batch.qty_strips += total_strips
                     batch.mrp = Decimal(str(item_payload['mrp']))
                     batch.purchase_rate = Decimal(str(item_payload.get('baseLandingRate', item_payload['purchaseRate'])))
                     batch.sale_rate = Decimal(str(item_payload['saleRate']))
                     new_pkg = int(item_payload.get('pkg') or 1)
                     if new_pkg and new_pkg != batch.pack_size:
                         batch.pack_size = new_pkg
-                    batch.save(update_fields=['qty_strips', 'mrp', 'purchase_rate', 'sale_rate', 'pack_size'])
+                    batch.save(update_fields=['mrp', 'purchase_rate', 'sale_rate', 'pack_size'])
                     logger.info(f"[EDIT] Batch {batch_no} updated: mrp={batch.mrp}, sale_rate={batch.sale_rate}")
                 else:
                     # Create a new batch — this item is for a truly new batch
@@ -940,19 +987,21 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
                 ('debit',  party_ledger, grand_total),
                 ('credit', cash_ledger,  grand_total),
             ])
-        new_state = {
-            'invoice_no': purchase_invoice.invoice_no,
-            'distributor_id': str(purchase_invoice.distributor_id),
-            'grand_total': float(purchase_invoice.grand_total),
-            'subtotal': float(purchase_invoice.subtotal),
-            'discount_amount': float(purchase_invoice.discount_amount),
-            'items_count': len(purchase_items),
-        }
-        changes = {k: {'old': old_state[k], 'new': new_state[k]} for k in old_state if old_state[k] != new_state[k]}
+        # --- Create Revision Record ---
+        from apps.audit.core import orchestrator
+        new_snapshot = SnapshotBuilderRegistry.build_snapshot(purchase_invoice)
+        orchestrator.record_mutation(
+            entity=purchase_invoice,
+            action="UPDATE",
+            module="purchases",
+            old_snapshot=old_snapshot,
+            new_snapshot=new_snapshot,
+            reason_code=reason_code or 'OTHER',
+            reason_text=reason_text or 'No reason provided',
+            metadata={'payload': payload}
+        )
 
-        pass
-
-        return purchase_invoice
+        return purchase_invoice  # return updated invoice
 
     except PurchaseServiceError:
         raise

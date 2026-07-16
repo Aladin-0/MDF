@@ -1,7 +1,7 @@
 import logging
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from apps.core.permissions import IsAdminStaff, IsManagerOrAbove, IsAuthenticated
+from apps.core.permissions import IsAdminStaff, IsManagerOrAbove, IsAuthenticated, CanEditVouchers, CanViewAuditHistory
 from rest_framework import status
 from django.core.exceptions import ValidationError
 
@@ -359,7 +359,7 @@ class VoucherNextNoView(APIView):
 
 
 class VoucherListView(APIView):
-    permission_classes = [IsManagerOrAbove]
+    permission_classes = [CanEditVouchers]
 
     def get(self, request):
         outlet_id = get_outlet_id(request)
@@ -403,7 +403,7 @@ class VoucherListView(APIView):
 
 
 class VoucherDetailView(APIView):
-    permission_classes = [IsManagerOrAbove]
+    permission_classes = [CanEditVouchers]
 
     def get(self, request, voucher_id):
         try:
@@ -415,6 +415,25 @@ class VoucherDetailView(APIView):
             return Response(VoucherSerializer(voucher).data)
         except Voucher.DoesNotExist:
             return Response({'detail': 'Not found'}, status=404)
+
+    def put(self, request, voucher_id):
+        outlet_id = get_outlet_id(request)
+        if not outlet_id:
+            return Response({'detail': 'outletId required'}, status=400)
+        
+        from apps.accounts.voucher_update_service import atomic_voucher_update
+        try:
+            voucher = atomic_voucher_update(
+                voucher_id=str(voucher_id),
+                outlet_id=outlet_id,
+                payload=request.data,
+                staff_id=str(request.user.id)
+            )
+            return Response(VoucherSerializer(voucher).data)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).exception('Error updating voucher')
+            return Response({'detail': str(e)}, status=400)
 
 
 class DebitNoteListView(APIView):
@@ -519,7 +538,8 @@ class LedgerPendingBillsView(APIView):
         outlet_id = get_outlet_id(request)
         if not outlet_id:
             return Response({'detail': 'outletId required'}, status=400)
-        bills = VoucherService.get_pending_bills(outlet_id, ledger_id)
+        exclude_voucher_id = request.query_params.get('exclude_voucher_id')
+        bills = VoucherService.get_pending_bills(outlet_id, ledger_id, exclude_voucher_id=exclude_voucher_id)
         return Response({'data': bills, 'meta': {'total': len(bills)}})
 
 
@@ -1436,3 +1456,106 @@ class ProfitLossView(APIView):
             },
             'grand_total': round(grand_total, 2),
         })
+
+class VoucherRevisionDetailView(APIView):
+    permission_classes = [CanViewAuditHistory]
+    def get(self, request, voucher_id, *args, **kwargs):
+        outlet_id = request.query_params.get('outletId')
+        from apps.audit.models import DocumentRevision
+        from apps.billing.serializers import DocumentRevisionSerializer
+        from django.contrib.contenttypes.models import ContentType
+        from django.shortcuts import get_object_or_404
+        voucher = get_object_or_404(Voucher, id=voucher_id, outlet_id=outlet_id)
+        ct = ContentType.objects.get_for_model(Voucher)
+        
+        from apps.audit.core import flags
+        if flags.is_v2_read_enabled():
+            from apps.audit.models import DocumentRevisionV2
+            from apps.audit.serializers import DocumentRevisionV2LegacyAdapterSerializer
+            revisions_v2 = DocumentRevisionV2.objects.filter(
+                content_type=ct, object_id=str(voucher_id), tenant_id=outlet_id
+            ).order_by('-created_at')
+            serializer = DocumentRevisionV2LegacyAdapterSerializer(revisions_v2, many=True)
+        else:
+            revisions = DocumentRevision.objects.filter(content_type=ct, object_id=str(voucher_id)).order_by('-created_at')
+            from apps.audit.core import flags
+            if flags.is_v2_read_enabled():
+                from apps.audit.models import DocumentRevisionV2
+                from apps.audit.serializers import DocumentRevisionV2LegacyAdapterSerializer
+                revisions_v2 = DocumentRevisionV2.objects.filter(
+                    content_type=ct, object_id=str(voucher_id), tenant_id=outlet_id
+                ).order_by('-created_at')
+                serializer = DocumentRevisionV2LegacyAdapterSerializer(revisions_v2, many=True)
+            else:
+                serializer = DocumentRevisionSerializer(revisions, many=True)
+        
+        return Response({
+            'voucher': VoucherSerializer(voucher).data,
+            'revisions': serializer.data
+        })
+
+class DebitNoteRevisionDetailView(APIView):
+    permission_classes = [CanViewAuditHistory]
+    def get(self, request, note_id, *args, **kwargs):
+        outlet_id = request.query_params.get('outletId')
+        from apps.audit.models import DocumentRevision
+        from apps.billing.serializers import DocumentRevisionSerializer
+        from django.contrib.contenttypes.models import ContentType
+        from django.shortcuts import get_object_or_404
+        debit_note = get_object_or_404(DebitNote, id=note_id, outlet_id=outlet_id)
+        ct = ContentType.objects.get_for_model(DebitNote)
+        
+        from apps.audit.core import flags
+        if flags.is_v2_read_enabled():
+            from apps.audit.models import DocumentRevisionV2
+            from apps.audit.serializers import DocumentRevisionV2LegacyAdapterSerializer
+            revisions_v2 = DocumentRevisionV2.objects.filter(
+                content_type=ct, object_id=str(note_id), tenant_id=outlet_id
+            ).order_by('-created_at')
+            serializer = DocumentRevisionV2LegacyAdapterSerializer(revisions_v2, many=True)
+        else:
+            revisions = DocumentRevision.objects.filter(content_type=ct, object_id=str(note_id)).order_by('-created_at')
+            from apps.audit.core import flags
+            if flags.is_v2_read_enabled():
+                from apps.audit.models import DocumentRevisionV2
+                from apps.audit.serializers import DocumentRevisionV2LegacyAdapterSerializer
+                revisions_v2 = DocumentRevisionV2.objects.filter(
+                    content_type=ct, object_id=str(note_id), tenant_id=outlet_id
+                ).order_by('-created_at')
+                serializer = DocumentRevisionV2LegacyAdapterSerializer(revisions_v2, many=True)
+            else:
+                serializer = DocumentRevisionSerializer(revisions, many=True)
+        
+        return Response({
+            'debit_note': DebitNoteSerializer(debit_note).data,
+            'revisions': serializer.data
+        })
+
+class DebitNoteDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request, pk, *args, **kwargs):
+        from django.shortcuts import get_object_or_404
+        note = get_object_or_404(DebitNote, id=pk)
+        return Response(DebitNoteSerializer(note).data)
+
+    def put(self, request, pk, *args, **kwargs):
+        outlet_id = request.data.get('outletId')
+        if not outlet_id:
+            return Response({'error': 'outletId is required'}, status=400)
+
+        from apps.accounts.debit_note_update_service import atomic_debit_note_update
+        try:
+            note = atomic_debit_note_update(
+                debit_note_id=str(pk),
+                outlet_id=outlet_id,
+                payload=request.data,
+                staff_id=str(request.user.id)
+            )
+            note = DebitNote.objects.select_related('distributor').prefetch_related('items').get(id=note.id)
+            return Response(DebitNoteSerializer(note).data)
+        except ValidationError as e:
+            if hasattr(e, 'get_codes') and 'stale_edit_conflict' in e.get_codes():
+                return Response({'error': str(e.detail)}, status=409)
+            return Response({'error': str(e.detail)}, status=400)
+        except Exception as e:
+            return Response({'error': str(e)}, status=400)

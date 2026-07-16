@@ -140,6 +140,24 @@ class LoginView(APIView):
             'canAccessReports': staff.can_access_reports,
             'canEditSales': staff.can_edit_sales,
             'canEditPurchases': staff.can_edit_purchases,
+            'canModifyPaidPurchases': staff.can_modify_paid_purchases,
+            'canModifySettledVouchers': staff.can_modify_settled_vouchers,
+            'canModifySettledReturns': staff.can_modify_settled_returns,
+            'canEditSaleReturns': staff.can_edit_sale_returns,
+            'canEditPurchaseReturns': staff.can_edit_purchase_returns,
+            'canEditVouchers': staff.can_edit_vouchers,
+            'canViewAuditHistory': staff.can_view_audit_history,
+            'canVoidRecords': staff.can_void_records,
+            'canModifyDraftBill': staff.can_modify_draft_bill,
+            'canModifyUnpaidBill': staff.can_modify_unpaid_bill,
+            'canCorrectHeaderFields': staff.can_correct_header_fields,
+            'canCorrectRatesDiscounts': staff.can_correct_rates_discounts,
+            'canCorrectQuantities': staff.can_correct_quantities,
+            'canCorrectCustomer': staff.can_correct_customer,
+            'canModifyBillWithReturn': staff.can_modify_bill_with_return,
+            'canModifyPaidBill': staff.can_modify_paid_bill,
+            'canCancelAndReissueBill': staff.can_cancel_and_reissue_bill,
+            'canViewBillRevisionHistory': staff.can_view_bill_revision_history,
         }
 
         response_data = {
@@ -220,6 +238,24 @@ class SwitchOutletView(APIView):
             'canAccessReports': staff.can_access_reports,
             'canEditSales': staff.can_edit_sales,
             'canEditPurchases': staff.can_edit_purchases,
+            'canModifyPaidPurchases': staff.can_modify_paid_purchases,
+            'canModifySettledVouchers': staff.can_modify_settled_vouchers,
+            'canModifySettledReturns': staff.can_modify_settled_returns,
+            'canEditSaleReturns': staff.can_edit_sale_returns,
+            'canEditPurchaseReturns': staff.can_edit_purchase_returns,
+            'canEditVouchers': staff.can_edit_vouchers,
+            'canViewAuditHistory': staff.can_view_audit_history,
+            'canVoidRecords': staff.can_void_records,
+            'canModifyDraftBill': staff.can_modify_draft_bill,
+            'canModifyUnpaidBill': staff.can_modify_unpaid_bill,
+            'canCorrectHeaderFields': staff.can_correct_header_fields,
+            'canCorrectRatesDiscounts': staff.can_correct_rates_discounts,
+            'canCorrectQuantities': staff.can_correct_quantities,
+            'canCorrectCustomer': staff.can_correct_customer,
+            'canModifyBillWithReturn': staff.can_modify_bill_with_return,
+            'canModifyPaidBill': staff.can_modify_paid_bill,
+            'canCancelAndReissueBill': staff.can_cancel_and_reissue_bill,
+            'canViewBillRevisionHistory': staff.can_view_bill_revision_history,
         }
 
         response_data = {
@@ -275,6 +311,24 @@ class StaffMeView(APIView):
             'canAccessReports': staff.can_access_reports,
             'canEditSales': staff.can_edit_sales,
             'canEditPurchases': staff.can_edit_purchases,
+            'canModifyPaidPurchases': staff.can_modify_paid_purchases,
+            'canModifySettledVouchers': staff.can_modify_settled_vouchers,
+            'canModifySettledReturns': staff.can_modify_settled_returns,
+            'canEditSaleReturns': staff.can_edit_sale_returns,
+            'canEditPurchaseReturns': staff.can_edit_purchase_returns,
+            'canEditVouchers': staff.can_edit_vouchers,
+            'canViewAuditHistory': staff.can_view_audit_history,
+            'canVoidRecords': staff.can_void_records,
+            'canModifyDraftBill': staff.can_modify_draft_bill,
+            'canModifyUnpaidBill': staff.can_modify_unpaid_bill,
+            'canCorrectHeaderFields': staff.can_correct_header_fields,
+            'canCorrectRatesDiscounts': staff.can_correct_rates_discounts,
+            'canCorrectQuantities': staff.can_correct_quantities,
+            'canCorrectCustomer': staff.can_correct_customer,
+            'canModifyBillWithReturn': staff.can_modify_bill_with_return,
+            'canModifyPaidBill': staff.can_modify_paid_bill,
+            'canCancelAndReissueBill': staff.can_cancel_and_reissue_bill,
+            'canViewBillRevisionHistory': staff.can_view_bill_revision_history,
         }
 
         return Response(user_data, status=status.HTTP_200_OK)
@@ -912,6 +966,14 @@ class StaffListView(APIView):
                 'canAccessReports': s.can_access_reports,
                 'canEditSales': s.can_edit_sales,
                 'canEditPurchases': s.can_edit_purchases,
+                'canModifyPaidPurchases': s.can_modify_paid_purchases,
+                'canModifySettledVouchers': s.can_modify_settled_vouchers,
+                'canModifySettledReturns': s.can_modify_settled_returns,
+                'canEditSaleReturns': s.can_edit_sale_returns,
+                'canEditPurchaseReturns': s.can_edit_purchase_returns,
+                'canEditVouchers': s.can_edit_vouchers,
+                'canViewAuditHistory': s.can_view_audit_history,
+                'canVoidRecords': s.can_void_records,
                 'canModifyDraftBill': s.can_modify_draft_bill,
                 'canModifyUnpaidBill': s.can_modify_unpaid_bill,
                 'canCorrectHeaderFields': s.can_correct_header_fields,
@@ -1130,6 +1192,14 @@ def _serialize_staff(s):
         'canAccessReports': s.can_access_reports,
         'canEditSales': s.can_edit_sales,
         'canEditPurchases': s.can_edit_purchases,
+        'canModifyPaidPurchases': s.can_modify_paid_purchases,
+        'canModifySettledVouchers': s.can_modify_settled_vouchers,
+        'canModifySettledReturns': s.can_modify_settled_returns,
+        'canEditSaleReturns': s.can_edit_sale_returns,
+        'canEditPurchaseReturns': s.can_edit_purchase_returns,
+        'canEditVouchers': s.can_edit_vouchers,
+        'canViewAuditHistory': s.can_view_audit_history,
+        'canVoidRecords': s.can_void_records,
         'canModifyDraftBill': s.can_modify_draft_bill,
         'canModifyUnpaidBill': s.can_modify_unpaid_bill,
         'canCorrectHeaderFields': s.can_correct_header_fields,
@@ -1197,6 +1267,14 @@ class StaffCreateView(APIView):
             can_access_reports=request.data.get('canAccessReports', False),
             can_edit_sales=request.data.get('canEditSales', False),
             can_edit_purchases=request.data.get('canEditPurchases', False),
+            can_modify_paid_purchases=request.data.get('canModifyPaidPurchases', False),
+            can_modify_settled_vouchers=request.data.get('canModifySettledVouchers', False),
+            can_modify_settled_returns=request.data.get('canModifySettledReturns', False),
+            can_edit_sale_returns=request.data.get('canEditSaleReturns', False),
+            can_edit_purchase_returns=request.data.get('canEditPurchaseReturns', False),
+            can_edit_vouchers=request.data.get('canEditVouchers', False),
+            can_view_audit_history=request.data.get('canViewAuditHistory', False),
+            can_void_records=request.data.get('canVoidRecords', False),
             can_modify_draft_bill=request.data.get('canModifyDraftBill', False),
             can_modify_unpaid_bill=request.data.get('canModifyUnpaidBill', False),
             can_correct_header_fields=request.data.get('canCorrectHeaderFields', False),
@@ -1234,8 +1312,6 @@ class StaffDetailView(APIView):
         except Staff.DoesNotExist:
             return Response({'detail': 'Staff not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        updatable = ('name', 'email', 'role', 'max_discount', 'can_edit_rate',
-                     'can_view_purchase_rates', 'can_create_purchases', 'can_access_reports', 'can_edit_sales', 'can_edit_purchases', 'is_active')
         camel_map = {
             'maxDiscount': 'max_discount',
             'canEditRate': 'can_edit_rate',
@@ -1244,6 +1320,14 @@ class StaffDetailView(APIView):
             'canAccessReports': 'can_access_reports',
             'canEditSales': 'can_edit_sales',
             'canEditPurchases': 'can_edit_purchases',
+            'canModifyPaidPurchases': 'can_modify_paid_purchases',
+            'canModifySettledVouchers': 'can_modify_settled_vouchers',
+            'canModifySettledReturns': 'can_modify_settled_returns',
+            'canEditSaleReturns': 'can_edit_sale_returns',
+            'canEditPurchaseReturns': 'can_edit_purchase_returns',
+            'canEditVouchers': 'can_edit_vouchers',
+            'canViewAuditHistory': 'can_view_audit_history',
+            'canVoidRecords': 'can_void_records',
             'canModifyDraftBill': 'can_modify_draft_bill',
             'canModifyUnpaidBill': 'can_modify_unpaid_bill',
             'canCorrectHeaderFields': 'can_correct_header_fields',
@@ -1269,6 +1353,14 @@ class StaffDetailView(APIView):
             'can_access_reports': staff.can_access_reports,
             'can_edit_sales': staff.can_edit_sales,
             'can_edit_purchases': staff.can_edit_purchases,
+            'can_modify_paid_purchases': staff.can_modify_paid_purchases,
+            'can_modify_settled_vouchers': staff.can_modify_settled_vouchers,
+            'can_modify_settled_returns': staff.can_modify_settled_returns,
+            'can_edit_sale_returns': staff.can_edit_sale_returns,
+            'can_edit_purchase_returns': staff.can_edit_purchase_returns,
+            'can_edit_vouchers': staff.can_edit_vouchers,
+            'can_view_audit_history': staff.can_view_audit_history,
+            'can_void_records': staff.can_void_records,
             'can_modify_draft_bill': staff.can_modify_draft_bill,
             'can_modify_unpaid_bill': staff.can_modify_unpaid_bill,
             'can_correct_header_fields': staff.can_correct_header_fields,
@@ -1309,6 +1401,14 @@ class StaffDetailView(APIView):
             'can_access_reports': staff.can_access_reports,
             'can_edit_sales': staff.can_edit_sales,
             'can_edit_purchases': staff.can_edit_purchases,
+            'can_modify_paid_purchases': staff.can_modify_paid_purchases,
+            'can_modify_settled_vouchers': staff.can_modify_settled_vouchers,
+            'can_modify_settled_returns': staff.can_modify_settled_returns,
+            'can_edit_sale_returns': staff.can_edit_sale_returns,
+            'can_edit_purchase_returns': staff.can_edit_purchase_returns,
+            'can_edit_vouchers': staff.can_edit_vouchers,
+            'can_view_audit_history': staff.can_view_audit_history,
+            'can_void_records': staff.can_void_records,
             'can_modify_draft_bill': staff.can_modify_draft_bill,
             'can_modify_unpaid_bill': staff.can_modify_unpaid_bill,
             'can_correct_header_fields': staff.can_correct_header_fields,
@@ -1877,3 +1977,32 @@ class LogoutView(TokenBlacklistView):
                 description=desc,
             )
         return response
+
+from apps.accounts.dashboard_service import DashboardService
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+
+class DashboardKPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request):
+        outlet_id = request.query_params.get('outletId')
+        return Response(DashboardService.get_financial_health_kpis(outlet_id))
+
+class DashboardAgingView(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request):
+        outlet_id = request.query_params.get('outletId')
+        return Response(DashboardService.get_aging_summary(outlet_id))
+
+class DashboardUrgentActionsView(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request):
+        outlet_id = request.query_params.get('outletId')
+        return Response(DashboardService.get_urgent_actions(outlet_id))
+
+class DashboardAuditAlertsView(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request):
+        outlet_id = request.query_params.get('outletId')
+        return Response(DashboardService.get_audit_alerts(outlet_id))

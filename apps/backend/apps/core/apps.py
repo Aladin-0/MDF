@@ -6,7 +6,4 @@ class CoreConfig(AppConfig):
 
     def ready(self):
         from .models import Organization, Outlet, OutletSettings
-        from apps.audit.registry import register_audit
-        register_audit(Organization, 'core')
-        register_audit(Outlet, 'core')
-        register_audit(OutletSettings, 'core')
+        from .models import Organization, Outlet, OutletSettings

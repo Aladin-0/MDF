@@ -79,7 +79,7 @@ def log_activity(
             'action': action,
             'module': module,
             'entity_type': entity_type,
-            'entity_id': entity_id,
+            'entity_id': str(entity_id) if entity_id else None,
             'description': description,
             'error': str(e)
         }))

@@ -122,6 +122,14 @@ export interface AuthUser {
     canAccessReports: boolean;
     canEditSales?: boolean;
     canEditPurchases?: boolean;
+    canModifyPaidPurchases?: boolean;
+    canModifySettledVouchers?: boolean;
+    canModifySettledReturns?: boolean;
+    canEditSaleReturns?: boolean;
+    canEditPurchaseReturns?: boolean;
+    canEditVouchers?: boolean;
+    canViewAuditHistory?: boolean;
+    canVoidRecords?: boolean;
     canModifyDraftBill?: boolean;
     canModifyUnpaidBill?: boolean;
     canCorrectHeaderFields?: boolean;
@@ -162,6 +170,14 @@ export interface StaffMember {
     canAccessReports: boolean;
     canEditSales: boolean;
     canEditPurchases: boolean;
+    canModifyPaidPurchases: boolean;
+    canModifySettledVouchers: boolean;
+    canModifySettledReturns: boolean;
+    canEditSaleReturns: boolean;
+    canEditPurchaseReturns: boolean;
+    canEditVouchers: boolean;
+    canViewAuditHistory: boolean;
+    canVoidRecords: boolean;
     canModifyDraftBill?: boolean;
     canModifyUnpaidBill?: boolean;
     canCorrectHeaderFields?: boolean;
@@ -187,6 +203,14 @@ export interface StaffPinVerifyResponse {
     canViewPurchaseRates?: boolean;
     canEditSales?: boolean;
     canEditPurchases?: boolean;
+    canModifyPaidPurchases?: boolean;
+    canModifySettledVouchers?: boolean;
+    canModifySettledReturns?: boolean;
+    canEditSaleReturns?: boolean;
+    canEditPurchaseReturns?: boolean;
+    canEditVouchers?: boolean;
+    canViewAuditHistory?: boolean;
+    canVoidRecords?: boolean;
     billsToday: number;
     totalSalesToday: number;
 }
@@ -451,6 +475,10 @@ export interface DraftBill {
     lastSavedAt?: string;
     createdAt: string;
     updatedAt: string;
+    editingSaleId?: string;
+    revisionAction?: string;
+    revisionReasonCode?: string;
+    revisionReasonText?: string;
 }
 
 export interface ScheduleHData {
@@ -781,6 +809,7 @@ export interface PurchaseInvoiceFull extends PurchaseInvoice {
         currentBalance: number;
         state?: string;
     } | null;
+    paymentStatus?: 'pending' | 'partial' | 'paid';
 }
 
 // ─── Purchase Payloads ────────────────────────────────────────────────────────
@@ -1561,6 +1590,7 @@ export interface DebitNote {
     status: 'pending' | 'adjusted' | 'refunded';
     items: DebitNoteItem[];
     createdAt: string;
+    updatedAt: string;
 }
 
 export interface CreditNoteItem {

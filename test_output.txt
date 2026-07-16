@@ -1,0 +1,48 @@
+Creating test database for alias 'default'...
+Found 3 test(s).
+System check identified no issues (0 silenced).
+
+Outlet: Test Outlet
+  Primary groups created:    21
+  Tax sub-groups created:    3
+  Standard ledgers created:  112
+  Rate-specific GST ledgers: 28
+  Customers synced:          0
+  Distributors synced:       0
+
+Done. Total groups in DB: 24, Total ledgers in DB: 140
+FBatch qty before: 10
+
+Outlet: Test Outlet
+  Primary groups created:    21
+  Tax sub-groups created:    3
+  Standard ledgers created:  112
+  Rate-specific GST ledgers: 28
+  Customers synced:          0
+  Distributors synced:       0
+
+Done. Total groups in DB: 24, Total ledgers in DB: 140
+.
+Outlet: Test Outlet
+  Primary groups created:    21
+  Tax sub-groups created:    3
+  Standard ledgers created:  112
+  Rate-specific GST ledgers: 28
+  Customers synced:          0
+  Distributors synced:       0
+
+Done. Total groups in DB: 24, Total ledgers in DB: 140
+.
+======================================================================
+FAIL: test_direct_revise_unpaid_bill (apps.billing.tests.test_revise_api.SaleReviseAPITests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/app/apps/billing/tests/test_revise_api.py", line 146, in test_direct_revise_unpaid_bill
+    self.assertIn('180', revision.new_snapshot_json)
+AssertionError: '180' not found in {'id': 'dbeebf46-26a3-41f3-a636-50cef2c3bee3', 'items': [{'id': '3e55a8ff-e32e-4b10-934c-dd90fc9a5e1a', 'mrp': '100.00', 'rate': '90.00', 'batch_id': 'd9377a6b-d1df-4c45-a561-39a6e2e88f61', 'qty_loose': 0, 'gst_amount': '0.00', 'qty_strips': 2, 'discount_pct': '0.00', 'product_name': 'Test Prod', 'total_amount': '180.00', 'taxable_amount': '0.00'}], 'subtotal': '180.00', 'upi_paid': '0.00', 'card_paid': '0.00', 'cash_paid': '180.00', 'is_return': False, 'round_off': '0.00', 'amount_due': '0.00', 'invoice_no': 'INV-001', 'amount_paid': '180.00', 'cgst_amount': '0.00', 'customer_id': None, 'grand_total': '180.00', 'igst_amount': '0.00', 'sgst_amount': '0.00', 'billed_by_id': '00f1d35a-8095-4f76-8b8e-5c4094ccc05f', 'credit_given': '0.00', 'invoice_date': '2026-06-15T12:41:27.489044', 'payment_mode': 'cash', 'taxable_amount': '180.00', 'discount_amount': '0.00', 'extra_discount_pct': '0.00'}
+
+----------------------------------------------------------------------
+Ran 3 tests in 3.126s
+
+FAILED (failures=1)
+Destroying test database for alias 'default'...

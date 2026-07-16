@@ -112,6 +112,8 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
     const [ledgerAdjustment,  setLedgerAdjustment]   = useState<number>(0);
     const [adjustmentSign,    setAdjustmentSign]     = useState<'-' | '+'>('-');
     const [ledgerNote,        setLedgerNote]         = useState<string>('');
+    const [revisionReasonCode,setRevisionReasonCode] = useState<string>('');
+    const [revisionReasonText,setRevisionReasonText] = useState<string>('');
 
     // ── Add-product drawer state ───────────────────────────────────────────────
     const [drawerOpen,        setDrawerOpen]        = useState(false);
@@ -394,6 +396,17 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
 
 
             if (invoiceToEdit) {
+                if (!revisionReasonCode) {
+                    toast({ variant: 'destructive', title: 'Revision reason code is required.' });
+                    return;
+                }
+                if (!revisionReasonText || revisionReasonText.length < 5) {
+                    toast({ variant: 'destructive', title: 'A detailed revision reason explanation (min 5 characters) is required.' });
+                    return;
+                }
+                (payload as any).revisionReasonCode = revisionReasonCode;
+                (payload as any).revisionReasonText = revisionReasonText;
+                
                 await updatePurchase.mutateAsync({ id: invoiceToEdit.id, payload });
                 toast({
                     title:       'Purchase updated ✓',
@@ -844,6 +857,46 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                     </div>
                 </div>
             </div>
+
+            {/* ── Reason for Modification (Edit Mode Only) ──────────────── */}
+            {invoiceToEdit && (
+                <div className="rounded-xl border border-blue-200 bg-blue-50 p-5 mt-2">
+                    <h3 className="text-sm font-semibold text-blue-900 mb-3 flex items-center gap-2">
+                        <FileText className="h-4 w-4" />
+                        Reason for Modification
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label className="text-blue-800">Action Type / Reason Code <span className="text-rose-500">*</span></Label>
+                            <select
+                                className="w-full rounded-md border border-blue-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                                value={revisionReasonCode}
+                                onChange={(e) => setRevisionReasonCode(e.target.value)}
+                            >
+                                <option value="">Select a reason...</option>
+                                <option value="ENTRY_MISTAKE">Entry Mistake</option>
+                                <option value="RATE_CORRECTION">Rate Correction</option>
+                                <option value="QTY_CORRECTION">Quantity Correction</option>
+                                <option value="DATE_CORRECTION">Date Correction</option>
+                                <option value="SUPPLIER_REQUEST">Supplier Request</option>
+                                <option value="DUPLICATE_ENTRY_FIX">Duplicate Entry Fix</option>
+                                <option value="TAX_CORRECTION">Tax Correction</option>
+                                <option value="PAYMENT_ADJUSTMENT">Payment Adjustment</option>
+                                <option value="OTHER">Other</option>
+                            </select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label className="text-blue-800">Detailed Explanation <span className="text-rose-500">*</span></Label>
+                            <Textarea
+                                className="min-h-[80px] bg-white border-blue-200 focus-visible:ring-blue-500/20"
+                                placeholder="Explain why you are modifying this purchase invoice..."
+                                value={revisionReasonText}
+                                onChange={(e) => setRevisionReasonText(e.target.value)}
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* ── Action bar ───────────────────────────────────────────── */}
             <div className="flex items-center justify-between pb-2">

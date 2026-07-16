@@ -27,8 +27,6 @@ export default function ModifySalePage({ params }: { params: { id: string } }) {
     const { id } = params;
     const [loading, setLoading] = useState(true);
     const [data, setData] = useState<any>(null);
-    const [reasonCode, setReasonCode] = useState('');
-    const [reasonText, setReasonText] = useState('');
     const [error, setError] = useState('');
     const outlet = useAuthStore(s => s.user?.outlet);
 
@@ -53,25 +51,27 @@ export default function ModifySalePage({ params }: { params: { id: string } }) {
     const { invoice, allowedActions, blockReason } = data;
 
     const handleAction = async (action: string) => {
-        if (!reasonCode || !reasonText.trim()) {
-            alert('Please select a reason code and provide a brief explanation.');
-            return;
-        }
-
         try {
             const res = await api.get(`/sales/${id}/`, { params: { outletId: outlet?.id } });
             const fullInvoice = res.data;
 
             const store = useBillingStore.getState();
-            store.clearCart();
+            let targetDraftId = store.activeDraftId;
+            if (!targetDraftId) {
+                targetDraftId = store.createDraft();
+            } else {
+                store.clearCart(targetDraftId);
+            }
             store.setLastInvoice(null);
+            
+            // set properties now that we are guaranteed an active draft
             store.setEditingSaleId(id);
-            store.setRevisionContext(action, reasonCode, reasonText);
+            store.setRevisionContext(action, '', '');
 
             store.setCustomer(fullInvoice.customer || null);
             if (fullInvoice.customer) {
                 store.setCustomerLedger({
-                    id: fullInvoice.customer.id,
+                    id: 'mock',
                     name: fullInvoice.customer.name,
                     groupName: 'Sundry Debtors',
                     currentBalance: 0,
@@ -98,6 +98,17 @@ export default function ModifySalePage({ params }: { params: { id: string } }) {
                 amount: fullInvoice.amountPaid || fullInvoice.grandTotal,
             });
 
+            if (fullInvoice.doctorId) {
+                store.setDoctor({
+                    id: fullInvoice.doctorId,
+                    name: fullInvoice.doctorName || '',
+                    registration_number: fullInvoice.doctorRegNo || '',
+                } as any);
+            }
+            if (fullInvoice.hospitalName) {
+                store.setHospitalName(fullInvoice.hospitalName);
+            }
+
             if (fullInvoice.doctorName || fullInvoice.prescriptionNo) {
                  store.setScheduleHData({
                      patientName: fullInvoice.patientName || '',
@@ -123,7 +134,7 @@ export default function ModifySalePage({ params }: { params: { id: string } }) {
                  });
             }
 
-            router.push('/billing');
+            router.push('/dashboard/billing');
         } catch (err) {
             console.error("Failed to load invoice for modification", err);
             alert("Failed to load invoice details. Please try again.");
@@ -197,34 +208,7 @@ export default function ModifySalePage({ params }: { params: { id: string } }) {
                         </CardContent>
                     </Card>
 
-                    <Card>
-                        <CardHeader className="pb-3">
-                            <CardTitle className="text-lg">Reason for Modification</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="space-y-2">
-                                <Label>Reason Code <span className="text-red-500">*</span></Label>
-                                <Select value={reasonCode} onValueChange={setReasonCode}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select a code" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {REASON_CODES.map(c => (
-                                            <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="space-y-2">
-                                <Label>Detailed Explanation <span className="text-red-500">*</span></Label>
-                                <Input 
-                                    placeholder="Briefly explain why this is being modified..."
-                                    value={reasonText}
-                                    onChange={(e) => setReasonText(e.target.value)}
-                                />
-                            </div>
-                        </CardContent>
-                    </Card>
+
                 </div>
 
                 {/* Actions Column */}

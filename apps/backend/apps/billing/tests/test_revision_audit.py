@@ -4,7 +4,8 @@ from django.urls import reverse
 from apps.billing.tests.base import BaseRevisionTestCase
 from apps.billing.tests.factories import make_test_invoice, make_test_sales_return
 from apps.audit.models import ActivityLog
-from apps.billing.models import BillRevision
+from apps.audit.models import DocumentRevision
+from django.contrib.contenttypes.models import ContentType
 from unittest.mock import patch
 
 @override_settings(CELERY_TASK_ALWAYS_EAGER=True)
@@ -128,4 +129,4 @@ class RevisionAuditTestCase(BaseRevisionTestCase):
         
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         
-        self.assertEqual(BillRevision.objects.filter(original_invoice=invoice).count(), 0)
+        self.assertEqual(DocumentRevision.objects.filter(object_id=invoice.id).count(), 0)

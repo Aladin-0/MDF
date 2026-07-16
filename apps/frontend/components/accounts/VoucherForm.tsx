@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
-import { Loader2, Plus, Trash2, CheckSquare, Square, AlertCircle } from 'lucide-react';
+import { Loader2, Plus, Trash2, CheckSquare, Square, MinusSquare, AlertCircle, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { useOutletId } from '@/hooks/useOutletId';
 import { voucherApi } from '@/lib/apiClient';
+import { api } from '@/lib/api';
 import { Ledger, Voucher, PendingBill } from '@/types';
 import { LedgerPicker } from './LedgerPicker';
 import { cn } from '@/lib/utils';
@@ -26,6 +27,7 @@ interface LineRow {
 
 interface VoucherFormProps {
     initialType?: VoucherType;
+    voucherId?: string;
     onSuccess?: (voucher: Voucher) => void;
 }
 
@@ -43,6 +45,14 @@ const TYPE_SHORTCUTS: Record<string, VoucherType> = {
     F7: 'journal',
 };
 
+const REASON_CODES = [
+    { value: 'MODIFIED', label: 'General Modification' },
+    { value: 'AMOUNT_CORRECTION', label: 'Amount Correction' },
+    { value: 'LEDGER_CORRECTION', label: 'Ledger Correction' },
+    { value: 'DATE_CORRECTION', label: 'Date Correction' },
+    { value: 'NARRATION_UPDATE', label: 'Narration Update' },
+];
+
 function newLine(): LineRow {
     return { id: Math.random().toString(36).slice(2), ledger: null, debit: '', credit: '', description: '' };
 }
@@ -51,7 +61,7 @@ function fmt(n: number) {
     return '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-export function VoucherForm({ initialType = 'receipt', onSuccess }: VoucherFormProps) {
+export function VoucherForm({ initialType = 'receipt', voucherId, onSuccess }: VoucherFormProps) {
     const outletId = useOutletId();
     const { toast } = useToast();
 
@@ -61,6 +71,15 @@ export function VoucherForm({ initialType = 'receipt', onSuccess }: VoucherFormP
     const [narration, setNarration] = useState('');
     const [saving, setSaving] = useState(false);
     const [loadingNo, setLoadingNo] = useState(false);
+    const [loadingVoucher, setLoadingVoucher] = useState(!!voucherId);
+    const [globalError, setGlobalError] = useState<string | null>(null);
+    
+    // Revision state
+    const [originalStatus, setOriginalStatus] = useState<string>('draft');
+    
+    // Revision tracking
+    const [reasonCode, setReasonCode] = useState('');
+    const [reasonText, setReasonText] = useState('');
 
     // Party + cash/bank
     const [partyLedger, setPartyLedger] = useState<Ledger | null>(null);
@@ -71,6 +90,7 @@ export function VoucherForm({ initialType = 'receipt', onSuccess }: VoucherFormP
     const [billAmounts, setBillAmounts] = useState<Record<string, string>>({});
     const [onAccountAmount, setOnAccountAmount] = useState('');
     const [loadingBills, setLoadingBills] = useState(false);
+    const [showAllBills, setShowAllBills] = useState(false);
 
     // Contra
     const [contraDebitLedger, setContraDebitLedger] = useState<Ledger | null>(null);
@@ -87,13 +107,67 @@ export function VoucherForm({ initialType = 'receipt', onSuccess }: VoucherFormP
 
     // Load voucher number
     useEffect(() => {
-        if (!outletId) return;
+        if (!outletId || voucherId || loadingVoucher) return;
         setLoadingNo(true);
         voucherApi.getNextVoucherNo(outletId, voucherType)
             .then((d: any) => setVoucherNo(d.voucherNo || ''))
             .catch(() => {})
             .finally(() => setLoadingNo(false));
-    }, [outletId, voucherType]);
+    }, [outletId, voucherType, voucherId, loadingVoucher]);
+
+    // Load existing voucher if editing
+    useEffect(() => {
+        if (!voucherId || !outletId) return;
+        setLoadingVoucher(true);
+        api.get(`/vouchers/${voucherId}/`, { params: { outletId } })
+            .then(res => {
+                const data = res.data;
+                setVoucherType(data.voucherType);
+                setVoucherNo(data.voucherNo);
+                setDate(data.date);
+                setNarration(data.narration);
+                setOriginalStatus(data.status || 'posted');
+
+                if (data.voucherType === 'receipt' || data.voucherType === 'payment') {
+                    const cb = data.lines.find((l: any) => ['Cash in Hand', 'Bank Accounts'].includes(l.ledger?.groupName));
+                    const pt = data.lines.find((l: any) => l.ledger?.id !== cb?.ledger?.id);
+                    if (cb) setCashBankLedger(cb.ledger);
+                    if (pt) setPartyLedger(pt.ledger);
+
+                    let billTot = 0;
+                    const initialBills: Record<string, string> = {};
+                    data.billAdjustments?.forEach((adj: any) => {
+                        const id = adj.invoiceId || adj.saleInvoice || adj.purchaseInvoice;
+                        if (id) {
+                            initialBills[id] = adj.adjustedAmount;
+                            billTot += parseFloat(adj.adjustedAmount) || 0;
+                        }
+                    });
+                    setBillAmounts(initialBills);
+                    const rem = parseFloat(data.totalAmount) - billTot;
+                    if (rem > 0) setOnAccountAmount(rem.toFixed(2));
+                } else if (data.voucherType === 'contra') {
+                    const dr = data.lines.find((l: any) => l.debit > 0);
+                    const cr = data.lines.find((l: any) => l.credit > 0);
+                    if (dr) setContraDebitLedger(dr.ledger);
+                    if (cr) setContraCreditLedger(cr.ledger);
+                    setContraAmount(data.totalAmount);
+                } else if (data.voucherType === 'journal') {
+                    setLines(data.lines.map((l: any) => ({
+                        id: Math.random().toString(36).slice(2),
+                        ledger: l.ledger,
+                        debit: l.debit > 0 ? l.debit.toString() : '',
+                        credit: l.credit > 0 ? l.credit.toString() : '',
+                        description: l.description || ''
+                    })));
+                }
+            })
+            .catch(() => {
+                setGlobalError('Failed to load voucher details. Please try again.');
+                toast({ variant: 'destructive', title: 'Failed to load voucher' });
+            })
+            .finally(() => setLoadingVoucher(false));
+    }, [voucherId, outletId]);
 
     // Load pending bills when party ledger changes
     useEffect(() => {
@@ -103,15 +177,26 @@ export function VoucherForm({ initialType = 'receipt', onSuccess }: VoucherFormP
             return;
         }
         setLoadingBills(true);
-        voucherApi.getPendingBills(outletId, partyLedger.id)
+        voucherApi.getPendingBills(outletId, partyLedger.id, voucherId || undefined)
             .then((data: PendingBill[]) => {
                 setPendingBills(data);
-                // Init with 0 for each bill
-                const init: Record<string, string> = {};
-                data.forEach(b => { init[b.id] = ''; });
-                setBillAmounts(init);
+                setBillAmounts(prev => {
+                    const next: Record<string, string> = {};
+                    // Initialize new pending bills with empty strings
+                    data.forEach(b => { next[b.id] = ''; });
+                    // Preserve any existing amounts (from hydration or user input)
+                    Object.keys(prev).forEach(k => {
+                        if (prev[k]) {
+                            next[k] = prev[k];
+                        }
+                    });
+                    return next;
+                });
             })
-            .catch(() => setPendingBills([]))
+            .catch(() => {
+                setGlobalError('Failed to fetch outstanding bills. Please try again.');
+                setPendingBills([]);
+            })
             .finally(() => setLoadingBills(false));
     }, [partyLedger, outletId]);
 
@@ -165,8 +250,16 @@ export function VoucherForm({ initialType = 'receipt', onSuccess }: VoucherFormP
 
     async function handleSave() {
         if (!outletId) return;
+
         setSaving(true);
         try {
+            if (voucherId && originalStatus === 'posted') {
+                if (!reasonCode || reasonText.length < 10) {
+                    toast({ variant: 'destructive', title: 'Revision Reason Required', description: 'Please provide a valid reason code and explanation (min 10 chars) for this modification.' });
+                    return;
+                }
+            }
+
             let payload: any = { outletId, voucher_type: voucherType, date, narration };
 
             if (voucherType === 'receipt' || voucherType === 'payment') {
@@ -251,10 +344,22 @@ export function VoucherForm({ initialType = 'receipt', onSuccess }: VoucherFormP
                 }));
             }
 
-            const voucher = await voucherApi.createVoucher(payload);
-            toast({ title: `${TYPE_LABELS[voucherType]} saved`, description: voucher.voucherNo });
-            handleClear();
-            voucherApi.getNextVoucherNo(outletId, voucherType).then((d: any) => setVoucherNo(d.voucherNo || ''));
+            let voucher;
+            if (voucherId) {
+                if (originalStatus === 'posted') {
+                    payload.revisionReasonCode = reasonCode;
+                    payload.revisionReasonText = reasonText;
+                }
+                const res = await api.put(`/vouchers/${voucherId}/`, payload);
+                voucher = res.data;
+            } else {
+                voucher = await voucherApi.createVoucher(payload);
+            }
+            toast({ title: `${TYPE_LABELS[voucherType]} ${voucherId ? 'updated' : 'saved'}`, description: voucher.voucherNo });
+            if (!voucherId) {
+                handleClear();
+                voucherApi.getNextVoucherNo(outletId, voucherType).then((d: any) => setVoucherNo(d.voucherNo || ''));
+            }
             onSuccess?.(voucher);
         } catch (err: any) {
             toast({ variant: 'destructive', title: 'Failed to save', description: err?.detail || String(err) });
@@ -265,6 +370,27 @@ export function VoucherForm({ initialType = 'receipt', onSuccess }: VoucherFormP
 
     const totalDebit = lines.reduce((s, l) => s + (parseFloat(l.debit) || 0), 0);
     const totalCredit = lines.reduce((s, l) => s + (parseFloat(l.credit) || 0), 0);
+
+    if (loadingVoucher) {
+        return <div className="h-64 flex items-center justify-center text-muted-foreground animate-pulse">Loading voucher...</div>;
+    }
+
+    const visibleBills = (voucherId && !showAllBills) 
+        ? pendingBills.filter(b => parseFloat(billAmounts[b.id]) > 0)
+        : pendingBills;
+
+    if (globalError) {
+        return (
+            <div className="p-8 text-center bg-red-50 text-red-600 rounded-lg border border-red-200">
+                <AlertCircle className="w-8 h-8 mx-auto mb-3" />
+                <h3 className="font-semibold mb-2">Error Loading Data</h3>
+                <p>{globalError}</p>
+                <Button variant="outline" className="mt-4 border-red-200 text-red-600 hover:bg-red-100" onClick={() => window.location.reload()}>
+                    Retry
+                </Button>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">
@@ -327,9 +453,9 @@ export function VoucherForm({ initialType = 'receipt', onSuccess }: VoucherFormP
                         <div className="border rounded-lg overflow-hidden">
                             <div className="flex items-center justify-between px-4 py-2.5 bg-muted/60 border-b">
                                 <span className="text-sm font-semibold text-foreground">
-                                    {loadingBills ? 'Loading bills...' : `Outstanding Bills (${pendingBills.length})`}
+                                    {loadingBills ? 'Loading bills...' : `Outstanding Bills (${visibleBills.length})`}
                                 </span>
-                                {pendingBills.length > 0 && !loadingBills && (
+                                {visibleBills.length > 0 && !loadingBills && (
                                     <div className="flex gap-2">
                                         <button
                                             type="button"
@@ -354,7 +480,7 @@ export function VoucherForm({ initialType = 'receipt', onSuccess }: VoucherFormP
                                 <div className="flex items-center justify-center py-8 gap-2 text-muted-foreground text-sm">
                                     <Loader2 className="w-4 h-4 animate-spin" /> Loading pending bills...
                                 </div>
-                            ) : pendingBills.length === 0 ? (
+                            ) : visibleBills.length === 0 ? (
                                 <div className="flex items-center gap-2 px-4 py-5 text-sm text-muted-foreground">
                                     <AlertCircle className="w-4 h-4 text-amber-500" />
                                     No outstanding bills. Amount will be recorded On Account.
@@ -372,7 +498,7 @@ export function VoucherForm({ initialType = 'receipt', onSuccess }: VoucherFormP
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y">
-                                        {pendingBills.map((bill) => {
+                                        {visibleBills.map((bill) => {
                                             const payAmt = parseFloat(billAmounts[bill.id]) || 0;
                                             const isSelected = payAmt > 0;
                                             const isFull = Math.abs(payAmt - bill.outstanding) < 0.01;
@@ -395,7 +521,9 @@ export function VoucherForm({ initialType = 'receipt', onSuccess }: VoucherFormP
                                                         >
                                                             {isFull
                                                                 ? <CheckSquare className="w-4 h-4" />
-                                                                : <Square className="w-4 h-4" />
+                                                                : isSelected 
+                                                                    ? <MinusSquare className="w-4 h-4" />
+                                                                    : <Square className="w-4 h-4" />
                                                             }
                                                         </button>
                                                     </td>
@@ -437,7 +565,7 @@ export function VoucherForm({ initialType = 'receipt', onSuccess }: VoucherFormP
                                                 Bills Total:
                                             </td>
                                             <td className="px-4 py-2.5 text-right font-bold text-orange-600">
-                                                {fmt(pendingBills.reduce((s, b) => s + b.outstanding, 0))}
+                                                {fmt(visibleBills.reduce((s, b) => s + b.outstanding, 0))}
                                             </td>
                                             <td className="px-4 py-2.5 text-right font-bold text-primary">
                                                 {fmt(billTotal)}
@@ -446,6 +574,33 @@ export function VoucherForm({ initialType = 'receipt', onSuccess }: VoucherFormP
                                     </tfoot>
                                 </table>
                             )}
+                            
+                            {voucherId && !loadingBills && pendingBills.length > visibleBills.length && (
+                                <div className="bg-muted/10 border-t p-2 flex justify-center">
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="text-xs text-muted-foreground"
+                                        onClick={() => setShowAllBills(true)}
+                                    >
+                                        Show all {pendingBills.length} outstanding bills
+                                    </Button>
+                                </div>
+                            )}
+                            
+                            {voucherId && !loadingBills && showAllBills && pendingBills.length > visibleBills.filter(b => parseFloat(billAmounts[b.id]) > 0).length && (
+                                <div className="bg-muted/10 border-t p-2 flex justify-center">
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="text-xs text-muted-foreground"
+                                        onClick={() => setShowAllBills(false)}
+                                    >
+                                        Hide unselected bills
+                                    </Button>
+                                </div>
+                            )}
+
 
                             {/* On Account extra */}
                             <div className="flex items-center justify-between px-4 py-3 border-t bg-muted/20">
@@ -554,9 +709,43 @@ export function VoucherForm({ initialType = 'receipt', onSuccess }: VoucherFormP
                 <Textarea rows={2} placeholder="Add a note..." value={narration} onChange={(e) => setNarration(e.target.value)} />
             </div>
 
+            {/* Revision Reason Section for Posted Vouchers */}
+            {voucherId && originalStatus === 'posted' && (
+                <div className="border border-amber-200 bg-amber-50 rounded-lg p-4 space-y-4">
+                    <div className="flex items-center gap-2 text-amber-800 font-semibold mb-2">
+                        <AlertCircle className="w-5 h-5" />
+                        Modification Reason Required
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label>Reason Code</Label>
+                            <select 
+                                className="flex h-10 w-full items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-950 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                value={reasonCode}
+                                onChange={(e) => setReasonCode(e.target.value)}
+                            >
+                                <option value="" disabled>Select a reason...</option>
+                                {REASON_CODES.map(rc => (
+                                    <option key={rc.value} value={rc.value}>{rc.label}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Detailed Explanation</Label>
+                            <Textarea 
+                                placeholder="Explain why this transaction is being modified..."
+                                value={reasonText}
+                                onChange={e => setReasonText(e.target.value)}
+                                className="min-h-[40px]"
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Actions */}
             <div className="flex gap-3">
-                <Button onClick={handleSave} disabled={saving} className="flex-1">
+                <Button onClick={() => handleSave()} disabled={saving} className="flex-1">
                     {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Save <span className="ml-1.5 text-xs opacity-70">Ctrl+S</span>
                 </Button>
@@ -569,6 +758,7 @@ export function VoucherForm({ initialType = 'receipt', onSuccess }: VoucherFormP
                     Clear <span className="ml-1.5 text-xs opacity-70">Esc</span>
                 </Button>
             </div>
+
         </div>
     );
 }

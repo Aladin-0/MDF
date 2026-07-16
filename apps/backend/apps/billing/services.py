@@ -227,7 +227,7 @@ def generate_invoice_number(outlet_id: str) -> str:
         SaleInvoice.objects
         .filter(outlet=outlet)
         .select_for_update(skip_locked=False)  # Block until lock acquired
-        .order_by('-invoice_date', '-created_at')
+        .order_by('-created_at')
         .first()
     )
 

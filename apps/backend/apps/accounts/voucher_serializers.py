@@ -94,6 +94,11 @@ class VoucherLineSerializer(serializers.ModelSerializer):
             'id': str(instance.id),
             'ledgerId': str(instance.ledger_id),
             'ledgerName': instance.ledger.name,
+            'ledger': {
+                'id': str(instance.ledger_id),
+                'name': instance.ledger.name,
+                'groupName': instance.ledger.group.name if getattr(instance.ledger, 'group', None) else None,
+            },
             'debit': float(instance.debit),
             'credit': float(instance.credit),
             'description': instance.description,
@@ -106,6 +111,7 @@ class VoucherBillAdjustmentSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     def to_representation(self, instance):
+        inv_id = None
         inv_no = '—'
         inv_date = None
         grand_total = 0.0
@@ -115,6 +121,7 @@ class VoucherBillAdjustmentSerializer(serializers.ModelSerializer):
         if inv_type == 'purchase' and instance.purchase_invoice_id:
             inv = instance.purchase_invoice
             if inv:
+                inv_id = str(inv.id)
                 inv_no = inv.invoice_no or '—'
                 inv_date = str(inv.invoice_date) if inv.invoice_date else None
                 grand_total = float(inv.grand_total)
@@ -122,6 +129,7 @@ class VoucherBillAdjustmentSerializer(serializers.ModelSerializer):
         elif inv_type == 'sale' and instance.sale_invoice_id:
             inv = instance.sale_invoice
             if inv:
+                inv_id = str(inv.id)
                 inv_no = inv.invoice_no or '—'
                 inv_date = str(inv.invoice_date.date()) if inv.invoice_date else None
                 grand_total = float(inv.grand_total)
@@ -134,6 +142,7 @@ class VoucherBillAdjustmentSerializer(serializers.ModelSerializer):
 
         return {
             'id': str(instance.id),
+            'invoiceId': inv_id,
             'invoiceType': inv_type,
             'invoiceNo': inv_no,
             'invoiceDate': inv_date,
@@ -162,10 +171,11 @@ class VoucherSerializer(serializers.ModelSerializer):
             'narration': instance.narration,
             'totalAmount': float(instance.total_amount),
             'paymentMode': instance.payment_mode,
+            'status': instance.status,
+            'createdBy': instance.created_by.name if hasattr(instance, 'created_by') and instance.created_by else None,
+            'createdAt': str(instance.created_at),
             'lines': VoucherLineSerializer(instance.lines.all(), many=True).data,
             'billAdjustments': VoucherBillAdjustmentSerializer(adjustments, many=True).data,
-            'createdBy': str(instance.created_by_id),
-            'createdAt': instance.created_at.isoformat(),
         }
 
 
@@ -208,6 +218,7 @@ class DebitNoteSerializer(serializers.ModelSerializer):
             'status': instance.status,
             'items': DebitNoteItemSerializer(instance.items.all(), many=True).data,
             'createdAt': instance.created_at.isoformat(),
+            'updatedAt': instance.updated_at.isoformat(),
         }
 
 

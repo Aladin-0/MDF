@@ -2,7 +2,8 @@ from rest_framework import status
 from django.urls import reverse
 from apps.billing.tests.base import BaseRevisionTestCase
 from apps.billing.tests.factories import make_test_invoice, make_test_sales_return
-from apps.billing.models import BillRevision
+from apps.audit.models import DocumentRevision
+from django.contrib.contenttypes.models import ContentType
 class ReturnAwareCorrectionTestCase(BaseRevisionTestCase):
 
     def test_return_aware_block_qty_below_returned(self):
@@ -86,7 +87,7 @@ class ReturnAwareCorrectionTestCase(BaseRevisionTestCase):
         # Wait, the stock adjustment logic: diff = 5 - 10 = -5. So 5 restored.
         self.assertEqual(self.batch.qty_strips, batch_qty_before + 5)
         
-        revision = BillRevision.objects.filter(original_invoice=invoice).first()
+        revision = DocumentRevision.objects.filter(object_id=invoice.id).first()
         self.assertIsNotNone(revision)
 
     def test_cannot_remove_item_with_existing_return(self):

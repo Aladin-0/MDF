@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import SaleItem, SaleInvoice, BillRevision
+from .models import SaleItem, SaleInvoice
 from apps.accounts.models import Customer, Doctor
 from .utils.pricing import validate_sale_price
 from apps.inventory.models import Batch
@@ -61,9 +61,13 @@ class SaleInvoiceSerializer(serializers.ModelSerializer):
             SaleItem.objects.create(invoice=invoice, **item_data)
         return invoice
 
-class BillRevisionSerializer(serializers.ModelSerializer):
+from apps.audit.models import DocumentRevision
+
+class DocumentRevisionSerializer(serializers.ModelSerializer):
+    original_document_id = serializers.UUIDField(source='object_id', read_only=True)
+    
     class Meta:
-        model = BillRevision
+        model = DocumentRevision
         fields = '__all__'
         depth = 1
 

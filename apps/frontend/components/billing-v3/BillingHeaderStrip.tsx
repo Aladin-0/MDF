@@ -124,6 +124,8 @@ export function BillingHeaderStrip() {
                     <div className="flex items-center gap-2">
                         <label className="text-xs font-bold text-slate-600">Prescription</label>
                         <Input 
+                            value={activeDraft.prescriptionNo || ''}
+                            onChange={(e) => useBillingStore.getState().updateDraftHeader(activeDraftId, { prescriptionNo: e.target.value })}
                             className="w-48 h-9 border border-slate-300 rounded text-sm" 
                             placeholder="Rx Number..." 
                         />

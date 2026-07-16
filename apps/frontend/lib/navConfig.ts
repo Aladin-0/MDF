@@ -111,14 +111,15 @@ export const NAV_ITEMS: NavItem[] = [
     // },
     {
         label: 'Accounts',
-        href: '/dashboard/accounts',
+        href: '/dashboard/accounts/vouchers',
         icon: Wallet,
         permission: 'create_purchases' as Permission,
         shortcut: 'Alt+8',
         sequence: 'g a',
         subItems: [
-            { label: 'Accounts Dashboard', href: '/dashboard/accounts', icon: LayoutDashboard },
-            { label: 'Voucher Entry', href: '/dashboard/accounts/voucher-entry', icon: BookOpen },
+            { label: 'Accounts Dashboard', href: '/dashboard/accounts/overview', icon: LayoutDashboard },
+            { label: 'New Voucher', href: '/dashboard/accounts/voucher-entry', icon: BookOpen },
+            { label: 'All Vouchers', href: '/dashboard/accounts/vouchers', icon: List },
             { label: 'Ledgers', href: '/dashboard/accounts/ledgers', icon: List },
         ],
     },
