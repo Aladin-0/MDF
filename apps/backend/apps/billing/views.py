@@ -157,6 +157,12 @@ class SaleCreateView(APIView):
             items_data = request.data.get('items', [])
             schedule_h_data = request.data.get('scheduleHData')
 
+            if not items_data:
+                return Response(
+                    {'detail': 'Invoice must contain at least one item.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
             # Validate outlet exists
             try:
                 outlet = Outlet.objects.get(id=outlet_id)
@@ -2006,9 +2012,16 @@ class SaleReviseView(APIView):
         action = request.data.get('revisionAction')
         reason_code = request.data.get('revisionReasonCode')
         reason_text = request.data.get('revisionReasonText')
+        items_data = request.data.get('items', [])
 
         if not action or not reason_code or not reason_text:
             return Response({'detail': 'Revision context (action, reasonCode, reasonText) is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not items_data:
+            return Response(
+                {'detail': 'Invoice must contain at least one item.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         from apps.core.permissions import has_bill_revision_permission
         
