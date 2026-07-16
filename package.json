@@ -20,5 +20,9 @@
     },
     "dependencies": {
         "@radix-ui/react-alert-dialog": "^1.1.15"
+    },
+    "overrides": {
+        "react": "18.2.0",
+        "react-dom": "18.2.0"
     }
 }
