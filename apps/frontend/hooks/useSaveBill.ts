@@ -13,7 +13,7 @@ export function useSaveBill() {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const saveBill = async (payment: PaymentSplit) => {
+    const saveBill = async () => {
         setIsLoading(true);
         setError(null);
 
@@ -51,9 +51,9 @@ export function useSaveBill() {
             }
 
             const getPaid = (method: string) => {
-                if (payment.method === method) return payment.amount;
-                if (payment.method === 'split') {
-                    return (payment.splitBreakdown as any)?.[method] || 0;
+                if (draft.payment.method === method) return draft.payment.amount || totals.grandTotal;
+                if (draft.payment.method === 'split') {
+                    return (draft.payment.splitBreakdown as any)?.[method] || 0;
                 }
                 return 0;
             };
@@ -109,8 +109,8 @@ export function useSaveBill() {
                 roundOff: Number(totals.roundOff.toFixed(2)),
                 grandTotal: Number(totals.grandTotal.toFixed(2)),
                 extraDiscountPct,
-                paymentMode: payment.method,
-                cashPaid: getPaid('cash'),
+                paymentMode: draft.payment.method,
+                cashPaid: draft.payment.method === 'cash' ? (draft.payment.cashTendered || totals.grandTotal) : getPaid('cash'),
                 upiPaid: getPaid('upi'),
                 cardPaid: getPaid('card'),
                 creditGiven: getPaid('credit'),

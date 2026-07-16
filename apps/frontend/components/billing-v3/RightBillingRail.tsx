@@ -12,8 +12,16 @@ export function RightBillingRail() {
     
     const draft = activeDraftId ? drafts[activeDraftId] : null;
     const isQuotation = draft?.documentMode === 'quotation';
-    const [localPaymentMethod, setLocalPaymentMethod] = useState<'cash' | 'upi' | 'card' | 'credit'>('cash');
-    const [cashReceived, setCashReceived] = useState<string>('');
+    const paymentMethod = draft?.payment?.method || 'cash';
+    const cashReceived = draft?.payment?.cashTendered ? String(draft.payment.cashTendered) : '';
+
+    const setPaymentMethod = (mode: any) => {
+        useBillingStore.getState().setPayment({ method: mode });
+    };
+
+    const setCashReceived = (val: string) => {
+        useBillingStore.getState().setPayment({ cashTendered: val === '' ? 0 : Number(val) });
+    };
     
     const { saveBill, isLoading } = useSaveBill();
     const { toast } = useToast();
@@ -58,7 +66,7 @@ export function RightBillingRail() {
     const tenderAmount = cashReceived === '' ? totals.grandTotal : Number(cashReceived);
     const balance = Math.max(0, tenderAmount - totals.grandTotal);
     
-    const isTenderInvalid = localPaymentMethod === 'cash' && cashReceived !== '' && Number(cashReceived) < totals.grandTotal;
+    const isTenderInvalid = paymentMethod === 'cash' && cashReceived !== '' && Number(cashReceived) < totals.grandTotal;
     
     // Header Info Validation
     const hasCustomer = Boolean(activeDraft?.customer && activeDraft.customer.id !== 'mock');
@@ -66,23 +74,19 @@ export function RightBillingRail() {
     // We don't strictly require Customer or Doctor for every bill (e.g. OTC cash)
     const isHeaderValid = true;
 
-    const isCreditInvalid = localPaymentMethod === 'credit' && !hasCustomer;
+    const isCreditInvalid = paymentMethod === 'credit' && !hasCustomer;
 
     const canCheckout = cart.length > 0 && isScheduleHValid && !isTenderInvalid && !isLoading && isHeaderValid && !isCreditInvalid;
 
     const executeCheckout = async () => {
         setCheckoutError(null);
         try {
-            await saveBill({
-                method: localPaymentMethod,
+            // Ensure final grandTotal is updated before saving
+            useBillingStore.getState().setPayment({
                 amount: totals.grandTotal,
-                cashTendered: localPaymentMethod === 'cash' ? tenderAmount : 0,
-                cashReturned: localPaymentMethod === 'cash' ? balance : 0,
-                upiRef: '',
-                cardLast4: '',
-                cardType: '',
-                creditGiven: 0
+                cashReturned: paymentMethod === 'cash' ? balance : 0,
             });
+            await saveBill();
             toast({
                 title: 'Success',
                 description: 'Bill Saved Successfully!',
@@ -224,10 +228,10 @@ export function RightBillingRail() {
                                 {['cash', 'upi', 'card', 'credit'].map((mode) => (
                                     <button
                                         key={mode}
-                                        onClick={() => setLocalPaymentMethod(mode as any)}
+                                        onClick={() => setPaymentMethod(mode as any)}
                                         className={cn(
                                             "flex-1 py-1.5 border rounded text-sm font-bold capitalize transition-colors",
-                                            localPaymentMethod === mode 
+                                            paymentMethod === mode 
                                                 ? "bg-[#0EA5E9] border-[#0EA5E9] text-white" 
                                                 : "bg-transparent border-slate-600 text-slate-300 hover:border-slate-400"
                                         )}
@@ -239,7 +243,7 @@ export function RightBillingRail() {
                         </div>
 
                         {/* Cash Received & Balance */}
-                        {localPaymentMethod === 'cash' && (
+                        {paymentMethod === 'cash' && (
                             <div className="grid grid-cols-2 gap-4 mb-6">
                                 <div>
                                     <span className="text-xs font-semibold text-slate-400 block mb-1">Received</span>
@@ -282,7 +286,7 @@ export function RightBillingRail() {
                         {isLoading ? 'Processing...' : (
                             isQuotation ? (
                                 <>SAVE QUOTATION</>
-                            ) : localPaymentMethod === 'credit' ? (
+                            ) : paymentMethod === 'credit' ? (
                                 <>SAVE ON CREDIT <span className="text-blue-200 text-xs font-normal ml-1 border border-blue-400/30 px-1 rounded bg-blue-500/20">[F8]</span></>
                             ) : (
                                 <>COLLECT PAYMENT <span className="text-blue-200 text-xs font-normal ml-1 border border-blue-400/30 px-1 rounded bg-blue-500/20">[F8]</span></>
