@@ -190,7 +190,12 @@ export function useAutosaveDraft() {
                     useBillingStore.getState().setDraftSaveStatus(responseData.id, 'saved', new Date().toISOString());
                 }
             } catch (err: any) {
-                console.error('Failed to autosave draft', err);
+                console.error(JSON.stringify({
+                    event: "AUTOSAVE_FAILED",
+                    error: err?.message || err?.detail || String(err),
+                    draftId: draft.id,
+                    outletId: payload.outlet,
+                }));
                 useBillingStore.getState().setDraftSaveStatus(draft.id, 'error');
                 // Block retry loop to avoid spamming the same failing payload
                 lastSavedStringRef.current = currentString;
