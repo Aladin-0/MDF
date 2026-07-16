@@ -81,12 +81,18 @@ export default function ModifySalePage({ params }: { params: { id: string } }) {
 
             const totalDiscountAmount = typeof fullInvoice.discountAmount === 'number' ? fullInvoice.discountAmount : 0;
             const totalRateAmount = fullInvoice.items?.reduce((sum: number, item: any) => {
-                const qty = item.totalQty || (item.qtyStrips || 0) + ((item.qtyLoose || 0) / (item.packSize || 1));
-                return sum + (item.rate * qty);
+                const packSize = item.packSize || 1;
+                const qtyStrips = item.qtyStrips || 0;
+                const qtyLoose = item.qtyLoose || 0;
+                const qty = qtyStrips + (qtyLoose / packSize);
+                return sum + ((item.rate || item.saleRate || 0) * qty);
             }, 0) || 1;
             const itemDiscountAmount = fullInvoice.items?.reduce((sum: number, item: any) => {
-                const qty = item.totalQty || (item.qtyStrips || 0) + ((item.qtyLoose || 0) / (item.packSize || 1));
-                return sum + ((item.mrp - item.rate) * qty);
+                const packSize = item.packSize || 1;
+                const qtyStrips = item.qtyStrips || 0;
+                const qtyLoose = item.qtyLoose || 0;
+                const qty = qtyStrips + (qtyLoose / packSize);
+                return sum + (((item.mrp || 0) - (item.rate || item.saleRate || 0)) * qty);
             }, 0) || 0;
             
             const extraDiscountAmount = Math.max(0, totalDiscountAmount - itemDiscountAmount);
@@ -94,15 +100,17 @@ export default function ModifySalePage({ params }: { params: { id: string } }) {
             store.setExtraDiscountPct(extraDiscountPct);
 
             store.setPayment({
-                method: fullInvoice.paymentMode as any,
-                amount: fullInvoice.amountPaid || fullInvoice.grandTotal,
+                method: (fullInvoice.paymentMode || 'cash') as any,
+                amount: fullInvoice.amountPaid ?? fullInvoice.grandTotal ?? 0,
+                cashTendered: fullInvoice.paymentMode === 'cash' ? (fullInvoice.cashPaid ?? fullInvoice.amountPaid ?? fullInvoice.grandTotal ?? 0) : undefined,
             });
 
-            if (fullInvoice.doctorId) {
+            console.log("Hydrating doctor:", fullInvoice.doctorId, fullInvoice.doctorName);
+            if (fullInvoice.doctorId || fullInvoice.doctorName) {
                 store.setDoctor({
-                    id: fullInvoice.doctorId,
-                    name: fullInvoice.doctorName || '',
-                    registration_number: fullInvoice.doctorRegNo || '',
+                    id: fullInvoice.doctorId || 'unregistered',
+                    name: fullInvoice.doctorName || 'Unknown Doctor',
+                    regNo: fullInvoice.doctorRegNo || '',
                 } as any);
             }
             if (fullInvoice.hospitalName) {
@@ -122,14 +130,28 @@ export default function ModifySalePage({ params }: { params: { id: string } }) {
 
             if (fullInvoice.items) {
                  fullInvoice.items.forEach((item: any) => {
+                     const packSize = item.packSize || 1;
+                     const qtyStrips = item.qtyStrips || 0;
+                     const qtyLoose = item.qtyLoose || 0;
+                     const totalQtyFractional = qtyStrips + (qtyLoose / packSize);
+                     
                      store.addToCart(store.activeDraftId, {
                          ...item,
-                         totalQty: item.totalQty || (item.qtyStrips || 0) + ((item.qtyLoose || 0) / (item.packSize || 1)),
+                         qtyStrips: qtyStrips,
+                         qtyLoose: qtyLoose,
+                         packSize: packSize,
+                         productId: item.productId,
+                         batchId: item.batchId,
+                         batchNo: item.batchNo,
+                         expiryDate: item.expiryDate,
+                         discountPct: item.discountPct || 0,
+                         gstRate: item.gstRate || 0,
+                         cgstRate: item.cgstRate || 0,
+                         sgstRate: item.sgstRate || 0,
+                         saleRate: item.saleRate || item.rate,
+                         totalQty: totalQtyFractional,
                          saleMode: item.saleMode || 'mixed',
                          mrp: item.mrp || item.rate,
-                         saleRate: item.saleRate || item.rate,
-                         cgst: item.cgstRate || (item.gstRate ? item.gstRate / 2 : 0),
-                         sgst: item.sgstRate || (item.gstRate ? item.gstRate / 2 : 0),
                      });
                  });
             }

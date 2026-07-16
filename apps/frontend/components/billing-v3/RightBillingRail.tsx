@@ -179,7 +179,7 @@ export function RightBillingRail() {
                 {/* Net Payable */}
                 <div className="flex justify-between items-end mb-6">
                     <span className="text-[13px] font-black tracking-widest text-slate-300">NET PAYABLE</span>
-                    <span className="font-black text-5xl tracking-tight text-white">₹ {totals.grandTotal.toFixed(2)}</span>
+                    <span className="font-black text-5xl tracking-tight text-white" data-testid="grand-total-amount">₹ {totals.grandTotal.toFixed(2)}</span>
                 </div>
 
                 {/* Payment Options (Hide if Quotation) */}

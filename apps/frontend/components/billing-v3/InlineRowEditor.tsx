@@ -238,6 +238,7 @@ export function InlineRowEditor({ item, onSave, onCancel, onRemove }: InlineRowE
                                         ref={qtyInputRef}
                                         type="number" 
                                         min="0"
+                                        data-testid="inline-qty-strips"
                                         value={qtyStrips}
                                         onChange={(e) => setQtyStrips(e.target.value)}
                                         onKeyDown={handleKeyDown}
@@ -251,6 +252,7 @@ export function InlineRowEditor({ item, onSave, onCancel, onRemove }: InlineRowE
                                     <Input 
                                         type="number" 
                                         min="0"
+                                        data-testid="inline-qty-loose"
                                         value={qtyLoose}
                                         onChange={(e) => setQtyLoose(e.target.value)}
                                         onKeyDown={handleKeyDown}
