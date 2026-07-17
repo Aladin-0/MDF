@@ -1963,6 +1963,11 @@ class SaleDetailView(APIView):
             'isReturn': invoice.is_return,
             'billedBy': str(invoice.billed_by.id) if invoice.billed_by else None,
             'billedByName': invoice.billed_by.name if invoice.billed_by else 'Unknown',
+            'doctorId': str(invoice.doctor.id) if invoice.doctor else None,
+            'doctorName': invoice.doctor.name if invoice.doctor else None,
+            'doctorRegNo': invoice.doctor.registration_no if invoice.doctor else None,
+            'hospitalName': invoice.hospital_name,
+            'prescriptionNo': invoice.prescription_no,
             'items': items_list,
             # Return metadata — used by billing page to show edit warning
             'hasReturns': return_count > 0,
@@ -2072,7 +2077,7 @@ class SaleReviseView(APIView):
         if not action or not reason_code or not reason_text:
             return Response({'detail': 'Revision context (action, reasonCode, reasonText) is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        if not items_data:
+        if not items_data and action != 'header_correction':
             return Response(
                 {'detail': 'Invoice must contain at least one item.'},
                 status=status.HTTP_400_BAD_REQUEST

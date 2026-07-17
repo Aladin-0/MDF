@@ -140,10 +140,9 @@ test.describe('Phase 2: Edit Sale Bill Tests', () => {
     
     // 6. Verify Audit History panel fetches without 404
     const historyBtn = page.getByRole('button', { name: /History/i });
-    if (await historyBtn.isVisible()) {
-        await historyBtn.click();
-        await expect(page.getByText('History')).toBeVisible();
-        await expect(page.getByText('Patient wanted one more strip')).toBeVisible();
-    }
+    await expect(historyBtn).toBeVisible({ timeout: 5000 });
+    await historyBtn.click();
+    await expect(page.getByText('History')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText('Patient wanted one more strip')).toBeVisible({ timeout: 5000 });
   });
 });

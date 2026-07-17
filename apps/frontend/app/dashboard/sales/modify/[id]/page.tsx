@@ -102,7 +102,6 @@ export default function ModifySalePage({ params }: { params: { id: string } }) {
             store.setPayment({
                 method: (fullInvoice.paymentMode || 'cash') as any,
                 amount: fullInvoice.amountPaid ?? fullInvoice.grandTotal ?? 0,
-                cashTendered: fullInvoice.paymentMode === 'cash' ? (fullInvoice.cashPaid ?? fullInvoice.amountPaid ?? fullInvoice.grandTotal ?? 0) : undefined,
             });
 
             console.log("Hydrating doctor:", fullInvoice.doctorId, fullInvoice.doctorName);

@@ -212,7 +212,8 @@ def generate_invoice_number(outlet_id: str) -> str:
     """
 
     try:
-        outlet = Outlet.objects.get(id=outlet_id)
+        # Lock the Outlet row to prevent concurrent invoice generation for the same outlet
+        outlet = Outlet.objects.select_for_update().get(id=outlet_id)
     except Outlet.DoesNotExist:
         raise
 
@@ -221,12 +222,10 @@ def generate_invoice_number(outlet_id: str) -> str:
     # Get current year
     current_year = datetime.now().year
 
-    # Query last invoice for this outlet with SELECT FOR UPDATE (row-level lock)
-    # This ensures concurrent transactions wait for each other to avoid duplicate sequences
+    # Now that the outlet is locked, it's safe to query the last invoice
     last_invoice = (
         SaleInvoice.objects
         .filter(outlet=outlet)
-        .select_for_update(skip_locked=False)  # Block until lock acquired
         .order_by('-created_at')
         .first()
     )
