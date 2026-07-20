@@ -7,6 +7,7 @@ env = environ.Env()
 environ.Env.read_env(BASE_DIR / '.env')
 
 SECRET_KEY = env('SECRET_KEY')  # Required — must be set in .env; no fallback
+FERNET_KEY = env('FERNET_KEY', default='oU1iXjUoG_2EaY5m7nB_n-1P1b2Yh9y2pYk4fJtQj8s=') # 32-url-safe base64
 DEBUG = env.bool('DEBUG', default=False)
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['backend'])
 
