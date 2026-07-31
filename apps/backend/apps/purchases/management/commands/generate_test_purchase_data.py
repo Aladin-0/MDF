@@ -294,7 +294,7 @@ class Command(BaseCommand):
             if sell_qty <= 0:
                 continue
 
-            taxable_amount = float(sell_qty * float(batch.sale_rate))
+            taxable_amount = float(sell_qty * float(batch.mrp))
             gst_amount = taxable_amount * 0.12
             
             payload = {
@@ -306,7 +306,7 @@ class Command(BaseCommand):
                     "name": batch.product.name if batch.product else "Unknown",
                     "qtyStrips": sell_qty,
                     "qtyLoose": 0,
-                    "rate": float(batch.sale_rate),
+                    "rate": float(batch.mrp),
                     "discountPct": 0,
                     "discountAmount": 0,
                     "taxableAmount": taxable_amount,

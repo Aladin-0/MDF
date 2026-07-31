@@ -96,15 +96,17 @@ export function StockTable({ onProductClick, onAdjustClick, onEditClick }: any) 
             header: ({ column }) => <SortableHeader column={column} title="Stock" />,
             cell: ({ row }) => {
                 const p = row.original;
-                // totalStock is a float representing total equivalent strips (e.g., 16.7 strips).
-                // Convert back to total loose units, then divide by pack size to get full strips and remainder.
-                const packSize = p.packSize || 1;
-                const totalLooseUnits = Math.round((p.totalStock || 0) * packSize);
-                const qtyStrips = Math.floor(totalLooseUnits / packSize);
-                const qtyLoose = totalLooseUnits % packSize;
-
-                const isEmpty = qtyStrips === 0 && qtyLoose === 0;
+                const isEmpty = (p.totalStock || 0) === 0;
                 const color = isEmpty || p.isLowStock ? "text-red-600 font-bold" : "text-slate-900";
+
+                let displayText = p.stockDisplayText;
+                if (!displayText) {
+                    displayText = formatQty(
+                        Math.floor(Math.round((p.totalStock || 0) * (p.packSize || 1)) / (p.packSize || 1)), 
+                        Math.round((p.totalStock || 0) * (p.packSize || 1)) % (p.packSize || 1), 
+                        p.packSize || 1
+                    );
+                }
 
                 return (
                     <div className="w-40 text-right">
@@ -112,7 +114,7 @@ export function StockTable({ onProductClick, onAdjustClick, onEditClick }: any) 
                             <div className={`text-sm ${color}`}>Out of stock</div>
                         ) : (
                             <div className={`text-sm font-medium ${color}`}>
-                                {formatQty(qtyStrips, qtyLoose, packSize)}
+                                {displayText}
                             </div>
                         )}
                     </div>

@@ -9,7 +9,7 @@ alias deactivate 'test $?_OLD_VIRTUAL_PATH != 0 && setenv PATH "$_OLD_VIRTUAL_PA
 # Unset irrelevant variables.
 deactivate nondestructive
 
-setenv VIRTUAL_ENV /home/asta/.gemini/antigravity/brain/4d7d6536-4f96-4c09-babb-88be5677650d/.system_generated/worktrees/subagent-BACKEND-DATA-INTEGRITY-developer-6d4f0b19/venv
+setenv VIRTUAL_ENV /home/asta/coding/MDF/venv
 
 set _OLD_VIRTUAL_PATH="$PATH"
 setenv PATH "$VIRTUAL_ENV/"bin":$PATH"

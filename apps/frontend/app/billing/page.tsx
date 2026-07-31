@@ -12,13 +12,27 @@ import { useAutosaveDraft } from '@/hooks/useAutosaveDraft';
 import { useLoadDrafts } from '@/hooks/useLoadDrafts';
 import { BillSuccessScreen } from '@/components/billing/BillSuccessScreen';
 import { InvoicePreviewModal } from '@/components/billing/InvoicePreviewModal';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { shortcutRegistry } from '@/lib/shortcuts';
 
 export default function FullScreenBillingPage() {
     const { isPinVerified, activeDraftId, lastInvoice, setLastInvoice } = useBillingStore();
     useAutosaveDraft();
     const draftsLoaded = useLoadDrafts();
     const [showInvoicePreview, setShowInvoicePreview] = useState(false);
+
+    useEffect(() => {
+        return shortcutRegistry.register({
+            id: 'toggle-margin',
+            combo: 'Ctrl+Shift+m',
+            scope: 'global',
+            description: 'Toggle Margin Visibility',
+            handler: (e) => {
+                e.preventDefault();
+                useBillingStore.getState().toggleMarginInfo();
+            }
+        });
+    }, []);
 
     if (!isPinVerified) {
         return (

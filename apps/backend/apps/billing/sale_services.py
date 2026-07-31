@@ -175,7 +175,7 @@ def atomic_sale_save(
 
                 batch.save()
 
-                proposed_rate = Decimal(str(item_data.get('rate', batch.sale_rate)))
+                proposed_rate = Decimal(str(item_data.get('rate', batch.mrp)))
                 pricing_check = validate_sale_price(proposed_rate, batch, outlet.id)
                 if pricing_check.get('block'):
                     transaction.set_rollback(True)
@@ -193,7 +193,7 @@ def atomic_sale_save(
                     batch_no=batch.batch_no,
                     expiry_date=batch.expiry_date,
                     mrp=batch.mrp,
-                    sale_rate=batch.sale_rate,
+                    sale_rate=batch.mrp,
                     rate=proposed_rate,
                     qty_strips=qty_to_deduct,
                     qty_loose=item_data.get('qtyLoose', 0),

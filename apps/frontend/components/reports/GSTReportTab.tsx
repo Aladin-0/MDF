@@ -16,6 +16,9 @@ import { useGSTReport } from '@/hooks/useReports';
 import { useAuthStore } from '@/store/authStore';
 import { formatCurrency } from '@/lib/gst';
 import { cn } from '@/lib/utils';
+import { GSTR1View } from './GSTR1View';
+import { GSTR3BView } from './GSTR3BView';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const SLAB_COLORS: Record<number, string> = {
     0: '#94a3b8',
@@ -31,7 +34,7 @@ interface GSTReportTabProps {
     dateRange: DateRangeFilter;
 }
 
-export function GSTReportTab({ dateRange }: GSTReportTabProps) {
+function GSTSummaryView({ dateRange }: GSTReportTabProps) {
     const { data, isLoading } = useGSTReport(dateRange);
     const [sorting, setSorting] = useState<SortingState>([]);
     const [pdfLoading, setPdfLoading] = useState(false);
@@ -99,10 +102,12 @@ export function GSTReportTab({ dateRange }: GSTReportTabProps) {
     };
 
     if (isLoading) {
-        return <div className="h-64 flex items-center justify-center text-muted-foreground">Loading GST data...</div>;
+        return <div className="h-64 flex items-center justify-center text-muted-foreground">Loading GST Summary...</div>;
     }
 
-    if (!data) return null;
+    if (!data || !data.gstSlabBreakup) {
+        return <div className="h-64 flex items-center justify-center text-muted-foreground">Summary data is not available.</div>;
+    }
 
     const pieData = data.gstSlabBreakup
         .filter((s: any) => s.taxAmount > 0)
@@ -113,7 +118,7 @@ export function GSTReportTab({ dateRange }: GSTReportTabProps) {
         }));
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 mt-6">
             {/* GST Slab Summary Cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {data.gstSlabBreakup.map((slab: any) => (
@@ -144,14 +149,14 @@ export function GSTReportTab({ dateRange }: GSTReportTabProps) {
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
-                    <Badge variant="outline" className="text-xs">GSTR-1 Summary</Badge>
+                    <Badge variant="outline" className="text-xs">GST Summary</Badge>
                     <Button onClick={handlePDFDownload} disabled={pdfLoading} size="sm">
                         {pdfLoading ? (
                             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                         ) : (
                             <FileDown className="w-4 h-4 mr-2" />
                         )}
-                        {pdfLoading ? 'Generating PDF...' : 'Download GST Report PDF'}
+                        {pdfLoading ? 'Generating PDF...' : 'Download PDF'}
                     </Button>
                 </div>
             </div>
@@ -231,6 +236,34 @@ export function GSTReportTab({ dateRange }: GSTReportTabProps) {
                     </table>
                 </div>
             </div>
+        </div>
+    );
+}
+
+export function GSTReportTab({ dateRange }: GSTReportTabProps) {
+    const [activeTab, setActiveTab] = useState('summary');
+
+    return (
+        <div>
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                <TabsList className="grid w-full grid-cols-3">
+                    <TabsTrigger value="summary">Summary</TabsTrigger>
+                    <TabsTrigger value="gstr1">GSTR-1</TabsTrigger>
+                    <TabsTrigger value="gstr3b">GSTR-3B</TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="summary">
+                    <GSTSummaryView dateRange={dateRange} />
+                </TabsContent>
+                
+                <TabsContent value="gstr1">
+                    <GSTR1View dateRange={dateRange} />
+                </TabsContent>
+                
+                <TabsContent value="gstr3b">
+                    <GSTR3BView dateRange={dateRange} />
+                </TabsContent>
+            </Tabs>
         </div>
     );
 }

@@ -24,5 +24,23 @@
     "overrides": {
         "react": "18.2.0",
         "react-dom": "18.2.0"
-    }
+    },
+    "version": "1.0.0",
+    "description": "",
+    "main": "fix.js",
+    "directories": {
+        "doc": "docs"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/Aladin-0/MDF.git"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "type": "commonjs",
+    "bugs": {
+        "url": "https://github.com/Aladin-0/MDF/issues"
+    },
+    "homepage": "https://github.com/Aladin-0/MDF#readme"
 }

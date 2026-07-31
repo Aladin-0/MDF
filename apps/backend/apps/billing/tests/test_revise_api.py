@@ -377,6 +377,8 @@ class SaleReviseAPITests(APITestCase):
         # Create a revision
         revision = DocumentRevision.objects.create(
             content_type=ContentType.objects.get_for_model(SaleInvoice),
+            object_id=self.invoice.id if 'self.invoice' in locals() or 'self.invoice' in globals() else invoice.id,
+            content_type=ContentType.objects.get_for_model(SaleInvoice),
             object_id=self.invoice.id,
             outlet=self.outlet,
 
@@ -405,6 +407,8 @@ class SaleReviseAPITests(APITestCase):
     def test_sale_revision_report_and_export(self):
         # Create a revision
         revision = DocumentRevision.objects.create(
+            content_type=ContentType.objects.get_for_model(SaleInvoice),
+            object_id=self.invoice.id if 'self.invoice' in locals() or 'self.invoice' in globals() else invoice.id,
             content_type=ContentType.objects.get_for_model(SaleInvoice),
             object_id=self.invoice.id,
             outlet=self.outlet,

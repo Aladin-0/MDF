@@ -491,7 +491,7 @@ class SaleCreateView(APIView):
                             logger.debug(f"Deducted {qty_to_deduct} strips from batch {batch.batch_no}")
 
                             # NEW: Validate Landing Cost & MRP pricing
-                            proposed_rate = Decimal(str(item_data.get('rate', batch.sale_rate)))
+                            proposed_rate = Decimal(str(item_data.get('rate', batch.mrp)))
                             pricing_check = validate_sale_price(proposed_rate, batch, outlet_id)
                             if pricing_check.get('block'):
                                 transaction.set_rollback(True)
@@ -515,7 +515,7 @@ class SaleCreateView(APIView):
                                 batch_no=batch.batch_no,
                                 expiry_date=batch.expiry_date,
                                 mrp=batch.mrp,
-                                sale_rate=batch.sale_rate,
+                                sale_rate=batch.mrp,
                                 rate=proposed_rate,
                                 qty_strips=qty_to_deduct,
                                 qty_loose=item_data.get('qtyLoose', 0),

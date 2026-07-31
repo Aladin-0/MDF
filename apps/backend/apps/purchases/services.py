@@ -204,11 +204,11 @@ def atomic_purchase_save(payload: Dict[str, Any], outlet_id: str, created_by_id:
                 batch.qty_strips += total_strips
                 batch.mrp = Decimal(str(item_payload['mrp']))
                 batch.purchase_rate = Decimal(str(item_payload.get('baseLandingRate', item_payload['purchaseRate'])))
-                batch.sale_rate = Decimal(str(item_payload['saleRate']))
+                batch.mrp = Decimal(str(item_payload['saleRate']))
                 new_pkg = int(item_payload.get('pkg') or 1)
                 if new_pkg and new_pkg != batch.pack_size:
                     batch.pack_size = new_pkg
-                batch.save(update_fields=['qty_strips', 'mrp', 'purchase_rate', 'sale_rate', 'pack_size'])
+                batch.save(update_fields=['qty_strips', 'mrp', 'purchase_rate', 'pack_size'])
                 logger.info(f"Merged batch {batch_no}, updated rates/qty, total={batch.qty_strips}")
             else:
                 # Check if batch exists in inventory for this outlet
@@ -222,11 +222,11 @@ def atomic_purchase_save(payload: Dict[str, Any], outlet_id: str, created_by_id:
                     batch.qty_strips += total_strips
                     batch.mrp = Decimal(str(item_payload['mrp']))
                     batch.purchase_rate = Decimal(str(item_payload.get('baseLandingRate', item_payload['purchaseRate'])))
-                    batch.sale_rate = Decimal(str(item_payload['saleRate']))
+                    batch.mrp = Decimal(str(item_payload['saleRate']))
                     new_pkg = int(item_payload.get('pkg') or 1)
                     if new_pkg and new_pkg != batch.pack_size:
                         batch.pack_size = new_pkg
-                    batch.save(update_fields=['qty_strips', 'mrp', 'purchase_rate', 'sale_rate', 'pack_size'])
+                    batch.save(update_fields=['qty_strips', 'mrp', 'purchase_rate', 'pack_size'])
                     logger.info(f"Merged batch {batch_no}, updated rates/qty, total={batch.qty_strips}")
                 except Batch.DoesNotExist:
                     # Create new batch
@@ -237,7 +237,6 @@ def atomic_purchase_save(payload: Dict[str, Any], outlet_id: str, created_by_id:
                         expiry_date=expiry_date,
                         mrp=Decimal(str(item_payload['mrp'])),
                         purchase_rate=Decimal(str(item_payload.get('baseLandingRate', item_payload['purchaseRate']))),
-                        sale_rate=Decimal(str(item_payload['saleRate'])),
                         pack_size=int(item_payload.get('pkg') or (master_product.pack_size if master_product else 1)),
                         pack_unit=master_product.pack_unit if master_product else 'tablet',
                         pack_type=master_product.pack_type if master_product else 'strip',
@@ -250,6 +249,22 @@ def atomic_purchase_save(payload: Dict[str, Any], outlet_id: str, created_by_id:
                 # Cache the batch for potential merging in this transaction
                 batch_cache[batch_key] = batch
 
+            qty_val = int(item_payload['qty'])
+            actual_qty_val = int(item_payload['actualQty'])
+            gst_amount_val = Decimal(str(item_payload['gstAmount']))
+            purchase_rate_val = Decimal(str(item_payload['purchaseRate']))
+            
+            if qty_val > 0:
+                gst_per_unit = (gst_amount_val / Decimal(qty_val)).quantize(Decimal('0.0001'))
+            elif actual_qty_val > 0:
+                gst_per_unit = (gst_amount_val / Decimal(actual_qty_val)).quantize(Decimal('0.0001'))
+            else:
+                gst_per_unit = Decimal('0.0000')
+                
+            freight_per_unit = Decimal('0.0000')
+            other_cost_per_unit = Decimal('0.0000')
+            landing_rate = purchase_rate_val + gst_per_unit + freight_per_unit + other_cost_per_unit
+
             # Create PurchaseItem (denormalized snapshot)
             purchase_item = PurchaseItem(
                 invoice=purchase_invoice,
@@ -261,10 +276,10 @@ def atomic_purchase_save(payload: Dict[str, Any], outlet_id: str, created_by_id:
                 batch_no=batch_no,
                 expiry_date=expiry_date,
                 pkg=batch.pack_size,
-                qty=int(item_payload['qty']),
-                actual_qty=int(item_payload['actualQty']),
+                qty=qty_val,
+                actual_qty=actual_qty_val,
                 free_qty=int(item_payload.get('freeQty', 0)),
-                purchase_rate=Decimal(str(item_payload['purchaseRate'])),
+                purchase_rate=purchase_rate_val,
                 discount_pct=Decimal(str(item_payload.get('discountPct', 0))),
                 cash_discount_pct=Decimal(str(item_payload.get('cashDiscountPct', 0))),
                 gst_rate=Decimal(str(item_payload.get('gstRate', 0))),
@@ -272,11 +287,14 @@ def atomic_purchase_save(payload: Dict[str, Any], outlet_id: str, created_by_id:
                 mrp=Decimal(str(item_payload['mrp'])),
                 ptr=Decimal(str(item_payload['ptr'])),
                 pts=Decimal(str(item_payload['pts'])),
-                sale_rate=Decimal(str(item_payload['saleRate'])),
                 taxable_amount=Decimal(str(item_payload['taxableAmount'])),
-                gst_amount=Decimal(str(item_payload['gstAmount'])),
+                gst_amount=gst_amount_val,
                 cess_amount=Decimal(str(item_payload.get('cessAmount', 0))),
                 total_amount=Decimal(str(item_payload['totalAmount'])),
+                freight_per_unit=freight_per_unit,
+                other_cost_per_unit=other_cost_per_unit,
+                gst_per_unit=gst_per_unit,
+                landing_rate=landing_rate,
             )
             purchase_items.append(purchase_item)
 
@@ -821,11 +839,11 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
                 batch.qty_strips += total_strips
                 batch.mrp = Decimal(str(item_payload['mrp']))
                 batch.purchase_rate = Decimal(str(item_payload.get('baseLandingRate', item_payload['purchaseRate'])))
-                batch.sale_rate = Decimal(str(item_payload['saleRate']))
+                batch.mrp = Decimal(str(item_payload['saleRate']))
                 new_pkg = int(item_payload.get('pkg') or 1)
                 if new_pkg and new_pkg != batch.pack_size:
                     batch.pack_size = new_pkg
-                batch.save(update_fields=['qty_strips', 'mrp', 'purchase_rate', 'sale_rate', 'pack_size'])
+                batch.save(update_fields=['qty_strips', 'mrp', 'purchase_rate', 'pack_size'])
             else:
                 # Prefer to look up batch by its original PK (saved from old_items) to avoid
                 # master_product=None mismatch when product lookup fails.
@@ -855,12 +873,12 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
                 if batch is not None:
                     batch.mrp = Decimal(str(item_payload['mrp']))
                     batch.purchase_rate = Decimal(str(item_payload.get('baseLandingRate', item_payload['purchaseRate'])))
-                    batch.sale_rate = Decimal(str(item_payload['saleRate']))
+                    batch.mrp = Decimal(str(item_payload['saleRate']))
                     new_pkg = int(item_payload.get('pkg') or 1)
                     if new_pkg and new_pkg != batch.pack_size:
                         batch.pack_size = new_pkg
-                    batch.save(update_fields=['mrp', 'purchase_rate', 'sale_rate', 'pack_size'])
-                    logger.info(f"[EDIT] Batch {batch_no} updated: mrp={batch.mrp}, sale_rate={batch.sale_rate}")
+                    batch.save(update_fields=['mrp', 'purchase_rate', 'pack_size'])
+                    logger.info(f"[EDIT] Batch {batch_no} updated: mrp={batch.mrp}, mrp={batch.mrp}")
                 else:
                     # Create a new batch — this item is for a truly new batch
                     batch = Batch.objects.create(
@@ -870,7 +888,6 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
                         expiry_date=expiry_date,
                         mrp=Decimal(str(item_payload['mrp'])),
                         purchase_rate=Decimal(str(item_payload.get('baseLandingRate', item_payload['purchaseRate']))),
-                        sale_rate=Decimal(str(item_payload['saleRate'])),
                         pack_size=int(item_payload.get('pkg') or (master_product.pack_size if master_product else 1)),
                         pack_unit=master_product.pack_unit if master_product else 'tablet',
                         pack_type=master_product.pack_type if master_product else 'strip',
@@ -882,6 +899,22 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
 
                 batch_cache[batch_key] = batch
 
+            qty_val = int(item_payload['qty'])
+            actual_qty_val = int(item_payload['actualQty'])
+            gst_amount_val = Decimal(str(item_payload['gstAmount']))
+            purchase_rate_val = Decimal(str(item_payload['purchaseRate']))
+            
+            if qty_val > 0:
+                gst_per_unit = (gst_amount_val / Decimal(qty_val)).quantize(Decimal('0.0001'))
+            elif actual_qty_val > 0:
+                gst_per_unit = (gst_amount_val / Decimal(actual_qty_val)).quantize(Decimal('0.0001'))
+            else:
+                gst_per_unit = Decimal('0.0000')
+                
+            freight_per_unit = Decimal('0.0000')
+            other_cost_per_unit = Decimal('0.0000')
+            landing_rate = purchase_rate_val + gst_per_unit + freight_per_unit + other_cost_per_unit
+
             purchase_item = PurchaseItem(
                 invoice=purchase_invoice,
                 batch=batch,
@@ -892,10 +925,10 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
                 batch_no=batch_no,
                 expiry_date=expiry_date,
                 pkg=batch.pack_size,
-                qty=int(item_payload['qty']),
-                actual_qty=int(item_payload['actualQty']),
+                qty=qty_val,
+                actual_qty=actual_qty_val,
                 free_qty=int(item_payload.get('freeQty', 0)),
-                purchase_rate=Decimal(str(item_payload['purchaseRate'])),
+                purchase_rate=purchase_rate_val,
                 discount_pct=Decimal(str(item_payload.get('discountPct', 0))),
                 cash_discount_pct=Decimal(str(item_payload.get('cashDiscountPct', 0))),
                 gst_rate=Decimal(str(item_payload.get('gstRate', 0))),
@@ -903,11 +936,14 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
                 mrp=Decimal(str(item_payload['mrp'])),
                 ptr=Decimal(str(item_payload['ptr'])),
                 pts=Decimal(str(item_payload['pts'])),
-                sale_rate=Decimal(str(item_payload['saleRate'])),
                 taxable_amount=Decimal(str(item_payload['taxableAmount'])),
-                gst_amount=Decimal(str(item_payload['gstAmount'])),
+                gst_amount=gst_amount_val,
                 cess_amount=Decimal(str(item_payload.get('cessAmount', 0))),
                 total_amount=Decimal(str(item_payload['totalAmount'])),
+                freight_per_unit=freight_per_unit,
+                other_cost_per_unit=other_cost_per_unit,
+                gst_per_unit=gst_per_unit,
+                landing_rate=landing_rate,
             )
             purchase_items.append(purchase_item)
 

@@ -20,14 +20,21 @@ export function useCheckout() {
 
     const hasScheduleH = activeDraftId ? useBillingStore.getState().hasScheduleHItems(activeDraftId) : false;
     const scheduleHData = draft?.scheduleHData;
-    const isScheduleHValid = !hasScheduleH || Boolean(scheduleHData && scheduleHData.patientName && scheduleHData.doctorName);
+    
+    // In POS mode, the selected customer acts as the patient, and the selected doctor acts as the prescribing doctor.
+    // Allow checkout if explicit scheduleHData is provided OR if both Customer and Doctor are selected in the UI.
+    const hasCustomer = Boolean(draft?.customer && draft.customer.id !== 'mock');
+    const hasDoctor = Boolean(draft?.doctor && draft.doctor.id !== 'mock');
+    
+    const isScheduleHValid = !hasScheduleH || 
+        Boolean(scheduleHData && scheduleHData.patientName && scheduleHData.doctorName) || 
+        (hasCustomer && hasDoctor);
 
     const tenderAmount = cashReceived === '' ? (totals?.grandTotal || 0) : Number(cashReceived);
     const balance = Math.max(0, tenderAmount - (totals?.grandTotal || 0));
     
     const isTenderInvalid = paymentMethod === 'cash' && cashReceived !== '' && Number(cashReceived) < (totals?.grandTotal || 0);
     
-    const hasCustomer = Boolean(draft?.customer && draft.customer.id !== 'mock');
     const isCreditInvalid = paymentMethod === 'credit' && !hasCustomer;
 
     const canCheckout = Boolean(

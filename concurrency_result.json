@@ -1,0 +1,14 @@
+{
+  "results": {
+    "Request B": "SUCCESS",
+    "Request A": "SUCCESS"
+  },
+  "exceptions": {},
+  "PurchaseInvoice.subtotal": 1000.0,
+  "PurchaseInvoice.qty": 20,
+  "Batch.qty_strips": 16,
+  "StockLedger.qty_in": 20.0,
+  "StockLedger.qty_out": 4.0,
+  "StockLedger.count_purchase_in": 1,
+  "DocumentRevisionV2.count": 3
+}

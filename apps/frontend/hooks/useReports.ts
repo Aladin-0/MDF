@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, startOfMonth, startOfWeek, endOfMonth, startOfYear, subMonths } from 'date-fns';
 import { DateRangeFilter } from '@/types';
 import { reportsApi } from '@/lib/apiClient';
@@ -117,5 +117,48 @@ export function useBatchReport(filters: any) {
         queryFn: () => reportsApi.getBatchReport(outletId, filters),
         staleTime: 1000 * 60 * 5,
         enabled: !!outletId,
+    });
+}
+
+export function useGSTR1Report(dateRange: DateRangeFilter) {
+    const outletId = useOutletId();
+    return useQuery({
+        queryKey: ['reports', 'gstr1', outletId, dateRange],
+        queryFn: () => reportsApi.getGSTR1Report(outletId, dateRange.from, dateRange.to),
+        staleTime: 1000 * 60 * 5,
+        enabled: !!outletId,
+    });
+}
+
+export function useGSTR3BReport(dateRange: DateRangeFilter) {
+    const outletId = useOutletId();
+    return useQuery({
+        queryKey: ['reports', 'gstr3b', outletId, dateRange],
+        queryFn: () => reportsApi.getGSTR3BReport(outletId, dateRange.from, dateRange.to),
+        staleTime: 1000 * 60 * 5,
+        enabled: !!outletId,
+    });
+}
+
+
+export function useLockGSTReport() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: ({ outletId, payload }: { outletId: string, payload: { reportType: 'GSTR1' | 'GSTR3B', from: string, to: string, reason?: string } }) =>
+            reportsApi.lockGSTReport(outletId, payload),
+        onSuccess: (data, variables) => {
+            queryClient.invalidateQueries({ queryKey: ['reports', 'gst', variables.payload.reportType] });
+        }
+    });
+}
+
+export function useUnlockGSTReport() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: ({ outletId, payload }: { outletId: string, payload: { reportType: 'GSTR1' | 'GSTR3B', from: string, to: string, reason: string } }) =>
+            reportsApi.unlockGSTReport(outletId, payload),
+        onSuccess: (data, variables) => {
+            queryClient.invalidateQueries({ queryKey: ['reports', 'gst', variables.payload.reportType] });
+        }
     });
 }

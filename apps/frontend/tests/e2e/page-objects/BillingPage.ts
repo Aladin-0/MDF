@@ -17,13 +17,17 @@ export class BillingPage {
       await this.page.keyboard.press(char);
     }
     await expect(this.page.getByText('Enter Your PIN')).not.toBeVisible();
-    await expect(this.page.getByText('Walk-in / Cash Sale')).toBeVisible();
+    await expect(this.page.getByText('No Customer Selected')).toBeVisible();
   }
 
   async selectCustomer(name: string) {
     const custInput = this.page.getByPlaceholder('Search Customer...').first();
     await custInput.fill(name);
-    await custInput.blur();
+    await this.page.waitForTimeout(500);
+    // press down arrow and enter to select the first option
+    await this.page.keyboard.press('ArrowDown');
+    await this.page.waitForTimeout(200);
+    await this.page.keyboard.press('Enter');
   }
 
   async selectQuotationMode() {

@@ -127,7 +127,7 @@ def seed_master_data():
         p = MasterProduct.objects.create(
             name=f"{PREFIX}{name}", composition="Generic", manufacturer="Generic Pharma", category="Tablets",
             drug_type="Allopathic", schedule_type="H1", hsn_code=hsn, gst_rate=rate, pack_size=10, pack_unit="Strip",
-            pack_type="Blister", mrp=mrp, default_sale_rate=mrp, min_qty=5, reorder_qty=10, is_fridge=False, is_discontinued=False
+            pack_type="Blister", mrp=mrp, min_qty=5, reorder_qty=10, is_fridge=False, is_discontinued=False
         )
         products.append((p, pur_rate))
 
@@ -167,7 +167,7 @@ def seed_purchases(outlets, distributors, products, num_purchases):
             # Create Batch First to satisfy constraints
             batch = Batch.objects.create(
                 outlet=outlet, product=p, batch_no=batch_no, expiry_date=inv_date + timedelta(days=365),
-                mrp=p.mrp, purchase_rate=p_rate, sale_rate=p.mrp, pack_size=p.pack_size, pack_unit=p.pack_unit, pack_type=p.pack_type,
+                mrp=p.mrp, purchase_rate=p_rate, pack_size=p.pack_size, pack_unit=p.pack_unit, pack_type=p.pack_type,
                 qty_strips=qty, qty_loose=0, is_active=True, is_opening_stock=False
             )
             batches.append(batch)
@@ -242,14 +242,14 @@ def seed_sales(outlets, customers, batches, num_sales):
             batch.qty_strips -= qty
             batch.save()
 
-            rate = batch.sale_rate
+            rate = batch.mrp
             taxable = (Decimal(qty) * rate).quantize(Decimal('0.01'))
             gst = (taxable * batch.product.gst_rate / Decimal('100')).quantize(Decimal('0.01'))
 
             SaleItem.objects.create(
                 invoice=si, batch=batch, product_name=batch.product.name, pack_size=batch.pack_size, pack_unit=batch.pack_unit,
                 schedule_type=batch.product.schedule_type, batch_no=batch.batch_no, expiry_date=batch.expiry_date,
-                mrp=batch.mrp, sale_rate=batch.sale_rate, rate=rate, hsn_code=batch.product.hsn_code,
+                mrp=batch.mrp, rate=rate, hsn_code=batch.product.hsn_code,
                 qty_strips=qty, qty_loose=0, qty_returned=0, sale_mode="Pack", discount_pct=Decimal('0'),
                 gst_rate=batch.product.gst_rate, taxable_amount=taxable, gst_amount=gst, total_amount=taxable + gst
             )

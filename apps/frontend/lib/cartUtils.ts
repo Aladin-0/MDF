@@ -26,7 +26,8 @@ export function calculateRowTotals(
     qtyLooseRaw: string,
     discountType: 'percentage' | 'amount',
     discountValueRaw: string,
-    gstRate: number
+    gstRate: number,
+    historicalBaseRate?: number
 ): RowTotals {
     const s = parseInt(qtyStripsRaw) || 0;
     const l = parseInt(qtyLooseRaw) || 0;
@@ -34,8 +35,8 @@ export function calculateRowTotals(
     const tQtyLoose = (s * currentBatch.packSize) + l;
     const tQtyFractional = s + (l / currentBatch.packSize);
     
-    const saleRate = currentBatch.saleRate ?? currentBatch.mrp;
-    const rawTotal = saleRate * tQtyFractional;
+    const baseRate = historicalBaseRate ?? currentBatch.mrp;
+    const rawTotal = baseRate * tQtyFractional;
 
     let dPct = 0;
     let dAmount = 0;
@@ -47,7 +48,7 @@ export function calculateRowTotals(
         dPct = rawTotal > 0 ? (dAmount / rawTotal) * 100 : 0;
     }
 
-    const rate = saleRate * (1 - (dPct / 100));
+    const rate = baseRate * (1 - (dPct / 100));
     const sellAmount = rate * tQtyFractional;
     
     // Purchase rate per pack

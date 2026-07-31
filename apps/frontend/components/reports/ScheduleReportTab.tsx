@@ -626,8 +626,8 @@ export function ScheduleReportTab() {
                         </h4>
                         <div className="space-y-2 text-sm">
                           <div className="flex justify-between">
-                            <span className="text-slate-500">MRP / Rate</span>
-                            <span className="text-slate-800">{fmt(selectedSale.mrp || 0)} / {fmt(selectedSale.saleRate || 0)}</span>
+                            <span className="text-slate-500">MRP</span>
+                            <span className="text-slate-800">{fmt(selectedSale.mrp || 0)}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-slate-500">Discount Applied</span>

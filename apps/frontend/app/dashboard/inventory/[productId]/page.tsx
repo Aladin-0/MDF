@@ -173,7 +173,6 @@ export default function ProductInventoryPage() {
                 <InfoBadge label="HSN Code" value={product.hsnCode || '—'} />
                 <InfoBadge label="GST Rate" value={product.gstRate != null ? `${product.gstRate}%` : '—'} />
                 <InfoBadge label="Default MRP" value={formatCurrency(product.mrp)} />
-                <InfoBadge label="Default Sale Rate" value={formatCurrency(product.saleRate)} />
                 <InfoBadge label="Min Reorder Qty" value={`${product.minQty ?? 10} strips`} />
             </div>
 
@@ -262,7 +261,6 @@ export default function ProductInventoryPage() {
                                     <th className="text-left py-4 px-6 font-black text-xs uppercase tracking-widest text-slate-400">Mfg Date</th>
                                     <th className="text-right py-4 px-6 font-black text-xs uppercase tracking-widest text-slate-400">Stock</th>
                                     <th className="text-right py-4 px-6 font-black text-xs uppercase tracking-widest text-slate-400">MRP</th>
-                                    <th className="text-right py-4 px-6 font-black text-xs uppercase tracking-widest text-slate-400">Sale Rate</th>
                                     <PermissionGate permission="view_purchase_rates">
                                         <th className="text-right py-4 px-6 font-black text-xs uppercase tracking-widest text-slate-400">Purchase Rate</th>
                                         <th className="text-right py-4 px-6 font-black text-xs uppercase tracking-widest text-slate-400">Stock Value</th>
@@ -309,7 +307,6 @@ export default function ProductInventoryPage() {
                                                 </span>
                                             </td>
                                             <td className="py-4 px-6 text-right font-bold text-slate-700">{formatCurrency(batch.mrp)}</td>
-                                            <td className="py-4 px-6 text-right font-bold text-slate-700">{formatCurrency(batch.saleRate)}</td>
                                             <PermissionGate permission="view_purchase_rates">
                                                 <td className="py-4 px-6 text-right font-bold text-slate-700">{formatCurrency(batch.purchaseRate)}</td>
                                                 <td className="py-4 px-6 text-right font-bold text-emerald-700">{formatCurrency(stockValue)}</td>

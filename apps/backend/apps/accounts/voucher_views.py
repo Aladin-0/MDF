@@ -1060,7 +1060,7 @@ class BalanceSheetView(APIView):
                 if stock_valuation == 'mrp_rate':
                     rate = batch.mrp
                 elif stock_valuation == 'sale_rate':
-                    rate = batch.sale_rate
+                    rate = batch.mrp
                 elif stock_valuation == 'cost_ext':
                     rate = batch.purchase_rate * Decimal('1.05')  # purchase + 5%
                 else:  # purchase_rate (default)
@@ -1347,7 +1347,7 @@ class ProfitLossView(APIView):
                 if stock_valuation == 'mrp_rate':
                     rate = batch.mrp
                 elif stock_valuation == 'sale_rate':
-                    rate = batch.sale_rate
+                    rate = batch.mrp
                 elif stock_valuation == 'cost_ext':
                     rate = batch.purchase_rate * Decimal('1.05')
                 else:

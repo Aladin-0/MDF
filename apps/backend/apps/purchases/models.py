@@ -182,13 +182,12 @@ class PurchaseItem(models.Model):
                               help_text='Price to Retailer (distributor margin)')
     pts = models.DecimalField(max_digits=10, decimal_places=2,
                               help_text='Price to Stockist (wholesaler margin)')
-    sale_rate = models.DecimalField(max_digits=10, decimal_places=2,
-                                    help_text='Our sale rate for this batch')
-                                    
+
     # Inward landing costs
     freight_per_unit = models.DecimalField(max_digits=10, decimal_places=4, default=0, help_text="Freight/transport cost apportioned per unit for this batch")
     other_cost_per_unit = models.DecimalField(max_digits=10, decimal_places=4, default=0, help_text="Any other inward cost per unit (loading, unloading, etc.)")
-
+    gst_per_unit = models.DecimalField(max_digits=10, decimal_places=4, default=0, help_text="GST amount apportioned per unit")
+    landing_rate = models.DecimalField(max_digits=10, decimal_places=4, default=0, help_text="Landing rate per unit")
     def get_landing_cost(self, include_gst: bool = False) -> Decimal:
         """
         Compute the minimum price floor for this batch.

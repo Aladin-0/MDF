@@ -233,6 +233,7 @@ export interface MasterProduct {
     category: string;
     drugType: DrugType;
     scheduleType: DrugSchedule;
+
     hsnCode: string;
     gstRate: number;
     // NOTE: packSize / packUnit / packType on the product are "template" defaults
@@ -260,6 +261,7 @@ export interface CreateProductPayload {
     gstRate: number;
     packSize: number;
     packUnit: string;
+    packType: string;
     scheduleType: string;
     mrp: number;
     saleRate: number;
@@ -288,12 +290,14 @@ export interface Batch {
 export interface ProductSearchResult extends MasterProduct {
     outletProductId: string;
     totalStock: number;
+    stockDisplayText?: string;
     nearestExpiry: string;
     isLowStock: boolean;
     batches: Batch[];
     hasStock: boolean;
     totalQtyStrips: number;
     totalQtyLoose: number;
+    totalMeasured?: number;
     availableBatches?: Batch[];
 }
 
@@ -708,6 +712,7 @@ export interface PurchaseItemFormData {
     packUnitLabel?: string;
     qty: number;
     freeQty: number;
+
     purchaseRate: number;
     freightPerUnit: number;
     otherCostPerUnit: number;
@@ -741,6 +746,8 @@ export interface PurchaseItem {
     qty: number;                    // number of packs purchased
     actualQty: number;              // pkg × qty — units added to inventory
     freeQty: number;
+
+    packUnitLabel?: string;
 
     // Pricing
     purchaseRate: number;
@@ -825,6 +832,7 @@ export interface CreatePurchaseItemPayload {
     qty: number;
     actualQty: number;              // pkg × qty — pre-computed on client
     freeQty: number;
+
     purchaseRate: number;
     baseLandingRate?: number;
     freightPerUnit: number;

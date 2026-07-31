@@ -54,7 +54,6 @@ class PurchaseEditMigrationTest(TestCase):
         self.product = MasterProduct.objects.create(
             name="Test Medicine",
             mrp=Decimal('100.00'),
-            default_sale_rate=Decimal('80.00'),
             pack_size=10
         )
         
@@ -174,7 +173,6 @@ class PurchaseEditMigrationTest(TestCase):
         
         batch = Batch.objects.get(batch_no='BATCH-001', outlet=self.outlet)
         self.assertEqual(batch.purchase_rate, Decimal('55.00'))
-        self.assertEqual(batch.sale_rate, Decimal('85.00'))
         self.assertEqual(batch.mrp, Decimal('110.00'))
 
     def test_purchase_edit_missing_audit_reason_validation(self):

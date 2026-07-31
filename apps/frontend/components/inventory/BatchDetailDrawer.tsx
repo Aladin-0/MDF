@@ -175,11 +175,7 @@ export function BatchDetailDrawer({ productId, product, isOpen, onClose, onAdjus
                                                             {batch.qtyLoose > 0 && <span className="text-base font-bold text-slate-500 ml-1">+ {batch.qtyLoose} loose</span>}
                                                         </div>
                                                     </div>
-                                                    <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200">
-                                                        <div className="text-xs uppercase text-slate-500 font-black tracking-widest mb-2">Sale Rate</div>
-                                                        <div className="font-black text-slate-900 text-2xl mt-1">{formatCurrency(batch.saleRate)}</div>
-                                                    </div>
-                                                    
+
                                                     <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200">
                                                         <div className="text-xs uppercase text-slate-500 font-black tracking-widest mb-2">MRP</div>
                                                         <div className="font-black text-slate-700 text-xl">{formatCurrency(batch.mrp)}</div>

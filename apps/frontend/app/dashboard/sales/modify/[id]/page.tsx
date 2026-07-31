@@ -68,6 +68,13 @@ export default function ModifySalePage({ params }: { params: { id: string } }) {
             store.setEditingSaleId(id);
             store.setRevisionContext(action, '', '');
 
+            if (fullInvoice.invoiceDate) {
+                const d = new Date(fullInvoice.invoiceDate);
+                store.updateDraftHeader(targetDraftId, {
+                    invoiceDate: new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+                });
+            }
+
             store.setCustomer(fullInvoice.customer || null);
             if (fullInvoice.customer) {
                 store.setCustomerLedger({
@@ -107,7 +114,7 @@ export default function ModifySalePage({ params }: { params: { id: string } }) {
             console.log("Hydrating doctor:", fullInvoice.doctorId, fullInvoice.doctorName);
             if (fullInvoice.doctorId || fullInvoice.doctorName) {
                 store.setDoctor({
-                    id: fullInvoice.doctorId || 'unregistered',
+                    id: fullInvoice.doctorId || 'mock',
                     name: fullInvoice.doctorName || 'Unknown Doctor',
                     regNo: fullInvoice.doctorRegNo || '',
                 } as any);
@@ -125,6 +132,9 @@ export default function ModifySalePage({ params }: { params: { id: string } }) {
                      doctorRegNo: fullInvoice.doctorRegNo || '',
                      prescriptionNo: fullInvoice.prescriptionNo || '',
                  });
+                 if (fullInvoice.prescriptionNo) {
+                     store.updateDraftHeader(targetDraftId, { prescriptionNo: fullInvoice.prescriptionNo });
+                 }
             }
 
             if (fullInvoice.items) {

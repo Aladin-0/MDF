@@ -1,0 +1,39 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.0, pluggy-1.6.0 -- /home/asta/coding/MDF/apps/backend/venv/bin/python3
+cachedir: .pytest_cache
+django: version: 5.0.3, settings: mediflow.settings.test_settings (from env)
+rootdir: /home/asta/coding/MDF/apps/backend
+configfile: pytest.ini
+plugins: django-4.12.0
+collecting ... ERROR: found no collectors for /home/asta/coding/MDF/apps/backend/apps/purchases/tests/test_purchase_edit_stock.py::PurchaseEditStockTest::test_purchase_edit_10_to_6_with_4_sold
+
+collected 0 items / 1 error
+
+==================================== ERRORS ====================================
+______ ERROR collecting apps/purchases/tests/test_purchase_edit_stock.py _______
+apps/backend/venv/lib/python3.12/site-packages/_pytest/python.py:508: in importtestmodule
+    mod = import_path(
+apps/backend/venv/lib/python3.12/site-packages/_pytest/pathlib.py:596: in import_path
+    importlib.import_module(module_name)
+/usr/lib/python3.12/importlib/__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1387: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1331: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:935: in _load_unlocked
+    ???
+apps/backend/venv/lib/python3.12/site-packages/_pytest/assertion/rewrite.py:188: in exec_module
+    exec(co, module.__dict__)
+apps/backend/apps/purchases/tests/test_purchase_edit_stock.py:10: in <module>
+    from apps.purchases.services import atomic_purchase_save, atomic_purchase_update
+E     File "/home/asta/coding/MDF/apps/backend/apps/purchases/services.py", line 323
+E       print(f"DEBUG INIT: is_measured={is_measured}, qty_measured_val={qty_measured_val}")
+E       ^^^^^^^^^^^^^^^^^^^^
+E   SyntaxError: invalid syntax. Perhaps you forgot a comma?
+=========================== short test summary info ============================
+ERROR apps/backend/apps/purchases/tests/test_purchase_edit_stock.py
+=============================== 1 error in 0.26s ===============================

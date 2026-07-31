@@ -37,6 +37,12 @@ export function CreateLedgerModal({
     const [saving, setSaving] = useState(false);
     const [groups, setGroups] = useState<LedgerGroup[]>([]);
 
+    // In billing context (defaultGroupName provided), collapse extra sections by default
+    const isBillingContext = !!defaultGroupName;
+    const [showContact, setShowContact] = useState(!isBillingContext);
+    const [showCompliance, setShowCompliance] = useState(false);
+    const [showSettings, setShowSettings] = useState(false);
+
     // New Group modal state
     const [showNewGroup, setShowNewGroup] = useState(false);
     const [newGroupName, setNewGroupName] = useState('');
@@ -146,16 +152,23 @@ export function CreateLedgerModal({
             toast({ variant: 'destructive', title: 'Ledger name is required' });
             return;
         }
-        if (!groupId) {
+        // In billing context, groupName is sent as fallback so groupId is optional.
+        // For non-billing context (full ledger form), groupId is strictly required.
+        if (!groupId && !defaultGroupName) {
             toast({ variant: 'destructive', title: 'Account group is required' });
             return;
         }
         setSaving(true);
         try {
-            const payload = {
+            const payload: Record<string, any> = {
                 outletId,
                 name: name.trim(),
-                groupId,
+                groupId: groupId || undefined,
+                // Send groupName as fallback so backend can get_or_create if outlet
+                // doesn't have the group seeded yet.
+                groupName: !groupId && defaultGroupName ? defaultGroupName : undefined,
+                // Set ledgerCategory to CUSTOMER when called from billing
+                ledgerCategory: defaultGroupName ? 'CUSTOMER' : ledgerCategory,
                 openingBalance: parseFloat(openingBalance) || 0,
                 balanceType,
                 balancingMethod,
@@ -176,7 +189,7 @@ export function CreateLedgerModal({
                 extraHeadingNo, extraHeadingExpiry: extraHeadingExpiry || null,
                 itPanNo,
                 // Settings
-                billExport, ledgerCategory, state, country,
+                billExport, state, country,
                 ledgerType, color,
                 isHidden, retailioId,
             };
@@ -190,7 +203,8 @@ export function CreateLedgerModal({
             toast({ title: ledgerToEdit ? 'Ledger updated' : 'Ledger created' });
             onSave(ledger);
         } catch (err: any) {
-            toast({ variant: 'destructive', title: 'Failed to save', description: err?.detail || String(err) });
+            const desc = err?.detail || err?.message || String(err);
+            toast({ variant: 'destructive', title: 'Failed to save ledger', description: desc });
         } finally {
             setSaving(false);
         }
@@ -300,10 +314,17 @@ export function CreateLedgerModal({
                         </div>
                     </div>
 
-                    {/* Section 2 — Contact */}
+                    {/* Section 2 — Contact (collapsible; hidden by default in billing context) */}
                     <div>
-                        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Contact</h3>
-                        <div className="grid grid-cols-2 gap-4">
+                        <button
+                            type="button"
+                            className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 hover:text-foreground transition-colors"
+                            onClick={() => setShowContact(v => !v)}
+                        >
+                            <span>{showContact ? '▾' : '▸'}</span>
+                            Contact {isBillingContext && !showContact && <span className="text-xs font-normal normal-case text-muted-foreground/60">(tap to expand)</span>}
+                        </button>
+                        {showContact && <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-1.5">
                                 <Label>Mail To</Label>
                                 <Input value={mailTo} onChange={(e) => setMailTo(e.target.value)} />
@@ -348,13 +369,20 @@ export function CreateLedgerModal({
                                 <Label>Fax No.</Label>
                                 <Input type="tel" value={faxNo} onChange={(e) => setFaxNo(e.target.value)} />
                             </div>
-                        </div>
+                        </div>}
                     </div>
 
-                    {/* Section 3 — Compliance */}
+                    {/* Section 3 — Compliance (collapsible; collapsed by default) */}
                     <div>
-                        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Compliance</h3>
-                        <div className="grid grid-cols-2 gap-4">
+                        <button
+                            type="button"
+                            className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 hover:text-foreground transition-colors"
+                            onClick={() => setShowCompliance(v => !v)}
+                        >
+                            <span>{showCompliance ? '▾' : '▸'}</span>
+                            Compliance <span className="text-xs font-normal normal-case text-muted-foreground/60">(tap to expand)</span>
+                        </button>
+                        {showCompliance && <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-1.5">
                                 <Label>Freeze Upto</Label>
                                 <Input type="date" value={freezeUpto ?? ''} onChange={(e) => setFreezeUpto(e.target.value)} />
@@ -419,13 +447,20 @@ export function CreateLedgerModal({
                                 <Label>I.T. PAN No.</Label>
                                 <Input value={itPanNo} onChange={(e) => setItPanNo(e.target.value)} maxLength={10} />
                             </div>
-                        </div>
+                        </div>}
                     </div>
 
-                    {/* Section 4 — Settings */}
+                    {/* Section 4 — Settings (collapsible; collapsed by default) */}
                     <div>
-                        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Settings</h3>
-                        <div className="grid grid-cols-2 gap-4">
+                        <button
+                            type="button"
+                            className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 hover:text-foreground transition-colors"
+                            onClick={() => setShowSettings(v => !v)}
+                        >
+                            <span>{showSettings ? '▾' : '▸'}</span>
+                            Settings <span className="text-xs font-normal normal-case text-muted-foreground/60">(tap to expand)</span>
+                        </button>
+                        {showSettings && <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-1.5">
                                 <Label>Bill Export</Label>
                                 <select
@@ -515,7 +550,7 @@ export function CreateLedgerModal({
                                 <Label>Retailio ID</Label>
                                 <Input value={retailioId} onChange={(e) => setRetailioId(e.target.value)} />
                             </div>
-                        </div>
+                        </div>}
                     </div>
                 </div>
 

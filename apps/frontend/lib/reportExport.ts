@@ -99,3 +99,110 @@ export function exportPurchaseReportCSV(rows: PurchaseReportRow[], dateRange: Da
     ]);
     downloadCSV(headers, csvRows, `purchase-report-${dateRange.from}-to-${dateRange.to}.csv`);
 }
+
+
+export function exportGSTR1_JSON(reportData: any, outlet: any, dateRange: DateRangeFilter): void {
+    const filename = `gstr1_${outlet.gstin || outlet.id}_${dateRange.from}_to_${dateRange.to}.json`;
+    const meta = {
+        outletId: outlet.id,
+        gstin: outlet.gstin,
+        periodFrom: dateRange.from,
+        periodTo: dateRange.to,
+        generatedAt: new Date().toISOString(),
+        reportType: 'GSTR-1'
+    };
+    const payload = { meta, data: reportData };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+export function exportGSTR3B_JSON(reportData: any, outlet: any, dateRange: DateRangeFilter): void {
+    const filename = `gstr3b_${outlet.gstin || outlet.id}_${dateRange.from}_to_${dateRange.to}.json`;
+    const meta = {
+        outletId: outlet.id,
+        gstin: outlet.gstin,
+        periodFrom: dateRange.from,
+        periodTo: dateRange.to,
+        generatedAt: new Date().toISOString(),
+        reportType: 'GSTR-3B'
+    };
+    const payload = { meta, data: reportData };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+export function exportGSTR1_CSV(data: any, outlet: any, dateRange: DateRangeFilter): void {
+    const baseName = `gstr1_${outlet.gstin || outlet.id}_${dateRange.from}`;
+    
+    // B2B
+    if (data.b2b_invoices && data.b2b_invoices.length > 0) {
+        const headers = ['Receiver GSTIN/UIN', 'Invoice Number', 'Invoice Date', 'Taxable Value', 'Integrated Tax Amount', 'Central Tax Amount', 'State/UT Tax Amount', 'Cess Amount'];
+        const rows = data.b2b_invoices.map((r: any) => [
+            r.party_gstin || '', r.document_number || '', r.transaction_date || '', 
+            r.total_taxable_value || 0, r.total_igst || 0, r.total_cgst || 0, r.total_sgst || 0, r.total_cess || 0
+        ]);
+        downloadCSV(headers, rows, `${baseName}_b2b.csv`);
+    }
+
+    // B2C
+    if (data.b2c_summary && data.b2c_summary.length > 0) {
+        const headers = ['Place of Supply (POS)', 'Rate', 'Taxable Value', 'Integrated Tax Amount', 'Central Tax Amount', 'State/UT Tax Amount', 'Cess Amount'];
+        const rows = data.b2c_summary.map((r: any) => [
+            r.party_state || '', r.gst_rate || 0, r.total_taxable_value || 0, 
+            r.total_igst || 0, r.total_cgst || 0, r.total_sgst || 0, r.total_cess || 0
+        ]);
+        downloadCSV(headers, rows, `${baseName}_b2c.csv`);
+    }
+
+    // CDNR
+    if (data.cdnr && data.cdnr.length > 0) {
+        const headers = ['Receiver GSTIN/UIN', 'Note Number', 'Note Date', 'Taxable Value', 'Integrated Tax Amount', 'Central Tax Amount', 'State/UT Tax Amount', 'Cess Amount'];
+        const rows = data.cdnr.map((r: any) => [
+            r.party_gstin || '', r.document_number || '', r.transaction_date || '', 
+            r.total_taxable_value || 0, r.total_igst || 0, r.total_cgst || 0, r.total_sgst || 0, r.total_cess || 0
+        ]);
+        downloadCSV(headers, rows, `${baseName}_cdnr.csv`);
+    }
+
+    // HSN
+    if (data.hsn_summary && data.hsn_summary.length > 0) {
+        const headers = ['HSN', 'Rate', 'Taxable Value', 'Integrated Tax Amount', 'Central Tax Amount', 'State/UT Tax Amount', 'Cess Amount'];
+        const rows = data.hsn_summary.map((r: any) => [
+            r.hsn_code || '', r.gst_rate || 0, r.total_taxable_value || 0, 
+            r.total_igst || 0, r.total_cgst || 0, r.total_sgst || 0, r.total_cess || 0
+        ]);
+        downloadCSV(headers, rows, `${baseName}_hsn.csv`);
+    }
+}
+
+export function exportGSTR3B_CSV(data: any, outlet: any, dateRange: DateRangeFilter): void {
+    const baseName = `gstr3b_${outlet.gstin || outlet.id}_${dateRange.from}`;
+
+    // 3.1
+    const t31 = data.outward_supplies?.taxable || {};
+    const n31 = data.outward_supplies?.nil_exempt || {};
+    const headers31 = ['Nature of Supplies', 'Total Taxable Value', 'Integrated Tax', 'Central Tax', 'State/UT Tax', 'Cess'];
+    const rows31 = [
+        ['(a) Outward taxable supplies (other than zero rated, nil rated and exempted)', t31.total_taxable_value || 0, t31.total_igst || 0, t31.total_cgst || 0, t31.total_sgst || 0, t31.total_cess || 0],
+        ['(c) Other outward supplies (Nil rated, exempted)', n31.total_taxable_value || 0, 0, 0, 0, 0]
+    ];
+    downloadCSV(headers31, rows31, `${baseName}_3_1.csv`);
+
+    // 4A
+    const itc = data.eligible_itc?.all_other_itc || {};
+    const headers4a = ['Details', 'Integrated Tax', 'Central Tax', 'State/UT Tax', 'Cess'];
+    const rows4a = [
+        ['(A) (5) All other ITC', itc.total_igst || 0, itc.total_cgst || 0, itc.total_sgst || 0, itc.total_cess || 0]
+    ];
+    downloadCSV(headers4a, rows4a, `${baseName}_4a.csv`);
+}

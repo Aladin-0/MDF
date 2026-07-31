@@ -48,9 +48,6 @@ const calcPTR = (mrp: number, gstRate: number, retailMargin = 20) =>
 const calcPTS = (ptr: number, stockistMargin = 5) =>
     ptr ? parseFloat((ptr * (1 - stockistMargin / 100)).toFixed(2)) : 0;
 
-const autoSaleRate = (mrp: number, marginPct = 10) =>
-    mrp ? parseFloat((mrp * (1 - marginPct / 100)).toFixed(2)) : 0;
-
 // ─── Shared cell input — plain <input> for full table cell control ────────────
 // We intentionally do NOT use shadcn Input here because its internal padding
 // and ring classes interfere with table cell sizing and spinner removal.
@@ -84,7 +81,6 @@ export const PURCHASE_ITEM_COLS = [
     { key: 'disc',      width: 60  },
     { key: 'gst',       width: 52  },
     { key: 'mrp',       width: 76  },
-    { key: 'saleRate',  width: 76  },
     { key: 'amount',    width: 84  },
     { key: 'expand',    width: 32  },
     { key: 'remove',    width: 32  },
@@ -123,12 +119,8 @@ export function PurchaseItemRow({
         value.otherCostPerUnit || 0
     );
     
-    // Auto-fill saleRate when landingRate is calculated and saleRate is empty
-    useEffect(() => {
-        if (landingRate > 0 && !value.saleRate) {
-            onChange(index, 'saleRate', landingRate);
-        }
-    }, [landingRate, value.saleRate]);
+    // Sale rate logic removed. 
+    // We intentionally let the new batches fallback to MRP later.
 
     // Helper to calculate dropdown position (viewport-relative for position:fixed)
     const openDropdown = () => {
@@ -230,7 +222,6 @@ export function PurchaseItemRow({
         const mrp = parseFloat(raw) || 0;
         onChange(index, 'mrp', mrp);
         if (mrp > 0) {
-            if (!value.saleRate) onChange(index, 'saleRate', autoSaleRate(mrp));
             if (!value.ptr)      onChange(index, 'ptr', calcPTR(mrp, value.gstRate));
             if (!value.pts)      onChange(index, 'pts', calcPTS(calcPTR(mrp, value.gstRate)));
         }
@@ -500,15 +491,7 @@ export function PurchaseItemRow({
                     />
                 </td>
 
-                {/* Sale Rate */}
-                <td className={td}>
-                    <input
-                        type="number" min={0} step="0.01"
-                        className={cellInputCls(!!errors?.saleRate, 'right')}
-                        value={value.saleRate || ''}
-                        onChange={(e) => num('saleRate', e.target.value)}
-                    />
-                </td>
+                {/* Sale Rate was removed from here. */}
 
                 {/* Amount */}
                 <td className={cn(td, 'text-right')}>

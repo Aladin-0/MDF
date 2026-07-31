@@ -22,7 +22,7 @@ export function isEditableElement(target: EventTarget | null): boolean {
     const isContentEditable = el.isContentEditable;
     
     // ARIA roles that indicate text entry
-    const role = el.getAttribute('role');
+    const role = el.getAttribute?.('role') || null;
     const isTextRole = role === 'textbox' || role === 'searchbox' || role === 'combobox';
     
     // Type check for inputs to exclude checkboxes/radios if desired
@@ -106,11 +106,8 @@ class ShortcutRegistry {
 
         const matches = Array.from(this.shortcuts.values()).filter(s => {
             if (!this.activeScopes.has(s.scope)) return false;
-            if (isInput && !s.allowInInput) return false;
-            
-            // Check combo
-            const comboMatch = s.combo === comboString;
-            // Check sequence
+             const comboMatch = s.combo === comboString && (isInput ? !!s.allowInInput : true);
+
             const sequenceMatch = s.sequence && currentSequence.endsWith(s.sequence);
             
             return comboMatch || sequenceMatch;

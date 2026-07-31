@@ -68,7 +68,7 @@ export function ActiveBillsTabs() {
         <div className="flex bg-[#F8FAFC] border-b border-slate-300 px-4 pt-2 items-end overflow-x-auto overflow-y-hidden min-h-[48px] shrink-0">
             {draftList.map((draft, idx) => {
                 const isActive = activeDraftId === draft.id;
-                const title = draft.customer ? draft.customer.name : 'WALK-IN';
+                const title = draft.customer ? draft.customer.name : 'No Customer';
                 const amount = draft.cart.reduce((sum, item) => sum + item.totalAmount, 0);
 
                 return (

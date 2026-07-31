@@ -131,6 +131,8 @@ export function SaleReturnEditModal({
                 batchId: item.batchId,
                 productName: item.productName,
                 qtyReturned: item.qtyReturned,
+                qtyStripsReturned: Math.floor(item.qtyReturned / (item.packSize || 1)),
+                qtyLooseReturned: item.qtyReturned % (item.packSize || 1),
                 returnRate: item.returnRate,
                 totalAmount: item.qtyReturned * item.returnRate,
             })),

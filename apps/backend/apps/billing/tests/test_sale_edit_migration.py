@@ -125,7 +125,7 @@ class SaleEditMigrationTests(BaseRevisionTestCase):
         new_invoice_id = response.data['id']
         
         acts = ActivityEvent.objects.filter(entity_id=str(self.invoice.id), action="cancel_and_reissue")
-        sys_acts = SystemEvent.objects.filter(entity_id=str(self.invoice.id), event_name="cancel_and_reissue")
+        sys_acts = SystemEvent.objects.filter(entity_id=str(self.invoice.id), action="cancel_and_reissue")
         self.assertEqual(acts.count() + sys_acts.count(), 1)
         act = acts.first() or sys_acts.first()
         self.assertEqual(act.metadata_json.get('resulting_invoice_id'), new_invoice_id)

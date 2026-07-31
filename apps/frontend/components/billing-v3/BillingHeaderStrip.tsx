@@ -90,7 +90,7 @@ export function BillingHeaderStrip() {
                                     )}
                                 </>
                             ) : (
-                                <span>Walk-in / Cash Sale</span>
+                                <span>No Customer Selected</span>
                             )}
                         </div>
                     </div>

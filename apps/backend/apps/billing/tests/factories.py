@@ -137,7 +137,7 @@ def make_test_invoice(outlet, staff, customer=None, items=[], status='finalized'
             batch_no=batch.batch_no,
             expiry_date=batch.expiry_date,
             mrp=batch.mrp,
-            sale_rate=batch.sale_rate,
+            sale_rate=batch.mrp,
             rate=rate,
             qty_strips=qty,
             qty_loose=0,

@@ -1,4 +1,4 @@
-#!/home/asta/.gemini/antigravity/brain/4d7d6536-4f96-4c09-babb-88be5677650d/.system_generated/worktrees/subagent-BACKEND-DATA-INTEGRITY-developer-6d4f0b19/venv/bin/python3
+#!/home/asta/coding/MDF/venv/bin/python3
 # Copyright (c) 2005-2012 Stephen John Machin, Lingfo Pty Ltd
 # This script is part of the xlrd package, which is released under a
 # BSD-style licence.

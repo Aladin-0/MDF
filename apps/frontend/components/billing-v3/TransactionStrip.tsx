@@ -52,49 +52,21 @@ export function TransactionStrip() {
 
             {/* Right side: Toggles, Date, Actions */}
             <div className="flex items-center gap-5">
-                {/* Document Mode Toggle */}
-                <div className="flex items-center gap-2">
-                    <select
-                        className="text-xs font-bold text-slate-700 bg-transparent border-none outline-none cursor-pointer hover:bg-slate-200 py-1 px-2 rounded-md transition-colors"
-                        value={activeDraft.documentMode || 'invoice'}
-                        onChange={(e) => setDraftDocumentMode(activeDraftId, e.target.value as 'invoice' | 'quotation')}
-                    >
-                        <option value="invoice">Sale Invoice</option>
-                        <option value="quotation">Quotation / Estimate</option>
-                    </select>
-                </div>
-                
-                <div className="w-px h-4 bg-slate-300"></div>
-
-                {/* Walk-in Toggle */}
-                <div className="flex items-center gap-2">
-                    <div className="w-8 h-4 bg-blue-600 rounded-full relative cursor-pointer flex items-center p-0.5">
-                        <div className="w-3 h-3 bg-white rounded-full translate-x-4"></div>
-                    </div>
-                    <span className="text-xs font-bold text-slate-700">Walk-in</span>
-                </div>
-                
-                <div className="w-px h-4 bg-slate-300"></div>
-                
                 {/* Date/Time */}
                 <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
                     <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                    <span>{format(new Date(), 'MMM dd, HH:mm')}</span>
-                </div>
-                
-                <div className="w-px h-4 bg-slate-300"></div>
-                
-                {/* Action Icons */}
-                <div className="flex items-center gap-3 text-slate-500">
-                    <button className="hover:text-slate-800 transition-colors">
-                        <Printer className="w-4 h-4" />
-                    </button>
-                    <button className="hover:text-slate-800 transition-colors">
-                        <Download className="w-4 h-4" />
-                    </button>
-                    <button className="hover:text-slate-800 transition-colors">
-                        <Settings className="w-4 h-4" />
-                    </button>
+                    {activeDraft.documentMode === 'invoice' ? (
+                        <input 
+                            type="datetime-local" 
+                            className="bg-transparent border-none outline-none cursor-pointer hover:bg-slate-200 py-1 px-1 rounded transition-colors text-xs font-bold text-slate-700"
+                            value={activeDraft.invoiceDate || format(new Date(), "yyyy-MM-dd'T'HH:mm")}
+                            onChange={(e) => {
+                                useBillingStore.getState().updateDraftHeader(activeDraftId, { invoiceDate: e.target.value });
+                            }}
+                        />
+                    ) : (
+                        <span>{format(new Date(), 'MMM dd, HH:mm')}</span>
+                    )}
                 </div>
             </div>
         </div>

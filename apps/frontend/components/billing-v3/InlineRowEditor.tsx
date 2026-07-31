@@ -77,6 +77,10 @@ export function InlineRowEditor({ item, onSave, onCancel, onRemove }: InlineRowE
         qtyInputRef.current?.select();
     }, []);
 
+    // If we're editing the original batch, preserve its historical saleRate (pre-discount base rate)
+    const isSameBatch = selectedBatchId === item.batchId;
+    const historicalBaseRate = isSameBatch ? (item.saleRate || item.mrp) : undefined;
+    
     // Live Calculations using Cart Utility
     const totals = calculateRowTotals(
         currentBatch,
@@ -84,7 +88,8 @@ export function InlineRowEditor({ item, onSave, onCancel, onRemove }: InlineRowE
         qtyLoose,
         discountType,
         discountValue,
-        item.gstRate
+        item.gstRate,
+        historicalBaseRate
     );
 
     const {
@@ -114,7 +119,7 @@ export function InlineRowEditor({ item, onSave, onCancel, onRemove }: InlineRowE
             rate: rate,
             totalAmount: sellAmount,
             mrp: currentBatch.mrp,
-            saleRate: currentBatch.saleRate ?? currentBatch.mrp,
+            saleRate: historicalBaseRate ?? currentBatch.mrp,
             purchaseRate: currentBatch.purchaseRate,
             packSize: currentBatch.packSize,
             packUnit: currentBatch.packUnit,

@@ -47,13 +47,11 @@ class PurchaseEditStockTest(TestCase):
         self.product = MasterProduct.objects.create(
             name="Test Medicine",
             mrp=Decimal('100.00'),
-            default_sale_rate=Decimal('80.00'),
             pack_size=1
         )
         self.product2 = MasterProduct.objects.create(
             name="Test Medicine 2",
             mrp=Decimal('200.00'),
-            default_sale_rate=Decimal('160.00'),
             pack_size=1
         )
 

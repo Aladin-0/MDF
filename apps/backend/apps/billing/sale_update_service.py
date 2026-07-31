@@ -400,7 +400,7 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
                     batch.qty_loose += (batch.pack_size or 1)
                 batch.save()
 
-                proposed_rate = Decimal(str(item_data.get('rate', batch.sale_rate)))
+                proposed_rate = Decimal(str(item_data.get('rate', batch.mrp)))
                 pricing_check = validate_sale_price(proposed_rate, batch, str(outlet.id))
                 if pricing_check.get('block'):
                     raise SaleServiceError(pricing_check['message'])
@@ -432,7 +432,7 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
                         batch_no=batch.batch_no,
                         expiry_date=batch.expiry_date,
                         mrp=batch.mrp,
-                        sale_rate=batch.sale_rate,
+                        sale_rate=batch.mrp,
                         rate=proposed_rate,
                         qty_strips=qty_to_deduct,
                         qty_loose=loose_to_deduct, # Fix: Use loose_to_deduct

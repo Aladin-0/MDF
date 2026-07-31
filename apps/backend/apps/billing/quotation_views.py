@@ -134,7 +134,7 @@ class QuotationListCreateView(generics.ListCreateAPIView):
                     item['expiry_date'] = batch.expiry_date  # snapshot for display
                     item['pack_size'] = batch.pack_size or 1
                     item['mrp'] = float(batch.mrp) if batch.mrp else 0
-                    item['sale_rate'] = float(batch.sale_rate or batch.mrp or 0)
+                    item['sale_rate'] = float(batch.mrp or batch.mrp or 0)
                     item['batch'] = batch.id
                 except (Batch.DoesNotExist, ValidationError):
                     # If batch doesn't exist or is invalid UUID (like 'mock'), populate defaults
@@ -237,7 +237,7 @@ class QuotationDetailView(generics.RetrieveUpdateDestroyAPIView):
                     item['expiry_date'] = batch.expiry_date  # snapshot for display
                     item['pack_size'] = batch.pack_size or 1
                     item['mrp'] = float(batch.mrp) if batch.mrp else 0
-                    item['sale_rate'] = float(batch.sale_rate or batch.mrp or 0)
+                    item['sale_rate'] = float(batch.mrp or batch.mrp or 0)
                     item['batch'] = batch.id
                 except Batch.DoesNotExist:
                     pass

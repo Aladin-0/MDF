@@ -52,6 +52,21 @@ export function useSaveBill() {
                 };
             }
 
+            const partyLedgerId = (customerLedger && customerLedger.id !== 'mock' && !(customerLedger as any).isMock) ? customerLedger.id : undefined;
+            const customerId = (customer && customer.id !== 'mock') ? customer.id : undefined;
+
+            if (draft.documentMode === 'invoice' && !partyLedgerId && !customerId) {
+                throw new Error("Customer selection is mandatory for Sale Invoices.");
+            }
+
+            let invoiceDateIso;
+            if (draft.invoiceDate) {
+                const parsed = new Date(draft.invoiceDate);
+                if (!isNaN(parsed.getTime())) {
+                    invoiceDateIso = parsed.toISOString();
+                }
+            }
+
             const getPaid = (method: string) => {
                 if (draft.payment.method === method) return draft.payment.amount || totals.grandTotal;
                 if (draft.payment.method === 'split') {
@@ -62,8 +77,9 @@ export function useSaveBill() {
 
             const payload = {
                 outletId: resolvedOutletId,
-                partyLedgerId: (customerLedger && customerLedger.id !== 'mock' && !(customerLedger as any).isMock) ? customerLedger.id : undefined,
-                customerId: (customer && customer.id !== 'mock') ? customer.id : undefined,
+                invoiceDate: invoiceDateIso,
+                partyLedgerId,
+                customerId,
                 doctorId: (doctor && doctor.id !== 'mock') ? doctor.id : undefined,
                 doctorName: doctor?.name,      // Needed by quotation backend (stores text, not FK)
                 hospitalName: draft.hospitalName,
@@ -88,7 +104,6 @@ export function useSaveBill() {
                         qtyLoose: item.qtyLoose,
                         saleMode: item.saleMode,
                         mrp: item.mrp || 0,            // Snapshot fields for quotation reopen
-                        saleRate: item.saleRate || item.rate || 0,
                         packSize: item.packSize || 1,
                         rate: item.rate,
                         discountPct: item.discountPct,

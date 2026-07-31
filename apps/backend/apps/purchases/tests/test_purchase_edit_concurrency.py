@@ -55,7 +55,6 @@ class PurchaseEditConcurrencyTest(TransactionTestCase):
         self.product = MasterProduct.objects.create(
             name="Test Medicine",
             mrp=Decimal('100.00'),
-            default_sale_rate=Decimal('80.00'),
             pack_size=1
         )
 

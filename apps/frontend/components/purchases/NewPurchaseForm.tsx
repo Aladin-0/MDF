@@ -44,7 +44,7 @@ const itemSchema = z.object({
     mrp:             z.number().positive('MRP required'),
     ptr:             z.number().min(0),
     pts:             z.number().min(0),
-    saleRate:        z.number().positive('Sale rate required'),
+    saleRate:        z.number().min(0, 'Sale rate cannot be negative').optional().default(0),
 });
 
 const schema = z.object({
@@ -174,6 +174,33 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
     const watchedFreight      = watch('freight') ?? 0;
     const watchedInvoiceNo    = watch('invoiceNo');
     const watchedPartyLedgerId = watch('partyLedgerId');
+    const watchedInvoiceDate   = watch('invoiceDate');
+    
+    // ─── Credit Days Logic ────────────────────────────────────────────────────────
+    const [creditDays, setCreditDays] = useState<number>(30);
+
+    // Sync credit days from edit invoice
+    useEffect(() => {
+        if (invoiceToEdit && invoiceToEdit.dueDate && invoiceToEdit.invoiceDate && invoiceToEdit.purchaseType === 'credit') {
+            const diff = differenceInDays(new Date(invoiceToEdit.dueDate), new Date(invoiceToEdit.invoiceDate));
+            setCreditDays(diff > 0 ? diff : 30);
+        }
+    }, [invoiceToEdit]);
+
+
+
+    // Centralize due date math
+    useEffect(() => {
+        if (watchedPurchaseType === 'credit' && watchedInvoiceDate) {
+            const date = new Date(watchedInvoiceDate);
+            if (!isNaN(date.getTime())) {
+                setValue('dueDate', format(addDays(date, creditDays), 'yyyy-MM-dd'));
+            }
+        } else if (watchedPurchaseType === 'cash') {
+            setValue('dueDate', undefined);
+        }
+    }, [watchedInvoiceDate, creditDays, watchedPurchaseType, setValue]);
+    // ──────────────────────────────────────────────────────────────────────────────
     
     // Check for duplicate invoice
     const duplicateInvoiceQuery = useCheckDuplicateInvoice(watchedInvoiceNo, watchedPartyLedgerId);
@@ -198,7 +225,7 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
             batchNo: it.batchNo,
             expiryDate: it.expiryDate || '',
             pkg: (it.pkg === 1 && it.product?.packSize) ? it.product.packSize : it.pkg,
-            packUnitLabel: it.product?.packUnit || '',
+            packUnitLabel: it.packUnitLabel || it.product?.packUnit || '',
             qty: it.qty,
             freeQty: it.freeQty,
             purchaseRate: it.purchaseRate,
@@ -329,7 +356,9 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
     const effectiveAdjustment = ledgerAdjustment * (adjustmentSign === '-' ? 1 : -1);
     const netPayable   = computedTotal - effectiveAdjustment;
 
-    const totalUnits       = items.reduce((s, it) => s + it.qty * getEffPkg(it.pkg), 0);
+    const totalUnits = items.reduce((s, it) => {
+        return s + it.qty * getEffPkg(it.pkg);
+    }, 0);
     const nearExpiryCount  = items.filter((it) => it.expiryDate && isNearExpiry(it.expiryDate)).length;
 
     // ── Submit ───────────────────────────────────────────────────────────────
@@ -363,6 +392,7 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                     const gstAmount  = base * (it.gstRate / 100);
                     const cessAmount = base * (it.cess / 100);
                     const baseLandingRate = (it.qty + it.freeQty) > 0 ? parseFloat((base / (it.qty + it.freeQty)).toFixed(2)) : 0;
+                    
                     return {
                         masterProductId:   it.isCustom ? null : it.productId,
                         customProductName: it.isCustom ? it.productName : null,
@@ -385,7 +415,7 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                         mrp:             it.mrp,
                         ptr:             it.ptr,
                         pts:             it.pts,
-                        saleRate:        it.saleRate,
+                        saleRate:        it.saleRate || it.mrp,
                         taxableAmount:   parseFloat(base.toFixed(2)),
                         gstAmount:       parseFloat(gstAmount.toFixed(2)),
                         cessAmount:      parseFloat(cessAmount.toFixed(2)),
@@ -438,7 +468,20 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
 
     return (
         <>
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
+        <form onSubmit={handleSubmit(onSubmit, (errors) => {
+            console.error("FORM VALIDATION ERRORS:", errors);
+            let errMsg = JSON.stringify(errors, null, 2);
+            if (errors.items && errors.items.length > 0) {
+                const firstRowErrors = errors.items[0] || {};
+                errMsg = "Row 1 Failing Fields: " + Object.keys(firstRowErrors).join(", ");
+                alert(errMsg); // FORCE an unignorable popup!
+            }
+            toast({
+                variant: 'destructive',
+                title: 'Validation Error',
+                description: errMsg
+            });
+        })} className="flex flex-col gap-5">
 
             {/* ── Draft banner ────────────────────────────────────────── */}
             {hasDraft && (
@@ -560,11 +603,24 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                         <Input className="h-9 text-sm" type="date" {...register('invoiceDate')} />
                     </div>
 
-                    {/* Due Date — hidden for cash */}
+                    {/* Credit Days — hidden for cash */}
                     {watchedPurchaseType !== 'cash' && (
                         <div className="space-y-1.5">
-                            <Label className="text-xs font-medium text-slate-600">Due Date</Label>
-                            <Input className="h-9 text-sm" type="date" {...register('dueDate')} />
+                            <Label className="text-xs font-medium text-slate-600">Credit Days</Label>
+                            <Select
+                                value={creditDays.toString()}
+                                onValueChange={(val) => setCreditDays(parseInt(val, 10))}
+                            >
+                                <SelectTrigger className="h-9 text-sm bg-white border-slate-200">
+                                    <SelectValue placeholder="Select days" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {Array.from(new Set([7, 15, 30, 45, 60, 90, creditDays])).sort((a, b) => a - b).map(d => (
+                                        <SelectItem key={d} value={d.toString()}>{d} Days</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <input type="hidden" {...register('dueDate')} />
                         </div>
                     )}
 
@@ -653,7 +709,6 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                                 <th className="px-2 py-2.5 text-right font-medium text-slate-500">Disc%</th>
                                 <th className="px-2 py-2.5 text-right font-medium text-slate-500">GST%</th>
                                 <th className="px-2 py-2.5 text-right font-medium text-slate-500">MRP</th>
-                                <th className="px-2 py-2.5 text-right font-medium text-slate-500">Sale Rate</th>
                                 <th className="px-2 py-2.5 text-right font-medium text-slate-500">Amount</th>
                                 <th className="w-7" title="Expand PTR / PTS / CD / Cess" />
                                 <th className="w-7" />

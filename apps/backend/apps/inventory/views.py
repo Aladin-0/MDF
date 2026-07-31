@@ -65,7 +65,7 @@ def serialize_product(product, total_stock=0, nearest_expiry="2099-12-31", is_lo
         'isDiscontinued': product.is_discontinued,
         'imageUrl': product.image_url,
         'mrp': float(product.mrp),
-        'saleRate': float(product.default_sale_rate),
+        'saleRate': float(product.mrp),
         'outletProductId': str(product.id),
         'totalStock': total_stock,
         'nearestExpiry': nearest_expiry,
@@ -83,7 +83,7 @@ def serialize_batch(batch):
         'expiryDate': batch.expiry_date.isoformat() if batch.expiry_date else None,
         'mrp': float(batch.mrp),
         'purchaseRate': float(batch.purchase_rate),
-        'saleRate': float(batch.sale_rate),
+        'saleRate': float(batch.mrp),
         'qtyStrips': batch.qty_strips,
         'qtyLoose': batch.qty_loose,
         'packSize': batch.pack_size,
@@ -139,14 +139,6 @@ class ProductListView(APIView):
             errors['mrp'] = 'Invalid MRP'
             mrp = Decimal('0')
 
-        try:
-            sale_rate = Decimal(str(data.get('saleRate', 0)))
-            if sale_rate <= 0:
-                errors['saleRate'] = 'Sale rate must be > 0'
-        except (InvalidOperation, TypeError):
-            errors['saleRate'] = 'Invalid sale rate'
-            sale_rate = Decimal('0')
-
         if errors:
             return Response({'errors': errors}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -177,7 +169,6 @@ class ProductListView(APIView):
                     pack_unit=pack_unit,
                     pack_type='strip',
                     mrp=mrp,
-                    default_sale_rate=sale_rate,
                 )
         except IntegrityError as e:
             return Response(
@@ -286,7 +277,7 @@ class ProductDetailView(APIView):
                 if sr < 0:
                     errors['saleRate'] = 'Sale rate cannot be negative'
                 else:
-                    product.default_sale_rate = sr
+                    product.mrp = sr
             except (InvalidOperation, TypeError):
                 errors['saleRate'] = 'Invalid sale rate'
 
@@ -579,7 +570,7 @@ class ProductSearchView(APIView):
                 'isDiscontinued': product.is_discontinued,
                 'imageUrl': product.image_url,
                 'mrp': float(product.mrp),
-                'saleRate': float(product.default_sale_rate),
+                'saleRate': float(product.mrp),
                 'outletProductId': str(product.id),
                 
                 'has_stock': product.has_stock,
@@ -824,7 +815,7 @@ class InventoryListView(APIView):
                 'isDiscontinued':  product.is_discontinued,
                 'imageUrl':        product.image_url,
                 'mrp':             float(pbs[0].mrp) if pbs else float(product.mrp),
-                'saleRate':        float(pbs[0].sale_rate) if pbs else float(product.default_sale_rate),
+                'saleRate':        float(pbs[0].mrp) if pbs else float(product.mrp),
                 'outletProductId': str(product.id),
                 'totalStock':      tot_stock,
                 'totalLoose':      tot_loose,

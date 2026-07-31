@@ -23,6 +23,8 @@ import {
     Package, Pill, Barcode, Thermometer, AlertTriangle,
     RotateCcw, IndianRupee, ReceiptText, FlaskConical,
 } from 'lucide-react';
+import { PACK_TYPE_OPTIONS } from '@/constants/productBehavior';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -40,10 +42,6 @@ const SCHEDULE_OPTIONS = [
     { value: 'Veterinary', label: 'Veterinary' },
 ];
 
-const PACK_TYPE_OPTIONS = [
-    'strip', 'bottle', 'vial', 'box', 'blister', 'tube', 'packet', 'other',
-];
-
 const GST_RATES = [0, 5, 12, 18, 28];
 
 // ─── Form type ────────────────────────────────────────────────────────────────
@@ -59,7 +57,6 @@ interface FormValues {
     packType: string;
     scheduleType: string;
     mrp: number;
-    saleRate: number;
     barcode: string;
     minQty: number;
     reorderQty: number;
@@ -92,8 +89,12 @@ export function EditProductModal({
         handleSubmit,
         reset,
         control,
+        setValue,
+        watch,
         formState: { errors, isDirty },
     } = useForm<FormValues>();
+
+    const watchPackType = watch('packType');
 
     // Populate form when product changes
     useEffect(() => {
@@ -109,7 +110,6 @@ export function EditProductModal({
                 packType:      product.packType ?? 'strip',
                 scheduleType:  product.scheduleType ?? 'OTC',
                 mrp:           product.mrp ?? 0,
-                saleRate:      product.saleRate ?? 0,
                 barcode:       product.barcode ?? '',
                 minQty:        product.minQty ?? 10,
                 reorderQty:    product.reorderQty ?? 50,
@@ -136,7 +136,6 @@ export function EditProductModal({
                 packType:       values.packType,
                 scheduleType:   values.scheduleType as any,
                 mrp:            Number(values.mrp),
-                saleRate:       Number(values.saleRate),
                 barcode:        values.barcode || undefined,
                 minQty:         Number(values.minQty),
                 reorderQty:     Number(values.reorderQty),
@@ -244,39 +243,93 @@ export function EditProductModal({
 
                             <Separator />
 
-                            {/* ── Section: Packaging ── */}
-                            <Section icon={<Package className="h-4 w-4 text-emerald-500" />} title="Packaging">
-                                <div className="grid grid-cols-3 gap-4">
-                                    <Field label="Pack Size *" error={fieldErr('packSize')}
-                                        hint="Units per pack (e.g. 10 tablets/strip)">
-                                        <Input
-                                            type="number"
-                                            min={1}
-                                            {...register('packSize', { required: true, min: 1, valueAsNumber: true })}
-                                        />
-                                    </Field>
-                                    <Field label="Pack Unit *" error={fieldErr('packUnit')}
-                                        hint="tablet, capsule, ml, etc.">
-                                        <Input {...register('packUnit', { required: 'Required' })} placeholder="tablet" />
-                                    </Field>
-                                    <Field label="Pack Type" error={fieldErr('packType')}>
-                                        <Controller
-                                            name="packType"
-                                            control={control}
-                                            render={({ field }) => (
-                                                <Select value={field.value} onValueChange={field.onChange}>
-                                                    <SelectTrigger>
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {PACK_TYPE_OPTIONS.map(o => (
-                                                            <SelectItem key={o} value={o} className="capitalize">{o}</SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                            )}
-                                        />
-                                    </Field>
+                            {/* ── Section: Product Form ── */}
+                            <Section icon={<Package className="h-4 w-4 text-emerald-500" />} title="Product Form">
+                                <Field label="Product Type & Inventory Model *" error={fieldErr('packType')}>
+                                    <Controller
+                                        name="packType"
+                                        control={control}
+                                        render={({ field }) => (
+                                            <Select value={field.value} onValueChange={(v) => {
+                                                field.onChange(v);
+                                                if (v === 'strip' || v === 'blister') { 
+                                                    setValue('packUnit', 'Tablet', { shouldDirty: true }); 
+                                                    setValue('packSize', 10, { shouldDirty: true }); 
+                                                } else { 
+                                                    setValue('packUnit', PACK_TYPE_OPTIONS.find(o => o.value === v)?.label || 'Piece', { shouldDirty: true }); 
+                                                    setValue('packSize', 1, { shouldDirty: true }); 
+                                                }
+                                            }}>
+                                                <SelectTrigger className={`h-9 text-sm w-1/2 ${fieldErr('packType') ? 'border-red-400' : ''}`}>
+                                                    <SelectValue placeholder="Select Pack Type" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {PACK_TYPE_OPTIONS.map((opt) => (
+                                                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        )}
+                                    />
+                                </Field>
+                            </Section>
+
+                            <Separator />
+
+                            {/* ── Section: Unit Structure ── */}
+                            <Section icon={<FlaskConical className="h-4 w-4 text-purple-500" />} title="Unit Structure">
+                                <div className="bg-indigo-50/50 p-4 rounded-md border border-indigo-100">
+                                    {(watchPackType === 'strip' || watchPackType === 'blister') ? (
+                                        <div className="flex flex-col gap-2">
+                                            <p className="text-sm text-gray-600 mb-2">Define how this product is packaged. <span className="font-semibold text-gray-800">Example: 1 Strip contains 10 Tablets.</span></p>
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-sm font-medium">1 {watchPackType ? (PACK_TYPE_OPTIONS.find(o => o.value === watchPackType)?.label || watchPackType) : 'Pack'} contains</span>
+                                                <div className="w-24">
+                                                    <Input
+                                                        type="number"
+                                                        min={1}
+                                                        {...register('packSize', { required: true, min: 1, valueAsNumber: true })}
+                                                        placeholder="Qty"
+                                                    />
+                                                </div>
+                                                <div className="w-32">
+                                                    <Input
+                                                        {...register('packUnit', { required: 'Required' })}
+                                                        placeholder="Base Unit"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-4">
+                                                <div className="w-24 pl-[108px]">{fieldErr('packSize') && <p className="text-[11px] text-red-500">{fieldErr('packSize')}</p>}</div>
+                                                <div className="w-32 pl-4">{fieldErr('packUnit') && <p className="text-[11px] text-red-500">{fieldErr('packUnit')}</p>}</div>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-col gap-2">
+                                            <p className="text-sm text-gray-600 mb-2">This product is tracked as a packaged unit (e.g., 1 Bottle).</p>
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-sm font-medium">Package Size & Name</span>
+                                                <div className="w-24">
+                                                    <Input
+                                                        type="number"
+                                                        min={1}
+                                                        {...register('packSize', { required: true, min: 1, valueAsNumber: true })}
+                                                        placeholder="Qty"
+                                                    />
+                                                </div>
+                                                <div className="w-32">
+                                                    <Input
+                                                        {...register('packUnit', { required: 'Required' })}
+                                                        placeholder="Unit Name"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-4">
+                                                <div className="w-24 pl-[148px]">{fieldErr('packSize') && <p className="text-[11px] text-red-500">{fieldErr('packSize')}</p>}</div>
+                                                <div className="w-32 pl-4">{fieldErr('packUnit') && <p className="text-[11px] text-red-500">{fieldErr('packUnit')}</p>}</div>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </Section>
 
@@ -284,21 +337,13 @@ export function EditProductModal({
 
                             {/* ── Section: Pricing & GST ── */}
                             <Section icon={<IndianRupee className="h-4 w-4 text-amber-500" />} title="Pricing & Taxes">
-                                <div className="grid grid-cols-3 gap-4">
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                                     <Field label="MRP (₹)" error={fieldErr('mrp')}>
                                         <Input
                                             type="number"
                                             step="0.01"
                                             min={0}
                                             {...register('mrp', { valueAsNumber: true, min: 0 })}
-                                        />
-                                    </Field>
-                                    <Field label="Default Sale Rate (₹)" error={fieldErr('saleRate')}>
-                                        <Input
-                                            type="number"
-                                            step="0.01"
-                                            min={0}
-                                            {...register('saleRate', { valueAsNumber: true, min: 0 })}
                                         />
                                     </Field>
                                     <Field label="GST Rate (%)" error={fieldErr('gstRate')}>

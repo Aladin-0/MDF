@@ -249,6 +249,7 @@ const realProductsApi = {
             packSize: item.packSize,
             packUnit: item.packUnit,
             packType: item.packType,
+
             barcode: item.barcode,
             isFridge: item.isFridge,
             isDiscontinued: item.isDiscontinued,
@@ -257,6 +258,7 @@ const realProductsApi = {
             saleRate: item.saleRate ?? 0,
             outletProductId: item.outletProductId,
             totalStock: item.totalStock,
+            stockDisplayText: item.stockDisplayText,
             nearestExpiry: item.nearestExpiry,
             isLowStock: item.isLowStock,
             batches: item.batches || [],
@@ -289,6 +291,7 @@ const realProductsApi = {
             saleRate: item.saleRate ?? 0,
             outletProductId: item.outletProductId ?? item.id,
             totalStock: 0,
+            stockDisplayText: "Out of stock",
             nearestExpiry: '2099-12-31',
             isLowStock: false,
             batches: [],
@@ -327,6 +330,7 @@ const realProductsApi = {
             packSize: item.packSize ?? 1,
             packUnit: item.packUnit ?? '',
             packType: item.packType ?? 'strip',
+
             barcode: item.barcode,
             isFridge: item.isFridge ?? false,
             isDiscontinued: item.isDiscontinued ?? false,
@@ -1084,6 +1088,26 @@ const realAttendanceApi = {
 };
 
 const realReportsApi = {
+
+    lockGSTReport: async (outletId: string, payload: { reportType: 'GSTR1' | 'GSTR3B', from: string, to: string, reason?: string }) => {
+        const response = await fetch(`${API_URL}/reports/gst/lock/`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify({ ...payload, outletId })
+        });
+        await assertOk(response);
+        return response.json();
+    },
+    unlockGSTReport: async (outletId: string, payload: { reportType: 'GSTR1' | 'GSTR3B', from: string, to: string, reason: string }) => {
+        const response = await fetch(`${API_URL}/reports/gst/unlock/`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify({ ...payload, outletId })
+        });
+        await assertOk(response);
+        return response.json();
+    },
+
     getSalesReport: async (outletId: string, filters: any) => {
         // If filters has date range, fetch reports for each day in range
         // Otherwise, just fetch for today
@@ -1144,6 +1168,30 @@ const realReportsApi = {
         await assertOk(response);
         return response.json();
     },
+    getGSTR1Report: async (outletId: string, from_date: string, to_date: string) => {
+        const params = new URLSearchParams({
+            outletId,
+            from: from_date,
+            to: to_date,
+        });
+        const response = await fetch(`${API_URL}/reports/gst/gstr1/?${params}`, {
+            headers: getHeaders(),
+        });
+        await assertOk(response);
+        return response.json();
+    },
+    getGSTR3BReport: async (outletId: string, from_date: string, to_date: string) => {
+        const params = new URLSearchParams({
+            outletId,
+            from: from_date,
+            to: to_date,
+        });
+        const response = await fetch(`${API_URL}/reports/gst/gstr3b/?${params}`, {
+            headers: getHeaders(),
+        });
+        await assertOk(response);
+        return response.json();
+    },
     getStockValuation: async (outletId: string) => {
         const response = await fetch(`${API_URL}/reports/inventory/valuation/?outletId=${outletId}`, {
             headers: getHeaders(),
@@ -1162,13 +1210,6 @@ const realReportsApi = {
     getGSTR2Report: async (outletId: string, filters: any) => {
         const params = new URLSearchParams({ outletId, from: filters.from, to: filters.to });
         const response = await fetch(`${API_URL}/reports/gst/gstr2/?${params}`, {
-            headers: getHeaders(),
-        });
-        await assertOk(response);
-        return response.json();
-    },
-    getGSTR3BReport: async (outletId: string, month: string) => {
-        const response = await fetch(`${API_URL}/reports/gst/gstr3b/?outletId=${outletId}&month=${month}`, {
             headers: getHeaders(),
         });
         await assertOk(response);

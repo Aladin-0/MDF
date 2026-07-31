@@ -260,6 +260,8 @@ function NewCreditNoteContent() {
                             originalSaleItemId: i.saleItemId, 
                             batchId: i.batchId,       
                             qtyReturned: absoluteTotalUnits,
+                            qtyStripsReturned: Math.floor(absoluteTotalUnits / (i.packSize || 1)),
+                            qtyLooseReturned: absoluteTotalUnits % (i.packSize || 1),
                             returnRate: parseFloat(i.rate),
                             totalAmount: absoluteTotalUnits * (parseFloat(i.rate) / (i.packSize || 1))
                         };
@@ -280,7 +282,9 @@ function NewCreditNoteContent() {
                         return {
                             saleItemId: i.saleItemId, 
                             batchId: i.batchId,       
-                            qtyReturned: totalUnits, // Sends total units
+                            qtyReturned: totalUnits, // Sending both legacy and new for safe fallback
+                            qtyStripsReturned: parseFloat(i.qtyStrips) || 0,
+                            qtyLooseReturned: parseFloat(i.qtyLoose) || 0,
                             returnRate: parseFloat(i.rate),
                             gstRate: parseFloat(i.gstRate) || 0,
                         };

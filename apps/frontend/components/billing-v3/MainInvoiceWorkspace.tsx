@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { getExpiryStatus } from '@/utils/expiry';
+import { calculateLineMargin } from '@/lib/billingMarginUtils';
 import { useProductSearch } from '@/hooks/useProductSearch';
 import { Batch, ProductSearchResult } from '@/types';
 import { format } from 'date-fns';
@@ -15,7 +16,7 @@ import { cn } from '@/lib/utils';
 import { InlineRowEditor } from './InlineRowEditor';
 
 export function MainInvoiceWorkspace() {
-    const { drafts, activeDraftId, addToCart, removeFromCart, updateCartItem } = useBillingStore();
+    const { drafts, activeDraftId, addToCart, removeFromCart, updateCartItem, showMarginInfo, activeStaff } = useBillingStore();
     
     // Search State
     const [searchQuery, setSearchQuery] = useState('');
@@ -138,7 +139,8 @@ export function MainInvoiceWorkspace() {
         console.log("validBatches calculation started, availableBatches:", availableBatches);
         const validBatches = availableBatches.filter(b => {
             const isExpired = b.expiryDate ? new Date(b.expiryDate) < new Date() : false;
-            return !isExpired && b.qtyStrips > 0;
+            const hasStock = b.qtyStrips > 0 || b.qtyLoose > 0;
+            return !isExpired && hasStock;
         });
 
         console.log("validBatches evaluated to:", validBatches);
@@ -199,9 +201,8 @@ export function MainInvoiceWorkspace() {
             alert('Warning: Added quantity exceeds available stock.');
         }
 
-        const saleRate = quickAddBatch.saleRate ?? quickAddBatch.mrp;
         const dPct = parseFloat(discountPct) || 0;
-        const baseRate = saleRate * (1 - (dPct / 100));
+        const baseRate = quickAddBatch.mrp * (1 - (dPct / 100));
         
         const taxableAmount = (baseRate * totalQtyFractional) / (1 + quickAddProduct.gstRate / 100);
         const gstAmount = (baseRate * totalQtyFractional) - taxableAmount;
@@ -219,10 +220,11 @@ export function MainInvoiceWorkspace() {
             expiryDate: quickAddBatch.expiryDate,
             scheduleType: quickAddProduct.scheduleType as any,
             mrp: quickAddBatch.mrp,
-            saleRate: saleRate,
+            saleRate: quickAddBatch.mrp,
             rate: baseRate,
             qtyStrips: s,
             qtyLoose: l,
+
             totalQty: totalQtyFractional,
             saleMode: 'strip',
             discountPct: dPct,
@@ -353,7 +355,7 @@ export function MainInvoiceWorkspace() {
                                     const l = parseInt(qtyLoose) || 0;
                                     const d = parseFloat(discountPct) || 0;
                                     const tQtyFractional = s + (l / quickAddBatch.packSize);
-                                    const rate = quickAddBatch.saleRate ?? quickAddBatch.mrp;
+                                    const rate = quickAddBatch.mrp;
                                     return ((rate * (1 - d/100)) * tQtyFractional).toFixed(2);
                                 })()}
                             </div>
@@ -607,9 +609,16 @@ export function MainInvoiceWorkspace() {
                                         </td>
                                         <td className="px-2 py-1.5 text-right border-r border-slate-100">
                                             <div className="text-[11px] font-bold text-blue-700">
-                                                {item.qtyStrips > 0 ? `${item.qtyStrips}S ` : ''}
-                                                {item.qtyLoose > 0 ? `${item.qtyLoose}L` : ''}
+                                                <>
+                                                    {item.qtyStrips > 0 ? `${item.qtyStrips}S ` : ''}
+                                                    {item.qtyLoose > 0 ? `${item.qtyLoose}L` : ''}
+                                                </>
                                             </div>
+                                            {(showMarginInfo && (activeStaff?.role === 'owner' || activeStaff?.role === 'admin')) && (
+                                                <div className="text-[10px] text-emerald-600 font-medium whitespace-nowrap mt-0.5">
+                                                    Base ₹{item.landingRate ?? item.purchaseRate ?? 0} · Margin ₹{calculateLineMargin(item).margin} ({calculateLineMargin(item).marginPct}%)
+                                                </div>
+                                            )}
                                         </td>
                                         <td className="px-2 py-1.5 text-[11px] font-bold text-slate-500 text-right border-r border-slate-100">
                                             {item.discountPct > 0 ? <span className="text-emerald-600">{item.discountPct}%</span> : '-'}

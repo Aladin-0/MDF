@@ -33,7 +33,7 @@ end
 # Unset irrelevant variables.
 deactivate nondestructive
 
-set -gx VIRTUAL_ENV /home/asta/.gemini/antigravity/brain/4d7d6536-4f96-4c09-babb-88be5677650d/.system_generated/worktrees/subagent-BACKEND-DATA-INTEGRITY-developer-6d4f0b19/venv
+set -gx VIRTUAL_ENV /home/asta/coding/MDF/venv
 
 set -gx _OLD_VIRTUAL_PATH $PATH
 set -gx PATH "$VIRTUAL_ENV/"bin $PATH

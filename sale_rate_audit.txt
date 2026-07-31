@@ -1,0 +1,163 @@
+apps/backend/fix_prices.py:8:    Batch.objects.filter(product=product).update(purchase_rate=5.00, sale_rate=10.00, mrp=12.00)
+apps/backend/simulate_bug.py:24:    product = MasterProduct.objects.create(name="Citrezen", mrp=150.0, default_sale_rate=120.0, pack_size=10)
+apps/backend/reproduce_stock_bug.py:35:            mrp=100, purchase_rate=80, sale_rate=100
+apps/backend/reproduce_stock_bug.py:47:            mrp=100, sale_rate=100, batch_no="BUG-BATCH-1", taxable_amount=500,
+apps/backend/docs/LOCAL_TEST_DATA_SHAPE_REPORT.md:24:- **Required**: `name`, `composition`, `manufacturer`, `category`, `drug_type`, `schedule_type`, `gst_rate` (Decimal), `pack_size`, `pack_unit`, `pack_type`, `mrp`, `default_sale_rate`, `min_qty`, `reorder_qty`.
+apps/backend/docs/LOCAL_TEST_DATA_SHAPE_REPORT.md:28:- **Required**: `outlet` (FK), `product` (FK), `batch_no`, `expiry_date` (Date), `mrp`, `purchase_rate`, `sale_rate`, `pack_size`, `pack_unit`, `pack_type`, `qty_strips`, `qty_loose`, `is_active`, `is_opening_stock`.
+apps/backend/docs/LOCAL_TEST_DATA_SHAPE_REPORT.md:42:- **Required**: `invoice`, `batch`, `product_name`, `pack_size`, `pack_unit`, `schedule_type`, `batch_no`, `expiry_date`, rates (`mrp`, `sale_rate`, `rate`), `qty_strips`, `qty_loose`, `qty_returned`, `sale_mode`, `discount_pct`, `gst_rate`, `taxable_amount`, `gst_amount`, `total_amount`.
+apps/backend/apps/reports/tests/test_phase2_snapshots.py:45:        sale_rate=Decimal('100.00'),
+apps/backend/apps/reports/tests/test_phase2_snapshots.py:77:        sale_rate=batch.sale_rate,
+apps/backend/apps/reports/tests/test_phase2_snapshots.py:78:        rate=batch.sale_rate,
+apps/backend/apps/reports/tests/test_phase2_snapshots.py:113:        return_rate=batch.sale_rate,
+apps/backend/apps/reports/tests/test_phase2_snapshots.py:158:        sale_rate=Decimal('100.00'),
+apps/backend/apps/reports/tests/test_phase3_reports.py:32:    batch = Batch.objects.create(outlet=outlet, product=product, batch_no="B1", expiry_date=timezone.now().date(), mrp=Decimal('100.00'), purchase_rate=Decimal('80.00'), sale_rate=Decimal('100.00'), pack_size=10, pack_unit="Strip")
+apps/backend/apps/reports/tests/test_phase3_reports.py:43:    item_b2b_intra = SaleItem.objects.create(invoice=sale_b2b_intra, batch=batch, product_name=product.name, pack_size=10, pack_unit="Strip", hsn_code="123456", batch_no="B1", expiry_date=today, mrp=Decimal('100'), sale_rate=Decimal('100'), rate=Decimal('100'), qty_strips=1, qty_loose=0, gst_rate=Decimal('12'), taxable_amount=Decimal('100'), gst_amount=Decimal('12'), total_amount=Decimal('112'))
+apps/backend/apps/reports/tests/test_phase3_reports.py:48:    item_b2c = SaleItem.objects.create(invoice=sale_b2c, batch=batch, product_name=product.name, pack_size=10, pack_unit="Strip", hsn_code="123456", batch_no="B1", expiry_date=today, mrp=Decimal('100'), sale_rate=Decimal('100'), rate=Decimal('100'), qty_strips=2, qty_loose=0, gst_rate=Decimal('12'), taxable_amount=Decimal('200'), gst_amount=Decimal('24'), total_amount=Decimal('224'))
+apps/backend/apps/reports/tests/test_phase3_reports.py:58:    pur_item = PurchaseItem.objects.create(invoice=pur, master_product=product, batch=batch, batch_no="B1", expiry_date=today, hsn_code="123456", pkg=10, qty=5, actual_qty=50, mrp=Decimal('100'), purchase_rate=Decimal('100'), ptr=Decimal('100'), pts=Decimal('100'), sale_rate=Decimal('100'), gst_rate=Decimal('12'), taxable_amount=Decimal('500'), gst_amount=Decimal('60'), cess_amount=Decimal('0'), total_amount=Decimal('560.00'))
+apps/backend/apps/reports/tests/test_batch_report.py.bak:43:            sale_rate=Decimal('100.00'),
+apps/backend/apps/reports/tests/test_batch_report.py.bak:87:            sale_rate=Decimal('50.00'),
+apps/backend/apps/reports/tests/test_batch_report.py.bak:101:            sale_rate=Decimal('20.00'),
+apps/backend/apps/reports/tests/test_batch_report.py.bak:245:            mrp=Decimal('100.00'), purchase_rate=Decimal('80.00'), sale_rate=Decimal('100.00'),
+apps/backend/apps/reports/services.py:206:            margin_pct = ((float(b.sale_rate) - float(b.purchase_rate)) / float(b.purchase_rate) * 100) if float(b.purchase_rate) > 0 else 0
+apps/backend/apps/reports/services.py:228:            if b.sale_rate < b.purchase_rate:
+apps/backend/apps/reports/services.py:234:                    "message": f"Sale rate ₹{b.sale_rate} is lower than purchase rate ₹{b.purchase_rate}"
+apps/backend/apps/reports/services.py:255:                'sale_rate': float(b.sale_rate),
+apps/backend/apps/reports/services.py:332:                row['sale_rate'],
+apps/backend/apps/reports/services.py:424:                row['sale_rate'],
+apps/backend/apps/reports/views.py:1151:                'saleRate':      float(si.sale_rate),
+apps/backend/apps/accounts/tests/test_debit_note_mod.py:44:        self.product = MasterProduct.objects.create(name="Dolo 650", mrp=Decimal('10.00'), default_sale_rate=Decimal('10.00'), pack_size=10, pack_unit='tablet', pack_type='strip')
+apps/backend/apps/accounts/tests/test_debit_note_mod.py:45:        self.batch = Batch.objects.create(outlet=self.outlet, product=self.product, batch_no="B-001", expiry_date="2026-12-31", mrp=Decimal('10.00'), purchase_rate=Decimal('8.00'), sale_rate=Decimal('10.00'))
+apps/backend/apps/accounts/tests/test_phase0_gst.py:47:        mrp=120, purchase_rate=100, sale_rate=112, qty_strips=10
+apps/backend/apps/accounts/tests/test_phase0_gst.py:51:        mrp=150, purchase_rate=100, sale_rate=118, qty_strips=10
+apps/backend/apps/accounts/tests/test_phase0_gst.py:92:        batch_no="B12", expiry_date=date(2030,1,1), mrp=120, sale_rate=112, rate=100,
+apps/backend/apps/accounts/tests/test_phase0_gst.py:124:        batch_no="B12", expiry_date=date(2030,1,1), mrp=120, sale_rate=112, rate=100,
+apps/backend/apps/accounts/tests/test_phase0_gst.py:155:        purchase_rate=100, mrp=150, ptr=100, pts=100, sale_rate=118,
+apps/backend/apps/accounts/tests/test_phase0_gst.py:186:        purchase_rate=100, mrp=150, ptr=100, pts=100, sale_rate=118,
+apps/backend/apps/accounts/tests/test_phase0_gst.py:219:        batch_no="B12", expiry_date=date(2030,1,1), mrp=120, sale_rate=112, rate=100,
+apps/backend/apps/accounts/voucher_views.py:1087:                elif stock_valuation == 'sale_rate':
+apps/backend/apps/accounts/voucher_views.py:1088:                    rate = batch.sale_rate
+apps/backend/apps/accounts/voucher_views.py:1374:                elif stock_valuation == 'sale_rate':
+apps/backend/apps/accounts/voucher_views.py:1375:                    rate = batch.sale_rate
+apps/backend/apps/purchases/tests/test_purchase_edit_stock.py:50:            default_sale_rate=Decimal('80.00'),
+apps/backend/apps/purchases/tests/test_purchase_edit_stock.py:56:            default_sale_rate=Decimal('160.00'),
+apps/backend/apps/purchases/tests/test_purchase_edit_concurrency.py:58:            default_sale_rate=Decimal('80.00'),
+apps/backend/apps/purchases/tests/test_purchase_edit_migration.py:57:            default_sale_rate=Decimal('80.00'),
+apps/backend/apps/purchases/tests/test_purchase_edit_migration.py:177:        self.assertEqual(batch.sale_rate, Decimal('85.00'))
+apps/backend/apps/purchases/services.py:255:                batch.sale_rate = Decimal(str(item_payload.get('saleRate') or item_payload['mrp']))
+apps/backend/apps/purchases/services.py:258:                batch.save(update_fields=['qty_strips', 'mrp', 'purchase_rate', 'sale_rate', 'pack_size', 'landing_rate'])
+apps/backend/apps/purchases/services.py:282:                    batch.sale_rate = Decimal(str(item_payload.get('saleRate') or item_payload['mrp']))
+apps/backend/apps/purchases/services.py:285:                    batch.save(update_fields=['qty_strips', 'mrp', 'purchase_rate', 'sale_rate', 'pack_size', 'landing_rate'])
+apps/backend/apps/purchases/services.py:296:                        sale_rate=Decimal(str(item_payload.get('saleRate') or item_payload['mrp'])),
+apps/backend/apps/purchases/services.py:332:                sale_rate=Decimal(str(item_payload.get('saleRate') or item_payload['mrp'])),
+apps/backend/apps/purchases/services.py:931:                batch.sale_rate = Decimal(str(item_payload.get('saleRate') or item_payload['mrp']))
+apps/backend/apps/purchases/services.py:934:                batch.save(update_fields=['qty_strips', 'mrp', 'purchase_rate', 'sale_rate', 'pack_size', 'landing_rate'])
+apps/backend/apps/purchases/services.py:973:                    batch.sale_rate = Decimal(str(item_payload.get('saleRate') or item_payload['mrp']))
+apps/backend/apps/purchases/services.py:976:                    batch.save(update_fields=['mrp', 'purchase_rate', 'sale_rate', 'pack_size', 'landing_rate'])
+apps/backend/apps/purchases/services.py:977:                    logger.info(f"[EDIT] Batch {batch_no} updated: mrp={batch.mrp}, sale_rate={batch.sale_rate}")
+apps/backend/apps/purchases/services.py:987:                        sale_rate=Decimal(str(item_payload.get('saleRate') or item_payload['mrp'])),
+apps/backend/apps/purchases/services.py:1021:                sale_rate=Decimal(str(item_payload.get('saleRate') or item_payload['mrp'])),
+apps/backend/apps/purchases/views.py:643:            'saleRate': float(item.sale_rate),
+apps/backend/apps/purchases/views.py:1053:                    'saleRate': float(item.sale_rate),
+apps/backend/apps/purchases/management/commands/generate_test_purchase_data.py:297:            taxable_amount = float(sell_qty * float(batch.sale_rate))
+apps/backend/apps/purchases/management/commands/generate_test_purchase_data.py:309:                    "rate": float(batch.sale_rate),
+apps/backend/apps/purchases/migrations/0001_initial.py:96:                ('sale_rate', models.DecimalField(decimal_places=2, help_text='Our sale rate for this batch', max_digits=10)),
+apps/backend/apps/purchases/models.py:194:    sale_rate = models.DecimalField(max_digits=10, decimal_places=2,
+apps/backend/apps/billing/quotation_views.py:137:                    item['sale_rate'] = float(batch.sale_rate or batch.mrp or 0)
+apps/backend/apps/billing/quotation_views.py:144:                    item['sale_rate'] = float(item.get('saleRate', 0))
+apps/backend/apps/billing/quotation_views.py:240:                    item['sale_rate'] = float(batch.sale_rate or batch.mrp or 0)
+apps/backend/apps/billing/sale_services.py:178:                proposed_rate = Decimal(str(item_data.get('rate', batch.sale_rate)))
+apps/backend/apps/billing/sale_services.py:196:                    sale_rate=batch.sale_rate,
+apps/backend/apps/billing/sale_return_update_service.py:126:        # Note: In Mediflow SaleItem, if sale_rate is per strip, rate = sale_rate / pack_size. We use sale_item.rate.
+apps/backend/apps/billing/tests/test_quotation_api.py:167:            default_sale_rate=Decimal('90.0')
+apps/backend/apps/billing/tests/test_quotation_api.py:177:            sale_rate=Decimal('90.0')
+apps/backend/apps/billing/tests/factories.py:33:def make_test_medicine(outlet, name="Paracetamol", batch_qty=100, mrp=100.0, sale_rate=90.0, pack_size=10):
+apps/backend/apps/billing/tests/factories.py:42:        default_sale_rate=Decimal(str(sale_rate))
+apps/backend/apps/billing/tests/factories.py:50:        purchase_rate=Decimal(str(sale_rate * 0.8)),
+apps/backend/apps/billing/tests/factories.py:51:        sale_rate=Decimal(str(sale_rate)),
+apps/backend/apps/billing/tests/factories.py:69:        rate=Decimal(str(sale_rate * 0.8)),
+apps/backend/apps/billing/tests/factories.py:70:        value_in=batch_qty * Decimal(str(sale_rate * 0.8)),
+apps/backend/apps/billing/tests/factories.py:73:        running_value=batch_qty * Decimal(str(sale_rate * 0.8))
+apps/backend/apps/billing/tests/factories.py:140:            sale_rate=batch.sale_rate,
+apps/backend/apps/billing/tests/test_sale_return_mod.py:34:        self.product = MasterProduct.objects.create(name="Dolo 650", mrp=Decimal('10.00'), default_sale_rate=Decimal('10.00'), pack_size=10, pack_unit='tablet', pack_type='strip')
+apps/backend/apps/billing/tests/test_sale_return_mod.py:35:        self.batch = Batch.objects.create(outlet=self.outlet, product=self.product, batch_no="B-001", expiry_date="2026-12-31", mrp=Decimal('10.00'), purchase_rate=Decimal('8.00'), sale_rate=Decimal('10.00'), qty_strips=10)
+apps/backend/apps/billing/tests/test_sale_return_mod.py:47:            qty_strips=10, qty_loose=0, rate=Decimal('10.00'), mrp=Decimal('10.00'), sale_rate=Decimal('10.00'),
+apps/backend/apps/billing/tests/test_packet_b.py:28:            default_sale_rate=Decimal("90.00"),
+apps/backend/apps/billing/tests/test_packet_b.py:40:            sale_rate=Decimal("90.00"),
+apps/backend/apps/billing/tests/test_packet_b.py:104:            sale_rate=Decimal("90.00")
+apps/backend/apps/billing/tests/test_packet_b.py:194:            sale_rate=Decimal("90.00")
+apps/backend/apps/billing/tests/test_packet_b.py:277:            sale_rate=Decimal("90.00")
+apps/backend/apps/billing/tests/test_packet_b.py:331:            default_sale_rate=Decimal("90.00"),
+apps/backend/apps/billing/tests/test_packet_b.py:344:            sale_rate=Decimal("90.00"),
+apps/backend/apps/billing/tests/test_packet_b.py:358:            sale_rate=Decimal("90.00"),
+apps/backend/apps/billing/tests/test_backfill.py:30:        sale_rate=Decimal('100.00'),
+apps/backend/apps/billing/tests/test_backfill.py:64:        sale_rate=batch.sale_rate,
+apps/backend/apps/billing/tests/test_discount_math.py:38:            sale_rate=Decimal('100.00'),
+apps/backend/apps/billing/tests/test_discount_math.py:106:            sale_rate=Decimal('100.00'),
+apps/backend/apps/billing/tests/test_discount_math.py:149:            sale_rate=Decimal('100.00'),
+apps/backend/apps/billing/tests/test_discount_math.py:192:            sale_rate=Decimal('100.00'),
+apps/backend/apps/billing/tests/test_revise_api.py:59:            sale_rate=Decimal('90.00')
+apps/backend/apps/billing/tests/test_revise_api.py:117:            sale_rate=Decimal('90.00'),
+apps/backend/apps/billing/tests/test_phase1_immutability.py:28:        sale_rate=Decimal('100.00'),
+apps/backend/apps/billing/tests/test_phase1_immutability.py:63:        sale_rate=batch.sale_rate,
+apps/backend/apps/billing/tests/test_packet_a.py:28:            expiry_date="2027-01-01", mrp=Decimal('100.00'), sale_rate=Decimal('100.00'), purchase_rate=Decimal('50.00'),
+apps/backend/apps/billing/tests/test_packet_a.py:36:            expiry_date="2027-01-01", mrp=Decimal('100.00'), sale_rate=Decimal('100.00'), purchase_rate=Decimal('50.00'),
+apps/backend/apps/billing/tests/test_packet_a.py:84:            expiry_date="2027-01-01", mrp=Decimal('50.00'), sale_rate=Decimal('50.00'), purchase_rate=Decimal('25.00'),
+apps/backend/apps/billing/tests/test_sale_modification.py:36:            qty_strips=100, qty_loose=0, mrp=50, purchase_rate=30, sale_rate=45, pack_size=10, opening_qty=100
+apps/backend/apps/billing/tests/test_sale_modification.py:80:            sale_rate=45,
+apps/backend/apps/billing/utils/pricing.py:27:def validate_sale_price(sale_rate: Decimal, batch: Batch, pharmacy_id) -> dict:
+apps/backend/apps/billing/utils/pricing.py:42:    if sale_rate > mrp:
+apps/backend/apps/billing/utils/pricing.py:45:            'message': f"Sale rate ₹{sale_rate} exceeds MRP ₹{mrp}. Cannot bill above MRP.",
+apps/backend/apps/billing/utils/pricing.py:49:    if sale_rate < landing_cost:
+apps/backend/apps/billing/utils/pricing.py:53:                f"Sale rate ₹{sale_rate:.2f} is below Landing Cost ₹{landing_cost:.2f}."
+apps/backend/apps/billing/views.py:1528:                'saleRate': float(item.sale_rate),
+apps/backend/apps/billing/views.py:1617:                'saleRate': float(item.sale_rate),
+apps/backend/apps/billing/views.py:2671:                sale_rate = float(row.get('SaleRate', 0) or purchase_rate)
+apps/backend/apps/billing/views.py:2712:                    sale_rate=sale_rate,
+apps/backend/apps/billing/views.py:2779:                    'saleRate': float(item.sale_rate),
+apps/backend/apps/billing/migrations/0001_initial.py:69:                ('sale_rate', models.DecimalField(decimal_places=2, help_text='Selling price per pack', max_digits=10)),
+apps/backend/apps/billing/migrations/0014_quotation_quotationitem_and_more.py:66:                ('sale_rate', models.DecimalField(decimal_places=2, default=0, max_digits=10)),
+apps/backend/apps/billing/serializers.py:13:        # Support either rate or sale_rate from payload depending on fields
+apps/backend/apps/billing/serializers.py:14:        sale_rate = data.get('rate') or data.get('sale_rate')
+apps/backend/apps/billing/serializers.py:32:        if sale_rate and batch and pharmacy_id:
+apps/backend/apps/billing/serializers.py:40:            result = validate_sale_price(sale_rate, batch, pharmacy_id)
+apps/backend/apps/billing/serializers.py:43:                    'sale_rate': result['message'],
+apps/backend/apps/billing/sale_update_service.py:412:                proposed_rate = Decimal(str(item_data.get('rate', batch.sale_rate)))
+apps/backend/apps/billing/sale_update_service.py:445:                        sale_rate=batch.sale_rate,
+apps/backend/apps/billing/models.py:144:    sale_rate = models.DecimalField(max_digits=10, decimal_places=2, help_text='Selling price per pack')
+apps/backend/apps/billing/models.py:879:    sale_rate = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+apps/backend/apps/core/management/commands/seeder.py:132:            pack_type="Blister", mrp=mrp, default_sale_rate=mrp, min_qty=5, reorder_qty=10, is_fridge=False, is_discontinued=False
+apps/backend/apps/core/management/commands/seeder.py:210:                mrp=p.mrp, purchase_rate=p_rate, sale_rate=p.mrp, pack_size=p.pack_size, pack_unit=p.pack_unit, pack_type=p.pack_type,
+apps/backend/apps/core/management/commands/seeder.py:222:                gst_rate=p.gst_rate, cess=Decimal('0'), mrp=p.mrp, ptr=p_rate, pts=p_rate, sale_rate=p.mrp,
+apps/backend/apps/core/management/commands/seeder.py:285:            rate = batch.sale_rate
+apps/backend/apps/core/management/commands/seeder.py:292:                mrp=batch.mrp, sale_rate=batch.sale_rate, rate=rate, hsn_code=batch.product.hsn_code,
+apps/backend/apps/core/management/commands/seeder.py:425:            batch_no=batch_12.batch_no, expiry_date=batch_12.expiry_date, mrp=batch_12.mrp, sale_rate=Decimal('10.00'),
+apps/backend/apps/core/management/commands/seeder.py:452:            batch_no=batch_12.batch_no, expiry_date=batch_12.expiry_date, mrp=batch_12.mrp, sale_rate=Decimal('10.00'),
+apps/backend/apps/core/management/commands/seeder.py:489:            gst_rate=Decimal('12.00'), cess=Decimal('0'), mrp=batch_12.mrp, ptr=Decimal('10.00'), pts=Decimal('10.00'), sale_rate=Decimal('10.00'),
+apps/backend/apps/inventory/views.py:68:        'saleRate': float(product.default_sale_rate),
+apps/backend/apps/inventory/views.py:96:        'saleRate': float(batch.sale_rate),
+apps/backend/apps/inventory/views.py:153:            sale_rate = Decimal(str(data.get('saleRate', 0)))
+apps/backend/apps/inventory/views.py:154:            if sale_rate <= 0:
+apps/backend/apps/inventory/views.py:158:            sale_rate = Decimal('0')
+apps/backend/apps/inventory/views.py:190:                    default_sale_rate=sale_rate,
+apps/backend/apps/inventory/views.py:299:                    product.default_sale_rate = sr
+apps/backend/apps/inventory/views.py:592:                'saleRate': float(product.default_sale_rate),
+apps/backend/apps/inventory/views.py:837:                'saleRate':        float(pbs[0].sale_rate) if pbs else float(product.default_sale_rate),
+apps/backend/apps/inventory/management/commands/import_marg_data.py:408:                        default_sale_rate = _dec(row[12]),
+apps/backend/apps/inventory/management/commands/import_marg_data.py:567:            sale_rate     = _dec(row[12]) or mrp
+apps/backend/apps/inventory/management/commands/import_marg_data.py:612:                        sale_rate       = sale_rate,
+apps/backend/apps/inventory/migrations/0004_add_mrp_default_sale_rate_to_masterproduct.py:15:            name='default_sale_rate',
+apps/backend/apps/inventory/migrations/0001_initial.py:53:                ('sale_rate', models.DecimalField(decimal_places=2, help_text='Selling price per pack', max_digits=10)),
+apps/backend/apps/inventory/migrations/0005_alter_masterproduct_schedule_type.py:9:        ('inventory', '0004_add_mrp_default_sale_rate_to_masterproduct'),
+apps/backend/apps/inventory/models.py:68:    default_sale_rate = models.DecimalField(max_digits=10, decimal_places=2, default=0, help_text='Default selling price')
+apps/backend/apps/inventory/models.py:97:    sale_rate = models.DecimalField(max_digits=10, decimal_places=2, help_text='Selling price per pack')
+apps/backend/apps/audit/tests/factories.py:81:            "sale_rate": 100.0,
+apps/backend/apps/audit/snapshot_serializers.py:20:            'sale_rate', 'rate', 'mrp', 'discount_pct',
+apps/backend/test_purchase_revision.py:48:        sale_rate=Decimal('80.00'),
+apps/backend/templates/reports/batch_report.html:150:                <td class="text-right">{{ row.sale_rate|floatformat:2 }}</td>
+apps/backend/test_prices.py:10:        print(f"Batch {b.batch_no}: PR={b.purchase_rate}, SR={b.sale_rate}, MRP={b.mrp}")
+apps/backend/simulate_mutations.py:62:        mrp=Decimal('10.00'), sale_rate=Decimal('10.00'), purchase_rate=Decimal('10.00'), qty_strips=100
+apps/backend/simulate_mutations.py:74:        sale_rate=Decimal('10.00'),
+apps/backend/reproduce_draft.py:20:    taxable = float("{:.2f}".format(float(item.qty_strips * batch.sale_rate) / 1.18))
+apps/backend/reproduce_draft.py:21:    gst = float("{:.2f}".format(float(item.qty_strips * batch.sale_rate) - taxable))
+apps/backend/reproduce_draft.py:28:        "rate": float(batch.sale_rate),
+apps/backend/reproduce_draft.py:33:        "totalAmount": float("{:.2f}".format(float(item.qty_strips * batch.sale_rate))),

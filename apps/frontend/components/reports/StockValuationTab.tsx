@@ -73,10 +73,7 @@ export function StockValuationTab() {
             header: 'MRP',
             cell: info => `₹${info.getValue()}`,
         }),
-        helper.accessor('saleRate', {
-            header: 'Sale Rate',
-            cell: info => `₹${info.getValue()}`,
-        }),
+
         helper.accessor('stockValue', {
             header: 'Stock Value',
             cell: info => <span className="font-medium">{formatCurrency(info.getValue())}</span>,

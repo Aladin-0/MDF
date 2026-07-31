@@ -1,14 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useBillingStore } from '@/store/billingStore';
 import { cn } from '@/lib/utils';
+import { calculateTotalMargin } from '@/lib/billingMarginUtils';
 import { useCheckout } from '@/hooks/useCheckout';
 import { useToast } from '@/hooks/use-toast';
 import { RevisionReasonModal } from './RevisionReasonModal';
 
 export function RightBillingRail() {
-    const { drafts, activeDraftId, getDraftTotals, setDraftDocumentMode, setRevisionContext } = useBillingStore();
+    const { drafts, activeDraftId, getDraftTotals, setDraftDocumentMode, setRevisionContext, showMarginInfo, activeStaff } = useBillingStore();
     
     const draft = activeDraftId ? drafts[activeDraftId] : null;
     const isQuotation = draft?.documentMode === 'quotation';
@@ -38,6 +39,11 @@ export function RightBillingRail() {
     const [amtDraft, setAmtDraft] = useState<string>('');
     const [pctFocused, setPctFocused] = useState(false);
     const [amtFocused, setAmtFocused] = useState(false);
+
+    const marginData = useMemo(() => {
+        if (!activeDraft) return null;
+        return calculateTotalMargin(activeDraft.cart, totals.subtotal);
+    }, [activeDraft, totals.subtotal]);
 
     const base = totals.subtotal - totals.discountAmount;
 
@@ -181,6 +187,19 @@ export function RightBillingRail() {
                     <span className="text-[13px] font-black tracking-widest text-slate-300">NET PAYABLE</span>
                     <span className="font-black text-5xl tracking-tight text-white" data-testid="grand-total-amount">₹ {totals.grandTotal.toFixed(2)}</span>
                 </div>
+                
+                {(showMarginInfo && (activeStaff?.role === 'owner' || activeStaff?.role === 'admin') && marginData) && (
+                    <div className="flex flex-col mb-4 bg-emerald-900/40 p-3 rounded-md border border-emerald-800/50">
+                        <div className="flex justify-between text-sm">
+                            <span className="text-emerald-400/80">Total Margin</span>
+                            <span className="font-semibold text-emerald-400">₹ {marginData.totalMargin.toFixed(2)} ({marginData.totalMarginPct.toFixed(2)}%)</span>
+                        </div>
+                        <div className="flex justify-between text-sm mt-1">
+                            <span className="text-emerald-400/80">Gross Profit</span>
+                            <span className="font-semibold text-emerald-400">₹ {marginData.totalGrossProfit.toFixed(2)}</span>
+                        </div>
+                    </div>
+                )}
 
                 {/* Payment Options (Hide if Quotation) */}
                 {!isQuotation && (
@@ -283,10 +302,8 @@ export function RightBillingRail() {
                 onSubmit={async (code, text) => {
                     setRevisionContext(activeDraft?.revisionAction || null, code, text);
                     setReasonModalOpen(false);
-                    // Use setTimeout to ensure the zustand store updates before saveBill reads it
-                    setTimeout(() => {
-                        executeCheckout();
-                    }, 0);
+                    // Zustand updates are synchronous, so we can immediately execute checkout
+                    executeCheckout();
                 }}
             />
         </div>

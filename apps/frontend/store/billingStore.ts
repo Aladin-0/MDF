@@ -33,7 +33,10 @@ interface BillingState {
     revisionReasonText: string | null;
 
     backendRateErrors: Record<string, string>;
-
+    
+    // UI Feature Flags
+    showMarginInfo: boolean;
+    
     // Actions - Draft Management
     createDraft: () => string;
     switchDraft: (id: string) => void;
@@ -81,6 +84,8 @@ interface BillingState {
     setBackendRateError: (batchId: string, errorMsg: string) => void;
     clearBackendRateError: (batchId: string) => void;
     clearAllBackendRateErrors: () => void;
+    
+    toggleMarginInfo: () => void;
 
     // Session bill counter
     billsToday: number;
@@ -130,6 +135,8 @@ export const useBillingStore = create<BillingState>((set, get) => ({
     revisionReasonText: null,
     billsToday: 0,
     backendRateErrors: {},
+    
+    showMarginInfo: false,
 
     // --- Draft Management ---
 
@@ -393,8 +400,16 @@ export const useBillingStore = create<BillingState>((set, get) => ({
                     hospitalName: null,
                     payment: { ...initialPayment },
                     scheduleHData: null,
+                    prescriptionNo: null,
                     prescriptionImageUrl: null,
                     extraDiscountPct: 0,
+                    invoiceDate: undefined,
+                    editingSaleId: undefined,
+                    revisionAction: undefined,
+                    revisionReasonCode: undefined,
+                    revisionReasonText: undefined,
+                    quotationId: undefined,
+                    sourceQuotationNo: undefined,
                     updatedAt: new Date().toISOString()
                 }
             }
@@ -421,17 +436,20 @@ export const useBillingStore = create<BillingState>((set, get) => ({
         let taxableAmount = 0;
         let cgstAmount = 0;
         let sgstAmount = 0;
-        let totalQty = 0;
+        let totalQtyCount = 0;
         let hasScheduleH = false;
         let requiresDoctorDetails = false;
 
         draft.cart.forEach(item => {
-            const rawTotal = item.rate * item.totalQty;
+            const rate = item.rate || 0;
+            const mrp = item.mrp || 0;
+            const totalQty = item.totalQty || 0;
+            const rawTotal = rate * totalQty;
             const gstRate = item.gstRate || 0;
 
-            subtotal += item.mrp * item.totalQty;
+            subtotal += mrp * totalQty;
             totalRateAmount += rawTotal;
-            totalQty += item.totalQty;
+            totalQtyCount += totalQty;
 
             const discountedTotal = rawTotal * discountFactor;
 
@@ -478,7 +496,7 @@ export const useBillingStore = create<BillingState>((set, get) => ({
             amountPaid,
             amountDue,
             itemCount: draft.cart.length,
-            totalQty,
+            totalQty: totalQtyCount,
             hasScheduleH,
             requiresDoctorDetails
         };
@@ -544,6 +562,8 @@ export const useBillingStore = create<BillingState>((set, get) => ({
     }),
     clearAllBackendRateErrors: () => set({ backendRateErrors: {} }),
     
+    toggleMarginInfo: () => set((state) => ({ showMarginInfo: !state.showMarginInfo })),
+
     setRevisionContext: (action, reasonCode, reasonText) => set((state) => {
         if (!state.activeDraftId) return state;
         const draft = state.drafts[state.activeDraftId];
