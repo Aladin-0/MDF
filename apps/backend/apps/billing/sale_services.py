@@ -20,6 +20,17 @@ from apps.reports.gst_snapshot_service import create_sale_snapshots
 
 logger = logging.getLogger(__name__)
 
+def _canonical_pack_type(batch):
+    valid_choices = {'strip', 'bottle', 'vial', 'box', 'blister', 'tube', 'packet', 'other'}
+    
+    if batch.pack_type and batch.pack_type in valid_choices:
+        return batch.pack_type
+        
+    fallback = (batch.product.pack_type if (batch.product and batch.product.pack_type in valid_choices) else 'strip')
+    logger.warning(f"Runtime correction: batch {batch.batch_no} has bad pack_type '{batch.pack_type}', falling back to '{fallback}'")
+    return fallback
+
+
 def atomic_sale_save(
     request_data: dict,
     outlet,
