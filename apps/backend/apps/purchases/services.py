@@ -196,6 +196,9 @@ def atomic_purchase_save(payload: Dict[str, Any], outlet_id: str, created_by_id:
             # total_stock property handles the strips → units conversion on read.
             # ────────────────────────────────────────────────────────────────────────
             
+            if int(item_payload.get('qtyLoose', 0)) > 0:
+                raise ValidationError("Inbound stock must be full units (packs/strips), loose quantities are not supported.")
+
             # Calculate total strips purchased including free goods
             total_strips = int(item_payload['qty']) + int(item_payload.get('freeQty', 0))
 
