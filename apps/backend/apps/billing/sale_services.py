@@ -13,6 +13,7 @@ def _canonical_pack_type(pack_type, pack_unit):
     pt = (pack_type or '').strip().lower()
     pu = (pack_unit or '').strip().lower()
     if pt == 'strip' and pu in ['box', 'piece', 'bottle', 'vial', 'tube', 'packet']:
+        logger.warning(f"Runtime correction: bad pack_type 'strip' with unit '{pu}', falling back to '{pu}'")
         return pu
     return pack_type
 

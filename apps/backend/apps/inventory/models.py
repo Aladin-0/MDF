@@ -96,7 +96,7 @@ class Batch(models.Model):
     purchase_rate = models.DecimalField(max_digits=10, decimal_places=2, help_text='Cost price per pack')
     pack_size = models.IntegerField(default=1, help_text='Number of units per pack (e.g., 10 tablets per strip)')
     pack_unit = models.CharField(max_length=50, default='tablet', help_text='Unit name (e.g., tablet, capsule, ml, etc.)')
-    pack_type = models.CharField(max_length=20, default='strip', choices=MasterProduct.PACK_TYPE_CHOICES)
+    pack_type = models.CharField(max_length=20, choices=MasterProduct.PACK_TYPE_CHOICES)
     qty_strips = models.IntegerField(default=0, help_text='Number of full strips/packs')
     qty_loose = models.IntegerField(default=0, help_text='Number of loose units (< 1 pack)')
     opening_qty = models.DecimalField(
