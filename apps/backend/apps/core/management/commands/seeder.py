@@ -115,19 +115,20 @@ def seed_master_data():
 
     # Master Products
     products_data = [
-        ("Paracetamol 500mg", "12340001", Decimal('12.00'), Decimal('50.00'), Decimal('35.00')),
-        ("Azithromycin 250mg", "12340002", Decimal('12.00'), Decimal('120.00'), Decimal('90.00')),
-        ("Vitamins Complex", "21069099", Decimal('18.00'), Decimal('250.00'), Decimal('180.00')),
-        ("BP Monitor", "90189019", Decimal('18.00'), Decimal('1500.00'), Decimal('1200.00')),
-        ("Exempted Item (Zero Tax)", "00000000", Decimal('0.00'), Decimal('100.00'), Decimal('80.00')),
+        ("Paracetamol 500mg", "12340001", Decimal('12.00'), Decimal('50.00'), Decimal('35.00'), "Strip", "Blister"),
+        ("Azithromycin 250mg", "12340002", Decimal('12.00'), Decimal('120.00'), Decimal('90.00'), "Strip", "Blister"),
+        ("Vitamins Complex", "21069099", Decimal('18.00'), Decimal('250.00'), Decimal('180.00'), "Bottle", "Bottle"),
+        ("BP Monitor", "90189019", Decimal('18.00'), Decimal('1500.00'), Decimal('1200.00'), "Piece", "Box"),
+        ("Hand Strap", "90189020", Decimal('18.00'), Decimal('500.00'), Decimal('300.00'), "Piece", "Piece"),
+        ("Exempted Item (Zero Tax)", "00000000", Decimal('0.00'), Decimal('100.00'), Decimal('80.00'), "Packet", "Packet"),
     ]
 
     products = []
-    for name, hsn, rate, mrp, pur_rate in products_data:
+    for name, hsn, rate, mrp, pur_rate, punit, ptype in products_data:
         p = MasterProduct.objects.create(
             name=f"{PREFIX}{name}", composition="Generic", manufacturer="Generic Pharma", category="Tablets",
-            drug_type="Allopathic", schedule_type="H1", hsn_code=hsn, gst_rate=rate, pack_size=10, pack_unit="Strip",
-            pack_type="Blister", mrp=mrp, min_qty=5, reorder_qty=10, is_fridge=False, is_discontinued=False
+            drug_type="Allopathic", schedule_type="H1", hsn_code=hsn, gst_rate=rate, pack_size=10 if punit=="Strip" else 1, pack_unit=punit,
+            pack_type=ptype, mrp=mrp, min_qty=5, reorder_qty=10, is_fridge=False, is_discontinued=False
         )
         products.append((p, pur_rate))
 

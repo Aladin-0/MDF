@@ -6,7 +6,7 @@ from rest_framework.exceptions import ValidationError
 
 from apps.accounts.models import DebitNote, DebitNoteItem
 from apps.inventory.models import Batch
-from apps.purchases.models import PurchaseInvoice, PurchaseInvoiceItem
+from apps.purchases.models import PurchaseInvoice, PurchaseItem
 from apps.accounts.journal_service import post_debit_note
 # removed import
 
@@ -105,14 +105,14 @@ def atomic_debit_note_update(debit_note_id: str, outlet_id: str, payload: dict, 
         previously_returned_qty = Decimal('0')
         if note.purchase_invoice_id:
             try:
-                pi_item = PurchaseInvoiceItem.objects.get(purchase_invoice_id=note.purchase_invoice_id, batch_id=batch.id)
+                pi_item = PurchaseItem.objects.get(purchase_invoice_id=note.purchase_invoice_id, batch_id=batch.id)
                 original_qty = pi_item.qty
                 # Sum previously returned quantities for this batch on this invoice, EXCLUDING current note
                 other_notes = DebitNote.objects.filter(purchase_invoice_id=note.purchase_invoice_id).exclude(id=note.id)
                 from django.db.models import Sum
                 agg = DebitNoteItem.objects.filter(debit_note__in=other_notes, batch_id=batch.id).aggregate(total=Sum('qty'))
                 previously_returned_qty = agg['total'] or Decimal('0')
-            except PurchaseInvoiceItem.DoesNotExist:
+            except PurchaseItem.DoesNotExist:
                 # If no direct link, fallback to checking what's currently in stock
                 pass
 
@@ -129,9 +129,9 @@ def atomic_debit_note_update(debit_note_id: str, outlet_id: str, payload: dict, 
         original_rate = Decimal('0')
         if note.purchase_invoice_id:
             try:
-                pi_item = PurchaseInvoiceItem.objects.get(purchase_invoice_id=note.purchase_invoice_id, batch_id=batch.id)
+                pi_item = PurchaseItem.objects.get(purchase_invoice_id=note.purchase_invoice_id, batch_id=batch.id)
                 original_rate = pi_item.rate
-            except PurchaseInvoiceItem.DoesNotExist:
+            except PurchaseItem.DoesNotExist:
                 original_rate = batch.purchase_rate
         else:
             original_rate = batch.purchase_rate

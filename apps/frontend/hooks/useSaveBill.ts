@@ -55,10 +55,6 @@ export function useSaveBill() {
             const partyLedgerId = (customerLedger && customerLedger.id !== 'mock' && !(customerLedger as any).isMock) ? customerLedger.id : undefined;
             const customerId = (customer && customer.id !== 'mock') ? customer.id : undefined;
 
-            if (draft.documentMode === 'invoice' && !partyLedgerId && !customerId) {
-                throw new Error("Customer selection is mandatory for Sale Invoices.");
-            }
-
             let invoiceDateIso;
             if (draft.invoiceDate) {
                 const parsed = new Date(draft.invoiceDate);

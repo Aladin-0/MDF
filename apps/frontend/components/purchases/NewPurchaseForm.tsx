@@ -470,8 +470,8 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
         <>
         <form onSubmit={handleSubmit(onSubmit, (errors) => {
             console.error("FORM VALIDATION ERRORS:", errors);
-            let errMsg = JSON.stringify(errors, null, 2);
-            if (errors.items && errors.items.length > 0) {
+            let errMsg = "Validation failed";
+            if (errors.items && Array.isArray(errors.items) && errors.items.length > 0) {
                 const firstRowErrors = errors.items[0] || {};
                 errMsg = "Row 1 Failing Fields: " + Object.keys(firstRowErrors).join(", ");
                 alert(errMsg); // FORCE an unignorable popup!

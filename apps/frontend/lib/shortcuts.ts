@@ -1,5 +1,7 @@
 export type ShortcutScope = 'global' | 'route' | 'modal' | 'widget';
 
+export const DISABLE_DISRUPTIVE_SHORTCUTS = true; // Temporary kill switch for conflicting shortcuts
+
 export interface ShortcutDefinition {
     id: string;
     combo?: string; // e.g., 'Alt+1', 'Ctrl+S', '/'
@@ -66,6 +68,8 @@ class ShortcutRegistry {
     }
 
     handleKeydown(e: KeyboardEvent) {
+        if (!e || typeof e.key !== 'string') return; // Safe guard against synthetic/malformed events
+
         const isInput = isEditableElement(e.target);
 
         // Normalize combo string (e.g., 'Alt+1')
@@ -106,9 +110,12 @@ class ShortcutRegistry {
 
         const matches = Array.from(this.shortcuts.values()).filter(s => {
             if (!this.activeScopes.has(s.scope)) return false;
-             const comboMatch = s.combo === comboString && (isInput ? !!s.allowInInput : true);
+            const comboMatch = s.combo === comboString && (isInput ? !!s.allowInInput : true);
 
-            const sequenceMatch = s.sequence && currentSequence.endsWith(s.sequence);
+            // If the kill switch is on, disable sequence shortcuts completely
+            if (DISABLE_DISRUPTIVE_SHORTCUTS && s.sequence) return false;
+
+            const sequenceMatch = s.sequence && currentSequence.endsWith(s.sequence) && (isInput ? !!s.allowInInput : true);
             
             return comboMatch || sequenceMatch;
         });

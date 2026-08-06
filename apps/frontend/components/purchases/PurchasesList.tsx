@@ -52,7 +52,6 @@ function getPeriodBounds(period: PeriodFilter): { start: string; end: string } |
 /* ─── component ───────────────────────────────────────────── */
 
 export function PurchasesList({ onEditInvoice }: { onEditInvoice?: (invoice: PurchaseInvoiceFull) => void }) {
-    const { data, isLoading } = usePurchasesList();
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
     const [period, setPeriod] = useState<PeriodFilter>('all');
@@ -60,43 +59,23 @@ export function PurchasesList({ onEditInvoice }: { onEditInvoice?: (invoice: Pur
     const [page, setPage] = useState(1);
     const [selectedInvoice, setSelectedInvoice] = useState<PurchaseInvoiceFull | null>(null);
 
-    const allInvoices: PurchaseInvoiceFull[] = data?.data ?? [];
-
-    /* invoices filtered only by period — used for status pill counts */
-    const periodInvoices = useMemo(() => {
+    const queryParams = useMemo(() => {
         const bounds = getPeriodBounds(period);
-        if (!bounds) return allInvoices;
-        return allInvoices.filter(
-            (inv) => inv.invoiceDate >= bounds.start && inv.invoiceDate <= bounds.end
-        );
-    }, [allInvoices, period]);
+        return {
+            page,
+            pageSize: PAGE_SIZE,
+            status: statusFilter === 'all' ? undefined : statusFilter,
+            search: search.trim() || undefined,
+            startDate: bounds?.start,
+            endDate: bounds?.end,
+        };
+    }, [page, statusFilter, search, period]);
 
-    /* status counts for the pill badges */
-    const statusCounts = useMemo(() => {
-        const counts: Record<string, number> = { paid: 0, partial: 0, unpaid: 0, overdue: 0 };
-        periodInvoices.forEach((inv) => counts[getPurchaseStatus(inv)]++);
-        return counts;
-    }, [periodInvoices]);
+    const { data, isLoading } = usePurchasesList(queryParams);
 
-    /* fully filtered list */
-    const filtered = useMemo(() => {
-        return periodInvoices.filter((inv) => {
-            // ✅ fixed: actually check status
-            if (statusFilter !== 'all' && getPurchaseStatus(inv) !== statusFilter) return false;
-
-            // ✅ fixed: search always runs regardless of statusFilter
-            if (search.trim()) {
-                const q = search.toLowerCase();
-                const matchInvoice = inv.invoiceNo.toLowerCase().includes(q);
-                const matchDist = inv.distributor?.name?.toLowerCase().includes(q) ?? false;
-                if (!matchInvoice && !matchDist) return false;
-            }
-            return true;
-        });
-    }, [periodInvoices, search, statusFilter]);
-
-    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-    const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+    const allInvoices: PurchaseInvoiceFull[] = data?.data ?? [];
+    const totalRecords = data?.pagination?.totalRecords ?? 0;
+    const totalPages = data?.pagination?.totalPages ?? 1;
 
     const resetPage = () => setPage(1);
 
@@ -129,10 +108,9 @@ export function PurchasesList({ onEditInvoice }: { onEditInvoice?: (invoice: Pur
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap">
-                    {/* Status pills with live counts */}
+                    {/* Status pills without live counts (moved to server-side) */}
                     {(['all', 'paid', 'partial', 'unpaid', 'overdue'] as StatusFilter[]).map((s) => {
                         const isActive = statusFilter === s;
-                        const count = s === 'all' ? periodInvoices.length : statusCounts[s];
                         return (
                             <button
                                 key={s}
@@ -145,14 +123,6 @@ export function PurchasesList({ onEditInvoice }: { onEditInvoice?: (invoice: Pur
                                 )}
                             >
                                 {s.charAt(0).toUpperCase() + s.slice(1)}
-                                <span className={cn(
-                                    'inline-flex items-center justify-center rounded-full text-[10px] font-semibold min-w-[16px] h-4 px-1',
-                                    isActive
-                                        ? 'bg-background/20 text-background'
-                                        : 'bg-muted text-muted-foreground'
-                                )}>
-                                    {count}
-                                </span>
                             </button>
                         );
                     })}
@@ -207,7 +177,7 @@ export function PurchasesList({ onEditInvoice }: { onEditInvoice?: (invoice: Pur
                                         ))}
                                     </tr>
                                 ))
-                            ) : paginated.length === 0 ? (
+                            ) : allInvoices.length === 0 ? (
                                 <tr>
                                     <td colSpan={10}>
                                         <div className="flex flex-col items-center justify-center gap-3 py-16 text-muted-foreground">
@@ -226,7 +196,7 @@ export function PurchasesList({ onEditInvoice }: { onEditInvoice?: (invoice: Pur
                                     </td>
                                 </tr>
                             ) : (
-                                paginated.map((inv) => {
+                                allInvoices.map((inv) => {
                                     const status = getPurchaseStatus(inv);
                                     const isExpanded = expandedId === inv.id;
                                     const cfg = STATUS_CONFIG[status];
@@ -291,7 +261,7 @@ export function PurchasesList({ onEditInvoice }: { onEditInvoice?: (invoice: Pur
                 </div>
 
                 {/* Expanded row — rendered OUTSIDE the table to avoid DOM nesting issues */}
-                {paginated.map((inv) => {
+                {allInvoices.map((inv) => {
                     if (expandedId !== inv.id) return null;
                     return (
                         <div key={`${inv.id}-expand`} className="border-t border-border bg-muted/20 px-6 py-4">
@@ -339,7 +309,7 @@ export function PurchasesList({ onEditInvoice }: { onEditInvoice?: (invoice: Pur
             {totalPages > 1 && (
                 <div className="flex items-center justify-between text-sm text-muted-foreground">
                     <span>
-                        Showing {Math.min((page - 1) * PAGE_SIZE + 1, filtered.length)}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
+                        Showing {Math.min((page - 1) * PAGE_SIZE + 1, totalRecords)}–{Math.min(page * PAGE_SIZE, totalRecords)} of {totalRecords}
                     </span>
                     <div className="flex items-center gap-1">
                         <Button

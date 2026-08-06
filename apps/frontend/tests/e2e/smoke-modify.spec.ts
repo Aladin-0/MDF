@@ -57,7 +57,7 @@ test.describe('Real Local Smoke Test - Modify', () => {
         }
         
         if (fullInvoice.items) {
-            fullInvoice.items.forEach(item => {
+            fullInvoice.items.forEach((item: any) => {
                 store.addToCart({
                     id: Math.random().toString(),
                     draftId: targetDraftId,

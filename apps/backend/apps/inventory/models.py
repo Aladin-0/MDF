@@ -1,6 +1,7 @@
 from django.db import models
 from django.core.exceptions import ValidationError
 import uuid
+from django.conf import settings
 
 
 class OutletFilteredManager(models.Manager):
@@ -172,7 +173,7 @@ class StockLedger(models.Model):
     id              = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     outlet          = models.ForeignKey('core.Outlet', on_delete=models.PROTECT,
                                         related_name='stock_ledger_entries')
-    product         = models.ForeignKey('inventory.MasterProduct', on_delete=models.PROTECT,
+    product         = models.ForeignKey('inventory.MasterProduct', on_delete=models.SET_NULL, null=True, blank=True,
                                         related_name='stock_ledger_entries')
     batch           = models.ForeignKey('inventory.Batch', on_delete=models.SET_NULL,
                                         null=True, blank=True,
@@ -201,6 +202,7 @@ class StockLedger(models.Model):
     running_value   = models.DecimalField(max_digits=14, decimal_places=2, default=0)
 
     created_at      = models.DateTimeField(auto_now_add=True)
+    actor           = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
 
     class Meta:
         ordering = ['txn_date', 'created_at']

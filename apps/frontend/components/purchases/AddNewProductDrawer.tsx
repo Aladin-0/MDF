@@ -10,7 +10,9 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { productsApi } from '@/lib/apiClient';
 import { CreateProductPayload, ProductSearchResult } from '@/types';
 import { SCHEDULE_TYPE_OPTIONS } from '@/constants/scheduleTypes';
-import { PACK_TYPE_OPTIONS } from '@/constants/productBehavior';
+import { PACK_TYPE_OPTIONS, DISPENSING_UNIT_OPTIONS } from '@/constants/productBehavior';
+import { inferPackUnit } from '@/utils/productUtils';
+import { Pencil } from 'lucide-react';
 
 interface Props {
     open: boolean;
@@ -64,12 +66,14 @@ export function AddNewProductDrawer({ open, onOpenChange, initialName, onSuccess
     const [errors, setErrors] = useState<FieldErrors>({});
     const [serverError, setServerError] = useState('');
     const [saving, setSaving] = useState(false);
+    const [isEditingUnit, setIsEditingUnit] = useState(false);
 
     useEffect(() => {
         if (open) {
             setForm(emptyForm(initialName));
             setErrors({});
             setServerError('');
+            setIsEditingUnit(false);
         }
     }, [open, initialName]);
 
@@ -246,13 +250,13 @@ export function AddNewProductDrawer({ open, onOpenChange, initialName, onSuccess
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="space-y-1">
                                     <Label className="text-xs font-medium">Pack Type <span className="text-red-500">*</span></Label>
-                                    <Select value={form.packType} onValueChange={(v) => {
-                                        set('packType', v);
-                                        if (v === 'strip' || v === 'blister') { 
-                                            set('packUnit', 'Tablet'); 
+                                    <Select value={form.packType} onValueChange={(val) => {
+                                        set('packType', val);
+                                        set('packUnit', inferPackUnit(form.name, val));
+                                        setIsEditingUnit(false);
+                                        if (val === 'strip' || val === 'blister') { 
                                             set('packSize', '10'); 
                                         } else { 
-                                            set('packUnit', PACK_TYPE_OPTIONS.find(o => o.value === v)?.label || 'Piece'); 
                                             set('packSize', '1'); 
                                         }
                                     }}>
@@ -276,7 +280,7 @@ export function AddNewProductDrawer({ open, onOpenChange, initialName, onSuccess
                             <div className="bg-indigo-50/50 p-4 rounded-md border border-indigo-100">
                                 {(form.packType === 'strip' || form.packType === 'blister') ? (
                                     <div className="flex flex-col gap-2">
-                                        <p className="text-sm text-gray-600 mb-2">Define how this product is packaged. <span className="font-semibold text-gray-800">Example: 1 Strip contains 10 Tablets.</span></p>
+                                        <p className="text-sm text-gray-600 mb-2">Define how this product is packaged. <span className="font-semibold text-gray-800">Example: 1 {form.packType ? (PACK_TYPE_OPTIONS.find(o => o.value === form.packType)?.label || form.packType) : 'Strip'} contains 10 {form.packUnit ? form.packUnit + 's' : 'Tablets'}.</span></p>
                                         <div className="flex items-center gap-3">
                                             <span className="text-sm font-medium">1 {form.packType ? (PACK_TYPE_OPTIONS.find(o => o.value === form.packType)?.label || form.packType) : 'Pack'} contains</span>
                                             <div className="w-24">
@@ -289,18 +293,42 @@ export function AddNewProductDrawer({ open, onOpenChange, initialName, onSuccess
                                                     placeholder="Qty"
                                                 />
                                             </div>
-                                            <div className="w-32">
-                                                <Input
-                                                    className={fieldCls(errors.packUnit)}
-                                                    value={form.packUnit}
-                                                    onChange={(e) => set('packUnit', e.target.value)}
-                                                    placeholder="Base Unit"
-                                                />
+                                            <div className="flex-1 min-w-[150px]">
+                                                {!isEditingUnit ? (
+                                                    <div className="flex items-center gap-2 h-10 px-3 bg-gray-50 border border-gray-200 rounded-md text-sm">
+                                                        <span className="font-medium text-gray-700">{form.packUnit || 'Unit'}</span>
+                                                        <button type="button" onClick={() => setIsEditingUnit(true)} className="ml-auto p-1 text-gray-400 hover:text-blue-600 transition-colors" title="Edit Dispensing Unit">
+                                                            <Pencil className="h-3 w-3" />
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex gap-2">
+                                                        <Select value={DISPENSING_UNIT_OPTIONS.some(o => o.value === form.packUnit) ? form.packUnit : 'Other'} onValueChange={(v) => set('packUnit', v === 'Other' ? '' : v)}>
+                                                            <SelectTrigger className={fieldCls(errors.packUnit)}>
+                                                                <SelectValue placeholder="Select Unit" />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {DISPENSING_UNIT_OPTIONS.map(opt => (
+                                                                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                                                                ))}
+                                                                <SelectItem value="Other">Other...</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                        {!DISPENSING_UNIT_OPTIONS.some(o => o.value === form.packUnit) && form.packUnit !== '' && (
+                                                            <Input
+                                                                className={fieldCls(errors.packUnit)}
+                                                                value={form.packUnit}
+                                                                onChange={(e) => set('packUnit', e.target.value)}
+                                                                placeholder="Type unit"
+                                                            />
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                         <div className="flex gap-4">
                                             <div className="w-24 pl-[108px]">{errors.packSize && <p className="text-[11px] text-red-500">{errors.packSize}</p>}</div>
-                                            <div className="w-32 pl-4">{errors.packUnit && <p className="text-[11px] text-red-500">{errors.packUnit}</p>}</div>
+                                            <div className="flex-1 pl-4">{errors.packUnit && <p className="text-[11px] text-red-500">{errors.packUnit}</p>}</div>
                                         </div>
                                     </div>
                                 ) : (
@@ -318,18 +346,42 @@ export function AddNewProductDrawer({ open, onOpenChange, initialName, onSuccess
                                                     placeholder="Qty"
                                                 />
                                             </div>
-                                            <div className="w-32">
-                                                <Input
-                                                    className={fieldCls(errors.packUnit)}
-                                                    value={form.packUnit}
-                                                    onChange={(e) => set('packUnit', e.target.value)}
-                                                    placeholder="Unit Name"
-                                                />
+                                            <div className="flex-1 min-w-[150px]">
+                                                {!isEditingUnit ? (
+                                                    <div className="flex items-center gap-2 h-10 px-3 bg-gray-50 border border-gray-200 rounded-md text-sm">
+                                                        <span className="font-medium text-gray-700">{form.packUnit || 'Unit'}</span>
+                                                        <button type="button" onClick={() => setIsEditingUnit(true)} className="ml-auto p-1 text-gray-400 hover:text-blue-600 transition-colors" title="Edit Dispensing Unit">
+                                                            <Pencil className="h-3 w-3" />
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex gap-2">
+                                                        <Select value={DISPENSING_UNIT_OPTIONS.some(o => o.value === form.packUnit) ? form.packUnit : 'Other'} onValueChange={(v) => set('packUnit', v === 'Other' ? '' : v)}>
+                                                            <SelectTrigger className={fieldCls(errors.packUnit)}>
+                                                                <SelectValue placeholder="Select Unit" />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {DISPENSING_UNIT_OPTIONS.map(opt => (
+                                                                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                                                                ))}
+                                                                <SelectItem value="Other">Other...</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                        {!DISPENSING_UNIT_OPTIONS.some(o => o.value === form.packUnit) && form.packUnit !== '' && (
+                                                            <Input
+                                                                className={fieldCls(errors.packUnit)}
+                                                                value={form.packUnit}
+                                                                onChange={(e) => set('packUnit', e.target.value)}
+                                                                placeholder="Type unit"
+                                                            />
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                         <div className="flex gap-4">
                                             <div className="w-24 pl-[148px]">{errors.packSize && <p className="text-[11px] text-red-500">{errors.packSize}</p>}</div>
-                                            <div className="w-32 pl-4">{errors.packUnit && <p className="text-[11px] text-red-500">{errors.packUnit}</p>}</div>
+                                            <div className="flex-1 pl-4">{errors.packUnit && <p className="text-[11px] text-red-500">{errors.packUnit}</p>}</div>
                                         </div>
                                     </div>
                                 )}

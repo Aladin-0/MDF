@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from apps.core.permissions import IsAuthenticated, IsManagerOrAbove, CanCreatePurchases, CanEditPurchaseInvoice, CanAccessPurchases
 from rest_framework import status
 from django.db.models import Q
+from django.db import transaction
 
 from apps.purchases.models import Distributor, PurchaseInvoice
 from apps.billing.models import LedgerEntry, PaymentEntry, PaymentAllocation
@@ -122,43 +123,48 @@ class DistributorListView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
             
-        distributor = Distributor.objects.create(
-            outlet=outlet,
-            name=request.data.get('name'),
-            gstin=request.data.get('gstin'),
-            drug_license_no=request.data.get('drugLicenseNo'),
-            food_license_no=request.data.get('foodLicenseNo'),
-            phone=request.data.get('phone', ''),
-            email=request.data.get('email'),
-            address=request.data.get('address', ''),
-            city=request.data.get('city', ''),
-            state=request.data.get('state', ''),
-            credit_days=request.data.get('creditDays', 0),
-            opening_balance=Decimal(str(request.data.get('openingBalance', 0))),
-            balance_type=request.data.get('balanceType', 'CR'),
-            is_active=True,
-        )
-
-        # Auto-create the linked Sundry Creditor ledger so the distributor
-        # appears in LedgerPicker immediately and ledger.state is synced.
         try:
-            from apps.accounts.models import LedgerGroup
-            sc_group = LedgerGroup.objects.filter(outlet=outlet, name='Sundry Creditors').first()
-            if sc_group:
-                Ledger.objects.get_or_create(
+            with transaction.atomic():
+                distributor = Distributor.objects.create(
                     outlet=outlet,
-                    linked_distributor=distributor,
-                    defaults={
-                        'name': distributor.name,
-                        'group': sc_group,
-                        'phone': distributor.phone or '',
-                        'gstin': distributor.gstin or '',
-                        'address': distributor.address or '',
-                        'state': distributor.state or '',
-                    },
+                    name=request.data.get('name'),
+                    gstin=request.data.get('gstin'),
+                    drug_license_no=request.data.get('drugLicenseNo'),
+                    food_license_no=request.data.get('foodLicenseNo'),
+                    phone=request.data.get('phone', ''),
+                    email=request.data.get('email'),
+                    address=request.data.get('address', ''),
+                    city=request.data.get('city', ''),
+                    state=request.data.get('state', ''),
+                    credit_days=request.data.get('creditDays', 0),
+                    opening_balance=Decimal(str(request.data.get('openingBalance', 0))),
+                    balance_type=request.data.get('balanceType', 'CR'),
+                    is_active=True,
                 )
+
+                # Auto-create the linked Sundry Creditor ledger so the distributor
+                # appears in LedgerPicker immediately and ledger.state is synced.
+                from apps.accounts.models import LedgerGroup
+                sc_group = LedgerGroup.objects.filter(outlet=outlet, name='Sundry Creditors').first()
+                if sc_group:
+                    Ledger.objects.get_or_create(
+                        outlet=outlet,
+                        linked_distributor=distributor,
+                        defaults={
+                            'name': distributor.name,
+                            'group': sc_group,
+                            'phone': distributor.phone or '',
+                            'gstin': distributor.gstin or '',
+                            'address': distributor.address or '',
+                            'state': distributor.state or '',
+                        },
+                    )
         except Exception as e:
-            logger.warning('Could not auto-create ledger for distributor %s: %s', distributor.id, e)
+            logger.warning('Could not auto-create ledger for distributor: %s', e)
+            return Response(
+                {'error': {'code': 'LEDGER_CREATION_FAILED', 'message': f'Failed to setup distributor ledger: {str(e)}'}},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         logger.info(f"Created distributor {distributor.id} ({distributor.name})")
 
@@ -755,6 +761,34 @@ class PurchaseListView(APIView):
                     logger.info(f"Filtered to {end_date}")
                 except (ValueError, TypeError):
                     logger.warning(f"Invalid endDate format: {end_date}")
+
+            # Filter by status if provided
+            status_filter = request.query_params.get('status')
+            if status_filter and status_filter != 'all':
+                today = datetime.now().date()
+                if status_filter == 'paid':
+                    queryset = queryset.filter(outstanding__lte=0)
+                elif status_filter == 'overdue':
+                    queryset = queryset.filter(outstanding__gt=0, due_date__lt=today)
+                elif status_filter == 'partial':
+                    # Not paid, not overdue, has some amount paid
+                    queryset = queryset.filter(outstanding__gt=0, amount_paid__gt=0).filter(
+                        Q(due_date__isnull=True) | Q(due_date__gte=today)
+                    )
+                elif status_filter == 'unpaid':
+                    # Not paid, not overdue, zero amount paid
+                    queryset = queryset.filter(outstanding__gt=0, amount_paid__lte=0).filter(
+                        Q(due_date__isnull=True) | Q(due_date__gte=today)
+                    )
+                logger.info(f"Filtered by status {status_filter}")
+
+            # Filter by search if provided
+            search_query = request.query_params.get('search')
+            if search_query:
+                queryset = queryset.filter(
+                    Q(invoice_no__icontains=search_query) |
+                    Q(distributor__name__icontains=search_query)
+                )
 
             # Order by newest first
             queryset = queryset.order_by('-invoice_date', '-created_at')

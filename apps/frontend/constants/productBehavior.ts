@@ -11,3 +11,23 @@ export const PACK_TYPE_OPTIONS = [
     { value: 'jar', label: 'Jar' },
     { value: 'sachet', label: 'Sachet' },
 ] as const;
+
+export const DISPENSING_UNIT_OPTIONS = [
+    { value: 'Tablet', label: 'Tablet' },
+    { value: 'Capsule', label: 'Capsule' },
+    { value: 'Softgel', label: 'Softgel' },
+    { value: 'Syrup', label: 'Syrup' },
+    { value: 'Suspension', label: 'Suspension' },
+    { value: 'Drops', label: 'Drops' },
+    { value: 'Vial', label: 'Vial' },
+    { value: 'Bottle', label: 'Bottle' },
+    { value: 'Cream', label: 'Cream' },
+    { value: 'Gel', label: 'Gel' },
+    { value: 'Ointment', label: 'Ointment' },
+    { value: 'Tube', label: 'Tube' },
+    { value: 'Piece', label: 'Piece' },
+    { value: 'Kit', label: 'Kit' },
+    { value: 'Jar', label: 'Jar' },
+    { value: 'Sachet', label: 'Sachet' },
+    { value: 'Ampoule', label: 'Ampoule' },
+] as const;

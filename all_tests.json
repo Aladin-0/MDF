@@ -1,0 +1,1514 @@
+[
+  {
+    "name": "test_lookup_by_pin_success",
+    "file": "apps/backend/apps/accounts/tests/test_pin_auth.py"
+  },
+  {
+    "name": "test_lookup_by_pin_failure",
+    "file": "apps/backend/apps/accounts/tests/test_pin_auth.py"
+  },
+  {
+    "name": "test_direct_revise_modifies_and_logs",
+    "file": "apps/backend/apps/accounts/tests/test_debit_note_mod.py"
+  },
+  {
+    "name": "test_unauthorized_user_cannot_edit",
+    "file": "apps/backend/apps/accounts/tests/test_debit_note_mod.py"
+  },
+  {
+    "name": "test_voucher_revise_logs_diff",
+    "file": "apps/backend/apps/accounts/tests/test_voucher_mod.py"
+  },
+  {
+    "name": "test_voucher_payment_mode_switch",
+    "file": "apps/backend/apps/accounts/tests/test_voucher_mod.py"
+  },
+  {
+    "name": "test_voucher_ledger_rewrite",
+    "file": "apps/backend/apps/accounts/tests/test_voucher_mod.py"
+  },
+  {
+    "name": "test_voucher_invoice_link",
+    "file": "apps/backend/apps/accounts/tests/test_voucher_mod.py"
+  },
+  {
+    "name": "test_voucher_invoice_unlink",
+    "file": "apps/backend/apps/accounts/tests/test_voucher_mod.py"
+  },
+  {
+    "name": "test_voucher_validation_reason_code_missing",
+    "file": "apps/backend/apps/accounts/tests/test_voucher_mod.py"
+  },
+  {
+    "name": "test_voucher_validation_explanation_too_short",
+    "file": "apps/backend/apps/accounts/tests/test_voucher_mod.py"
+  },
+  {
+    "name": "test_voucher_rollback_business_update_fails",
+    "file": "apps/backend/apps/accounts/tests/test_voucher_mod.py"
+  },
+  {
+    "name": "test_voucher_rollback_audit_write_fails",
+    "file": "apps/backend/apps/accounts/tests/test_voucher_mod.py"
+  },
+  {
+    "name": "test_voucher_no_duplicate_journal_entries",
+    "file": "apps/backend/apps/accounts/tests/test_voucher_mod.py"
+  },
+  {
+    "name": "test_voucher_unauthorized",
+    "file": "apps/backend/apps/accounts/tests/test_voucher_mod.py"
+  },
+  {
+    "name": "test_voucher_modify_bill_allocation",
+    "file": "apps/backend/apps/accounts/tests/test_voucher_bills.py"
+  },
+  {
+    "name": "test_pending_bills_view_with_exclude_voucher",
+    "file": "apps/backend/apps/accounts/tests/test_voucher_bills.py"
+  },
+  {
+    "name": "test_purchase_edit_10_to_20_with_4_sold",
+    "file": "apps/backend/apps/purchases/tests/test_purchase_edit_stock.py"
+  },
+  {
+    "name": "test_purchase_edit_10_to_12_with_4_sold",
+    "file": "apps/backend/apps/purchases/tests/test_purchase_edit_stock.py"
+  },
+  {
+    "name": "test_purchase_edit_10_to_10_noop_with_4_sold",
+    "file": "apps/backend/apps/purchases/tests/test_purchase_edit_stock.py"
+  },
+  {
+    "name": "test_purchase_edit_10_to_6_with_4_sold",
+    "file": "apps/backend/apps/purchases/tests/test_purchase_edit_stock.py"
+  },
+  {
+    "name": "test_purchase_edit_10_to_3_with_4_sold_fails",
+    "file": "apps/backend/apps/purchases/tests/test_purchase_edit_stock.py"
+  },
+  {
+    "name": "test_multiple_items_and_batches",
+    "file": "apps/backend/apps/purchases/tests/test_purchase_edit_stock.py"
+  },
+  {
+    "name": "test_purchase_edit_concurrency",
+    "file": "apps/backend/apps/purchases/tests/test_purchase_edit_concurrency.py"
+  },
+  {
+    "name": "test_purchase_edit_happy_path",
+    "file": "apps/backend/apps/purchases/tests/test_purchase_edit_migration.py"
+  },
+  {
+    "name": "test_purchase_edit_amount_tax_update",
+    "file": "apps/backend/apps/purchases/tests/test_purchase_edit_migration.py"
+  },
+  {
+    "name": "test_purchase_edit_line_item_update",
+    "file": "apps/backend/apps/purchases/tests/test_purchase_edit_migration.py"
+  },
+  {
+    "name": "test_purchase_edit_supplier_outstanding_recalculation",
+    "file": "apps/backend/apps/purchases/tests/test_purchase_edit_migration.py"
+  },
+  {
+    "name": "test_purchase_edit_inventory_valuation_consistency",
+    "file": "apps/backend/apps/purchases/tests/test_purchase_edit_migration.py"
+  },
+  {
+    "name": "test_purchase_edit_missing_audit_reason_validation",
+    "file": "apps/backend/apps/purchases/tests/test_purchase_edit_migration.py"
+  },
+  {
+    "name": "test_purchase_edit_atomic_rollback_on_business_failure",
+    "file": "apps/backend/apps/purchases/tests/test_purchase_edit_migration.py"
+  },
+  {
+    "name": "test_purchase_edit_atomic_rollback_on_audit_failure",
+    "file": "apps/backend/apps/purchases/tests/test_purchase_edit_migration.py"
+  },
+  {
+    "name": "test_purchase_create_api",
+    "file": "apps/backend/apps/purchases/tests/test_purchases_api.py"
+  },
+  {
+    "name": "test_purchase_update_api",
+    "file": "apps/backend/apps/purchases/tests/test_purchases_api.py"
+  },
+  {
+    "name": "test_create_sale_with_empty_items_returns_400",
+    "file": "apps/backend/apps/billing/tests/test_empty_items_validation.py"
+  },
+  {
+    "name": "test_create_sale_with_no_items_key_returns_400",
+    "file": "apps/backend/apps/billing/tests/test_empty_items_validation.py"
+  },
+  {
+    "name": "test_revise_sale_with_empty_items_returns_400",
+    "file": "apps/backend/apps/billing/tests/test_empty_items_validation.py"
+  },
+  {
+    "name": "test_revise_sale_with_no_items_key_returns_400",
+    "file": "apps/backend/apps/billing/tests/test_empty_items_validation.py"
+  },
+  {
+    "name": "test_create_quotation_success",
+    "file": "apps/backend/apps/billing/tests/test_quotation_api.py"
+  },
+  {
+    "name": "test_update_quotation",
+    "file": "apps/backend/apps/billing/tests/test_quotation_api.py"
+  },
+  {
+    "name": "test_convert_quotation_to_invoice",
+    "file": "apps/backend/apps/billing/tests/test_quotation_api.py"
+  },
+  {
+    "name": "test_convert_quotation_with_schedule_h",
+    "file": "apps/backend/apps/billing/tests/test_quotation_api.py"
+  },
+  {
+    "name": "test_cannot_edit_converted_quotation",
+    "file": "apps/backend/apps/billing/tests/test_quotation_api.py"
+  },
+  {
+    "name": "test_walk_in_customer_quotation",
+    "file": "apps/backend/apps/billing/tests/test_quotation_api.py"
+  },
+  {
+    "name": "test_create_sale_from_quotation_frontend_flow",
+    "file": "apps/backend/apps/billing/tests/test_quotation_api.py"
+  },
+  {
+    "name": "test_overpayment_creates_customer_advance",
+    "file": "apps/backend/apps/billing/tests/test_paid_correction.py"
+  },
+  {
+    "name": "test_journal_balanced_after_paid_correction",
+    "file": "apps/backend/apps/billing/tests/test_paid_correction.py"
+  },
+  {
+    "name": "test_billing_staff_cannot_do_paid_correction",
+    "file": "apps/backend/apps/billing/tests/test_paid_correction.py"
+  },
+  {
+    "name": "test_sale_return_revise_logs_diff",
+    "file": "apps/backend/apps/billing/tests/test_sale_return_mod.py"
+  },
+  {
+    "name": "test_sale_return_unauthorized",
+    "file": "apps/backend/apps/billing/tests/test_sale_return_mod.py"
+  },
+  {
+    "name": "test_missing_gst_ledger_raises_error",
+    "file": "apps/backend/apps/billing/tests/test_packet_b.py"
+  },
+  {
+    "name": "test_select_for_update_called_on_create",
+    "file": "apps/backend/apps/billing/tests/test_packet_b.py"
+  },
+  {
+    "name": "test_select_for_update_called_on_modify",
+    "file": "apps/backend/apps/billing/tests/test_packet_b.py"
+  },
+  {
+    "name": "test_missing_gst_ledger_returns_400_on_create",
+    "file": "apps/backend/apps/billing/tests/test_packet_b.py"
+  },
+  {
+    "name": "test_missing_gst_ledger_returns_400_on_modify",
+    "file": "apps/backend/apps/billing/tests/test_packet_b.py"
+  },
+  {
+    "name": "test_batch_pre_locking_uses_sorted_bulk_query",
+    "file": "apps/backend/apps/billing/tests/test_packet_b.py"
+  },
+  {
+    "name": "test_sale_create_succeeds_with_two_batch_items",
+    "file": "apps/backend/apps/billing/tests/test_packet_b.py"
+  },
+  {
+    "name": "test_sale_creation_concurrency",
+    "file": "apps/backend/apps/billing/tests/test_billing_concurrency.py"
+  },
+  {
+    "name": "test_block_edit_invoice_with_return",
+    "file": "apps/backend/apps/billing/tests/test_revision_blocks.py"
+  },
+  {
+    "name": "test_block_edit_fully_paid_invoice",
+    "file": "apps/backend/apps/billing/tests/test_revision_blocks.py"
+  },
+  {
+    "name": "test_block_edit_invoice_with_later_payment",
+    "file": "apps/backend/apps/billing/tests/test_revision_blocks.py"
+  },
+  {
+    "name": "test_block_fires_before_any_write",
+    "file": "apps/backend/apps/billing/tests/test_revision_blocks.py"
+  },
+  {
+    "name": "test_modification_options_admin",
+    "file": "apps/backend/apps/billing/tests/test_modification_options.py"
+  },
+  {
+    "name": "test_modification_options_blocked",
+    "file": "apps/backend/apps/billing/tests/test_modification_options.py"
+  },
+  {
+    "name": "test_item_discount_only",
+    "file": "apps/backend/apps/billing/tests/test_discount_math.py"
+  },
+  {
+    "name": "test_invoice_extra_discount_only",
+    "file": "apps/backend/apps/billing/tests/test_discount_math.py"
+  },
+  {
+    "name": "test_item_and_invoice_discount_combined",
+    "file": "apps/backend/apps/billing/tests/test_discount_math.py"
+  },
+  {
+    "name": "test_no_discount",
+    "file": "apps/backend/apps/billing/tests/test_discount_math.py"
+  },
+  {
+    "name": "test_direct_revise_unpaid_bill",
+    "file": "apps/backend/apps/billing/tests/test_revise_api.py"
+  },
+  {
+    "name": "test_revise_blocked_if_paid",
+    "file": "apps/backend/apps/billing/tests/test_revise_api.py"
+  },
+  {
+    "name": "test_revise_blocked_if_no_permission",
+    "file": "apps/backend/apps/billing/tests/test_revise_api.py"
+  },
+  {
+    "name": "test_paid_correction_success",
+    "file": "apps/backend/apps/billing/tests/test_revise_api.py"
+  },
+  {
+    "name": "test_paid_correction_blocked_if_no_permission",
+    "file": "apps/backend/apps/billing/tests/test_revise_api.py"
+  },
+  {
+    "name": "test_cancel_and_reissue_success",
+    "file": "apps/backend/apps/billing/tests/test_revise_api.py"
+  },
+  {
+    "name": "test_cancel_and_reissue_blocked_if_no_permission",
+    "file": "apps/backend/apps/billing/tests/test_revise_api.py"
+  },
+  {
+    "name": "test_sale_revision_history_api",
+    "file": "apps/backend/apps/billing/tests/test_revise_api.py"
+  },
+  {
+    "name": "test_sale_revision_report_and_export",
+    "file": "apps/backend/apps/billing/tests/test_revise_api.py"
+  },
+  {
+    "name": "test_direct_revise_reduces_qty",
+    "file": "apps/backend/apps/billing/tests/test_direct_revise.py"
+  },
+  {
+    "name": "test_reason_required_for_revise",
+    "file": "apps/backend/apps/billing/tests/test_direct_revise.py"
+  },
+  {
+    "name": "test_second_revision_creates_r2",
+    "file": "apps/backend/apps/billing/tests/test_direct_revise.py"
+  },
+  {
+    "name": "test_add_item_in_direct_revise",
+    "file": "apps/backend/apps/billing/tests/test_direct_revise.py"
+  },
+  {
+    "name": "test_remove_item_in_direct_revise",
+    "file": "apps/backend/apps/billing/tests/test_direct_revise.py"
+  },
+  {
+    "name": "test_sale_create_api",
+    "file": "apps/backend/apps/billing/tests/test_billing_api.py"
+  },
+  {
+    "name": "test_sale_create_invalid_payload",
+    "file": "apps/backend/apps/billing/tests/test_billing_api.py"
+  },
+  {
+    "name": "test_audit_log_full_diff",
+    "file": "apps/backend/apps/billing/tests/test_revision_audit.py"
+  },
+  {
+    "name": "test_audit_log_not_written_on_rollback",
+    "file": "apps/backend/apps/billing/tests/test_revision_audit.py"
+  },
+  {
+    "name": "test_no_revision_record_on_blocked",
+    "file": "apps/backend/apps/billing/tests/test_revision_audit.py"
+  },
+  {
+    "name": "test_cancel_and_reissue_links_invoices",
+    "file": "apps/backend/apps/billing/tests/test_cancel_reissue.py"
+  },
+  {
+    "name": "test_cancelled_invoice_cannot_be_modified",
+    "file": "apps/backend/apps/billing/tests/test_cancel_reissue.py"
+  },
+  {
+    "name": "test_cancel_reissue_stock_integrity",
+    "file": "apps/backend/apps/billing/tests/test_cancel_reissue.py"
+  },
+  {
+    "name": "test_header_correction_on_paid_invoice",
+    "file": "apps/backend/apps/billing/tests/test_header_correction.py"
+  },
+  {
+    "name": "test_header_correction_cannot_change_total",
+    "file": "apps/backend/apps/billing/tests/test_header_correction.py"
+  },
+  {
+    "name": "test_revisions_invalid_outlet_id_no_500",
+    "file": "apps/backend/apps/billing/tests/test_revisions_regression.py"
+  },
+  {
+    "name": "test_sale_revisions_invalid_uuid_returns_json_404",
+    "file": "apps/backend/apps/billing/tests/test_revisions_regression.py"
+  },
+  {
+    "name": "test_sale_revisions_valid_uuid_not_found_returns_json_404",
+    "file": "apps/backend/apps/billing/tests/test_revisions_regression.py"
+  },
+  {
+    "name": "test_readonly_user_cannot_modify",
+    "file": "apps/backend/apps/billing/tests/test_revision_permissions.py"
+  },
+  {
+    "name": "test_billing_staff_allowed_actions",
+    "file": "apps/backend/apps/billing/tests/test_revision_permissions.py"
+  },
+  {
+    "name": "test_manager_actions_on_paid_invoice",
+    "file": "apps/backend/apps/billing/tests/test_revision_permissions.py"
+  },
+  {
+    "name": "test_backend_enforces_permission_regardless_of_frontend",
+    "file": "apps/backend/apps/billing/tests/test_revision_permissions.py"
+  },
+  {
+    "name": "test_helper_admin_bypass",
+    "file": "apps/backend/apps/billing/tests/test_bill_revision_permissions.py"
+  },
+  {
+    "name": "test_helper_staff_with_permission",
+    "file": "apps/backend/apps/billing/tests/test_bill_revision_permissions.py"
+  },
+  {
+    "name": "test_helper_staff_without_permission",
+    "file": "apps/backend/apps/billing/tests/test_bill_revision_permissions.py"
+  },
+  {
+    "name": "test_helper_unauthenticated_user",
+    "file": "apps/backend/apps/billing/tests/test_bill_revision_permissions.py"
+  },
+  {
+    "name": "test_permission_class_allow",
+    "file": "apps/backend/apps/billing/tests/test_bill_revision_permissions.py"
+  },
+  {
+    "name": "test_permission_class_deny",
+    "file": "apps/backend/apps/billing/tests/test_bill_revision_permissions.py"
+  },
+  {
+    "name": "test_permission_class_no_required_perm_attribute",
+    "file": "apps/backend/apps/billing/tests/test_bill_revision_permissions.py"
+  },
+  {
+    "name": "test_a1_edit_invoice_with_return_blocked",
+    "file": "apps/backend/apps/billing/tests/test_sale_modification.py"
+  },
+  {
+    "name": "test_a2_edit_invoice_with_later_payment_blocked",
+    "file": "apps/backend/apps/billing/tests/test_sale_modification.py"
+  },
+  {
+    "name": "test_a3_edit_fully_paid_invoice_blocked",
+    "file": "apps/backend/apps/billing/tests/test_sale_modification.py"
+  },
+  {
+    "name": "test_b1_overpayment_converted_to_advance",
+    "file": "apps/backend/apps/billing/tests/test_sale_modification.py"
+  },
+  {
+    "name": "test_c3_discount_stacking_consistency",
+    "file": "apps/backend/apps/billing/tests/test_sale_modification.py"
+  },
+  {
+    "name": "test_gst_tax_calculation_matrix",
+    "file": "apps/backend/apps/billing/tests/test_phase0_gst.py"
+  },
+  {
+    "name": "test_quotation_convert_and_sale_create_require_same_fields",
+    "file": "apps/backend/apps/billing/tests/test_api_schemas.py"
+  },
+  {
+    "name": "test_build_invoice_snapshot",
+    "file": "apps/backend/apps/billing/tests/test_revision_service.py"
+  },
+  {
+    "name": "test_compute_bill_revision_diff",
+    "file": "apps/backend/apps/billing/tests/test_revision_service.py"
+  },
+  {
+    "name": "test_generate_revision_number",
+    "file": "apps/backend/apps/billing/tests/test_revision_service.py"
+  },
+  {
+    "name": "test_create_bill_revision_record",
+    "file": "apps/backend/apps/billing/tests/test_revision_service.py"
+  },
+  {
+    "name": "test_return_aware_block_qty_below_returned",
+    "file": "apps/backend/apps/billing/tests/test_return_aware_correction.py"
+  },
+  {
+    "name": "test_return_aware_allow_qty_above_returned",
+    "file": "apps/backend/apps/billing/tests/test_return_aware_correction.py"
+  },
+  {
+    "name": "test_cannot_remove_item_with_existing_return",
+    "file": "apps/backend/apps/billing/tests/test_return_aware_correction.py"
+  },
+  {
+    "name": "test_sale_detail_put_happy_path",
+    "file": "apps/backend/apps/billing/tests/test_sale_edit_migration.py"
+  },
+  {
+    "name": "test_sale_detail_put_audit_write",
+    "file": "apps/backend/apps/billing/tests/test_sale_edit_migration.py"
+  },
+  {
+    "name": "test_sale_detail_put_rollback_on_audit_failure",
+    "file": "apps/backend/apps/billing/tests/test_sale_edit_migration.py"
+  },
+  {
+    "name": "test_sale_revise_standard_correction_happy_path",
+    "file": "apps/backend/apps/billing/tests/test_sale_edit_migration.py"
+  },
+  {
+    "name": "test_sale_revise_cancel_reissue_happy_path",
+    "file": "apps/backend/apps/billing/tests/test_sale_edit_migration.py"
+  },
+  {
+    "name": "test_sale_revise_cancel_reissue_metadata_persistence",
+    "file": "apps/backend/apps/billing/tests/test_sale_edit_migration.py"
+  },
+  {
+    "name": "test_sale_update_rollback_on_business_failure",
+    "file": "apps/backend/apps/billing/tests/test_sale_edit_migration.py"
+  },
+  {
+    "name": "test_sale_revise_rollback_on_audit_failure",
+    "file": "apps/backend/apps/billing/tests/test_sale_edit_migration.py"
+  },
+  {
+    "name": "test_history_api_read_path",
+    "file": "apps/backend/apps/billing/tests/test_sale_edit_migration.py"
+  },
+  {
+    "name": "test_history_ui_rendering_parity",
+    "file": "apps/backend/apps/billing/tests/test_sale_edit_migration.py"
+  },
+  {
+    "name": "test_sale_success_payload_shape_parity",
+    "file": "apps/backend/apps/billing/tests/test_sale_edit_migration.py"
+  },
+  {
+    "name": "test_data",
+    "file": "apps/backend/apps/billing/tests/test_measured_rollback_regression.py"
+  },
+  {
+    "name": "test_inventory_list_api",
+    "file": "apps/backend/apps/billing/tests/test_measured_rollback_regression.py"
+  },
+  {
+    "name": "test_bottle_purchase_and_billing",
+    "file": "apps/backend/apps/billing/tests/test_measured_rollback_regression.py"
+  },
+  {
+    "name": "test_accounts_factories",
+    "file": "apps/backend/apps/inventory/tests/test_factories.py"
+  },
+  {
+    "name": "test_inventory_factories",
+    "file": "apps/backend/apps/inventory/tests/test_factories.py"
+  },
+  {
+    "name": "test_billing_factories",
+    "file": "apps/backend/apps/inventory/tests/test_factories.py"
+  },
+  {
+    "name": "test_purchases_factories",
+    "file": "apps/backend/apps/inventory/tests/test_factories.py"
+  },
+  {
+    "name": "test_stock_invariant_exact_deduction",
+    "file": "apps/backend/apps/inventory/tests/test_stock_invariants.py"
+  },
+  {
+    "name": "test_stock_invariant_negative_stock_guard",
+    "file": "apps/backend/apps/inventory/tests/test_stock_invariants.py"
+  },
+  {
+    "name": "test_stock_invariant_deterministic_rebuild",
+    "file": "apps/backend/apps/inventory/tests/test_stock_invariants.py"
+  },
+  {
+    "name": "test_login_log_created_via_celery_eager",
+    "file": "apps/backend/apps/audit/tests/test_async_logging.py"
+  },
+  {
+    "name": "test_crud_log_created_via_celery_eager",
+    "file": "apps/backend/apps/audit/tests/test_async_logging.py"
+  },
+  {
+    "name": "test_log_not_lost_if_celery_unavailable",
+    "file": "apps/backend/apps/audit/tests/test_async_logging.py"
+  },
+  {
+    "name": "test_flat_voucher_diff",
+    "file": "apps/backend/apps/audit/tests/test_core_diff_engine.py"
+  },
+  {
+    "name": "test_nested_invoice_diff",
+    "file": "apps/backend/apps/audit/tests/test_core_diff_engine.py"
+  },
+  {
+    "name": "test_log_timestamp_is_auto_set",
+    "file": "apps/backend/apps/audit/tests/test_immutability.py"
+  },
+  {
+    "name": "test_log_entry_persists_after_user_deletion",
+    "file": "apps/backend/apps/audit/tests/test_immutability.py"
+  },
+  {
+    "name": "test_two_requests_get_different_request_ids",
+    "file": "apps/backend/apps/audit/tests/test_immutability.py"
+  },
+  {
+    "name": "test_immutability_known_gap",
+    "file": "apps/backend/apps/audit/tests/test_immutability.py"
+  },
+  {
+    "name": "test_is_super_admin_blocks_unauthenticated",
+    "file": "apps/backend/apps/audit/tests/test_permissions.py"
+  },
+  {
+    "name": "test_is_super_admin_blocks_regular_staff",
+    "file": "apps/backend/apps/audit/tests/test_permissions.py"
+  },
+  {
+    "name": "test_is_super_admin_blocks_outlet_admin",
+    "file": "apps/backend/apps/audit/tests/test_permissions.py"
+  },
+  {
+    "name": "test_is_super_admin_allows_super_admin",
+    "file": "apps/backend/apps/audit/tests/test_permissions.py"
+  },
+  {
+    "name": "test_is_super_admin_blocks_django_superuser_without_role",
+    "file": "apps/backend/apps/audit/tests/test_permissions.py"
+  },
+  {
+    "name": "test_super_admin_can_view_logs",
+    "file": "apps/backend/apps/audit/tests/test_api.py"
+  },
+  {
+    "name": "test_staff_admin_cannot_view_logs",
+    "file": "apps/backend/apps/audit/tests/test_api.py"
+  },
+  {
+    "name": "test_unauthenticated_user_cannot_view_logs",
+    "file": "apps/backend/apps/audit/tests/test_api.py"
+  },
+  {
+    "name": "test_non_admin_cannot_list_logs",
+    "file": "apps/backend/apps/audit/tests/test_api.py"
+  },
+  {
+    "name": "test_filter_by_module",
+    "file": "apps/backend/apps/audit/tests/test_api.py"
+  },
+  {
+    "name": "test_filter_by_action",
+    "file": "apps/backend/apps/audit/tests/test_api.py"
+  },
+  {
+    "name": "test_filter_by_entity_type",
+    "file": "apps/backend/apps/audit/tests/test_api.py"
+  },
+  {
+    "name": "test_filter_by_user",
+    "file": "apps/backend/apps/audit/tests/test_api.py"
+  },
+  {
+    "name": "test_logs_cannot_be_created_via_api",
+    "file": "apps/backend/apps/audit/tests/test_api.py"
+  },
+  {
+    "name": "test_logs_cannot_be_deleted_via_api",
+    "file": "apps/backend/apps/audit/tests/test_api.py"
+  },
+  {
+    "name": "test_logs_cannot_be_updated_via_api",
+    "file": "apps/backend/apps/audit/tests/test_api.py"
+  },
+  {
+    "name": "test_super_admin_can_export_logs",
+    "file": "apps/backend/apps/audit/tests/test_api.py"
+  },
+  {
+    "name": "test_staff_admin_cannot_export_logs",
+    "file": "apps/backend/apps/audit/tests/test_api.py"
+  },
+  {
+    "name": "test_update_log_has_old_and_new",
+    "file": "apps/backend/apps/audit/tests/test_changes_diff.py"
+  },
+  {
+    "name": "test_unchanged_fields_not_in_diff",
+    "file": "apps/backend/apps/audit/tests/test_changes_diff.py"
+  },
+  {
+    "name": "test_create_log_has_empty_or_null_changes",
+    "file": "apps/backend/apps/audit/tests/test_changes_diff.py"
+  },
+  {
+    "name": "test_delete_log_captures_entity_label",
+    "file": "apps/backend/apps/audit/tests/test_changes_diff.py"
+  },
+  {
+    "name": "test_multiple_field_changes_all_in_diff",
+    "file": "apps/backend/apps/audit/tests/test_changes_diff.py"
+  },
+  {
+    "name": "test_password_not_in_changes_json",
+    "file": "apps/backend/apps/audit/tests/test_sensitive_fields.py"
+  },
+  {
+    "name": "test_staff_pin_not_in_changes_json",
+    "file": "apps/backend/apps/audit/tests/test_sensitive_fields.py"
+  },
+  {
+    "name": "test_token_not_in_changes_json",
+    "file": "apps/backend/apps/audit/tests/test_sensitive_fields.py"
+  },
+  {
+    "name": "test_sensitive_fields_not_in_log_even_if_changed",
+    "file": "apps/backend/apps/audit/tests/test_sensitive_fields.py"
+  },
+  {
+    "name": "test_audit_context_defaults",
+    "file": "apps/backend/apps/audit/tests/test_core_context.py"
+  },
+  {
+    "name": "test_audit_context_set_and_reset",
+    "file": "apps/backend/apps/audit/tests/test_core_context.py"
+  },
+  {
+    "name": "test_audit_context_middleware_unauthenticated",
+    "file": "apps/backend/apps/audit/tests/test_core_context.py"
+  },
+  {
+    "name": "test_audit_context_middleware_authenticated",
+    "file": "apps/backend/apps/audit/tests/test_core_context.py"
+  },
+  {
+    "name": "test_product_create_logged",
+    "file": "apps/backend/apps/audit/tests/test_signals.py"
+  },
+  {
+    "name": "test_product_update_logged_with_diff",
+    "file": "apps/backend/apps/audit/tests/test_signals.py"
+  },
+  {
+    "name": "test_product_delete_logged",
+    "file": "apps/backend/apps/audit/tests/test_signals.py"
+  },
+  {
+    "name": "test_batch_create_logged",
+    "file": "apps/backend/apps/audit/tests/test_signals.py"
+  },
+  {
+    "name": "test_batch_update_logs_qty_change",
+    "file": "apps/backend/apps/audit/tests/test_signals.py"
+  },
+  {
+    "name": "test_invoice_create_logged",
+    "file": "apps/backend/apps/audit/tests/test_signals.py"
+  },
+  {
+    "name": "test_invoice_update_logged",
+    "file": "apps/backend/apps/audit/tests/test_signals.py"
+  },
+  {
+    "name": "test_invoice_cancel_logged_as_cancelled",
+    "file": "apps/backend/apps/audit/tests/test_signals.py"
+  },
+  {
+    "name": "test_purchase_invoice_create_logged",
+    "file": "apps/backend/apps/audit/tests/test_signals.py"
+  },
+  {
+    "name": "test_purchase_invoice_update_logged",
+    "file": "apps/backend/apps/audit/tests/test_signals.py"
+  },
+  {
+    "name": "test_customer_create_logged",
+    "file": "apps/backend/apps/audit/tests/test_signals.py"
+  },
+  {
+    "name": "test_staff_update_logs_diff",
+    "file": "apps/backend/apps/audit/tests/test_signals.py"
+  },
+  {
+    "name": "test_ip_captured_from_remote_addr",
+    "file": "apps/backend/apps/audit/tests/test_middleware.py"
+  },
+  {
+    "name": "test_ip_captured_from_x_forwarded_for",
+    "file": "apps/backend/apps/audit/tests/test_middleware.py"
+  },
+  {
+    "name": "test_endpoint_captured",
+    "file": "apps/backend/apps/audit/tests/test_middleware.py"
+  },
+  {
+    "name": "test_http_method_captured",
+    "file": "apps/backend/apps/audit/tests/test_middleware.py"
+  },
+  {
+    "name": "test_user_agent_captured",
+    "file": "apps/backend/apps/audit/tests/test_middleware.py"
+  },
+  {
+    "name": "test_request_id_captured_from_header",
+    "file": "apps/backend/apps/audit/tests/test_middleware.py"
+  },
+  {
+    "name": "test_request_id_generated_if_missing",
+    "file": "apps/backend/apps/audit/tests/test_middleware.py"
+  },
+  {
+    "name": "test_context_cleared_between_requests",
+    "file": "apps/backend/apps/audit/tests/test_middleware.py"
+  },
+  {
+    "name": "test_bill_revision_creates_activity_log",
+    "file": "apps/backend/apps/audit/tests/test_billing_revision.py"
+  },
+  {
+    "name": "test_bill_revision_log_contains_reason",
+    "file": "apps/backend/apps/audit/tests/test_billing_revision.py"
+  },
+  {
+    "name": "test_modification_blocked_creates_log",
+    "file": "apps/backend/apps/audit/tests/test_billing_revision.py"
+  },
+  {
+    "name": "test_invoice_cancelled_action_logged",
+    "file": "apps/backend/apps/audit/tests/test_billing_revision.py"
+  },
+  {
+    "name": "test_successful_login_creates_log",
+    "file": "apps/backend/apps/audit/tests/test_auth_events.py"
+  },
+  {
+    "name": "test_successful_login_captures_ip",
+    "file": "apps/backend/apps/audit/tests/test_auth_events.py"
+  },
+  {
+    "name": "test_successful_login_captures_user_agent",
+    "file": "apps/backend/apps/audit/tests/test_auth_events.py"
+  },
+  {
+    "name": "test_failed_login_wrong_pin_creates_log",
+    "file": "apps/backend/apps/audit/tests/test_auth_events.py"
+  },
+  {
+    "name": "test_failed_login_unknown_user_creates_log",
+    "file": "apps/backend/apps/audit/tests/test_auth_events.py"
+  },
+  {
+    "name": "test_failed_login_captures_ip",
+    "file": "apps/backend/apps/audit/tests/test_auth_events.py"
+  },
+  {
+    "name": "test_failed_login_user_field_is_null_or_correct",
+    "file": "apps/backend/apps/audit/tests/test_auth_events.py"
+  },
+  {
+    "name": "test_logout_creates_log",
+    "file": "apps/backend/apps/audit/tests/test_auth_events.py"
+  },
+  {
+    "name": "test_logout_captures_ip",
+    "file": "apps/backend/apps/audit/tests/test_auth_events.py"
+  },
+  {
+    "name": "test_multiple_failed_logins_all_logged",
+    "file": "apps/backend/apps/audit/tests/test_auth_events.py"
+  },
+  {
+    "name": "test_transaction_rollback_on_error",
+    "file": "apps/backend/apps/audit/tests/test_atomic_rollbacks.py"
+  },
+  {
+    "name": "test_each_login_logged_separately",
+    "file": "apps/backend/apps/audit/tests/test_user_timeline.py"
+  },
+  {
+    "name": "test_user_a_logs_do_not_mix_with_user_b",
+    "file": "apps/backend/apps/audit/tests/test_user_timeline.py"
+  },
+  {
+    "name": "test_api_filter_by_user_returns_correct_logs",
+    "file": "apps/backend/apps/audit/tests/test_user_timeline.py"
+  },
+  {
+    "name": "test_logs_ordered_newest_first",
+    "file": "apps/backend/apps/audit/tests/test_user_timeline.py"
+  },
+  {
+    "name": "Create Credit 7 Days",
+    "file": "apps/frontend/tests/e2e/test_credit_days.spec.ts"
+  },
+  {
+    "name": "Create Cash",
+    "file": "apps/frontend/tests/e2e/test_credit_days.spec.ts"
+  },
+  {
+    "name": "Edit flow UI hydration, modification and persistence",
+    "file": "apps/frontend/tests/e2e/edit-sale-bill.spec.ts"
+  },
+  {
+    "name": "Complete billing journey",
+    "file": "apps/frontend/tests/e2e/billing.spec.ts"
+  },
+  {
+    "name": "admin can toggle margin visibility with Ctrl+Shift+M",
+    "file": "apps/frontend/tests/e2e/margin-visibility.spec.ts"
+  },
+  {
+    "name": "Create basic walk-in sale with single item",
+    "file": "apps/frontend/tests/e2e/create-sale-bill.spec.ts"
+  },
+  {
+    "name": "Create sale with fractional/loose quantities and discount",
+    "file": "apps/frontend/tests/e2e/create-sale-bill.spec.ts"
+  },
+  {
+    "name": "Empty items rejected gracefully",
+    "file": "apps/frontend/tests/e2e/create-sale-bill.spec.ts"
+  },
+  {
+    "name": "debug purchase form",
+    "file": "apps/frontend/tests/e2e/test_form_validation.spec.ts"
+  },
+  {
+    "name": "Modify Flow Verification",
+    "file": "apps/frontend/tests/e2e/smoke-modify.spec.ts"
+  },
+  {
+    "name": "create-sale-bill",
+    "file": "apps/frontend/tests/e2e/smoke.spec.ts"
+  },
+  {
+    "name": "edit-sale-bill",
+    "file": "apps/frontend/tests/e2e/smoke.spec.ts"
+  },
+  {
+    "name": "create-purchase",
+    "file": "apps/frontend/tests/e2e/smoke.spec.ts"
+  },
+  {
+    "name": "Create and convert quotation",
+    "file": "apps/frontend/tests/e2e/quotation.spec.ts"
+  },
+  {
+    "name": "End-to-End flow remains unaffected by modification tracking rollout",
+    "file": "apps/frontend/tests/e2e/regression/cross-module-smoke.spec.ts"
+  },
+  {
+    "name": "Reports data aggregates correctly after modifications",
+    "file": "apps/frontend/tests/e2e/regression/cross-module-smoke.spec.ts"
+  },
+  {
+    "name": "Create & Edit (Header + Items) \u2014 assert exactly one revision entry with diff captured",
+    "file": "apps/frontend/tests/e2e/modification-tracking/purchase-entry-mod.spec.ts"
+  },
+  {
+    "name": "Stock Reversal & Reapplication Math \u2014 stock change is exact",
+    "file": "apps/frontend/tests/e2e/modification-tracking/purchase-entry-mod.spec.ts"
+  },
+  {
+    "name": "Safe Blocking of Over-Consumption \u2014 blocked safely",
+    "file": "apps/frontend/tests/e2e/modification-tracking/purchase-entry-mod.spec.ts"
+  },
+  {
+    "name": "Unauthorized user cannot edit purchases \u2014 403 Forbidden",
+    "file": "apps/frontend/tests/e2e/modification-tracking/purchase-entry-mod.spec.ts"
+  },
+  {
+    "name": "Manager without granular flag is blocked from editing settled purchase",
+    "file": "apps/frontend/tests/e2e/modification-tracking/purchase-entry-mod.spec.ts"
+  },
+  {
+    "name": "Create a new record \u2014 assert no false modified history",
+    "file": "apps/frontend/tests/e2e/modification-tracking/sale-return-mod.spec.ts"
+  },
+  {
+    "name": "Edit a single field \u2014 assert exactly one revision entry",
+    "file": "apps/frontend/tests/e2e/modification-tracking/sale-return-mod.spec.ts"
+  },
+  {
+    "name": "Edit multiple fields in one save",
+    "file": "apps/frontend/tests/e2e/modification-tracking/sale-return-mod.spec.ts"
+  },
+  {
+    "name": "Edit line/item-level data",
+    "file": "apps/frontend/tests/e2e/modification-tracking/sale-return-mod.spec.ts"
+  },
+  {
+    "name": "Edit the same record multiple times in sequence",
+    "file": "apps/frontend/tests/e2e/modification-tracking/sale-return-mod.spec.ts"
+  },
+  {
+    "name": "Void/cancel/delete the record",
+    "file": "apps/frontend/tests/e2e/modification-tracking/sale-return-mod.spec.ts"
+  },
+  {
+    "name": "Edit stock-affecting record mathematically correctly",
+    "file": "apps/frontend/tests/e2e/modification-tracking/sale-return-mod.spec.ts"
+  },
+  {
+    "name": "Edit a record that affects ledger/account balances",
+    "file": "apps/frontend/tests/e2e/modification-tracking/sale-return-mod.spec.ts"
+  },
+  {
+    "name": "Edit a record that affects customer/supplier credit",
+    "file": "apps/frontend/tests/e2e/modification-tracking/sale-return-mod.spec.ts"
+  },
+  {
+    "name": "Attempt to edit downward when stock already sold",
+    "file": "apps/frontend/tests/e2e/modification-tracking/sale-return-mod.spec.ts"
+  },
+  {
+    "name": "Edit a Voucher that has linked bill adjustments",
+    "file": "apps/frontend/tests/e2e/modification-tracking/sale-return-mod.spec.ts"
+  },
+  {
+    "name": "Unauthorized user cannot edit",
+    "file": "apps/frontend/tests/e2e/modification-tracking/sale-return-mod.spec.ts"
+  },
+  {
+    "name": "Unauthorized user cannot view history",
+    "file": "apps/frontend/tests/e2e/modification-tracking/sale-return-mod.spec.ts"
+  },
+  {
+    "name": "Post-settlement lock rejects edit for user without override flag",
+    "file": "apps/frontend/tests/e2e/modification-tracking/sale-return-mod.spec.ts"
+  },
+  {
+    "name": "Authorized user succeeds end-to-end",
+    "file": "apps/frontend/tests/e2e/modification-tracking/sale-return-mod.spec.ts"
+  },
+  {
+    "name": "Granular permission explicitly blocks action regardless of role",
+    "file": "apps/frontend/tests/e2e/modification-tracking/sale-return-mod.spec.ts"
+  },
+  {
+    "name": "Void/cancel endpoints reject unauthorized users via API",
+    "file": "apps/frontend/tests/e2e/modification-tracking/sale-return-mod.spec.ts"
+  },
+  {
+    "name": "Assert revision history attributes correct User",
+    "file": "apps/frontend/tests/e2e/modification-tracking/sale-return-mod.spec.ts"
+  },
+  {
+    "name": "Concurrent edits by two users attribute correctly",
+    "file": "apps/frontend/tests/e2e/modification-tracking/sale-return-mod.spec.ts"
+  },
+  {
+    "name": "Edit non-existent record returns 404",
+    "file": "apps/frontend/tests/e2e/modification-tracking/sale-return-mod.spec.ts"
+  },
+  {
+    "name": "Edit with invalid data returns validation error",
+    "file": "apps/frontend/tests/e2e/modification-tracking/sale-return-mod.spec.ts"
+  },
+  {
+    "name": "Concurrent edits handle conflicts gracefully",
+    "file": "apps/frontend/tests/e2e/modification-tracking/sale-return-mod.spec.ts"
+  },
+  {
+    "name": "Create a new record \u2014 assert no false modified history",
+    "file": "apps/frontend/tests/e2e/modification-tracking/purchase-return-mod.spec.ts"
+  },
+  {
+    "name": "Edit a single field \u2014 assert exactly one revision entry",
+    "file": "apps/frontend/tests/e2e/modification-tracking/purchase-return-mod.spec.ts"
+  },
+  {
+    "name": "Edit multiple fields in one save",
+    "file": "apps/frontend/tests/e2e/modification-tracking/purchase-return-mod.spec.ts"
+  },
+  {
+    "name": "Edit line/item-level data",
+    "file": "apps/frontend/tests/e2e/modification-tracking/purchase-return-mod.spec.ts"
+  },
+  {
+    "name": "Edit the same record multiple times in sequence",
+    "file": "apps/frontend/tests/e2e/modification-tracking/purchase-return-mod.spec.ts"
+  },
+  {
+    "name": "Void/cancel/delete the record",
+    "file": "apps/frontend/tests/e2e/modification-tracking/purchase-return-mod.spec.ts"
+  },
+  {
+    "name": "Edit stock-affecting record mathematically correctly",
+    "file": "apps/frontend/tests/e2e/modification-tracking/purchase-return-mod.spec.ts"
+  },
+  {
+    "name": "Edit a record that affects ledger/account balances",
+    "file": "apps/frontend/tests/e2e/modification-tracking/purchase-return-mod.spec.ts"
+  },
+  {
+    "name": "Edit a record that affects customer/supplier credit",
+    "file": "apps/frontend/tests/e2e/modification-tracking/purchase-return-mod.spec.ts"
+  },
+  {
+    "name": "Attempt to edit downward when stock already sold",
+    "file": "apps/frontend/tests/e2e/modification-tracking/purchase-return-mod.spec.ts"
+  },
+  {
+    "name": "Edit a Voucher that has linked bill adjustments",
+    "file": "apps/frontend/tests/e2e/modification-tracking/purchase-return-mod.spec.ts"
+  },
+  {
+    "name": "Unauthorized user cannot edit",
+    "file": "apps/frontend/tests/e2e/modification-tracking/purchase-return-mod.spec.ts"
+  },
+  {
+    "name": "Unauthorized user cannot view history",
+    "file": "apps/frontend/tests/e2e/modification-tracking/purchase-return-mod.spec.ts"
+  },
+  {
+    "name": "Post-settlement lock rejects edit for user without override flag",
+    "file": "apps/frontend/tests/e2e/modification-tracking/purchase-return-mod.spec.ts"
+  },
+  {
+    "name": "Authorized user succeeds end-to-end",
+    "file": "apps/frontend/tests/e2e/modification-tracking/purchase-return-mod.spec.ts"
+  },
+  {
+    "name": "Granular permission explicitly blocks action regardless of role",
+    "file": "apps/frontend/tests/e2e/modification-tracking/purchase-return-mod.spec.ts"
+  },
+  {
+    "name": "Void/cancel endpoints reject unauthorized users via API",
+    "file": "apps/frontend/tests/e2e/modification-tracking/purchase-return-mod.spec.ts"
+  },
+  {
+    "name": "Assert revision history attributes correct User",
+    "file": "apps/frontend/tests/e2e/modification-tracking/purchase-return-mod.spec.ts"
+  },
+  {
+    "name": "Concurrent edits by two users attribute correctly",
+    "file": "apps/frontend/tests/e2e/modification-tracking/purchase-return-mod.spec.ts"
+  },
+  {
+    "name": "Edit non-existent record returns 404",
+    "file": "apps/frontend/tests/e2e/modification-tracking/purchase-return-mod.spec.ts"
+  },
+  {
+    "name": "Edit with invalid data returns validation error",
+    "file": "apps/frontend/tests/e2e/modification-tracking/purchase-return-mod.spec.ts"
+  },
+  {
+    "name": "Concurrent edits handle conflicts gracefully",
+    "file": "apps/frontend/tests/e2e/modification-tracking/purchase-return-mod.spec.ts"
+  },
+  {
+    "name": "Create a new record \u2014 assert no false modified history",
+    "file": "apps/frontend/tests/e2e/modification-tracking/sales-bill-mod.spec.ts"
+  },
+  {
+    "name": "Edit a single header field \u2014 assert exactly one revision entry with diff captured",
+    "file": "apps/frontend/tests/e2e/modification-tracking/sales-bill-mod.spec.ts"
+  },
+  {
+    "name": "Edit stock-affecting record \u2014 stock change is mathematically correct",
+    "file": "apps/frontend/tests/e2e/modification-tracking/sales-bill-mod.spec.ts"
+  },
+  {
+    "name": "Unauthorized user cannot edit sales \u2014 403 and no revision created",
+    "file": "apps/frontend/tests/e2e/modification-tracking/sales-bill-mod.spec.ts"
+  },
+  {
+    "name": "Granular permission explicitly blocks action regardless of role",
+    "file": "apps/frontend/tests/e2e/modification-tracking/sales-bill-mod.spec.ts"
+  },
+  {
+    "name": "Create a new record \u2014 assert no false modified history",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-payment-mod.spec.ts"
+  },
+  {
+    "name": "Edit a single field \u2014 assert exactly one revision entry",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-payment-mod.spec.ts"
+  },
+  {
+    "name": "Edit multiple fields in one save",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-payment-mod.spec.ts"
+  },
+  {
+    "name": "Edit line/item-level data",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-payment-mod.spec.ts"
+  },
+  {
+    "name": "Edit the same record multiple times in sequence",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-payment-mod.spec.ts"
+  },
+  {
+    "name": "Void/cancel/delete the record",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-payment-mod.spec.ts"
+  },
+  {
+    "name": "Edit stock-affecting record mathematically correctly",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-payment-mod.spec.ts"
+  },
+  {
+    "name": "Edit a record that affects ledger/account balances",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-payment-mod.spec.ts"
+  },
+  {
+    "name": "Edit a record that affects customer/supplier credit",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-payment-mod.spec.ts"
+  },
+  {
+    "name": "Attempt to edit downward when stock already sold",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-payment-mod.spec.ts"
+  },
+  {
+    "name": "Edit a Voucher that has linked bill adjustments",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-payment-mod.spec.ts"
+  },
+  {
+    "name": "Unauthorized user cannot edit",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-payment-mod.spec.ts"
+  },
+  {
+    "name": "Unauthorized user cannot view history",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-payment-mod.spec.ts"
+  },
+  {
+    "name": "Post-settlement lock rejects edit for user without override flag",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-payment-mod.spec.ts"
+  },
+  {
+    "name": "Authorized user succeeds end-to-end",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-payment-mod.spec.ts"
+  },
+  {
+    "name": "Granular permission explicitly blocks action regardless of role",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-payment-mod.spec.ts"
+  },
+  {
+    "name": "Void/cancel endpoints reject unauthorized users via API",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-payment-mod.spec.ts"
+  },
+  {
+    "name": "Assert revision history attributes correct User",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-payment-mod.spec.ts"
+  },
+  {
+    "name": "Concurrent edits by two users attribute correctly",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-payment-mod.spec.ts"
+  },
+  {
+    "name": "Edit non-existent record returns 404",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-payment-mod.spec.ts"
+  },
+  {
+    "name": "Edit with invalid data returns validation error",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-payment-mod.spec.ts"
+  },
+  {
+    "name": "Concurrent edits handle conflicts gracefully",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-payment-mod.spec.ts"
+  },
+  {
+    "name": "Create a new record \u2014 assert no false modified history",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-receipt-mod.spec.ts"
+  },
+  {
+    "name": "Edit a single field \u2014 assert exactly one revision entry",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-receipt-mod.spec.ts"
+  },
+  {
+    "name": "Edit multiple fields in one save",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-receipt-mod.spec.ts"
+  },
+  {
+    "name": "Edit line/item-level data",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-receipt-mod.spec.ts"
+  },
+  {
+    "name": "Edit the same record multiple times in sequence",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-receipt-mod.spec.ts"
+  },
+  {
+    "name": "Void/cancel/delete the record",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-receipt-mod.spec.ts"
+  },
+  {
+    "name": "Edit stock-affecting record mathematically correctly",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-receipt-mod.spec.ts"
+  },
+  {
+    "name": "Edit a record that affects ledger/account balances",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-receipt-mod.spec.ts"
+  },
+  {
+    "name": "Edit a record that affects customer/supplier credit",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-receipt-mod.spec.ts"
+  },
+  {
+    "name": "Attempt to edit downward when stock already sold",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-receipt-mod.spec.ts"
+  },
+  {
+    "name": "Edit a Voucher that has linked bill adjustments",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-receipt-mod.spec.ts"
+  },
+  {
+    "name": "Unauthorized user cannot edit",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-receipt-mod.spec.ts"
+  },
+  {
+    "name": "Unauthorized user cannot view history",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-receipt-mod.spec.ts"
+  },
+  {
+    "name": "Post-settlement lock rejects edit for user without override flag",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-receipt-mod.spec.ts"
+  },
+  {
+    "name": "Authorized user succeeds end-to-end",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-receipt-mod.spec.ts"
+  },
+  {
+    "name": "Granular permission explicitly blocks action regardless of role",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-receipt-mod.spec.ts"
+  },
+  {
+    "name": "Void/cancel endpoints reject unauthorized users via API",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-receipt-mod.spec.ts"
+  },
+  {
+    "name": "Assert revision history attributes correct User",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-receipt-mod.spec.ts"
+  },
+  {
+    "name": "Concurrent edits by two users attribute correctly",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-receipt-mod.spec.ts"
+  },
+  {
+    "name": "Edit non-existent record returns 404",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-receipt-mod.spec.ts"
+  },
+  {
+    "name": "Edit with invalid data returns validation error",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-receipt-mod.spec.ts"
+  },
+  {
+    "name": "Concurrent edits handle conflicts gracefully",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-receipt-mod.spec.ts"
+  },
+  {
+    "name": "Create a new record \u2014 assert no false modified history",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-contra-mod.spec.ts"
+  },
+  {
+    "name": "Edit a single field \u2014 assert exactly one revision entry",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-contra-mod.spec.ts"
+  },
+  {
+    "name": "Edit multiple fields in one save",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-contra-mod.spec.ts"
+  },
+  {
+    "name": "Edit line/item-level data",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-contra-mod.spec.ts"
+  },
+  {
+    "name": "Edit the same record multiple times in sequence",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-contra-mod.spec.ts"
+  },
+  {
+    "name": "Void/cancel/delete the record",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-contra-mod.spec.ts"
+  },
+  {
+    "name": "Edit stock-affecting record mathematically correctly",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-contra-mod.spec.ts"
+  },
+  {
+    "name": "Edit a record that affects ledger/account balances",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-contra-mod.spec.ts"
+  },
+  {
+    "name": "Edit a record that affects customer/supplier credit",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-contra-mod.spec.ts"
+  },
+  {
+    "name": "Attempt to edit downward when stock already sold",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-contra-mod.spec.ts"
+  },
+  {
+    "name": "Edit a Voucher that has linked bill adjustments",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-contra-mod.spec.ts"
+  },
+  {
+    "name": "Unauthorized user cannot edit",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-contra-mod.spec.ts"
+  },
+  {
+    "name": "Unauthorized user cannot view history",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-contra-mod.spec.ts"
+  },
+  {
+    "name": "Post-settlement lock rejects edit for user without override flag",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-contra-mod.spec.ts"
+  },
+  {
+    "name": "Authorized user succeeds end-to-end",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-contra-mod.spec.ts"
+  },
+  {
+    "name": "Granular permission explicitly blocks action regardless of role",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-contra-mod.spec.ts"
+  },
+  {
+    "name": "Void/cancel endpoints reject unauthorized users via API",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-contra-mod.spec.ts"
+  },
+  {
+    "name": "Assert revision history attributes correct User",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-contra-mod.spec.ts"
+  },
+  {
+    "name": "Concurrent edits by two users attribute correctly",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-contra-mod.spec.ts"
+  },
+  {
+    "name": "Edit non-existent record returns 404",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-contra-mod.spec.ts"
+  },
+  {
+    "name": "Edit with invalid data returns validation error",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-contra-mod.spec.ts"
+  },
+  {
+    "name": "Concurrent edits handle conflicts gracefully",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-contra-mod.spec.ts"
+  },
+  {
+    "name": "Create a new record \u2014 assert no false modified history",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-journal-mod.spec.ts"
+  },
+  {
+    "name": "Edit a single field \u2014 assert exactly one revision entry",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-journal-mod.spec.ts"
+  },
+  {
+    "name": "Edit multiple fields in one save",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-journal-mod.spec.ts"
+  },
+  {
+    "name": "Edit line/item-level data",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-journal-mod.spec.ts"
+  },
+  {
+    "name": "Edit the same record multiple times in sequence",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-journal-mod.spec.ts"
+  },
+  {
+    "name": "Void/cancel/delete the record",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-journal-mod.spec.ts"
+  },
+  {
+    "name": "Edit stock-affecting record mathematically correctly",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-journal-mod.spec.ts"
+  },
+  {
+    "name": "Edit a record that affects ledger/account balances",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-journal-mod.spec.ts"
+  },
+  {
+    "name": "Edit a record that affects customer/supplier credit",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-journal-mod.spec.ts"
+  },
+  {
+    "name": "Attempt to edit downward when stock already sold",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-journal-mod.spec.ts"
+  },
+  {
+    "name": "Edit a Voucher that has linked bill adjustments",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-journal-mod.spec.ts"
+  },
+  {
+    "name": "Unauthorized user cannot edit",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-journal-mod.spec.ts"
+  },
+  {
+    "name": "Unauthorized user cannot view history",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-journal-mod.spec.ts"
+  },
+  {
+    "name": "Post-settlement lock rejects edit for user without override flag",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-journal-mod.spec.ts"
+  },
+  {
+    "name": "Authorized user succeeds end-to-end",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-journal-mod.spec.ts"
+  },
+  {
+    "name": "Granular permission explicitly blocks action regardless of role",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-journal-mod.spec.ts"
+  },
+  {
+    "name": "Void/cancel endpoints reject unauthorized users via API",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-journal-mod.spec.ts"
+  },
+  {
+    "name": "Assert revision history attributes correct User",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-journal-mod.spec.ts"
+  },
+  {
+    "name": "Concurrent edits by two users attribute correctly",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-journal-mod.spec.ts"
+  },
+  {
+    "name": "Edit non-existent record returns 404",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-journal-mod.spec.ts"
+  },
+  {
+    "name": "Edit with invalid data returns validation error",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-journal-mod.spec.ts"
+  },
+  {
+    "name": "Concurrent edits handle conflicts gracefully",
+    "file": "apps/frontend/tests/e2e/modification-tracking/voucher-journal-mod.spec.ts"
+  }
+]

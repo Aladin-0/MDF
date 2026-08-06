@@ -12,6 +12,7 @@ import { useProductSearch } from '@/hooks/useProductSearch';
 import { Batch, ProductSearchResult } from '@/types';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { DISABLE_DISRUPTIVE_SHORTCUTS } from '@/lib/shortcuts';
 
 import { InlineRowEditor } from './InlineRowEditor';
 
@@ -50,6 +51,7 @@ export function MainInvoiceWorkspace() {
     // Global F2 Shortcut
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
+            if (DISABLE_DISRUPTIVE_SHORTCUTS) return;
             if (e.key === 'F2') {
                 e.preventDefault();
                 searchInputRef.current?.focus();
@@ -194,8 +196,12 @@ export function MainInvoiceWorkspace() {
             return; // Needs qty
         }
 
-        const totalQtyLoose = (s * quickAddBatch.packSize) + l;
-        const totalQtyFractional = s + (l / quickAddBatch.packSize);
+        const canonicalPackType = quickAddProduct?.packType || '';
+        const isStripBased = canonicalPackType.toLowerCase() === 'strip' || canonicalPackType.toLowerCase() === 'blister';
+        const effectiveLoose = isStripBased ? l : 0;
+
+        const totalQtyLoose = (s * quickAddBatch.packSize) + effectiveLoose;
+        const totalQtyFractional = s + (effectiveLoose / quickAddBatch.packSize);
         
         if (totalQtyLoose > (quickAddBatch.qtyStrips * quickAddBatch.packSize + quickAddBatch.qtyLoose)) {
             alert('Warning: Added quantity exceeds available stock.');
@@ -215,6 +221,7 @@ export function MainInvoiceWorkspace() {
             manufacturer: quickAddProduct.manufacturer,
             packSize: quickAddBatch.packSize,
             packUnit: quickAddBatch.packUnit,
+            packType: quickAddProduct.packType || '',
             requiresPrescription: ['H', 'H1', 'X', 'Narcotic'].includes(quickAddProduct.scheduleType),
             batchNo: quickAddBatch.batchNo,
             expiryDate: quickAddBatch.expiryDate,
@@ -223,7 +230,7 @@ export function MainInvoiceWorkspace() {
             saleRate: quickAddBatch.mrp,
             rate: baseRate,
             qtyStrips: s,
-            qtyLoose: l,
+            qtyLoose: effectiveLoose,
 
             totalQty: totalQtyFractional,
             saleMode: 'strip',
@@ -307,7 +314,7 @@ export function MainInvoiceWorkspace() {
 
                         <div>
                             <label className="text-[10px] font-bold text-blue-600 uppercase tracking-wider block mb-1 flex items-center justify-between">
-                                Qty (Strips) <span className="text-[9px] font-normal text-slate-400 ml-2">max {quickAddBatch.qtyStrips}</span>
+                                Qty ({quickAddProduct?.packType?.toLowerCase() === 'strip' || quickAddProduct?.packType?.toLowerCase() === 'blister' ? 'Strips' : (quickAddProduct?.packType || 'Unit')}) <span className="text-[9px] font-normal text-slate-400 ml-2">max {quickAddBatch.qtyStrips}</span>
                             </label>
                             <Input 
                                 ref={qtyInputRef}
@@ -320,19 +327,21 @@ export function MainInvoiceWorkspace() {
                             />
                         </div>
 
-                        <div>
-                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1 flex items-center justify-between">
-                                Loose <span className="text-[9px] font-normal text-slate-400 ml-2">of {quickAddBatch.packSize}</span>
-                            </label>
-                            <Input 
-                                type="number" 
-                                min="0"
-                                value={qtyLoose}
-                                onChange={(e) => setQtyLoose(e.target.value)}
-                                onKeyDown={handleQtyKeyDown}
-                                className="w-20 h-10 border-slate-300 focus-visible:ring-blue-500 font-bold text-lg text-center"
-                            />
-                        </div>
+                        {(quickAddProduct?.packType?.toLowerCase() === 'strip' || quickAddProduct?.packType?.toLowerCase() === 'blister') && (
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1 flex items-center justify-between">
+                                    Loose <span className="text-[9px] font-normal text-slate-400 ml-2">of {quickAddBatch.packSize}</span>
+                                </label>
+                                <Input 
+                                    type="number" 
+                                    min="0"
+                                    value={qtyLoose}
+                                    onChange={(e) => setQtyLoose(e.target.value)}
+                                    onKeyDown={handleQtyKeyDown}
+                                    className="w-20 h-10 border-slate-300 focus-visible:ring-blue-500 font-bold text-lg text-center"
+                                />
+                            </div>
+                        )}
 
                         <div>
                             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Disc %</label>
@@ -354,7 +363,9 @@ export function MainInvoiceWorkspace() {
                                     const s = parseInt(qtyStrips) || 0;
                                     const l = parseInt(qtyLoose) || 0;
                                     const d = parseFloat(discountPct) || 0;
-                                    const tQtyFractional = s + (l / quickAddBatch.packSize);
+                                    const isStrip = quickAddProduct?.packType?.toLowerCase() === 'strip' || quickAddProduct?.packType?.toLowerCase() === 'blister';
+                                    const effectiveL = isStrip ? l : 0;
+                                    const tQtyFractional = s + (effectiveL / quickAddBatch.packSize);
                                     const rate = quickAddBatch.mrp;
                                     return ((rate * (1 - d/100)) * tQtyFractional).toFixed(2);
                                 })()}
@@ -530,13 +541,13 @@ export function MainInvoiceWorkspace() {
                                 } else if (expiryStatus === 'good') {
                                     statusBorder = 'border-l-[6px] border-l-emerald-500 bg-emerald-50/80 !text-emerald-700';
                                 } else {
-                                    statusBorder = 'border-l-[6px] border-l-transparent';
+                                statusBorder = 'border-l-[6px] border-l-transparent';
                                 }
 
                                 if (isEditing) {
                                     return (
                                         <InlineRowEditor 
-                                            key={`${item.batchId}-${index}-edit`}
+                                            key={`${item.productId}-${item.packType || 'unit'}-${item.batchId}-${index}-edit`}
                                             item={item}
                                             onSave={handleSaveEdit}
                                             onCancel={handleCancelEdit}
@@ -610,8 +621,8 @@ export function MainInvoiceWorkspace() {
                                         <td className="px-2 py-1.5 text-right border-r border-slate-100">
                                             <div className="text-[11px] font-bold text-blue-700">
                                                 <>
-                                                    {item.qtyStrips > 0 ? `${item.qtyStrips}S ` : ''}
-                                                    {item.qtyLoose > 0 ? `${item.qtyLoose}L` : ''}
+                                                    {item.qtyStrips > 0 ? `${item.qtyStrips}${item.packType?.toLowerCase() === 'strip' || item.packType?.toLowerCase() === 'blister' ? 'S' : ' ' + (item.packType || 'Unit')} ` : ''}
+                                                    {item.qtyLoose > 0 && (item.packType?.toLowerCase() === 'strip' || item.packType?.toLowerCase() === 'blister') ? `${item.qtyLoose}L` : ''}
                                                 </>
                                             </div>
                                             {(showMarginInfo && (activeStaff?.role === 'owner' || activeStaff?.role === 'admin')) && (

@@ -20,6 +20,7 @@ from apps.billing.services import (
     generate_invoice_number,
     InsufficientStockError,
     ScheduleHViolationError,
+    UnitIntegrityError,
 )
 from apps.billing.utils.pricing import validate_sale_price
 from apps.inventory.models import Batch, MasterProduct
@@ -435,7 +436,13 @@ class SaleCreateView(APIView):
 
                     try:
                         # Get product details
-                        product = MasterProduct.objects.get(id=product_id)
+                        if product_id:
+                            product = MasterProduct.objects.get(id=product_id)
+                            
+                            from apps.billing.sale_services import validate_unit_integrity
+                            qty_loose_needed = item_data.get('qtyLoose', 0)
+                            validate_unit_integrity(product, qty_loose_needed)
+                        
                         qty_loose_needed = item_data.get('qtyLoose', 0)
 
                         if batch_id:
@@ -746,6 +753,12 @@ class SaleCreateView(APIView):
 
         except InsufficientStockError as e:
             logger.warning(f"Insufficient stock error: {str(e)}")
+            return Response(
+                {'detail': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except UnitIntegrityError as e:
+            logger.warning(f"Unit integrity error: {str(e)}")
             return Response(
                 {'detail': str(e)},
                 status=status.HTTP_400_BAD_REQUEST

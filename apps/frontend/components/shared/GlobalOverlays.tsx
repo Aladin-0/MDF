@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Calculator, Package, Search, Settings, FileText, ShoppingCart, User, HelpCircle, FileBarChart, CreditCard, Layers } from 'lucide-react';
-import { shortcutRegistry } from '@/lib/shortcuts';
+import { shortcutRegistry, isEditableElement } from '@/lib/shortcuts';
 
 export function GlobalOverlays() {
     const [openCommand, setOpenCommand] = useState(false);
@@ -14,6 +14,8 @@ export function GlobalOverlays() {
 
     useEffect(() => {
         const down = (e: KeyboardEvent) => {
+            if (isEditableElement(e.target)) return;
+            
             if (e.key === 'k' && (e.metaKey || e.ctrlKey) && e.shiftKey) {
                 e.preventDefault();
                 setOpenCommand((open) => !open);

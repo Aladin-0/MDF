@@ -16,6 +16,7 @@ export type Permission =
     | 'manage_products';
 
 const ROLE_PERMISSIONS: Record<StaffRole, Permission[] | ['*']> = {
+    owner: ['*'],
     super_admin: ['*'],
     admin: [
         'view_outlet', 'manage_staff', 'create_bills',

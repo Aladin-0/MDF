@@ -417,6 +417,7 @@ export function PurchaseItemRow({
                         type="number" min={1}
                         className={cellInputCls(!!errors?.pkg, 'right')}
                         value={value.pkg || ''}
+                        placeholder="Pkg"
                         onChange={(e) => num('pkg', e.target.value)}
                     />
                     {value.packUnitLabel && (
@@ -432,6 +433,7 @@ export function PurchaseItemRow({
                         type="number" min={0}
                         className={cellInputCls(!!errors?.qty, 'right')}
                         value={value.qty || ''}
+                        placeholder="Qty"
                         onChange={(e) => num('qty', e.target.value)}
                     />
                     {effPkg > 1 && value.qty > 0 && (
@@ -447,6 +449,7 @@ export function PurchaseItemRow({
                         type="number" min={0}
                         className={cellInputCls(false, 'right')}
                         value={value.freeQty || ''}
+                        placeholder="Free"
                         onChange={(e) => num('freeQty', e.target.value)}
                     />
                 </td>

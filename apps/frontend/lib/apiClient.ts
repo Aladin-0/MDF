@@ -793,6 +793,8 @@ const realPurchasesApi = {
         if (filters?.distributorId) url += `&distributorId=${filters.distributorId}`;
         if (filters?.startDate) url += `&startDate=${filters.startDate}`;
         if (filters?.endDate) url += `&endDate=${filters.endDate}`;
+        if (filters?.status) url += `&status=${filters.status}`;
+        if (filters?.search) url += `&search=${encodeURIComponent(filters.search)}`;
         if (filters?.page) url += `&page=${filters.page}`;
         if (filters?.pageSize) url += `&pageSize=${filters.pageSize}`;
 

@@ -73,6 +73,14 @@ def serialize_product(product, total_stock=0, nearest_expiry="2099-12-31", is_lo
         'batches': batches or [],
     }
 
+def _canonical_pack_type(pack_type, pack_unit):
+    pt = (pack_type or '').strip().lower()
+    pu = (pack_unit or '').strip().lower()
+    if pt == 'strip' and pu in ['box', 'piece', 'bottle', 'vial', 'tube', 'packet']:
+        return pu
+    return pack_type
+
+
 def serialize_batch(batch):
     return {
         'id': str(batch.id),
@@ -88,7 +96,7 @@ def serialize_batch(batch):
         'qtyLoose': batch.qty_loose,
         'packSize': batch.pack_size,
         'packUnit': batch.pack_unit,
-        'packType': batch.pack_type,
+        'packType': _canonical_pack_type(batch.pack_type, batch.pack_unit),
         'rackLocation': batch.rack_location,
         'isActive': batch.is_active,
         'createdAt': batch.created_at.isoformat(),
@@ -564,7 +572,7 @@ class ProductSearchView(APIView):
                 'gstRate': float(product.gst_rate),
                 'packSize': product.pack_size,
                 'packUnit': product.pack_unit,
-                'packType': product.pack_type,
+                'packType': _canonical_pack_type(product.pack_type, product.pack_unit),
                 'barcode': product.barcode,
                 'isFridge': product.is_fridge,
                 'isDiscontinued': product.is_discontinued,
@@ -1093,6 +1101,7 @@ class InventoryAdjustView(APIView):
                         qty_out=0,
                         rate=batch.purchase_rate,
                         source_object=batch,
+                        actor=staff if staff else request.user,
                     )
                 else:
                     post_stock_ledger_entry(
@@ -1108,6 +1117,7 @@ class InventoryAdjustView(APIView):
                         qty_out=ledger_qty,
                         rate=batch.purchase_rate,
                         source_object=batch,
+                        actor=staff if staff else request.user,
                     )
 
                 log_activity(

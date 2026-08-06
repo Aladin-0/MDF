@@ -81,23 +81,25 @@ export function InlineRowEditor({ item, onSave, onCancel, onRemove }: InlineRowE
     const isSameBatch = selectedBatchId === item.batchId;
     const historicalBaseRate = isSameBatch ? (item.saleRate || item.mrp) : undefined;
     
-    // Live Calculations using Cart Utility
-    const totals = calculateRowTotals(
-        currentBatch,
-        qtyStrips,
-        qtyLoose,
-        discountType,
-        discountValue,
-        item.gstRate,
-        historicalBaseRate
-    );
+    const canonicalPackType = productInfo?.packType || item.packType || '';
+    const isStripBased = canonicalPackType.toLowerCase() === 'strip' || canonicalPackType.toLowerCase() === 'blister';
+    // If not strip-based, force loose to 0 in calculations
+    const effectiveQtyLoose = isStripBased ? qtyLoose : '0';
 
     const {
         tQtyFractional, tQtyLoose, rate, sellAmount, dPct, dAmount,
         marginPct, isLowMargin, isNegativeMargin, exceedsStock,
         isDiscountInvalid, isQtyZero, isValid, taxableAmount, gstAmount,
         totalCost, marginAmount
-    } = totals;
+    } = calculateRowTotals(
+        currentBatch,
+        qtyStrips,
+        effectiveQtyLoose,
+        discountType,
+        discountValue,
+        item.gstRate,
+        historicalBaseRate
+    );
 
     const commitSave = () => {
         if (!isValid) return;
@@ -111,7 +113,7 @@ export function InlineRowEditor({ item, onSave, onCancel, onRemove }: InlineRowE
             batchNo: currentBatch.batchNo,
             expiryDate: currentBatch.expiryDate,
             qtyStrips: parseInt(qtyStrips) || 0,
-            qtyLoose: parseInt(qtyLoose) || 0,
+            qtyLoose: isStripBased ? (parseInt(qtyLoose) || 0) : 0,
             totalQty: tQtyFractional,
             discountPct: dPct,
             discountType: discountType,
@@ -237,7 +239,7 @@ export function InlineRowEditor({ item, onSave, onCancel, onRemove }: InlineRowE
                             <div className="flex gap-4">
                                 <div>
                                     <label className="text-[10px] font-bold text-blue-700 uppercase tracking-wider block mb-1">
-                                        Qty (Strips)
+                                        Qty ({isStripBased ? 'Strips' : (canonicalPackType || 'Unit')})
                                     </label>
                                     <Input 
                                         ref={qtyInputRef}
@@ -250,20 +252,22 @@ export function InlineRowEditor({ item, onSave, onCancel, onRemove }: InlineRowE
                                         className="w-24 border-blue-400 focus-visible:ring-blue-600 font-bold text-center"
                                     />
                                 </div>
-                                <div>
-                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                                        Loose
-                                    </label>
-                                    <Input 
-                                        type="number" 
-                                        min="0"
-                                        data-testid="inline-qty-loose"
-                                        value={qtyLoose}
-                                        onChange={(e) => setQtyLoose(e.target.value)}
-                                        onKeyDown={handleKeyDown}
-                                        className="w-20 border-slate-300 focus-visible:ring-blue-500 font-bold text-center"
-                                    />
-                                </div>
+                                {isStripBased && (
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                                            Loose
+                                        </label>
+                                        <Input 
+                                            type="number" 
+                                            min="0"
+                                            data-testid="inline-qty-loose"
+                                            value={qtyLoose}
+                                            onChange={(e) => setQtyLoose(e.target.value)}
+                                            onKeyDown={handleKeyDown}
+                                            className="w-20 border-slate-300 focus-visible:ring-blue-500 font-bold text-center"
+                                        />
+                                    </div>
+                                )}
                                 <div>
                                     <div className="flex items-center justify-between mb-1 gap-2">
                                         <label className="text-[10px] font-bold text-blue-700 uppercase tracking-wider block">

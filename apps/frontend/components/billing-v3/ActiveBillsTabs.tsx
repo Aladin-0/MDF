@@ -4,6 +4,7 @@ import { useBillingStore } from '@/store/billingStore';
 import { Plus, X, User, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useEffect } from 'react';
+import { DISABLE_DISRUPTIVE_SHORTCUTS } from '@/lib/shortcuts';
 
 export function ActiveBillsTabs() {
     const { drafts, activeDraftId, switchDraft, closeDraft, createDraft } = useBillingStore();
@@ -12,6 +13,7 @@ export function ActiveBillsTabs() {
     // Global keyboard shortcuts
     useEffect(() => {
         const handleGlobalKeyDown = (e: KeyboardEvent) => {
+            if (DISABLE_DISRUPTIVE_SHORTCUTS) return;
             if (!e.altKey) return;
             
             // New Bill (Alt + N)

@@ -23,8 +23,10 @@ import {
     Package, Pill, Barcode, Thermometer, AlertTriangle,
     RotateCcw, IndianRupee, ReceiptText, FlaskConical,
 } from 'lucide-react';
-import { PACK_TYPE_OPTIONS } from '@/constants/productBehavior';
+import { PACK_TYPE_OPTIONS, DISPENSING_UNIT_OPTIONS } from '@/constants/productBehavior';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { inferPackUnit } from '@/utils/productUtils';
+import { Pencil } from 'lucide-react';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -82,6 +84,7 @@ export function EditProductModal({
     const { toast } = useToast();
     const queryClient = useQueryClient();
     const [saving, setSaving] = useState(false);
+    const [isEditingUnit, setIsEditingUnit] = useState(false);
     const [apiErrors, setApiErrors] = useState<Record<string, string>>({});
 
     const {
@@ -91,10 +94,13 @@ export function EditProductModal({
         control,
         setValue,
         watch,
+        getValues,
         formState: { errors, isDirty },
     } = useForm<FormValues>();
 
     const watchPackType = watch('packType');
+    const watchPackUnit = watch('packUnit');
+    const watchName = watch('name');
 
     // Populate form when product changes
     useEffect(() => {
@@ -117,6 +123,7 @@ export function EditProductModal({
                 isDiscontinued: product.isDiscontinued ?? false,
             });
             setApiErrors({});
+            setIsEditingUnit(false);
         }
     }, [product, reset]);
 
@@ -252,11 +259,11 @@ export function EditProductModal({
                                         render={({ field }) => (
                                             <Select value={field.value} onValueChange={(v) => {
                                                 field.onChange(v);
+                                                setValue('packUnit', inferPackUnit(watchName, v), { shouldDirty: true });
+                                                setIsEditingUnit(false);
                                                 if (v === 'strip' || v === 'blister') { 
-                                                    setValue('packUnit', 'Tablet', { shouldDirty: true }); 
                                                     setValue('packSize', 10, { shouldDirty: true }); 
                                                 } else { 
-                                                    setValue('packUnit', PACK_TYPE_OPTIONS.find(o => o.value === v)?.label || 'Piece', { shouldDirty: true }); 
                                                     setValue('packSize', 1, { shouldDirty: true }); 
                                                 }
                                             }}>
@@ -281,7 +288,7 @@ export function EditProductModal({
                                 <div className="bg-indigo-50/50 p-4 rounded-md border border-indigo-100">
                                     {(watchPackType === 'strip' || watchPackType === 'blister') ? (
                                         <div className="flex flex-col gap-2">
-                                            <p className="text-sm text-gray-600 mb-2">Define how this product is packaged. <span className="font-semibold text-gray-800">Example: 1 Strip contains 10 Tablets.</span></p>
+                                            <p className="text-sm text-gray-600 mb-2">Define how this product is packaged. <span className="font-semibold text-gray-800">Example: 1 {watchPackType ? (PACK_TYPE_OPTIONS.find(o => o.value === watchPackType)?.label || watchPackType) : 'Strip'} contains 10 {getValues('packUnit') ? getValues('packUnit') + 's' : 'Tablets'}.</span></p>
                                             <div className="flex items-center gap-3">
                                                 <span className="text-sm font-medium">1 {watchPackType ? (PACK_TYPE_OPTIONS.find(o => o.value === watchPackType)?.label || watchPackType) : 'Pack'} contains</span>
                                                 <div className="w-24">
@@ -292,16 +299,40 @@ export function EditProductModal({
                                                         placeholder="Qty"
                                                     />
                                                 </div>
-                                                <div className="w-32">
-                                                    <Input
-                                                        {...register('packUnit', { required: 'Required' })}
-                                                        placeholder="Base Unit"
-                                                    />
+                                                <div className="flex-1 min-w-[150px]">
+                                                    {!isEditingUnit ? (
+                                                        <div className="flex items-center gap-2 h-10 px-3 bg-gray-50 border border-gray-200 rounded-md text-sm">
+                                                            <span className="font-medium text-gray-700">{watchPackUnit || 'Unit'}</span>
+                                                            <button type="button" onClick={() => setIsEditingUnit(true)} className="ml-auto p-1 text-gray-400 hover:text-blue-600 transition-colors" title="Edit Dispensing Unit">
+                                                                <Pencil className="h-3 w-3" />
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex gap-2">
+                                                            <Select value={DISPENSING_UNIT_OPTIONS.some(o => o.value === watchPackUnit) ? watchPackUnit : 'Other'} onValueChange={(v) => setValue('packUnit', v === 'Other' ? '' : v)}>
+                                                                <SelectTrigger className={fieldErr('packUnit') ? 'border-red-500' : ''}>
+                                                                    <SelectValue placeholder="Select Unit" />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    {DISPENSING_UNIT_OPTIONS.map(opt => (
+                                                                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                                                                    ))}
+                                                                    <SelectItem value="Other">Other...</SelectItem>
+                                                                </SelectContent>
+                                                            </Select>
+                                                            {!DISPENSING_UNIT_OPTIONS.some(o => o.value === watchPackUnit) && watchPackUnit !== '' && (
+                                                                <Input
+                                                                    {...register('packUnit', { required: 'Required' })}
+                                                                    placeholder="Type unit"
+                                                                />
+                                                            )}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                             <div className="flex gap-4">
                                                 <div className="w-24 pl-[108px]">{fieldErr('packSize') && <p className="text-[11px] text-red-500">{fieldErr('packSize')}</p>}</div>
-                                                <div className="w-32 pl-4">{fieldErr('packUnit') && <p className="text-[11px] text-red-500">{fieldErr('packUnit')}</p>}</div>
+                                                <div className="flex-1 pl-4">{fieldErr('packUnit') && <p className="text-[11px] text-red-500">{fieldErr('packUnit')}</p>}</div>
                                             </div>
                                         </div>
                                     ) : (
@@ -317,16 +348,40 @@ export function EditProductModal({
                                                         placeholder="Qty"
                                                     />
                                                 </div>
-                                                <div className="w-32">
-                                                    <Input
-                                                        {...register('packUnit', { required: 'Required' })}
-                                                        placeholder="Unit Name"
-                                                    />
+                                                <div className="flex-1 min-w-[150px]">
+                                                    {!isEditingUnit ? (
+                                                        <div className="flex items-center gap-2 h-10 px-3 bg-gray-50 border border-gray-200 rounded-md text-sm">
+                                                            <span className="font-medium text-gray-700">{watchPackUnit || 'Unit'}</span>
+                                                            <button type="button" onClick={() => setIsEditingUnit(true)} className="ml-auto p-1 text-gray-400 hover:text-blue-600 transition-colors" title="Edit Dispensing Unit">
+                                                                <Pencil className="h-3 w-3" />
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex gap-2">
+                                                            <Select value={DISPENSING_UNIT_OPTIONS.some(o => o.value === watchPackUnit) ? watchPackUnit : 'Other'} onValueChange={(v) => setValue('packUnit', v === 'Other' ? '' : v)}>
+                                                                <SelectTrigger className={fieldErr('packUnit') ? 'border-red-500' : ''}>
+                                                                    <SelectValue placeholder="Select Unit" />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    {DISPENSING_UNIT_OPTIONS.map(opt => (
+                                                                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                                                                    ))}
+                                                                    <SelectItem value="Other">Other...</SelectItem>
+                                                                </SelectContent>
+                                                            </Select>
+                                                            {!DISPENSING_UNIT_OPTIONS.some(o => o.value === watchPackUnit) && watchPackUnit !== '' && (
+                                                                <Input
+                                                                    {...register('packUnit', { required: 'Required' })}
+                                                                    placeholder="Type unit"
+                                                                />
+                                                            )}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                             <div className="flex gap-4">
                                                 <div className="w-24 pl-[148px]">{fieldErr('packSize') && <p className="text-[11px] text-red-500">{fieldErr('packSize')}</p>}</div>
-                                                <div className="w-32 pl-4">{fieldErr('packUnit') && <p className="text-[11px] text-red-500">{fieldErr('packUnit')}</p>}</div>
+                                                <div className="flex-1 pl-4">{fieldErr('packUnit') && <p className="text-[11px] text-red-500">{fieldErr('packUnit')}</p>}</div>
                                             </div>
                                         </div>
                                     )}

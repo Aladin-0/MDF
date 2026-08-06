@@ -30,9 +30,9 @@ export function useCreatePurchase() {
     return useMutation({
         mutationFn: (payload: CreatePurchasePayload) =>
             purchasesApi.createPurchase(payload),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['purchases'] });
-            queryClient.invalidateQueries({ queryKey: ['inventory'] });
+        onSuccess: async () => {
+            await queryClient.invalidateQueries({ queryKey: ['purchases'] });
+            await queryClient.invalidateQueries({ queryKey: ['inventory'] });
         },
     });
 }
@@ -42,10 +42,10 @@ export function useUpdatePurchase() {
     return useMutation({
         mutationFn: ({ id, payload }: { id: string; payload: CreatePurchasePayload }) =>
             purchasesApi.update(id, payload),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['purchases'] });
-            queryClient.invalidateQueries({ queryKey: ['inventory'] });
-            queryClient.invalidateQueries({ queryKey: ['distributors'] });
+        onSuccess: async () => {
+            await queryClient.invalidateQueries({ queryKey: ['purchases'] });
+            await queryClient.invalidateQueries({ queryKey: ['inventory'] });
+            await queryClient.invalidateQueries({ queryKey: ['distributors'] });
         },
     });
 }

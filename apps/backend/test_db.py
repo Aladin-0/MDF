@@ -1,8 +1,11 @@
 import os
 import django
-from django.conf import settings
 
-os.environ['DATABASE_URL'] = 'sqlite:///:memory:'
-os.environ['DJANGO_SETTINGS_MODULE'] = 'mediflow.settings.prod'
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'mediflow.settings')
 django.setup()
-print("DB settings:", settings.DATABASES)
+
+from apps.purchases.models import PurchaseInvoice
+
+print("Total Purchases:", PurchaseInvoice.objects.count())
+for p in PurchaseInvoice.objects.order_by('-created_at')[:5]:
+    print(f"ID: {p.id}, Outlet: {p.outlet_id}, InvoiceDate: {p.invoice_date}, CreatedAt: {p.created_at}")

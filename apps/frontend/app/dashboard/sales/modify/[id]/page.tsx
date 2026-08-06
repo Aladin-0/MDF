@@ -165,7 +165,7 @@ export default function ModifySalePage({ params }: { params: { id: string } }) {
                  });
             }
 
-            router.push('/dashboard/billing');
+            router.push('/billing');
         } catch (err) {
             console.error("Failed to load invoice for modification", err);
             alert("Failed to load invoice details. Please try again.");

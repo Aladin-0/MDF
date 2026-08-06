@@ -52,7 +52,14 @@ class ActivityLogListView(generics.ListAPIView):
     """
     permission_classes = [IsSuperAdmin]  # Only super admin
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
-    filterset_class = ActivityLogFilter
+    
+    @property
+    def filterset_class(self):
+        from apps.audit.core import flags
+        if flags.is_v2_read_enabled():
+            return None
+        return ActivityLogFilter
+
     ordering_fields = ['timestamp', 'occurred_at']
     ordering = ['-timestamp']
 
@@ -77,7 +84,14 @@ class ActivityLogExportView(generics.ListAPIView):
     queryset = ActivityLog.objects.select_related('user', 'outlet')
     permission_classes = [IsSuperAdmin]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
-    filterset_class = ActivityLogFilter
+    
+    @property
+    def filterset_class(self):
+        from apps.audit.core import flags
+        if flags.is_v2_read_enabled():
+            return None
+        return ActivityLogFilter
+
     ordering = ['-timestamp']
 
     def get_queryset(self):

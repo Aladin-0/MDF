@@ -146,6 +146,9 @@ class SaleItem(models.Model):
     qty_strips = models.IntegerField(help_text='Strips/packs (can be negative for returns)')
     qty_loose = models.IntegerField(default=0, help_text='Loose units (can be negative for returns)')
     qty_returned = models.PositiveIntegerField(default=0, help_text='Total units (tablets/capsules) returned so far across all return transactions')
+    qty_returned_strips = models.IntegerField(default=0)
+    qty_returned_loose = models.IntegerField(default=0)
+    hsn_code = models.CharField(max_length=20, null=True, blank=True)
     sale_mode = models.CharField(max_length=20, choices=SALE_MODE_CHOICES, default='strip')
 
     # Discount and tax
@@ -605,6 +608,8 @@ class SalesReturnItem(models.Model):
     batch_no = models.CharField(max_length=100)
 
     qty_returned = models.IntegerField()
+    qty_returned_strips = models.IntegerField(default=0)
+    qty_returned_loose = models.IntegerField(default=0)
     return_rate = models.DecimalField(max_digits=10, decimal_places=2)
     total_amount = models.DecimalField(max_digits=12, decimal_places=2)
 

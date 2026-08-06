@@ -1,0 +1,3397 @@
+openapi: 3.0.3
+info:
+  title: ''
+  version: 0.0.0
+paths:
+  /api/schema/:
+    get:
+      operationId: schema_retrieve
+      description: |-
+        OpenApi3 schema for this API. Format can be selected via content negotiation.
+
+        - YAML: application/vnd.oai.openapi
+        - JSON: application/vnd.oai.openapi+json
+      parameters:
+      - in: query
+        name: format
+        schema:
+          type: string
+          enum:
+          - json
+          - yaml
+      - in: query
+        name: lang
+        schema:
+          type: string
+          enum:
+          - af
+          - ar
+          - ar-dz
+          - ast
+          - az
+          - be
+          - bg
+          - bn
+          - br
+          - bs
+          - ca
+          - ckb
+          - cs
+          - cy
+          - da
+          - de
+          - dsb
+          - el
+          - en
+          - en-au
+          - en-gb
+          - eo
+          - es
+          - es-ar
+          - es-co
+          - es-mx
+          - es-ni
+          - es-ve
+          - et
+          - eu
+          - fa
+          - fi
+          - fr
+          - fy
+          - ga
+          - gd
+          - gl
+          - he
+          - hi
+          - hr
+          - hsb
+          - hu
+          - hy
+          - ia
+          - id
+          - ig
+          - io
+          - is
+          - it
+          - ja
+          - ka
+          - kab
+          - kk
+          - km
+          - kn
+          - ko
+          - ky
+          - lb
+          - lt
+          - lv
+          - mk
+          - ml
+          - mn
+          - mr
+          - ms
+          - my
+          - nb
+          - ne
+          - nl
+          - nn
+          - os
+          - pa
+          - pl
+          - pt
+          - pt-br
+          - ro
+          - ru
+          - sk
+          - sl
+          - sq
+          - sr
+          - sr-latn
+          - sv
+          - sw
+          - ta
+          - te
+          - tg
+          - th
+          - tk
+          - tr
+          - tt
+          - udm
+          - ug
+          - uk
+          - ur
+          - uz
+          - vi
+          - zh-hans
+          - zh-hant
+      tags:
+      - schema
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/vnd.oai.openapi:
+              schema:
+                type: object
+                additionalProperties: {}
+            application/yaml:
+              schema:
+                type: object
+                additionalProperties: {}
+            application/vnd.oai.openapi+json:
+              schema:
+                type: object
+                additionalProperties: {}
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/attendance/:
+    get:
+      operationId: v1_attendance_retrieve
+      description: GET /api/v1/attendance/?outletId=xxx&month=2026-03
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/attendance/check-in/:
+    post:
+      operationId: v1_attendance_check_in_create
+      description: POST /api/v1/attendance/check-in/
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/attendance/check-out/:
+    post:
+      operationId: v1_attendance_check_out_create
+      description: POST /api/v1/attendance/check-out/
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/attendance/manual/:
+    post:
+      operationId: v1_attendance_manual_create
+      description: POST /api/v1/attendance/manual/
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/attendance/summary/:
+    get:
+      operationId: v1_attendance_summary_retrieve
+      description: GET /api/v1/attendance/summary/?outletId=xxx&month=2026-03
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/attendance/today/:
+    get:
+      operationId: v1_attendance_today_retrieve
+      description: GET /api/v1/attendance/today/?outletId=xxx
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/audit/logs/:
+    get:
+      operationId: v1_audit_logs_list
+      description: |-
+        Secure audit log list endpoint.
+        Restricted to admin or authorized staff only.
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - v1
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedActivityEventLegacyAdapterList'
+          description: ''
+  /api/v1/audit/logs/export/:
+    get:
+      operationId: v1_audit_logs_export_retrieve
+      description: Export filtered audit logs as CSV.
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/audit/revisions/{record_type}/{record_id}/:
+    get:
+      operationId: v1_audit_revisions_retrieve
+      description: GET /api/v1/audit/revisions/<record_type>/<record_id>/
+      parameters:
+      - in: path
+        name: record_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: record_type
+        schema:
+          type: string
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/login/:
+    post:
+      operationId: v1_auth_login_create
+      description: |-
+        Login with phone and staff PIN.
+
+        Request body:
+        {
+            "phone": "9876543210",
+            "password": "1234"  # staff_pin
+        }
+
+        Response:
+        {
+            "access": "<jwt_access_token>",
+            "refresh": "<jwt_refresh_token>",
+            "user": {
+                "id": "...",
+                "name": "...",
+                "phone": "...",
+                "role": "...",
+                "staffPin": "...",
+                "outletId": "...",
+                "outlet": {...},
+                "maxDiscount": 0,
+                ...
+            }
+        }
+      tags:
+      - v1
+      security:
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/logout/:
+    post:
+      operationId: v1_auth_logout_create
+      description: Subclass TokenBlacklistView to log the LOGOUT event.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenBlacklist'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenBlacklist'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenBlacklist'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenBlacklist'
+          description: ''
+  /api/v1/auth/me/:
+    get:
+      operationId: v1_auth_me_retrieve
+      description: Get current authenticated staff details.
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/me/pin/:
+    patch:
+      operationId: v1_auth_me_pin_partial_update
+      description: PATCH /api/v1/auth/me/pin/
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/refresh/:
+    post:
+      operationId: v1_auth_refresh_create
+      description: |-
+        Takes a refresh type JSON web token and returns an access type JSON web
+        token if the refresh token is valid.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRefresh'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenRefresh'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenRefresh'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRefresh'
+          description: ''
+  /api/v1/auth/switch-outlet/:
+    post:
+      operationId: v1_auth_switch_outlet_create
+      description: |-
+        POST /api/v1/auth/switch-outlet/
+
+        Switch the active outlet context for a Super Admin.
+        Validates organization constraints and updates the default Session outlet.
+        Returns a new set of JWT access + refresh tokens.
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/balance-sheet/:
+    get:
+      operationId: v1_balance_sheet_retrieve
+      description: |-
+        GET /api/v1/balance-sheet/?outlet_id=X&as_on_date=YYYY-MM-DD&stock_valuation=purchase_rate
+
+        Returns Balance Sheet in two-sided format (Marg ERP style):
+          LEFT  — Liabilities & Capital
+          RIGHT — Assets (including Stock in Hand from inventory)
+
+        Net Profit is always calculated for the FULL FINANCIAL YEAR up to as_on_date.
+        Duties & Taxes (GST Input) is placed on Assets side.
+        GST Payable goes on Liabilities side.
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/batches/{batch_id}/landing-cost/:
+    get:
+      operationId: v1_batches_landing_cost_retrieve
+      description: GET /api/v1/inventory/batches/{batch_id}/landing-cost/
+      parameters:
+      - in: path
+        name: batch_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/credit/:
+    get:
+      operationId: v1_credit_retrieve
+      description: List credit accounts for outlet.
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/credit-notes/:
+    get:
+      operationId: v1_credit_notes_retrieve
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_credit_notes_create
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/credit/{account_id}/transactions/:
+    get:
+      operationId: v1_credit_transactions_retrieve
+      description: GET /api/v1/credit/{id}/transactions/
+      parameters:
+      - in: path
+        name: account_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/credit/{customer_id}/ledger/:
+    get:
+      operationId: v1_credit_ledger_retrieve
+      description: GET /api/v1/credit/{id}/ledger/
+      parameters:
+      - in: path
+        name: customer_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/credit/{id}/reminder/:
+    post:
+      operationId: v1_credit_reminder_create
+      description: POST /api/v1/credit/{id}/reminder/
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/credit/{id}/limit/:
+    patch:
+      operationId: v1_credit_limit_partial_update
+      description: PATCH /api/v1/credit/{id}/limit/
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/credit/accounts/{account_id}/:
+    get:
+      operationId: v1_credit_accounts_retrieve
+      description: Get credit account details.
+      parameters:
+      - in: path
+        name: account_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/credit/payment/:
+    post:
+      operationId: v1_credit_payment_create
+      description: |-
+        Record a customer credit repayment.
+
+        Request body:
+        {
+            "creditAccountId": "...",
+            "amount": 1000,
+            "mode": "cash",
+            "reference": "CHQ12345",
+            "notes": "Payment received",
+            "paymentDate": "2026-03-17"
+        }
+
+        Returns:
+        {
+            "id": "...",
+            "customerId": "...",
+            "customer": {...},
+            "outletId": "...",
+            "creditLimit": 5000,
+            "totalOutstanding": 500,
+            "totalBorrowed": 2000,
+            "totalRepaid": 1500,
+            "status": "partial",
+            "lastTransactionDate": "2026-03-17T...",
+            "createdAt": "2026-03-17T..."
+        }
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/customers/:
+    get:
+      operationId: v1_customers_retrieve
+      description: List customers for outlet with pagination and optional search.
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_customers_create
+      description: Create a new customer.
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/customers/{customer_id}/:
+    get:
+      operationId: v1_customers_retrieve_2
+      description: Get customer details by ID.
+      parameters:
+      - in: path
+        name: customer_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: v1_customers_update
+      description: Update customer details.
+      parameters:
+      - in: path
+        name: customer_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/customers/{customer_id}/chronic-medicines/:
+    get:
+      operationId: v1_customers_chronic_medicines_retrieve
+      description: GET /api/v1/customers/{customer_id}/chronic-medicines/
+      parameters:
+      - in: path
+        name: customer_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/customers/{customer_id}/ledger/:
+    get:
+      operationId: v1_customers_ledger_retrieve
+      description: GET /api/v1/customers/{id}/ledger/?from=&to=
+      parameters:
+      - in: path
+        name: customer_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/customers/{customer_id}/purchase-history/:
+    get:
+      operationId: v1_customers_purchase_history_retrieve
+      description: |-
+        Get customer's purchase history.
+
+        Query parameters:
+        - outletId: Outlet UUID to filter invoices
+
+        Returns:
+        [
+            {
+                "invoiceId": "INV-...",
+                "date": "2026-03-15",
+                "total": 450.00,
+                "items": 3,
+                "billedBy": "Rajesh",
+                "paymentMode": "cash"
+            }
+        ]
+      parameters:
+      - in: path
+        name: customer_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/customers/{id}/outstanding/:
+    get:
+      operationId: v1_customers_outstanding_retrieve
+      description: |-
+        GET /api/v1/customers/<uuid:pk>/outstanding/
+        Returns all unpaid SaleInvoices for a customer.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/customers/refill-alerts/:
+    get:
+      operationId: v1_customers_refill_alerts_retrieve
+      description: GET /api/v1/customers/refill-alerts/?days=7
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/customers/search/:
+    get:
+      operationId: v1_customers_search_retrieve
+      description: |-
+        Search for customers by query string.
+
+        Query parameters:
+        - q: Search query (minimum 2 characters) for name or phone
+        - outletId: Outlet UUID to filter customers
+
+        Returns:
+        [
+            {
+                "id": "...",
+                "name": "...",
+                "phone": "...",
+                "address": "...",
+                "dob": "...",
+                "gstin": "...",
+                "fixedDiscount": 0,
+                "creditLimit": 5000,
+                "outstanding": 1200,
+                "totalPurchases": 15000,
+                "isChronic": false,
+                "isActive": true,
+                "createdAt": "2026-03-17T..."
+            }
+        ]
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/daily/:
+    get:
+      operationId: v1_dashboard_daily_retrieve
+      description: |-
+        Get daily dashboard KPIs and alerts.
+
+        Query parameters:
+        - outletId: Outlet UUID (required)
+        - date: Date in yyyy-MM-dd format (default: today)
+
+        Returns:
+        {
+            "date": "2026-03-17",
+            "totalSales": 15000,
+            "totalBills": 25,
+            "cashCollected": 10000,
+            "upiCollected": 3000,
+            "cardCollected": 2000,
+            "creditGiven": 0,
+            "topSellingItems": [
+                {
+                    "productId": "...",
+                    "name": "Dolo 650",
+                    "totalQty": 150,
+                    "totalRevenue": 3000
+                }
+            ],
+            "hourlySales": [
+                {
+                    "hour": "09:00",
+                    "bills": 5,
+                    "sales": 2000
+                }
+            ],
+            "paymentBreakdown": {
+                "cash": 10000,
+                "upi": 3000,
+                "card": 2000,
+                "credit": 0
+            },
+            "alerts": {
+                "lowStock": [...],
+                "expiringSoon": [...],
+                "overdueAccounts": [...]
+            }
+        }
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/debit-notes/:
+    get:
+      operationId: v1_debit_notes_retrieve
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_debit_notes_create
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/debit-notes/{id}/:
+    get:
+      operationId: v1_debit_notes_retrieve_2
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: v1_debit_notes_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/doctors/:
+    get:
+      operationId: v1_doctors_retrieve
+      description: GET/POST /api/v1/doctors/
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_doctors_create
+      description: GET/POST /api/v1/doctors/
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/doctors/{id}/:
+    get:
+      operationId: v1_doctors_retrieve_2
+      description: GET/PUT/PATCH /api/v1/doctors/{pk}/
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: v1_doctors_update
+      description: GET/PUT/PATCH /api/v1/doctors/{pk}/
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: v1_doctors_partial_update
+      description: GET/PUT/PATCH /api/v1/doctors/{pk}/
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/expenses/:
+    get:
+      operationId: v1_expenses_retrieve
+      description: |-
+        GET /api/v1/expenses/?from=&to=&head=
+        POST /api/v1/expenses/
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_expenses_create
+      description: |-
+        GET /api/v1/expenses/?from=&to=&head=
+        POST /api/v1/expenses/
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/gst-summary/:
+    get:
+      operationId: v1_gst_summary_retrieve
+      description: |-
+        GET /api/v1/accounts/gst-summary/?outlet_id=xxx&month=2026-03
+
+        Returns GST summary for a specific month:
+        - gst_output: Total GST collected from customers
+        - gst_input: Total GST paid to distributors
+        - gst_payable: (gst_output - gst_input)
+
+        Access: super_admin, admin only.
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/inventory/:
+    get:
+      operationId: v1_inventory_retrieve
+      description: |-
+        GET /api/v1/inventory/?outletId=xxx&search=para&lowStock=true&expiringSoon=true&export_format=csv
+
+        4-layer optimized inventory list:
+        1. DB-level LIMIT/OFFSET pagination  — never loads all products into RAM
+        2. pg_trgm GIN indexes              — icontains search on 50k products <5ms
+        3. SQL annotations (SUM/MIN)        — totals computed by PostgreSQL, not Python
+        4. Redis cache (2-min TTL)          — repeat page loads cost ~0ms
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/inventory/adjust/:
+    post:
+      operationId: v1_inventory_adjust_create
+      description: |-
+        Adjust batch stock.
+
+        Request body:
+        {
+            "batchId": "...",
+            "type": "damage" | "return" | "correction",
+            "qty": 5,  # Can be negative
+            "reason": "Batch damaged in transport",
+            "pin": "1234"
+        }
+
+        Response:
+        {
+            "success": true,
+            "message": "Stock adjusted successfully"
+        }
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/inventory/alerts/:
+    get:
+      operationId: v1_inventory_alerts_retrieve
+      description: |-
+        Get inventory alerts.
+
+        Query parameters:
+        - outletId: Outlet UUID to filter batches (required)
+
+        Returns:
+        {
+            "lowStock": [{ "productId", "productName", "totalStock", "reorderQty", "nearestExpiry" }],
+            "expiringIn30Days": [{ "productId", "productName", "batchNo", "expiryDate", "daysRemaining", "qty" }],
+            "outOfStock": [{ "productId", "productName" }]
+        }
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/inventory/batches/availability-check/:
+    post:
+      operationId: v1_inventory_batches_availability_check_create
+      description: |-
+        POST /api/v1/inventory/batches/availability-check/
+        Payload: [{ "batchId": "uuid", "qtyStrips": 1, "qtyLoose": 0 }]
+        Returns: [
+          {
+            "batchId": "uuid",
+            "availableQtyStrips": 1,
+            "availableQtyLoose": 0,
+            "status": "AVAILABLE" | "LOW_STOCK" | "BATCH_EXPIRED" | "BATCH_UNAVAILABLE"
+          }
+        ]
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/inventory/export/csv/:
+    get:
+      operationId: v1_inventory_export_csv_retrieve
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/inventory/stockledger/:
+    get:
+      operationId: v1_inventory_stockledger_retrieve
+      description: GET /api/v1/inventory/stockledger/?outletId=xxx&batchId=yyy&productId=zzz
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/inventory/stockledger/batches/:
+    get:
+      operationId: v1_inventory_stockledger_batches_retrieve
+      description: |-
+        GET /api/v1/inventory/stockledger/batches/?outletId=xxx
+        Returns a lightweight, fast, and optimized list of active batches at the outlet.
+        Used to populate the left-sidebar panel of the stock ledger view.
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/invoice-number/:
+    get:
+      operationId: v1_invoice_number_retrieve
+      description: |-
+        GET /api/v1/billing/next-invoice-number/?outletId=xxx
+
+        Returns a PREVIEW of the next invoice number.
+        The actual number is re-generated (with a row-level lock) when the bill is
+        saved, so this value may differ if another bill is created in the interim.
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/ledger-groups/:
+    get:
+      operationId: v1_ledger_groups_retrieve
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_ledger_groups_create
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/ledgers/:
+    get:
+      operationId: v1_ledgers_retrieve
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_ledgers_create
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/ledgers/{ledger_id}/:
+    put:
+      operationId: v1_ledgers_update
+      parameters:
+      - in: path
+        name: ledger_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/ledgers/{ledger_id}/outstanding/:
+    get:
+      operationId: v1_ledgers_outstanding_retrieve
+      parameters:
+      - in: path
+        name: ledger_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/ledgers/{ledger_id}/pending-bills/:
+    get:
+      operationId: v1_ledgers_pending_bills_retrieve
+      parameters:
+      - in: path
+        name: ledger_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/ledgers/{ledger_id}/statement/:
+    get:
+      operationId: v1_ledgers_statement_retrieve
+      parameters:
+      - in: path
+        name: ledger_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/ledgers/next-no/:
+    get:
+      operationId: v1_ledgers_next_no_retrieve
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/ledgers/sync/:
+    post:
+      operationId: v1_ledgers_sync_create
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/migrate/marg/:
+    post:
+      operationId: v1_migrate_marg_create
+      description: POST /api/v1/migrate/marg/ — bulk import CSV from Marg ERP
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/notifications/low-stock/:
+    post:
+      operationId: v1_notifications_low_stock_create
+      description: POST /api/v1/notifications/low-stock/
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/organizations/:
+    get:
+      operationId: v1_organizations_retrieve
+      description: GET /api/v1/organizations/ — list all organizations (super_admin
+        only).
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/organizations/{org_id}/outlets/:
+    get:
+      operationId: v1_organizations_outlets_retrieve
+      description: |-
+        GET /api/v1/organizations/<org_id>/outlets/ — list outlets for an organization.
+        POST /api/v1/organizations/<org_id>/outlets/ — create an outlet for the organization.
+      parameters:
+      - in: path
+        name: org_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_organizations_outlets_create
+      description: |-
+        GET /api/v1/organizations/<org_id>/outlets/ — list outlets for an organization.
+        POST /api/v1/organizations/<org_id>/outlets/ — create an outlet for the organization.
+      parameters:
+      - in: path
+        name: org_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/organizations/{id}/:
+    get:
+      operationId: v1_organizations_retrieve_2
+      description: GET /api/v1/organizations/<pk>/ — get single organization with
+        outlets.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/organizations/dashboard/:
+    get:
+      operationId: v1_organizations_dashboard_retrieve
+      description: |-
+        GET /api/v1/organizations/dashboard/?orgId=<uuid>&from=YYYY-MM-DD&to=YYYY-MM-DD
+
+        Chain-wide aggregated KPIs for a super_admin across ALL outlets in the org.
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/organizations/outlets/all/:
+    get:
+      operationId: v1_organizations_outlets_all_retrieve
+      description: |-
+        GET /api/v1/organizations/outlets/all/
+        Super-admin only: returns all outlets across their organization.
+        Used by the frontend Outlet Switcher so super_admin can operate
+        as any outlet (billing, purchases, inventory, etc.)
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/outlet/settings/:
+    get:
+      operationId: v1_outlet_settings_retrieve
+      description: GET/PATCH /api/v1/outlet/settings/
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: v1_outlet_settings_partial_update
+      description: GET/PATCH /api/v1/outlet/settings/
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/outstanding/customers/:
+    get:
+      operationId: v1_outstanding_customers_retrieve
+      description: GET /api/v1/outstanding/customers/
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/outstanding/distributors/:
+    get:
+      operationId: v1_outstanding_distributors_retrieve
+      description: GET /api/v1/outstanding/distributors/
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/products/:
+    get:
+      operationId: v1_products_retrieve
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_products_create
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/products/{id}/:
+    get:
+      operationId: v1_products_retrieve_2
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: v1_products_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/products/{id}/batches/:
+    get:
+      operationId: v1_products_batches_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/products/search/:
+    get:
+      operationId: v1_products_search_retrieve
+      description: |-
+        Search for products by query string.
+
+        Query parameters:
+        - q: Search query (minimum 2 characters)
+        - outletId: Outlet UUID to filter batches
+
+        Returns:
+        [
+            {
+                "id": "...",
+                "name": "Paracetamol",
+                "composition": "...",
+                "manufacturer": "...",
+                "category": "...",
+                "drugType": "...",
+                "scheduleType": "...",
+                "hsnCode": "...",
+                "gstRate": 0,
+                "packSize": 10,
+                "packUnit": "tablet",
+                "packType": "strip",
+                "isFridge": false,
+                "isDiscontinued": false,
+                "outletProductId": "...",
+                "totalStock": 150,
+                "nearestExpiry": "2026-12-31",
+                "isLowStock": false,
+                "batches": [
+                    {
+                        "id": "...",
+                        "outletId": "...",
+                        "outletProductId": "...",
+                        "batchNo": "BATCH123",
+                        "expiryDate": "2026-12-31",
+                        "mrp": 50.0,
+                        "purchaseRate": 25.0,
+                        "saleRate": 40.0,
+                        "qtyStrips": 10,
+                        "qtyLoose": 0,
+                        "isActive": true,
+                        "createdAt": "2026-03-17T..."
+                    }
+                ]
+            }
+        ]
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/profit-loss/:
+    get:
+      operationId: v1_profit_loss_retrieve
+      description: |-
+        GET /api/v1/profit-loss/?outlet_id=X&from_date=YYYY-MM-DD&to_date=YYYY-MM-DD
+                                 &stock_scope=all_days&stock_valuation=purchase_rate
+
+        Returns a full Marg-ERP-style Trading + P&L Account in two-sided format:
+          LEFT  — Dr side  (Expenses, Opening Stock, Purchases)
+          RIGHT — Cr side  (Sales, Closing Stock, Income)
+
+        Net Profit here MUST match the Net Profit shown in Balance Sheet Capital.
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/purchases/:
+    get:
+      operationId: v1_purchases_retrieve
+      description: |-
+        Get paginated list of purchase invoices.
+
+        Query parameters:
+        - outletId: Required
+        - distributorId: Optional
+        - startDate: Optional (yyyy-MM-dd)
+        - endDate: Optional (yyyy-MM-dd)
+        - page: Default 1
+        - pageSize: Default 50, max 100
+
+        Returns:
+        {
+            "data": [
+                {
+                    "id": "...",
+                    "outletId": "...",
+                    "distributorId": "...",
+                    "distributor": {...},
+                    "invoiceNo": "...",
+                    "invoiceDate": "2026-03-17",
+                    "dueDate": "2026-04-16",
+                    "subtotal": 10000,
+                    "discountAmount": 0,
+                    "taxableAmount": 10000,
+                    "gstAmount": 1800,
+                    "cessAmount": 0,
+                    "freight": 0,
+                    "roundOff": 0,
+                    "grandTotal": 11800,
+                    "amountPaid": 0,
+                    "outstanding": 11800,
+                    "createdAt": "2026-03-17T..."
+                }
+            ],
+            "pagination": {
+                "page": 1,
+                "pageSize": 50,
+                "totalPages": 1,
+                "totalRecords": 5
+            }
+        }
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_purchases_create
+      description: |-
+        Create a new purchase invoice.
+
+        Request body:
+        {
+            "outletId": "...",
+            "distributorId": "...",
+            "purchaseType": "cash" | "credit",
+            "invoiceNo": "...",
+            "invoiceDate": "2026-03-17",
+            "dueDate": "2026-04-16",
+            "purchaseOrderRef": "...",
+            "godown": "main",
+            "freight": 0,
+            "notes": "...",
+            "subtotal": 10000,
+            "discountAmount": 0,
+            "taxableAmount": 10000,
+            "gstAmount": 1800,
+            "cessAmount": 0,
+            "roundOff": 0,
+            "grandTotal": 11800,
+            "items": [
+                {
+                    "masterProductId": "...",
+                    "customProductName": null,
+                    "isCustomProduct": false,
+                    "hsnCode": "...",
+                    "batchNo": "...",
+                    "expiryDate": "2026-12-31",
+                    "pkg": 10,
+                    "qty": 10,
+                    "actualQty": 100,
+                    "freeQty": 0,
+                    "purchaseRate": 100,
+                    "discountPct": 0,
+                    "cashDiscountPct": 0,
+                    "gstRate": 18,
+                    "cess": 0,
+                    "mrp": 150,
+                    "ptr": 125,
+                    "pts": 110,
+                    "saleRate": 140,
+                    "taxableAmount": 1000,
+                    "gstAmount": 180,
+                    "cessAmount": 0,
+                    "totalAmount": 1180
+                }
+            ]
+        }
+
+        Returns:
+        {
+            "id": "...",
+            "outletId": "...",
+            "distributorId": "...",
+            "distributor": {...},
+            "invoiceNo": "...",
+            "invoiceDate": "2026-03-17",
+            "dueDate": "2026-04-16",
+            "purchaseType": "credit",
+            "purchaseOrderRef": "...",
+            "godown": "main",
+            "subtotal": 10000,
+            "discountAmount": 0,
+            "taxableAmount": 10000,
+            "gstAmount": 1800,
+            "cessAmount": 0,
+            "freight": 0,
+            "roundOff": 0,
+            "grandTotal": 11800,
+            "amountPaid": 0,
+            "outstanding": 11800,
+            "items": [...],
+            "createdByName": "...",
+            "createdAt": "2026-03-17T..."
+        }
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/purchases/{purchase_id}/:
+    get:
+      operationId: v1_purchases_retrieve_2
+      description: |-
+        GET /api/v1/purchases/{id}/
+
+        Get details of a specific purchase invoice, including its items.
+      parameters:
+      - in: path
+        name: purchase_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: v1_purchases_update
+      description: Update an existing purchase invoice.
+      parameters:
+      - in: path
+        name: purchase_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/purchases/check-invoice/:
+    get:
+      operationId: v1_purchases_check_invoice_retrieve
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/purchases/distributors/:
+    get:
+      operationId: v1_purchases_distributors_retrieve
+      description: |-
+        Get list of distributors.
+
+        Query parameters:
+        - outletId: Outlet UUID to filter distributors
+
+        Returns:
+        [
+            {
+                "id": "...",
+                "name": "...",
+                "gstin": "...",
+                "phone": "...",
+                "email": "...",
+                "address": "...",
+                "city": "...",
+                "state": "...",
+                "creditDays": 30,
+                "openingBalance": 0,
+                "balanceType": "CR",
+                "isActive": true,
+                "createdAt": "2026-03-17T..."
+            }
+        ]
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_purchases_distributors_create
+      description: Create a new distributor.
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/purchases/distributors/{distributor_id}/:
+    get:
+      operationId: v1_purchases_distributors_retrieve_2
+      description: Get distributor details.
+      parameters:
+      - in: path
+        name: distributor_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: v1_purchases_distributors_update
+      description: Update distributor details.
+      parameters:
+      - in: path
+        name: distributor_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/purchases/distributors/{distributor_id}/ledger/:
+    get:
+      operationId: v1_purchases_distributors_ledger_retrieve
+      description: |-
+        Get distributor ledger.
+
+        Query parameters:
+        - outletId: Outlet UUID to filter ledger
+
+        Returns:
+        {
+            "distributor": {...},
+            "ledger": [
+                {
+                    "id": "...",
+                    "date": "2026-03-17",
+                    "entryType": "purchase",
+                    "referenceNo": "PU-001",
+                    "description": "Purchase invoice",
+                    "debit": 5000.0,
+                    "credit": 0,
+                    "runningBalance": 5000.0,
+                    "createdAt": "2026-03-17T..."
+                }
+            ],
+            "summary": {
+                "totalDebit": 50000.0,
+                "totalCredit": 10000.0,
+                "runningBalance": 40000.0
+            }
+        }
+      parameters:
+      - in: path
+        name: distributor_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/purchases/distributors/{id}/outstanding/:
+    get:
+      operationId: v1_purchases_distributors_outstanding_retrieve
+      description: |-
+        GET /api/v1/purchases/distributors/{pk}/outstanding/
+        Returns all unpaid PurchaseInvoices for a distributor.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/purchases/invoices/search/:
+    get:
+      operationId: v1_purchases_invoices_search_retrieve
+      description: GET /api/v1/purchases/invoices/search/?outletId=xxx&q=INV-001
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/purchases/payments/:
+    get:
+      operationId: v1_purchases_payments_retrieve
+      description: |-
+        GET /api/v1/purchases/payments/?distributorId=&from=&to=
+        Lists PaymentEntry records for an outlet with optional filters.
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_purchases_payments_create
+      description: |-
+        GET /api/v1/purchases/payments/?distributorId=&from=&to=
+        Lists PaymentEntry records for an outlet with optional filters.
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/quotations/:
+    get:
+      operationId: v1_quotations_list
+      tags:
+      - v1
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Quotation'
+          description: ''
+    post:
+      operationId: v1_quotations_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Quotation'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Quotation'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Quotation'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Quotation'
+          description: ''
+  /api/v1/quotations/{id}/:
+    get:
+      operationId: v1_quotations_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Quotation'
+          description: ''
+    put:
+      operationId: v1_quotations_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Quotation'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Quotation'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Quotation'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Quotation'
+          description: ''
+    patch:
+      operationId: v1_quotations_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedQuotation'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedQuotation'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedQuotation'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Quotation'
+          description: ''
+    delete:
+      operationId: v1_quotations_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '204':
+          description: No response body
+  /api/v1/quotations/{id}/convert/:
+    post:
+      operationId: v1_quotations_convert_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/receipts/:
+    get:
+      operationId: v1_receipts_retrieve
+      description: |-
+        GET /api/v1/receipts/?customerId=&from=&to=
+        POST /api/v1/receipts/
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_receipts_create
+      description: |-
+        GET /api/v1/receipts/?customerId=&from=&to=
+        POST /api/v1/receipts/
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/reports/balance-sheet/:
+    get:
+      operationId: v1_reports_balance_sheet_retrieve
+      description: |-
+        GET /api/v1/reports/balance-sheet/?outletId=xxx
+
+        Snapshot balance sheet: Assets (stock + receivables) vs Liabilities (payables).
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/reports/batch-wise/:
+    get:
+      operationId: v1_reports_batch_wise_retrieve
+      description: GET /api/v1/reports/batch-wise/
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/reports/batch-wise/export/:
+    get:
+      operationId: v1_reports_batch_wise_export_retrieve
+      description: GET /api/v1/reports/batch-wise/export/
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/reports/expiry/:
+    get:
+      operationId: v1_reports_expiry_retrieve
+      description: GET /api/v1/reports/expiry/?days=30
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/reports/gst/gstr1/:
+    get:
+      operationId: v1_reports_gst_gstr1_retrieve
+      description: |-
+        GET /api/v1/reports/gst/gstr1/?from=YYYY-MM-DD&to=YYYY-MM-DD&outletId=xxx
+
+        Generate GSTR-1 compatible GST summary grouped by HSN code.
+        Matches the GSTSummary + GSTReportRow TypeScript interfaces exactly.
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/reports/gst/gstr2/:
+    get:
+      operationId: v1_reports_gst_gstr2_retrieve
+      description: GET /api/v1/reports/gst/gstr2/?from=&to=
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/reports/gst/gstr3b/:
+    get:
+      operationId: v1_reports_gst_gstr3b_retrieve
+      description: GET /api/v1/reports/gst/gstr3b/?month=2026-03
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/reports/gstr2a/:
+    post:
+      operationId: v1_reports_gstr2a_create
+      description: |-
+        POST /api/v1/reports/gstr2a/
+
+        Body: { "gstin": "27ABC123", "from": "2026-01-01", "to": "2026-03-31" }
+
+        Reconcile our purchase invoices against GSTR-2A data.
+        Phase 3: uses mock GSTR-2A data. Phase 4 will wire real GSTN API.
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/reports/inventory/movement/:
+    get:
+      operationId: v1_reports_inventory_movement_retrieve
+      description: GET /api/v1/reports/inventory/movement/?productId=&from=&to=
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/reports/inventory/valuation/:
+    get:
+      operationId: v1_reports_inventory_valuation_retrieve
+      description: GET /api/v1/reports/inventory/valuation/
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/reports/sales/daily/:
+    get:
+      operationId: v1_reports_sales_daily_retrieve
+      description: |-
+        Get daily sales report.
+
+        Query parameters:
+        - outletId: Outlet UUID to filter invoices (required)
+        - date: Report date in YYYY-MM-DD format (default: today)
+
+        Returns:
+        {
+            "rows": [{ "date", "invoiceCount", "totalSales", "totalDiscount", "totalTax", "paymentBreakdown": { "cash", "upi", "card", "credit" } }],
+            "summary": [{ "label", "value", "change", "trend" }],
+            "chartData": [{ "date", "sales", "bills" }]
+        }
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/reports/sales/summary/:
+    get:
+      operationId: v1_reports_sales_summary_retrieve
+      description: GET /api/v1/reports/sales/summary/?from=&to=
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/reports/schedule/:
+    get:
+      operationId: v1_reports_schedule_retrieve
+      description: |-
+        GET /api/v1/reports/schedule/?outletId=&schedule_type=&from=&to=
+
+        If schedule_type is empty, returns data for ALL scheduled drug types.
+        Returns per-schedule_type summary + full line-item sales & purchases.
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/reports/staff/performance/:
+    get:
+      operationId: v1_reports_staff_performance_retrieve
+      description: GET /api/v1/reports/staff/performance/?from=&to=
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/revisions/:
+    get:
+      operationId: v1_revisions_retrieve
+      description: GET /api/v1/billing/revisions/
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/sales/:
+    get:
+      operationId: v1_sales_retrieve
+      description: |-
+        Get paginated list of sales invoices.
+
+        Query parameters:
+        - outletId: Outlet UUID to filter invoices (required)
+        - page: Page number (default: 1)
+        - pageSize: Items per page (default: 50, max: 100)
+
+        Returns:
+        {
+            "data": [{SaleInvoice}],
+            "pagination": {
+                "page": 1,
+                "pageSize": 50,
+                "totalPages": 1,
+                "totalRecords": 5
+            }
+        }
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_sales_create
+      description: |-
+        Create a sale invoice.
+
+        Request body:
+        {
+            "outletId": "...",
+            "customerId": "...",  // optional
+            "items": [
+                {
+                    "batchId": "...",
+                    "productId": "...",
+                    "qtyStrips": 5,
+                    "qtyLoose": 0,
+                    "rate": 40.0,
+                    "discountPct": 0,
+                    "gstRate": 5,
+                    "taxableAmount": 200,
+                    "gstAmount": 10,
+                    "totalAmount": 210
+                }
+            ],
+            "subtotal": 2100,
+            "discountAmount": 0,
+            "taxableAmount": 2100,
+            "cgstAmount": 105,
+            "sgstAmount": 105,
+            "igstAmount": 0,
+            "cgst": 5,
+            "sgst": 5,
+            "igst": 0,
+            "roundOff": 0,
+            "grandTotal": 2310,
+            "paymentMode": "split",
+            "cashPaid": 1000,
+            "upiPaid": 1310,
+            "cardPaid": 0,
+            "creditGiven": 0,
+            "scheduleHData": {
+                "patientName": "...",
+                "patientAge": 45,
+                "patientAddress": "...",
+                "doctorName": "...",
+                "doctorRegNo": "...",
+                "prescriptionNo": "..."
+            }
+        }
+
+        Response:
+        {
+            "id": "...",
+            "outletId": "...",
+            "invoiceNo": "INV-2026-000001",
+            "invoiceDate": "2026-03-17T...",
+            "customerId": "...",
+            "subtotal": 2100,
+            "discountAmount": 0,
+            "taxableAmount": 2100,
+            "cgstAmount": 105,
+            "sgstAmount": 105,
+            "igstAmount": 0,
+            "cgst": 5,
+            "sgst": 5,
+            "igst": 0,
+            "roundOff": 0,
+            "grandTotal": 2310,
+            "paymentMode": "split",
+            "cashPaid": 1000,
+            "upiPaid": 1310,
+            "cardPaid": 0,
+            "creditGiven": 0,
+            "amountPaid": 2310,
+            "amountDue": 0,
+            "isReturn": false,
+            "billedBy": "...",
+            "items": [...],
+            "createdAt": "2026-03-17T..."
+        }
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/sales/{sale_id}/:
+    get:
+      operationId: v1_sales_retrieve_2
+      description: |-
+        GET /api/v1/sales/{id}/
+
+        Get details of a specific sale invoice.
+      parameters:
+      - in: path
+        name: sale_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: v1_sales_update
+      description: Update a sale invoice.
+      parameters:
+      - in: path
+        name: sale_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/sales/{sale_id}/items/:
+    get:
+      operationId: v1_sales_items_retrieve
+      description: |-
+        GET /api/v1/sales/{id}/items/
+
+        Returns the full line-item list for a single sale invoice.
+        Used by the customer invoice history expandable rows.
+      parameters:
+      - in: path
+        name: sale_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/sales/{sale_id}/modification-options/:
+    get:
+      operationId: v1_sales_modification_options_retrieve
+      description: GET /api/v1/billing/sales/<id>/modification-options/
+      parameters:
+      - in: path
+        name: sale_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/sales/{sale_id}/print/:
+    get:
+      operationId: v1_sales_print_retrieve
+      description: |-
+        Get sale invoice for printing.
+
+        Query parameters:
+        - outletId: Outlet UUID to filter invoices
+
+        Returns:
+        {
+            "id": "...",
+            "invoiceNo": "...",
+            "invoiceDate": "...",
+            "grandTotal": ...,
+            "paymentMode": "...",
+            "customer": { "name", "phone", "address" } | null,
+            "outlet": { "name", "address", "phone", "gstin", "drugLicenseNo" },
+            "billedBy": "staff name",
+            "items": [{ "productName", "composition", "batchNo", "expiryDate", "qty", "mrp", "saleRate", "discountPct", "gstRate", "totalAmount" }]
+        }
+      parameters:
+      - in: path
+        name: sale_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/sales/{sale_id}/revise/:
+    post:
+      operationId: v1_sales_revise_create
+      description: |-
+        POST /api/v1/billing/sales/<id>/revise/
+        Direct revision of a sale invoice. Takes pre-snapshot, performs update, takes post-snapshot,
+        and records it in the BillRevision and ActivityLog.
+      parameters:
+      - in: path
+        name: sale_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/sales/drafts/:
+    get:
+      operationId: v1_sales_drafts_list
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - v1
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedDraftInvoiceList'
+          description: ''
+    post:
+      operationId: v1_sales_drafts_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DraftInvoice'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DraftInvoice'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DraftInvoice'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DraftInvoice'
+          description: ''
+  /api/v1/sales/drafts/{id}/:
+    get:
+      operationId: v1_sales_drafts_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DraftInvoice'
+          description: ''
+    put:
+      operationId: v1_sales_drafts_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DraftInvoice'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DraftInvoice'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DraftInvoice'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DraftInvoice'
+          description: ''
+    patch:
+      operationId: v1_sales_drafts_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedDraftInvoice'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedDraftInvoice'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedDraftInvoice'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DraftInvoice'
+          description: ''
+    delete:
+      operationId: v1_sales_drafts_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '204':
+          description: No response body
+  /api/v1/sales/invoices/search/:
+    get:
+      operationId: v1_sales_invoices_search_retrieve
+      description: GET /api/v1/sales/invoices/search/?outletId=xxx&q=INV-001
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/sales/return/:
+    post:
+      operationId: v1_sales_return_create
+      description: POST /api/v1/sales/return/
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/sales/returns/:
+    get:
+      operationId: v1_sales_returns_retrieve
+      description: GET /api/v1/sales/returns/
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/sales/returns/{id}/:
+    get:
+      operationId: v1_sales_returns_retrieve_2
+      description: GET /api/v1/sales/returns/{id}/
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/sales/returns/{id}/print/:
+    get:
+      operationId: v1_sales_returns_print_retrieve
+      description: GET /api/v1/sales/returns/{id}/print/
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/sales/revisions/report/:
+    get:
+      operationId: v1_sales_revisions_report_retrieve
+      description: GET /api/v1/billing/revisions/report/
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/staff/:
+    get:
+      operationId: v1_staff_retrieve
+      description: |-
+        GET /api/v1/staff/?outletId=xxx
+
+        List all active staff members for an outlet.
+        Used by attendance components to display staff roster.
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/staff/{id}/:
+    patch:
+      operationId: v1_staff_partial_update
+      description: PATCH/DELETE /api/v1/staff/{pk}/
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_staff_destroy
+      description: PATCH/DELETE /api/v1/staff/{pk}/
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '204':
+          description: No response body
+  /api/v1/staff/{id}/performance/:
+    get:
+      operationId: v1_staff_performance_retrieve
+      description: GET /api/v1/staff/{pk}/performance/?from=&to=
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/staff/{staff_id}/verify-pin/:
+    post:
+      operationId: v1_staff_verify_pin_create
+      description: |-
+        Verify staff PIN.
+
+        Request body:
+        {
+            "pin": "1234"
+        }
+
+        Response:
+        {
+            "id": "...",
+            "name": "...",
+            "role": "...",
+            "staffPin": "...",
+            "maxDiscount": 0,
+            "canEditRate": false,
+            "billsToday": 0,
+            "totalSalesToday": 0
+        }
+      parameters:
+      - in: path
+        name: staff_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/staff/create/:
+    post:
+      operationId: v1_staff_create_create
+      description: POST /api/v1/staff/
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/staff/leaderboard/:
+    get:
+      operationId: v1_staff_leaderboard_retrieve
+      description: GET /api/v1/staff/leaderboard/?from=&to=
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/staff/lookup-by-pin/:
+    post:
+      operationId: v1_staff_lookup_by_pin_create
+      description: |-
+        POST /api/v1/staff/lookup-by-pin/
+
+        Look up a staff member by their PIN for kiosk check-in/out.
+        No staffId required — just the PIN and outletId.
+
+        Request body:
+        {
+            "pin": "1234",
+            "outletId": "uuid"
+        }
+
+        Response: same shape as StaffPinVerifyView on success.
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/trial-balance/:
+    get:
+      operationId: v1_trial_balance_retrieve
+      description: |-
+        GET /api/v1/accounts/trial-balance/?outlet_id=xxx&from_date=yyyy-mm-dd&to_date=yyyy-mm-dd
+
+        Returns all ledgers grouped by their LedgerGroup.
+        Calculates Opening Balance (before from_date), Period Totals (from_date to to_date),
+        and Closing Balance.
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/vouchers/:
+    get:
+      operationId: v1_vouchers_retrieve
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_vouchers_create
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/vouchers/{id}/history/:
+    get:
+      operationId: v1_vouchers_history_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/vouchers/{voucher_id}/:
+    get:
+      operationId: v1_vouchers_retrieve_2
+      parameters:
+      - in: path
+        name: voucher_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: v1_vouchers_update
+      parameters:
+      - in: path
+        name: voucher_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+components:
+  schemas:
+    ActivityEventLegacyAdapter:
+      type: object
+      description: |-
+        Adapter that serializes ActivityEvent into the EXACT shape expected by the frontend
+        for the legacy ActivityLog model.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        timestamp:
+          type: string
+          format: date-time
+          readOnly: true
+        user:
+          type: string
+          readOnly: true
+        user_email:
+          type: string
+          readOnly: true
+        outlet:
+          type: string
+          readOnly: true
+        outlet_name:
+          type: string
+          readOnly: true
+        action:
+          type: string
+          maxLength: 255
+        module:
+          type: string
+          maxLength: 255
+        entity_type:
+          type: string
+          maxLength: 255
+        entity_id:
+          type: string
+          maxLength: 255
+        entity_label:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+          default: ''
+        changes_json: {}
+        metadata_json:
+          type: string
+          readOnly: true
+        endpoint:
+          type: string
+          default: ''
+        http_method:
+          type: string
+          default: ''
+        status_code:
+          type: integer
+          default: 200
+        ip_address:
+          type: string
+          nullable: true
+        ip_is_routable:
+          type: boolean
+          default: true
+        user_agent:
+          type: string
+        request_id:
+          type: string
+          nullable: true
+          maxLength: 255
+      required:
+      - action
+      - id
+      - metadata_json
+      - module
+      - outlet
+      - outlet_name
+      - timestamp
+      - user
+      - user_email
+    DraftInvoice:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DraftInvoiceItem'
+        hospital_name:
+          type: string
+          nullable: true
+        customer:
+          type: string
+          format: uuid
+          nullable: true
+        doctor:
+          type: string
+          format: uuid
+          nullable: true
+        discount_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          default: '0.00'
+        extra_discount_pct:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          default: '0.00'
+        round_off:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          default: '0.00'
+        prescription_no:
+          type: string
+          nullable: true
+          maxLength: 100
+        draft_status:
+          $ref: '#/components/schemas/DraftStatusEnum'
+        subtotal:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        taxable_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        cgst_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        sgst_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        igst_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        grand_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        payment_mode:
+          type: string
+          maxLength: 20
+        schedule_h_json:
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        outlet:
+          type: string
+          format: uuid
+      required:
+      - created_at
+      - outlet
+      - updated_at
+    DraftInvoiceItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        qty_strips:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+        qty_loose:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+        discount_pct:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+        draft_invoice:
+          type: string
+          format: uuid
+          readOnly: true
+        batch:
+          type: string
+          format: uuid
+      required:
+      - batch
+      - draft_invoice
+      - id
+    DraftStatusEnum:
+      enum:
+      - draft
+      - held
+      type: string
+      description: |-
+        * `draft` - Draft
+        * `held` - Held
+    PaginatedActivityEventLegacyAdapterList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActivityEventLegacyAdapter'
+    PaginatedDraftInvoiceList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/DraftInvoice'
+    PatchedDraftInvoice:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DraftInvoiceItem'
+        hospital_name:
+          type: string
+          nullable: true
+        customer:
+          type: string
+          format: uuid
+          nullable: true
+        doctor:
+          type: string
+          format: uuid
+          nullable: true
+        discount_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          default: '0.00'
+        extra_discount_pct:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          default: '0.00'
+        round_off:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          default: '0.00'
+        prescription_no:
+          type: string
+          nullable: true
+          maxLength: 100
+        draft_status:
+          $ref: '#/components/schemas/DraftStatusEnum'
+        subtotal:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        taxable_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        cgst_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        sgst_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        igst_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        grand_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        payment_mode:
+          type: string
+          maxLength: 20
+        schedule_h_json:
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        outlet:
+          type: string
+          format: uuid
+    PatchedQuotation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuotationItem'
+        quotation_no:
+          type: string
+          description: e.g., QT-2026-000001
+          maxLength: 50
+        quotation_date:
+          type: string
+          format: date-time
+          readOnly: true
+        valid_until:
+          type: string
+          format: date-time
+          nullable: true
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+        customer_name_override:
+          type: string
+          nullable: true
+          maxLength: 255
+        customer_phone_override:
+          type: string
+          nullable: true
+          maxLength: 20
+        doctor_name:
+          type: string
+          nullable: true
+          maxLength: 255
+        hospital_name:
+          type: string
+          nullable: true
+          maxLength: 255
+        notes:
+          type: string
+          nullable: true
+        subtotal:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          description: Before discount and tax
+        discount_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        extra_discount_pct:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+        taxable_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        cgst_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        sgst_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        igst_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        round_off:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        grand_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        converted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        outlet:
+          type: string
+          format: uuid
+        customer:
+          type: string
+          format: uuid
+          nullable: true
+        converted_to_invoice:
+          type: string
+          format: uuid
+          nullable: true
+        created_by:
+          type: string
+          format: uuid
+          nullable: true
+    Quotation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuotationItem'
+        quotation_no:
+          type: string
+          description: e.g., QT-2026-000001
+          maxLength: 50
+        quotation_date:
+          type: string
+          format: date-time
+          readOnly: true
+        valid_until:
+          type: string
+          format: date-time
+          nullable: true
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+        customer_name_override:
+          type: string
+          nullable: true
+          maxLength: 255
+        customer_phone_override:
+          type: string
+          nullable: true
+          maxLength: 20
+        doctor_name:
+          type: string
+          nullable: true
+          maxLength: 255
+        hospital_name:
+          type: string
+          nullable: true
+          maxLength: 255
+        notes:
+          type: string
+          nullable: true
+        subtotal:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          description: Before discount and tax
+        discount_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        extra_discount_pct:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+        taxable_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        cgst_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        sgst_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        igst_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        round_off:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        grand_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        converted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        outlet:
+          type: string
+          format: uuid
+        customer:
+          type: string
+          format: uuid
+          nullable: true
+        converted_to_invoice:
+          type: string
+          format: uuid
+          nullable: true
+        created_by:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - created_at
+      - grand_total
+      - id
+      - outlet
+      - quotation_date
+      - quotation_no
+      - subtotal
+      - updated_at
+    QuotationItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        product:
+          type: string
+          format: uuid
+          readOnly: true
+        medicine_name:
+          type: string
+          maxLength: 255
+        batch_no:
+          type: string
+          maxLength: 100
+        expiry_date:
+          type: string
+          format: date
+          nullable: true
+        pack_size:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+        qty_strips:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+        qty_loose:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+        mrp:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        sale_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        discount_pct:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+        gst_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+        taxable_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        gst_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        total_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        quotation:
+          type: string
+          format: uuid
+          readOnly: true
+        batch:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - batch_no
+      - id
+      - medicine_name
+      - product
+      - quotation
+    StatusEnum:
+      enum:
+      - draft
+      - saved
+      - converted
+      - expired
+      - cancelled
+      type: string
+      description: |-
+        * `draft` - Draft
+        * `saved` - Saved
+        * `converted` - Converted
+        * `expired` - Expired
+        * `cancelled` - Cancelled
+    TokenBlacklist:
+      type: object
+      properties:
+        refresh:
+          type: string
+          writeOnly: true
+      required:
+      - refresh
+    TokenRefresh:
+      type: object
+      properties:
+        access:
+          type: string
+          readOnly: true
+        refresh:
+          type: string
+      required:
+      - access
+      - refresh

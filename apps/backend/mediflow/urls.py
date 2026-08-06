@@ -2,6 +2,7 @@ from django.urls import path, include
 from django.http import JsonResponse
 from django.contrib import admin
 from apps.billing.views import LowStockAlertView, MargMigrationView
+from drf_spectacular.views import SpectacularAPIView
 
 def health_check(request):
     return JsonResponse({"status": "ok"})
@@ -16,6 +17,7 @@ handler404 = custom_404
 handler500 = custom_500
 
 urlpatterns = [
+    path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("admin/", admin.site.urls),
     path("api/v1/health/", health_check),
     path("api/v1/auth/", include("apps.accounts.auth_urls")),

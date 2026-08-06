@@ -153,11 +153,12 @@ def atomic_purchase_save(payload: Dict[str, Any], outlet_id: str, created_by_id:
         for idx, item_payload in enumerate(items_payload):
             # Get or fallback MasterProduct
             master_product = None
-            if item_payload.get('masterProductId'):
+            prod_id = item_payload.get('masterProductId') or item_payload.get('productId')
+            if prod_id:
                 try:
-                    master_product = MasterProduct.objects.get(id=item_payload['masterProductId'])
+                    master_product = MasterProduct.objects.get(id=prod_id)
                 except MasterProduct.DoesNotExist:
-                    logger.warning(f"MasterProduct {item_payload['masterProductId']} not found, creating custom product")
+                    logger.warning(f"MasterProduct {prod_id} not found, creating custom product")
 
             # Batch lookup key: (batch_no, expiry_date)
             batch_no = item_payload['batchNo']
@@ -204,7 +205,6 @@ def atomic_purchase_save(payload: Dict[str, Any], outlet_id: str, created_by_id:
                 batch.qty_strips += total_strips
                 batch.mrp = Decimal(str(item_payload['mrp']))
                 batch.purchase_rate = Decimal(str(item_payload.get('baseLandingRate', item_payload['purchaseRate'])))
-                batch.mrp = Decimal(str(item_payload['saleRate']))
                 new_pkg = int(item_payload.get('pkg') or 1)
                 if new_pkg and new_pkg != batch.pack_size:
                     batch.pack_size = new_pkg
@@ -222,7 +222,6 @@ def atomic_purchase_save(payload: Dict[str, Any], outlet_id: str, created_by_id:
                     batch.qty_strips += total_strips
                     batch.mrp = Decimal(str(item_payload['mrp']))
                     batch.purchase_rate = Decimal(str(item_payload.get('baseLandingRate', item_payload['purchaseRate'])))
-                    batch.mrp = Decimal(str(item_payload['saleRate']))
                     new_pkg = int(item_payload.get('pkg') or 1)
                     if new_pkg and new_pkg != batch.pack_size:
                         batch.pack_size = new_pkg
@@ -306,7 +305,7 @@ def atomic_purchase_save(payload: Dict[str, Any], outlet_id: str, created_by_id:
         for pi in purchase_items:
             post_stock_ledger_entry(
                 outlet         = purchase_invoice.outlet,
-                product        = pi.batch.product,
+                product        = pi.master_product,
                 batch          = pi.batch,
                 txn_type       = 'PURCHASE_IN',
                 txn_date       = purchase_invoice.invoice_date,

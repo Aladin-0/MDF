@@ -1,6 +1,7 @@
 // ─── Enums / Union Types ──────────────────────────────────────────────────────
 
 export type StaffRole =
+    | 'owner'
     | 'super_admin'
     | 'admin'
     | 'manager'
@@ -275,6 +276,7 @@ export interface Batch {
     mfgDate?: string;
     expiryDate: string;
     mrp: number;
+    landingRate?: number;
     purchaseRate: number;
     saleRate: number;
     qtyStrips: number;
@@ -389,12 +391,14 @@ export interface CartItem {
     manufacturer?: string;
     packSize: number;
     packUnit: string;
+    packType?: string;
     requiresPrescription?: boolean;
     batchNo: string;
     expiryDate: string;
     scheduleType: DrugSchedule;
     mrp: number;
     saleRate?: number;
+    landingRate?: number;
     rate: number;
     qtyStrips: number;
     qtyLoose: number;
@@ -458,6 +462,7 @@ export type DraftStatus = 'active' | 'draft' | 'held' | 'rx_pending' | 'payment_
 export interface DraftBill {
     id: string;
     documentMode: 'invoice' | 'quotation';
+    invoiceDate?: string;
     quotationId?: string;
     sourceQuotationNo?: string;
     sourceInvoiceId?: string;

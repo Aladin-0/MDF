@@ -91,6 +91,10 @@ jobs:
       run: npm test -- -t "@regression|@integration"
       continue-on-error: false # Block on regression failure
 
+    - name: Run Frontend Type Check
+      working-directory: apps/frontend
+      run: npm run type-check
+
     - name: Run Playwright tests
       working-directory: apps/frontend
       run: npx playwright test

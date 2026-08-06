@@ -38,8 +38,7 @@ def make_test_medicine(outlet, name="Paracetamol", batch_qty=100, mrp=100.0, sal
         pack_size=pack_size,
         pack_unit='tablet',
         pack_type='strip',
-        mrp=Decimal(str(mrp)),
-        default_sale_rate=Decimal(str(sale_rate))
+        mrp=Decimal(str(mrp))
     )
     batch = Batch.objects.create(
         outlet=outlet,
@@ -48,7 +47,6 @@ def make_test_medicine(outlet, name="Paracetamol", batch_qty=100, mrp=100.0, sal
         expiry_date=timezone.now().date() + timezone.timedelta(days=365),
         mrp=Decimal(str(mrp)),
         purchase_rate=Decimal(str(sale_rate * 0.8)),
-        sale_rate=Decimal(str(sale_rate)),
         pack_size=pack_size,
         pack_type='strip',
         qty_strips=batch_qty,

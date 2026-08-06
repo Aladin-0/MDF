@@ -27,6 +27,11 @@ class ScheduleHViolationError(Exception):
     pass
 
 
+class UnitIntegrityError(Exception):
+    """Raised when fractional/loose units are applied to a product that does not support them."""
+    pass
+
+
 def fefo_batch_select(outlet_id: str, product_id: str, qty_strips_needed: int) -> List[Dict[str, Any]]:
     """
     Select batches for a sale using FEFO (First Expiry, First Out) principle.

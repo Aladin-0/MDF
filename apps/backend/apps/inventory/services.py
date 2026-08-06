@@ -17,6 +17,7 @@ def post_stock_ledger_entry(
     qty_out,
     rate,
     source_object=None,
+    actor=None,
 ):
     """
     Append-only. Call inside transaction.atomic() from purchase/sale services.
@@ -71,6 +72,7 @@ def post_stock_ledger_entry(
         value_out      = qty_out * rate,
         running_qty    = new_running_qty,
         running_value  = new_running_value,
+        actor          = actor,
     )
     return entry
 

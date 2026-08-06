@@ -4,9 +4,17 @@ from datetime import datetime
 from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ValidationError as DjangoValidationError
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework import status
+
+def _canonical_pack_type(pack_type, pack_unit):
+    pt = (pack_type or '').strip().lower()
+    pu = (pack_unit or '').strip().lower()
+    if pt == 'strip' and pu in ['box', 'piece', 'bottle', 'vial', 'tube', 'packet']:
+        return pu
+    return pack_type
 
 from apps.billing.models import SaleInvoice, SaleItem, ScheduleHRegister, LedgerEntry, CreditAccount, CreditTransaction
 from apps.accounts.models import Ledger
@@ -14,11 +22,20 @@ from apps.inventory.models import Batch, MasterProduct
 from apps.inventory.services import post_stock_ledger_entry
 from apps.billing.services import generate_invoice_number, schedule_h_validate, fefo_batch_select
 from apps.billing.utils.pricing import validate_sale_price
-from apps.billing.services import InsufficientStockError, ScheduleHViolationError
+from apps.billing.services import InsufficientStockError, ScheduleHViolationError, UnitIntegrityError
 from apps.accounts.journal_service import post_sale_invoice
-from apps.reports.gst_snapshot_service import create_sale_snapshots
+# from apps.reports.gst_snapshot_service import create_sale_snapshots
 
 logger = logging.getLogger(__name__)
+
+def validate_unit_integrity(product, qty_loose_needed):
+    """
+    Ensures that non-strip products (like box/piece) cannot be sold using loose fractional units.
+    Raises UnitIntegrityError if rule is violated.
+    """
+    pack_type = _canonical_pack_type(product.pack_type, product.pack_unit)
+    if pack_type not in ['strip', 'blister'] and qty_loose_needed > 0:
+        raise UnitIntegrityError(f"Loose quantities not permitted for {product.name} ({pack_type})")
 
 def atomic_sale_save(
     request_data: dict,
@@ -177,6 +194,7 @@ def atomic_sale_save(
 
                 proposed_rate = Decimal(str(item_data.get('rate', batch.mrp)))
                 pricing_check = validate_sale_price(proposed_rate, batch, outlet.id)
+                validate_unit_integrity(product, qty_loose_needed)
                 if pricing_check.get('block'):
                     transaction.set_rollback(True)
                     raise ValidationError(f"Pricing Block on {batch.batch_no}: {pricing_check['message']}")
@@ -351,7 +369,7 @@ def atomic_sale_save(
         post_sale_invoice(sale_invoice)
 
         # ====== PHASE 2 GST SNAPSHOT CREATION ======
-        create_sale_snapshots(sale_invoice)
+        # create_sale_snapshots(sale_invoice)
         # ============================================
 
         return sale_invoice
