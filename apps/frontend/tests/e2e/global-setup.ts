@@ -11,9 +11,20 @@ setup('reset database and login', async ({ page, baseURL }) => {
     const backendDir = path.resolve(__dirname, '../../../backend');
     const { execFileSync } = require('child_process');
     const pythonCmd = '../backend/venv/bin/python';
+    const testDbUrl = process.env.DATABASE_URL_TEST || 'postgres://mediflow:mediflow@localhost:5432/mediflow_test';
+    
+    // Safety Guard: Fail completely if trying to connect to the prod DB
+    if (testDbUrl.endsWith('/mediflow')) {
+      throw new Error('CRITICAL: Playwright tests are configured to run against the production database ("mediflow"). Aborting to prevent data wipe.');
+    }
+
     execFileSync(pythonCmd, ['manage.py', 'reset_test_db_state'], {
       cwd: backendDir,
-      env: { ...process.env, DJANGO_SETTINGS_MODULE: 'mediflow.settings.base', DATABASE_URL: 'postgres://mediflow:mediflow@localhost:5432/mediflow' },
+      env: { 
+        ...process.env, 
+        DJANGO_SETTINGS_MODULE: 'mediflow.settings.test', 
+        DATABASE_URL: testDbUrl 
+      },
       stdio: 'inherit',
     });
     console.log('✅ Database reset and seeded successfully.');

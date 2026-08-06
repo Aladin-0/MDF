@@ -6,8 +6,9 @@ from unittest.mock import MagicMock
 from apps.core.models import Outlet
 from apps.inventory.models import Batch, MasterProduct
 from apps.billing.sale_services import _canonical_pack_type
-from apps.inventory.migrations.0016_batch_pack_type_cleanup import fix_batch_pack_type
-
+import importlib
+migration_module = importlib.import_module("apps.inventory.migrations.0016_batch_pack_type_cleanup")
+fix_batch_pack_type = migration_module.fix_batch_pack_type
 class TestBatchSchema(TestCase):
     def setUp(self):
         self.outlet = Outlet.objects.create(name="Test Outlet")
