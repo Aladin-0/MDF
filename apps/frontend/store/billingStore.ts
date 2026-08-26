@@ -589,3 +589,4 @@ export const useBillingStore = create<BillingState>((set, get) => ({
     setLastInvoice: (inv) => set({ lastInvoice: inv }),
 
 }));
+if (typeof window !== 'undefined') (window as any).useBillingStore = useBillingStore;

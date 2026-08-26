@@ -13,12 +13,22 @@ test.describe('Sales UI Unit Rendering', () => {
         await pinOverlay.waitFor({ state: 'hidden', timeout: 5000 });
     } catch (e) {}
 
-    // Search for a real Strip Product (e.g., Paracetamol or Dolo)
+    // Search for a real Strip Product (e.g., test medicine or Dolo)
     const searchInput = page.locator('input[placeholder*="Search Medicine" i]').first();
-    await searchInput.fill('SEED-Paracetamol');
+    await searchInput.fill('test medicine');
     await page.waitForTimeout(1000); // Wait for debounce and API
     await page.keyboard.press('ArrowDown');
     await page.keyboard.press('Enter');
+
+    // Quick add widget auto-selects the batch if there's only 1, otherwise it shows a batch selector.
+    await page.waitForTimeout(1000);
+    
+    // If multiple batches exist, it asks to select a batch.
+    const selectBatchText = page.getByText('Select a Batch:');
+    if (await selectBatchText.isVisible()) {
+        await page.locator('.font-mono.font-bold').first().click();
+        await page.waitForTimeout(500);
+    }
 
     // Verify Strip UI
     await expect(page.getByText('Qty (Strips)')).toBeVisible();
@@ -34,6 +44,13 @@ test.describe('Sales UI Unit Rendering', () => {
     await page.keyboard.press('ArrowDown');
     await page.keyboard.press('Enter');
 
+    // Quick add widget auto-selects the batch if there's only 1.
+    await page.waitForTimeout(1000);
+
+    if (await selectBatchText.isVisible()) {
+        await page.locator('.font-mono.font-bold').first().click();
+        await page.waitForTimeout(500);
+    }
 
     // Verify Box UI (Loose should be hidden)
     await expect(page.getByText('Loose')).toBeHidden();

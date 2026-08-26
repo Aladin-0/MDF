@@ -67,7 +67,7 @@ export function BillingHeaderStrip() {
                                 setCustomerLedger(ledger);
                                 // Also set customer for backward compatibility if needed
                                 if (ledger) {
-                                    setCustomer({ id: ledger.id, name: ledger.name, phone: ledger.phone || '', gstin: ledger.gstin || '' } as any);
+                                    setCustomer({ id: ledger.id, name: ledger.name, phone: ledger.phone || '', gstin: ledger.gstin || '', address: ledger.address || '' } as any);
                                 } else {
                                     setCustomer(null);
                                 }

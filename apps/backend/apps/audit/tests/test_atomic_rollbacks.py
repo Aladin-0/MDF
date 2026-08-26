@@ -16,45 +16,14 @@ def test_transaction_rollback_on_error():
     staff = StaffFactory(outlet=outlet)
     product = MasterProductFactory()
     batch = BatchFactory(outlet=outlet, product=product, pack_size=10, qty_strips=10, qty_loose=0, mrp=Decimal('100.00'))
-    
     initial_invoices = SaleInvoice.objects.count()
     initial_ledgers = StockLedger.objects.count()
-    
-    request_data = {
-        'grandTotal': 200.00,
-        'subtotal': 200.00,
-        'discountAmount': 0,
-        'cashPaid': 200.00,
-        'paymentMode': 'cash',
-        'invoiceDate': timezone.now().isoformat(),
-    }
-    
-    items_data = [{
-        'productId': str(product.id),
-        'batchId': str(batch.id),
-        'qtyStrips': 2,
-        'qtyLoose': 0,
-        'rate': '100.00',
-        'gstRate': '0',
-    }]
-    
-    # Simulate an error during ledger generation
-    with patch('apps.billing.sale_services.post_stock_ledger_entry', side_effect=Exception("Synthetic error")):
-        with pytest.raises(Exception, match="Synthetic error"):
-            atomic_sale_save(
-                request_data=request_data,
-                outlet=outlet,
-                customer=None,
-                billed_by=staff,
-                items_data=items_data,
-                schedule_h_data=None,
-                hospital_name='',
-                doctor_id=None
-            )
-            
-    # Verify rollback
+    request_data = {'grandTotal': 200.0, 'subtotal': 200.0, 'discountAmount': 0, 'cashPaid': 200.0, 'paymentMode': 'cash', 'invoiceDate': timezone.now().isoformat()}
+    items_data = [{'productId': str(product.id), 'batchId': str(batch.id), 'qtyStrips': 2, 'qtyLoose': 0, 'rate': '100.00', 'gstRate': '0'}]
+    with patch('apps.billing.sale_services.post_stock_ledger_entry', side_effect=Exception('Synthetic error')):
+        with pytest.raises(Exception, match='Synthetic error'):
+            atomic_sale_save(request_data=request_data, outlet=outlet, customer=None, billed_by=staff, items_data=items_data, schedule_h_data=None, hospital_name='', doctor_id=None)
     assert SaleInvoice.objects.count() == initial_invoices
     assert StockLedger.objects.count() == initial_ledgers
-    
     batch.refresh_from_db()
     assert batch.qty_strips == 10

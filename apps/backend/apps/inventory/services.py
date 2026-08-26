@@ -1,7 +1,8 @@
 from django.db import transaction
 from django.contrib.contenttypes.models import ContentType
 from decimal import Decimal
-from .models import StockLedger, Batch
+from .models import StockLedger, Batch, StockAdjustment, StockAdjustmentAllocation
+from apps.purchases.models import PurchaseItem
 
 
 def post_stock_ledger_entry(
@@ -74,7 +75,98 @@ def post_stock_ledger_entry(
         running_value  = new_running_value,
         actor          = actor,
     )
+
+    if txn_type == 'ADJUSTMENT_OUT':
+        _auto_create_stock_adjustment(entry)
+
     return entry
+
+def _auto_create_stock_adjustment(entry):
+    batch = entry.batch
+    if not batch:
+        return
+    
+    qty_out_loose = entry.qty_out
+    pack_size = batch.pack_size or 1
+    qty_strips = int(qty_out_loose // pack_size)
+    qty_loose = int(qty_out_loose % pack_size)
+
+    with transaction.atomic():
+        adj = StockAdjustment.objects.create(
+            outlet=entry.outlet,
+            batch=batch,
+            source_ledger_entry=entry,
+            adjustment_type='EXPIRED',
+            qty_strips=qty_strips,
+            qty_loose=qty_loose,
+            status='PROPOSED',
+            traceability_status='NEEDS_REVIEW',
+            effective_date=entry.txn_date,
+            reason="Auto-generated from StockLedger ADJUSTMENT_OUT"
+        )
+
+        pis = list(PurchaseItem.objects.filter(batch=batch).select_for_update().select_related('invoice', 'invoice__distributor', 'invoice__outlet').order_by('invoice__invoice_date', 'created_at'))
+        total_pi_qty = sum(Decimal(str(pi.actual_qty)) for pi in pis)
+
+        prior_qty = entry.running_qty + entry.qty_out
+        total_consumed_before = total_pi_qty - prior_qty
+
+        if total_consumed_before < 0 or total_pi_qty < prior_qty:
+            return
+        
+        remaining_to_allocate = Decimal(str(qty_out_loose))
+        allocations = []
+        current_consumed = Decimal(str(total_consumed_before))
+
+        for pi in pis:
+            pi_qty = Decimal(str(pi.actual_qty))
+            if current_consumed >= pi_qty:
+                current_consumed -= pi_qty
+                continue
+            
+            available_in_pi = pi_qty - current_consumed
+            current_consumed = Decimal('0')
+
+            alloc_qty = min(remaining_to_allocate, available_in_pi)
+            if alloc_qty <= 0:
+                break
+            
+            proportion = alloc_qty / pi_qty
+            
+            is_inter_state = False
+            if pi.invoice.distributor and pi.invoice.outlet:
+                is_inter_state = (pi.invoice.distributor.state.strip().lower() != pi.invoice.outlet.state.strip().lower())
+
+            reversed_gst = pi.gst_amount * proportion
+            reversed_igst = reversed_gst if is_inter_state else Decimal('0')
+            reversed_cgst = (reversed_gst / 2) if not is_inter_state else Decimal('0')
+            reversed_sgst = (reversed_gst / 2) if not is_inter_state else Decimal('0')
+            reversed_cess = pi.cess_amount * proportion
+            taxable_value = pi.taxable_amount * proportion
+
+            allocations.append(StockAdjustmentAllocation(
+                stock_adjustment=adj,
+                source_purchase_item=pi,
+                allocated_qty=alloc_qty,
+                taxable_value=taxable_value,
+                reversed_igst_amount=reversed_igst,
+                reversed_cgst_amount=reversed_cgst,
+                reversed_sgst_amount=reversed_sgst,
+                reversed_cess_amount=reversed_cess,
+                allocation_order=len(allocations)
+            ))
+            
+            remaining_to_allocate -= alloc_qty
+            if remaining_to_allocate <= 0:
+                break
+        
+        if remaining_to_allocate > 0:
+            return
+        
+        StockAdjustmentAllocation.objects.bulk_create(allocations)
+        adj.traceability_status = 'FIFO_MATCHED'
+        adj.save()
+
 
 
 def rebuild_stock_ledger(batch_id: str, from_date):

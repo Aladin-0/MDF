@@ -14,7 +14,7 @@ test.describe('MediFlow Billing System Flow', () => {
     await billingPage.selectCustomer('Test Customer');
 
     // 4. Search item/medicine
-    await billingPage.addMedicine('0001Pracitemol', 1);
+    await billingPage.addMedicine('test medicine', 1);
 
     // 5. Checkout
     // Wait for internal calculation to settle before clicking collect payment

@@ -2,6 +2,7 @@ const path = require('path');
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+    distDir: process.env.PLAYWRIGHT_TEST ? '.next-test' : '.next',
     typescript: { ignoreBuildErrors: true },
     eslint: { ignoreDuringBuilds: true },
     transpilePackages: ['@mediflow/constants'],

@@ -36,6 +36,8 @@ class SaleInvoiceAuditSerializer(serializers.ModelSerializer):
             'invoice_date': obj.invoice_date.isoformat() if obj.invoice_date else None,
             'status': 'cancelled' if getattr(obj, 'is_cancelled', False) else 'posted',
             'customer_name': obj.customer.name if obj.customer else None,
+            'doctor_id': str(obj.doctor.id) if obj.doctor else None,
+            'doctor_name': obj.doctor.name if obj.doctor else None,
         }
         
     def get_financial(self, obj):

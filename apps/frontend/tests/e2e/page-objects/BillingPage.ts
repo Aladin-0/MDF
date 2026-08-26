@@ -31,8 +31,8 @@ export class BillingPage {
   }
 
   async selectQuotationMode() {
-    const modeSelect = this.page.locator('select').filter({ hasText: 'Quotation / Estimate' });
-    await modeSelect.selectOption('quotation');
+    const quotationBtn = this.page.getByRole('button', { name: 'Quotation', exact: true });
+    await quotationBtn.click();
     await expect(this.page.getByText('New Quotation')).toBeVisible();
   }
 

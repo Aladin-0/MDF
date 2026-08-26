@@ -5,7 +5,7 @@ def fix_batch_pack_type(apps, schema_editor):
     from apps.billing.sale_services import _canonical_pack_type
     
     for batch in Batch.objects.select_related('product').all():
-        correct_type = _canonical_pack_type(batch)
+        correct_type = _canonical_pack_type(batch.pack_type, batch.pack_unit)
         if batch.pack_type != correct_type:
             batch.pack_type = correct_type
             batch.save(update_fields=['pack_type'])

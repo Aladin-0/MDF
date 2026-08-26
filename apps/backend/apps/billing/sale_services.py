@@ -129,7 +129,7 @@ def atomic_sale_save(
         # guarantee every transaction acquires inventory_batch locks in the same
         # global order, which breaks any possible cycle.
         explicit_batch_ids = sorted({
-            item_data['batchId']
+            str(item_data['batchId'])
             for item_data in items_data
             if item_data.get('batchId')
         })
@@ -255,6 +255,10 @@ def atomic_sale_save(
                         prescription_no=(schedule_h_data.get('prescriptionNo') or '') if schedule_h_data else '',
                     )
 
+        is_interstate = False
+        if customer and customer.state and outlet.state:
+            is_interstate = customer.state.strip().lower() != outlet.state.strip().lower()
+
         discount_factor = Decimal('1') - extra_discount_pct / Decimal('100')
         server_taxable = Decimal('0')
         server_cgst = Decimal('0')
@@ -279,10 +283,18 @@ def atomic_sale_save(
 
             server_taxable += item_taxable
 
-            item_cgst = (item_gst / 2).quantize(Decimal('0.01'), rounding=ROUND_FLOOR)
-            item_sgst = item_gst - item_cgst
+            if is_interstate:
+                item_cgst = Decimal('0')
+                item_sgst = Decimal('0')
+                item_igst = item_gst
+            else:
+                item_cgst = (item_gst / 2).quantize(Decimal('0.01'), rounding=ROUND_FLOOR)
+                item_sgst = item_gst - item_cgst
+                item_igst = Decimal('0')
+
             server_cgst += item_cgst
             server_sgst += item_sgst
+            server_igst += item_igst
 
             if gst_rate > max_gst_rate:
                 max_gst_rate = gst_rate
@@ -294,9 +306,9 @@ def atomic_sale_save(
         sale_invoice.cgst_amount = server_cgst
         sale_invoice.sgst_amount = server_sgst
         sale_invoice.igst_amount = server_igst
-        sale_invoice.cgst = max_gst_rate / 2 if max_gst_rate > 0 else Decimal('0')
-        sale_invoice.sgst = max_gst_rate / 2 if max_gst_rate > 0 else Decimal('0')
-        sale_invoice.igst = Decimal('0')
+        sale_invoice.cgst = Decimal('0') if is_interstate else (max_gst_rate / 2 if max_gst_rate > 0 else Decimal('0'))
+        sale_invoice.sgst = Decimal('0') if is_interstate else (max_gst_rate / 2 if max_gst_rate > 0 else Decimal('0'))
+        sale_invoice.igst = max_gst_rate if (is_interstate and max_gst_rate > 0) else Decimal('0')
         sale_invoice.round_off = server_round_off
         sale_invoice.save()
 

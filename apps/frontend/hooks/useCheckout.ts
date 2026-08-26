@@ -27,8 +27,19 @@ export function useCheckout() {
     const hasDoctor = Boolean(draft?.doctor && draft.doctor.id !== 'mock');
     
     const isScheduleHValid = !hasScheduleH || 
-        Boolean(scheduleHData && scheduleHData.patientName && scheduleHData.doctorName) || 
-        (hasCustomer && hasDoctor);
+        Boolean(
+            scheduleHData && 
+            scheduleHData.patientName?.trim() && 
+            scheduleHData.patientAddress?.trim() && 
+            scheduleHData.doctorName?.trim() && 
+            scheduleHData.doctorRegNo?.trim()
+        ) || 
+        Boolean(
+            hasCustomer && 
+            draft?.customer?.address?.trim() && 
+            hasDoctor && 
+            draft?.doctor?.regNo?.trim()
+        );
 
     const tenderAmount = cashReceived === '' ? (totals?.grandTotal || 0) : Number(cashReceived);
     const balance = Math.max(0, tenderAmount - (totals?.grandTotal || 0));

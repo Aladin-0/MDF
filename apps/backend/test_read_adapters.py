@@ -14,6 +14,9 @@ from apps.accounts.models import Staff
 from apps.audit.core import flags
 from django.conf import settings
 
+import pytest
+
+@pytest.mark.django_db
 def test_read_adapters():
     settings.AUDIT_V2_WRITE_ENABLED = True
     settings.AUDIT_V2_READ_ENABLED = False

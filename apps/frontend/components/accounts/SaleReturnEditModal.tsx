@@ -16,6 +16,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { voucherApi } from '@/lib/apiClient';
 import { useOutletId } from '@/hooks/useOutletId';
+import { buildReturnPayload } from '@/utils/payloadBuilders';
 
 interface EditItemRow {
     originalSaleItemId: string;
@@ -118,25 +119,16 @@ export function SaleReturnEditModal({
         setSaving(true);
         setConflictError(null);
 
-        const payload = {
-            outletId,
+        const payload = buildReturnPayload(
+            returnData,
+            items,
             reason,
             refundMode,
             revisionReasonCode,
             revisionReasonText,
-            // OCC token — must match server's current updated_at
-            expectedUpdatedAt: returnData.updatedAt,
-            items: items.map((item) => ({
-                originalSaleItemId: item.originalSaleItemId,
-                batchId: item.batchId,
-                productName: item.productName,
-                qtyReturned: item.qtyReturned,
-                qtyStripsReturned: Math.floor(item.qtyReturned / (item.packSize || 1)),
-                qtyLooseReturned: item.qtyReturned % (item.packSize || 1),
-                returnRate: item.returnRate,
-                totalAmount: item.qtyReturned * item.returnRate,
-            })),
-        };
+            outletId
+        );
+
 
         try {
             const result = await voucherApi.updateSalesReturn(returnData.id, payload);

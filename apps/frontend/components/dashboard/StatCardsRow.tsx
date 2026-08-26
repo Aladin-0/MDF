@@ -33,7 +33,7 @@ export default function StatCardsRow({ kpi, isLoading }: StatCardsRowProps) {
     <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
       {/* 1. Total Sales */}
       <StatCard
-        title="Today's Sales"
+        title="Total Sales"
         value={formatCurrency(kpi.totalSales)}
         subtitle={`${kpi.totalBills} bills created`}
         icon={IndianRupee}
@@ -55,7 +55,7 @@ export default function StatCardsRow({ kpi, isLoading }: StatCardsRowProps) {
 
       {/* 3. Bills Count */}
       <StatCard
-        title="Bills Today"
+        title="Period Bills"
         value={String(kpi.totalBills)}
         subtitle={`Avg: ${formatCurrency(avgBill)}/bill`}
         icon={Receipt}

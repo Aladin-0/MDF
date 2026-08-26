@@ -2,7 +2,7 @@ import { APIRequestContext, expect } from '@playwright/test';
 
 export class ApiHelper {
   private request: APIRequestContext;
-  private baseUrl = 'http://localhost:8000/api/v1';
+  private baseUrl = 'http://localhost:8001/api/v1';
 
   constructor(request: APIRequestContext) {
     this.request = request;

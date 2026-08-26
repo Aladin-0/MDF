@@ -50,17 +50,17 @@ def clean_seed_data(hard_reset=False):
         # Let's manually delete snapshots starting with SEED- document_number
         from apps.reports.models import GSTTransactionSnapshot
         GSTTransactionSnapshot.objects.filter(document_number__startswith=PREFIX).delete()
-        Batch.objects.filter(batch_no__startswith=PREFIX).delete()
-        MasterProduct.objects.filter(name__startswith=PREFIX).delete()
+        # Preserved Batches
+        # Preserved Products
         Customer.objects.filter(name__startswith=PREFIX).delete()
         Distributor.objects.filter(name__startswith=PREFIX).delete()
-        Outlet.objects.filter(name__startswith=PREFIX).delete()
-        Organization.objects.filter(name__startswith=PREFIX).delete()
+        # Preserved Outlet
+        # Preserved Org
 
 def seed_master_data():
     """Generates Outlets, Products, Customers, Distributors"""
     print("Seeding master data...")
-    org = Organization.objects.create(name=f"{PREFIX}Test Organization", slug="seed-test-org")
+    org, _ = Organization.objects.get_or_create(slug="seed-test-org", defaults={"name": f"{PREFIX}Test Organization"})
 
     outlet_mh = Outlet.objects.create(drug_license_no="DL-MH-SEED", 
         organization=org, name=f"{PREFIX}Mumbai Outlet", state="MH", state_code="27", gstin="27AAAAA0000A1Z5", 
@@ -180,7 +180,7 @@ def seed_purchases(outlets, distributors, products, num_purchases):
                 invoice=pi, batch=batch, master_product=p, is_custom_product=False, hsn_code=p.hsn_code,
                 batch_no=batch_no, expiry_date=batch.expiry_date, pkg=p.pack_size, qty=qty, actual_qty=qty * p.pack_size,
                 free_qty=0, purchase_rate=p_rate, discount_pct=Decimal('0'), cash_discount_pct=Decimal('0'),
-                gst_rate=p.gst_rate, cess=Decimal('0'), mrp=p.mrp, ptr=p_rate, pts=p_rate, sale_rate=p.mrp,
+                gst_rate=p.gst_rate, cess=Decimal('0'), mrp=p.mrp, ptr=p_rate, pts=p_rate,
                 freight_per_unit=Decimal('0'), other_cost_per_unit=Decimal('0'), taxable_amount=taxable, gst_amount=gst,
                 cess_amount=Decimal('0'), total_amount=taxable + gst
             )
@@ -250,7 +250,7 @@ def seed_sales(outlets, customers, batches, num_sales):
             SaleItem.objects.create(
                 invoice=si, batch=batch, product_name=batch.product.name, pack_size=batch.pack_size, pack_unit=batch.pack_unit,
                 schedule_type=batch.product.schedule_type, batch_no=batch.batch_no, expiry_date=batch.expiry_date,
-                mrp=batch.mrp, rate=rate, hsn_code=batch.product.hsn_code,
+                mrp=batch.mrp, rate=rate, sale_rate=rate, hsn_code=batch.product.hsn_code,
                 qty_strips=qty, qty_loose=0, qty_returned=0, sale_mode="Pack", discount_pct=Decimal('0'),
                 gst_rate=batch.product.gst_rate, taxable_amount=taxable, gst_amount=gst, total_amount=taxable + gst
             )
@@ -313,8 +313,7 @@ def seed_returns(sales, num_returns):
 
             SalesReturnItem.objects.create(
                 sales_return=ret, original_sale_item=item, batch=item.batch, product_name=item.product_name,
-                batch_no=item.batch_no, qty_returned=ret_qty, return_rate=item.rate, total_amount=amount,
-                hsn_code=item.hsn_code, gst_rate=item.gst_rate, taxable_amount=taxable, gst_amount=gst
+                batch_no=item.batch_no, qty_returned=ret_qty, return_rate=item.rate, total_amount=amount
             )
             ret_total += amount
             # restore stock
@@ -430,8 +429,7 @@ def generate_deterministic_anchors():
         )
         SalesReturnItem.objects.create(
             sales_return=ret1, original_sale_item=item1, batch=batch_12, product_name=prod_12.name,
-            batch_no=batch_12.batch_no, qty_returned=5, return_rate=Decimal('10.00'), total_amount=Decimal('56.00'),
-            hsn_code=prod_12.hsn_code, gst_rate=Decimal('12.00'), taxable_amount=Decimal('50.00'), gst_amount=Decimal('6.00')
+            batch_no=batch_12.batch_no, qty_returned=5, return_rate=Decimal('10.00'), total_amount=Decimal('56.00')
         )
         create_sales_return_snapshots(ret1)
 
@@ -447,9 +445,24 @@ def generate_deterministic_anchors():
             invoice=pi1, batch=batch_12, master_product=prod_12, is_custom_product=False, hsn_code=prod_12.hsn_code,
             batch_no=batch_12.batch_no, expiry_date=batch_12.expiry_date, pkg=10, qty=50, actual_qty=500,
             free_qty=0, purchase_rate=Decimal('10.00'), discount_pct=Decimal('0'), cash_discount_pct=Decimal('0'),
-            gst_rate=Decimal('12.00'), cess=Decimal('0'), mrp=batch_12.mrp, ptr=Decimal('10.00'), pts=Decimal('10.00'), sale_rate=Decimal('10.00'),
+            gst_rate=Decimal('12.00'), cess=Decimal('0'), mrp=batch_12.mrp, ptr=Decimal('10.00'), pts=Decimal('10.00'),
             freight_per_unit=Decimal('0'), other_cost_per_unit=Decimal('0'), taxable_amount=Decimal('500.00'), gst_amount=Decimal('60.00'),
             cess_amount=Decimal('0'), total_amount=Decimal('560.00')
         )
-        create_purchase_snapshots(pi1)
+        # create_purchase_snapshots(pi1)
         print("Anchors generated successfully.")
+
+from django.core.management.base import BaseCommand
+
+class Command(BaseCommand):
+    help = 'Seed database with master data and transactions for development'
+
+    def add_arguments(self, parser):
+        parser.add_argument('--hard-reset', action='store_true', help='Hard reset the DB before seeding')
+        parser.add_argument('--size', type=str, choices=['small', 'medium'], default='small', help='Size of dataset')
+
+    def handle(self, *args, **options):
+        hard_reset = options['hard_reset']
+        size = options['size']
+        run_seeder(size=size, hard_reset=hard_reset)
+        generate_deterministic_anchors()

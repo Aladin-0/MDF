@@ -13,6 +13,9 @@ from django.conf import settings
 from django.test import RequestFactory
 from rest_framework.test import force_authenticate
 
+import pytest
+
+@pytest.mark.django_db
 def test_read_adapters_with_existing_mutations():
     settings.AUDIT_V2_WRITE_ENABLED = True
     

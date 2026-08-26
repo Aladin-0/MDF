@@ -124,6 +124,14 @@ export const NAV_ITEMS: NavItem[] = [
         ],
     },
     {
+        label: 'GST',
+        href: '/gst',
+        icon: Scale,
+        permission: 'view_reports' as Permission,
+        shortcut: 'Alt+G',
+        sequence: 'g g',
+    },
+    {
         label: 'Reports',
         href: '/dashboard/reports',
         icon: BarChart3,

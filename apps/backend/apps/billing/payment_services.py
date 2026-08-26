@@ -28,6 +28,7 @@ from apps.billing.models import (
     SalesReturnItem,
 )
 from apps.inventory.models import Batch
+from apps.audit.models import ActivityEvent
 from apps.audit.services import log_activity
 
 logger = logging.getLogger(__name__)
@@ -276,15 +277,27 @@ def create_sales_return(payload: Dict[str, Any], outlet_id: str, created_by_id: 
         raise ReturnServiceError(f"Staff {created_by_id} not found")
 
     original_sale_id = payload.get('originalSaleId')
-    try:
-        original_sale = SaleInvoice.objects.get(id=original_sale_id, outlet=outlet)
-    except SaleInvoice.DoesNotExist:
-        raise ReturnServiceError(f"Sale invoice {original_sale_id} not found for this outlet")
+    manual_override = False
+    if original_sale_id:
+        try:
+            original_sale = SaleInvoice.objects.get(id=original_sale_id, outlet=outlet)
+        except SaleInvoice.DoesNotExist:
+            raise ReturnServiceError(f"Sale invoice {original_sale_id} not found for this outlet")
 
-    if SalesReturn.objects.filter(original_sale=original_sale).exists():
-        raise ReturnServiceError(
-            "This invoice already has an active return. Please modify the existing return instead."
-        )
+        if SalesReturn.objects.filter(original_sale=original_sale).exists():
+            raise ReturnServiceError(
+                "This invoice already has an active return. Please modify the existing return instead."
+            )
+    else:
+        original_sale = None
+        manual_override = True
+        
+        # Permission check
+        if created_by.role not in ['admin', 'manager']:
+            raise ReturnServiceError("Permission denied: Only managers or admins can create manual override returns.")
+            
+        if not payload.get('overrideReason'):
+            raise ReturnServiceError("Standalone returns require an explicit override reason.")
 
     items_payload = payload.get('items', [])
     if not items_payload:
@@ -303,46 +316,53 @@ def create_sales_return(payload: Dict[str, Any], outlet_id: str, created_by_id: 
         qty_returned = int(item_data.get('qtyReturned', item_data.get('qty', 0)))
         return_rate = Decimal(str(item_data.get('returnRate', 0)))
 
-        try:
-            sale_item = SaleItem.objects.get(id=sale_item_id, invoice=original_sale)
-        except SaleItem.DoesNotExist:
-            raise ReturnServiceError(f"SaleItem {sale_item_id} not found on invoice {original_sale_id}")
+        sale_item = None
+        if original_sale:
+            try:
+                sale_item = SaleItem.objects.get(id=sale_item_id, invoice=original_sale)
+            except SaleItem.DoesNotExist:
+                raise ReturnServiceError(f"SaleItem {sale_item_id} not found on invoice {original_sale_id}")
 
-        # C8: guard against over-returning across multiple return transactions
-        already_returned = sale_item.qty_returned  # tracked by C10's field
-        
-        # Determine pack_size from SaleItem first, then fall back to the batch.
-        # SaleItem.pack_size can be NULL on old records created before this field
-        # was populated — in that case, the batch's frozen pack_size is authoritative.
-        batch_for_lookup = Batch.objects.filter(id=batch_id, outlet=outlet).first()
-        pack_size = (
-            sale_item.pack_size
-            or (batch_for_lookup.pack_size if batch_for_lookup else None)
-            or 1
-        )
-
-        # Calculate total units (tablets/capsules) originally sold
-        original_total_units = (sale_item.qty_strips * pack_size) + sale_item.qty_loose
-        
-        if qty_returned + already_returned > original_total_units:
-            raise ReturnServiceError(
-                f"Cannot return {qty_returned} unit(s) of '{sale_item.product_name}'. "
-                f"Original qty: {original_total_units}, already returned: {already_returned}."
+            # C8: guard against over-returning across multiple return transactions
+            already_returned = sale_item.qty_returned  # tracked by C10's field
+            
+            # Determine pack_size from SaleItem first, then fall back to the batch.
+            # SaleItem.pack_size can be NULL on old records created before this field
+            # was populated — in that case, the batch's frozen pack_size is authoritative.
+            batch_for_lookup = Batch.objects.filter(id=batch_id, outlet=outlet).first()
+            pack_size = (
+                sale_item.pack_size
+                or (batch_for_lookup.pack_size if batch_for_lookup else None)
+                or 1
             )
+
+            # Calculate total units (tablets/capsules) originally sold
+            original_total_units = (sale_item.qty_strips * pack_size) + sale_item.qty_loose
+            
+            if qty_returned + already_returned > original_total_units:
+                raise ReturnServiceError(
+                    f"Cannot return {qty_returned} unit(s) of '{sale_item.product_name}'. "
+                    f"Original qty: {original_total_units}, already returned: {already_returned}."
+                )
 
         try:
             batch = Batch.objects.get(id=batch_id, outlet=outlet)
         except Batch.DoesNotExist:
             raise ReturnServiceError(f"Batch {batch_id} not found")
 
-        # Security: ensure the return batch_id matches the batch on the original SaleItem.
-        # Without this check, a malicious/buggy payload could specify a different batch
-        # and restore stock to the wrong batch, corrupting inventory.
-        if str(sale_item.batch_id) != str(batch_id):
-            raise ReturnServiceError(
-                f"Batch mismatch for '{sale_item.product_name}': "
-                f"return batch {batch_id} does not match original sale batch {sale_item.batch_id}."
-            )
+        if original_sale:
+            # Security: ensure the return batch_id matches the batch on the original SaleItem.
+            if str(sale_item.batch_id) != str(batch_id):
+                raise ReturnServiceError(
+                    f"Batch mismatch for '{sale_item.product_name}': "
+                    f"return batch {batch_id} does not match original sale batch {sale_item.batch_id}."
+                )
+            product_name = sale_item.product_name
+            batch_no = sale_item.batch_no
+        else:
+            pack_size = batch.pack_size or 1
+            product_name = batch.product.name
+            batch_no = batch.batch_no
 
         item_total = return_rate * (Decimal(str(qty_returned)) / Decimal(str(pack_size)))
         item_total = item_total.quantize(Decimal('0.01'))
@@ -352,27 +372,45 @@ def create_sales_return(payload: Dict[str, Any], outlet_id: str, created_by_id: 
             'sale_item': sale_item,
             'batch': batch,
             'pack_size': pack_size,  # carry resolved pack_size for stock reversal
-            'product_name': sale_item.product_name,
-            'batch_no': sale_item.batch_no,
+            'product_name': product_name,
+            'batch_no': batch_no,
             'qty_returned': qty_returned,
             'return_rate': return_rate,
             'total_amount': item_total,
         })
-
     # Generate return number (SELECT FOR UPDATE inside atomic)
     return_no = generate_return_number(outlet)
 
     # Create SalesReturn
+    reason = payload.get('overrideReason') if manual_override else payload.get('reason', '')
     sales_return = SalesReturn.objects.create(
         outlet=outlet,
         original_sale=original_sale,
         return_no=return_no,
         return_date=return_date,
-        reason=payload.get('reason', ''),
+        reason=reason,
         total_amount=total_amount,
         refund_mode=refund_mode,
         created_by=created_by,
+        manual_override=manual_override
     )
+    
+    if manual_override:
+        ActivityEvent.objects.create(
+            actor_id=str(created_by.id),
+            actor_type='staff',
+            action='create_manual_override_return',
+            module='billing',
+            entity_type='SalesReturn',
+            entity_id=str(sales_return.id),
+            entity_label=sales_return.return_no,
+            reason_text=reason,
+            severity='warning',
+            metadata_json={
+                'role_used': created_by.role,
+                'total_amount': float(total_amount),
+            }
+        )
 
     # C1: all mutations are inside the @transaction.atomic decorator —
     # any failure (including journal reversal) rolls back everything atomically.
@@ -410,14 +448,18 @@ def create_sales_return(payload: Dict[str, Any], outlet_id: str, created_by_id: 
         batch.save(update_fields=['qty_strips', 'qty_loose'])
         # C10: track how much of this line item has been returned
         sale_item = item_data['sale_item']
-        sale_item.qty_returned += item_data['qty_returned']
-        sale_item.save(update_fields=['qty_returned'])
+        if sale_item:
+            sale_item.qty_returned += item_data['qty_returned']
+            sale_item.save(update_fields=['qty_returned'])
 
     SalesReturnItem.objects.bulk_create(return_items)
 
     # Post stock ledger entries for each returned item (SALE_RETURN = stock comes back IN)
     from apps.inventory.services import post_stock_ledger_entry
-    customer_name = original_sale.customer.name if original_sale.customer else 'Walk-in'
+    if original_sale and original_sale.customer:
+        customer_name = original_sale.customer.name
+    else:
+        customer_name = 'Walk-in'
     for item_data in items_to_create:
         batch = item_data['batch']
         # Use the same resolved pack_size (consistent with validation + stock reversal above)
@@ -463,7 +505,7 @@ def create_sales_return(payload: Dict[str, Any], outlet_id: str, created_by_id: 
     # This runs inside the @transaction.atomic decorator, so any exception
     # here rolls back the SalesReturn, stock changes, and qty_returned updates.
     from apps.accounts.journal_service import reverse_journal
-    reverse_journal('SALE', original_sale.id, str(outlet.id))
-
+    if original_sale:
+        reverse_journal('SALE', original_sale.id, str(outlet.id))
     logger.info(f"SalesReturn {return_no} created: ₹{total_amount}")
     return sales_return

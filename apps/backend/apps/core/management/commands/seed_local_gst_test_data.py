@@ -15,18 +15,15 @@ class Command(BaseCommand):
         hard_reset = options['hard_reset']
         seed = options['seed']
         size = options['size']
-
         if hard_reset:
-            self.stdout.write(self.style.WARNING("Performing HARD RESET of all local transactions..."))
+            self.stdout.write(self.style.WARNING('Performing HARD RESET of all local transactions...'))
             run_seeder(size=size, hard_reset=True, random_seed=seed)
         elif reset:
-            self.stdout.write(self.style.WARNING("Performing safe reset of SEEDED local data..."))
+            self.stdout.write(self.style.WARNING('Performing safe reset of SEEDED local data...'))
             run_seeder(size=size, hard_reset=False, random_seed=seed)
         else:
-            self.stdout.write(self.style.SUCCESS("Running seeder without reset (append mode)..."))
+            self.stdout.write(self.style.SUCCESS('Running seeder without reset (append mode)...'))
             run_seeder(size=size, hard_reset=False, random_seed=seed)
-        
-        self.stdout.write(self.style.SUCCESS("Generating deterministic anchor scenarios for validation..."))
+        self.stdout.write(self.style.SUCCESS('Generating deterministic anchor scenarios for validation...'))
         generate_deterministic_anchors()
-
-        self.stdout.write(self.style.SUCCESS("Test data generation complete. Run validate_test_data to confirm."))
+        self.stdout.write(self.style.SUCCESS('Test data generation complete. Run validate_test_data to confirm.'))

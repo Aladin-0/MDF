@@ -5,12 +5,17 @@ from django.db import migrations
 
 def copy_pack_sizes(apps, schema_editor):
     Batch = apps.get_model('inventory', 'Batch')
-    for batch in Batch.objects.select_related('product').all():
-        if batch.product:
-            batch.pack_size = batch.product.pack_size
-            batch.pack_unit = batch.product.pack_unit
-            batch.pack_type = batch.product.pack_type
-            batch.save(update_fields=['pack_size', 'pack_unit', 'pack_type'])
+    try:
+        if not Batch.objects.exists():
+            return
+        for batch in Batch.objects.select_related('product').all():
+            if batch.product:
+                batch.pack_size = batch.product.pack_size
+                batch.pack_unit = batch.product.pack_unit
+                batch.pack_type = batch.product.pack_type
+                batch.save(update_fields=['pack_size', 'pack_unit', 'pack_type'])
+    except Exception as e:
+        print(f"Skipping copy_pack_sizes: {e}")
 
 def reverse_copy(apps, schema_editor):
     pass

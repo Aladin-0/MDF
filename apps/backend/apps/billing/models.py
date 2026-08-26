@@ -567,7 +567,8 @@ class SalesReturn(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     outlet = models.ForeignKey('core.Outlet', on_delete=models.CASCADE, related_name='sales_returns')
-    original_sale = models.ForeignKey(SaleInvoice, on_delete=models.PROTECT, related_name='returns')
+    original_sale = models.ForeignKey(SaleInvoice, on_delete=models.PROTECT, related_name='returns', null=True, blank=True)
+    manual_override = models.BooleanField(default=False, help_text="True if created without linking to an original invoice")
 
     return_no = models.CharField(max_length=100, help_text='e.g., RTN-2026-000001')
     return_date = models.DateField()
@@ -600,7 +601,7 @@ class SalesReturnItem(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     sales_return = models.ForeignKey(SalesReturn, on_delete=models.CASCADE, related_name='items')
-    original_sale_item = models.ForeignKey(SaleItem, on_delete=models.PROTECT, related_name='return_items')
+    original_sale_item = models.ForeignKey(SaleItem, on_delete=models.PROTECT, related_name='return_items', null=True, blank=True)
     batch = models.ForeignKey('inventory.Batch', on_delete=models.PROTECT, related_name='return_items')
 
     # Denormalized from product/batch for reporting

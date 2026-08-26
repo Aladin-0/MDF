@@ -6,6 +6,7 @@ from apps.reports.views import (
     BalanceSheetView, GSTR2AReconciliationView, ScheduleReportView,
     BatchWiseReportView, BatchWiseReportExportView
 )
+from apps.reports import dashboard_views
 
 urlpatterns = [
     path('sales/daily/', SalesDailyReportView.as_view(), name='sales-daily-report'),
@@ -22,4 +23,6 @@ urlpatterns = [
     path('schedule/', ScheduleReportView.as_view(), name='schedule-report'),
     path('batch-wise/', BatchWiseReportView.as_view(), name='batch-wise-report'),
     path('batch-wise/export/', BatchWiseReportExportView.as_view(), name='batch-wise-report-export'),
+
+    # GST Dashboard MVP endpoints removed to gst_urls.py
 ]

@@ -14,6 +14,10 @@ import {
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL!; // Required — set NEXT_PUBLIC_API_URL in .env
 
+if (!API_URL || !API_URL.startsWith('http')) {
+    throw new Error(`CRITICAL: NEXT_PUBLIC_API_URL is unset or invalid. Currently: '${API_URL}'. Please check your .env files and Playwright configs.`);
+}
+
 let authToken: string | null = null;
 
 export function getStoredToken(): string | null {
@@ -1774,6 +1778,7 @@ const realDoctorsApi = {
         return {
             id: d.id,
             name: d.name,
+            regNo: d.registrationNo ?? d.regNo ?? '',
             specialty: d.specialization ?? '',
             phone: d.phone ?? '',
             outletId: payload.outletId,
@@ -1804,6 +1809,151 @@ export const auditApi = {
     }
 };
 
+const realGstApi = {
+    getPeriods: async () => {
+        const response = await fetch(`${API_URL}/gst/periods/`, { headers: getHeaders() });
+        await assertOk(response);
+        return response.json();
+    },
+    getSummary: async (fp: string) => {
+        const response = await fetch(`${API_URL}/gst/summary/${fp}/`, { headers: getHeaders() });
+        await assertOk(response);
+        return response.json();
+    },
+    getReconciliation: async (fp: string) => {
+        const response = await fetch(`${API_URL}/gst/reconciliation/${fp}/`, { headers: getHeaders() });
+        await assertOk(response);
+        return response.json();
+    },
+    getGSTR1Invoices: async (fp: string, filters: { report_type?: string, tax_filter?: string } = {}) => {
+        const query = new URLSearchParams(filters as Record<string, string>).toString();
+        const response = await fetch(`${API_URL}/gst/periods/${fp}/gstr1-invoices/?${query}`, { headers: getHeaders() });
+        await assertOk(response);
+        return response.json();
+    },
+    getGSTR2BReconciliationData: async (fp: string) => {
+        const response = await fetch(`${API_URL}/gst/periods/${fp}/gstr2b-reconciliation/`, { headers: getHeaders() });
+        await assertOk(response);
+        return response.json();
+    },
+    generateExport: async (fp: string, exportType: string) => {
+        const response = await fetch(`${API_URL}/gst/export/${fp}/${exportType}/`, { headers: getHeaders() });
+        await assertOk(response);
+        const blob = await response.blob();
+        
+        let filename = `GST_Export_${exportType}_${fp}`;
+        const disposition = response.headers.get('content-disposition');
+        if (disposition && disposition.indexOf('filename=') !== -1) {
+            const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
+            const matches = filenameRegex.exec(disposition);
+            if (matches != null && matches[1]) { 
+                filename = matches[1].replace(/['"]/g, '');
+            }
+        } else {
+            if (exportType.includes('excel')) {
+                filename += exportType.includes('gstr3b') ? '.xlsm' : '.xlsx';
+            } else if (exportType.includes('pdf')) {
+                filename += '.pdf';
+            } else {
+                filename += '.json';
+            }
+        }
+        
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        window.URL.revokeObjectURL(url);
+    },
+    generateReconciliationExport: async (period: string) => {
+        const response = await fetch(`${API_URL}/gst/periods/${period}/export/reconciliation/`, { headers: getHeaders() });
+        await assertOk(response);
+        const blob = await response.blob();
+        
+        let filename = `MediFlow_Reconciliation_Audit_${period}.xlsx`;
+        const disposition = response.headers.get('content-disposition');
+        if (disposition && disposition.indexOf('filename=') !== -1) {
+            const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
+            const matches = filenameRegex.exec(disposition);
+            if (matches != null && matches[1]) { 
+                filename = matches[1].replace(/['"]/g, '');
+            }
+        }
+        
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        window.URL.revokeObjectURL(url);
+    },
+    getAuditHistory: async (page: number = 1, period?: string, exportType?: string) => {
+        let url = `${API_URL}/gst/audit/?page=${page}`;
+        if (period) url += `&period=${period}`;
+        if (exportType) url += `&export_type=${exportType}`;
+        const response = await fetch(url, { headers: getHeaders() });
+        await assertOk(response);
+        return response.json();
+    },
+    getSandboxStatus: async () => {
+        const response = await fetch(`${API_URL}/gst/sandbox/status/`, { headers: getHeaders() });
+        await assertOk(response);
+        return response.json();
+    },
+    requestSandboxOTP: async () => {
+        const response = await fetch(`${API_URL}/gst/sandbox/request-otp/`, { 
+            method: 'POST',
+            headers: getHeaders() 
+        });
+        await assertOk(response);
+        return response.json();
+    },
+    verifySandboxOTP: async (otp: string) => {
+        const response = await fetch(`${API_URL}/gst/sandbox/verify-otp/`, { 
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify({ otp })
+        });
+        await assertOk(response);
+        return response.json();
+    },
+    syncSandboxGstr2b: async (period: string) => {
+        const response = await fetch(`${API_URL}/gst/sandbox/gstr2b/sync/`, { 
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify({ period })
+        });
+        await assertOk(response);
+        return response.json();
+    },
+    getSandboxGstr2bStatus: async (period: string) => {
+        const response = await fetch(`${API_URL}/gst/sandbox/gstr2b/status/?period=${period}`, { 
+            method: 'GET',
+            headers: getHeaders()
+        });
+        await assertOk(response);
+        return response.json();
+    },
+    runSandboxGstr2bReconciliation: async (period: string) => {
+        const response = await fetch(`${API_URL}/gst/sandbox/reconciliation/run/`, { 
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify({ period })
+        });
+        await assertOk(response);
+        return response.json();
+    },
+    getGstr2aWarning: async (period: string) => {
+        const response = await fetch(`${API_URL}/gst/periods/${period}/gstr2a-warning/`, { 
+            method: 'GET',
+            headers: getHeaders()
+        });
+        await assertOk(response);
+        return response.json();
+    }
+};
+
 export const authApi = realAuthApi;
 export const productsApi = realProductsApi;
 export const salesApi = realSalesApi;
@@ -1821,3 +1971,4 @@ export const settingsApi = realSettingsApi;
 export const chainApi = realChainApi;
 export const voucherApi = realVoucherApi;
 export const doctorsApi = realDoctorsApi;
+export const gstApi = realGstApi;

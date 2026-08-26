@@ -31,6 +31,7 @@ INSTALLED_APPS = [
     'apps.attendance',
     'apps.reports',
     'apps.audit',
+    'apps.gst',
     'rest_framework_simplejwt.token_blacklist',
     'import_export',
 ]
@@ -185,3 +186,5 @@ import sys
 if 'test' in sys.argv:
     CELERY_TASK_ALWAYS_EAGER = True
     CELERY_TASK_EAGER_PROPAGATES = True
+
+AUDIT_V2_WRITE_ENABLED = True

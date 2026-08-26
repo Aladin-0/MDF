@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { useOutletId } from '@/hooks/useOutletId';
 import { voucherApi } from '@/lib/apiClient';
@@ -15,6 +16,7 @@ import { Ledger, Voucher, PendingBill } from '@/types';
 import { LedgerPicker } from './LedgerPicker';
 import { cn } from '@/lib/utils';
 import { DISABLE_DISRUPTIVE_SHORTCUTS, isEditableElement } from '@/lib/shortcuts';
+import { buildVoucherPayload } from '@/utils/payloadBuilders';
 
 type VoucherType = 'receipt' | 'payment' | 'contra' | 'journal';
 
@@ -268,8 +270,6 @@ export function VoucherForm({ initialType = 'receipt', voucherId, onSuccess }: V
                 }
             }
 
-            let payload: any = { outletId, voucher_type: voucherType, date, narration };
-
             if (voucherType === 'receipt' || voucherType === 'payment') {
                 if (!partyLedger || !cashBankLedger) {
                     toast({ variant: 'destructive', title: 'Select both ledgers' });
@@ -281,30 +281,6 @@ export function VoucherForm({ initialType = 'receipt', voucherId, onSuccess }: V
                     setSaving(false);
                     return;
                 }
-
-                payload.total_amount = totalAmount;
-                payload.payment_mode = cashBankLedger.groupName === 'Bank Accounts' ? 'bank' : 'cash';
-
-                if (voucherType === 'payment') {
-                    payload.lines = [
-                        { ledger_id: partyLedger.id, debit: totalAmount, credit: 0, description: '' },
-                        { ledger_id: cashBankLedger.id, debit: 0, credit: totalAmount, description: '' },
-                    ];
-                } else {
-                    payload.lines = [
-                        { ledger_id: cashBankLedger.id, debit: totalAmount, credit: 0, description: '' },
-                        { ledger_id: partyLedger.id, debit: 0, credit: totalAmount, description: '' },
-                    ];
-                }
-
-                payload.bill_adjustments = pendingBills
-                    .filter(b => (parseFloat(billAmounts[b.id]) || 0) > 0)
-                    .map(b => ({
-                        invoice_id: b.id,
-                        invoice_type: b.invoiceType,
-                        adjusted_amount: parseFloat(billAmounts[b.id]) || 0,
-                    }));
-
             } else if (voucherType === 'contra') {
                 if (!contraDebitLedger || !contraCreditLedger) {
                     toast({ variant: 'destructive', title: 'Select both ledgers' });
@@ -322,12 +298,6 @@ export function VoucherForm({ initialType = 'receipt', voucherId, onSuccess }: V
                     setSaving(false);
                     return;
                 }
-                payload.total_amount = amt;
-                payload.payment_mode = 'cash';
-                payload.lines = [
-                    { ledger_id: contraDebitLedger.id, debit: amt, credit: 0, description: '' },
-                    { ledger_id: contraCreditLedger.id, debit: 0, credit: amt, description: '' },
-                ];
             } else {
                 const validLines = lines.filter(l => l.ledger);
                 if (validLines.length < 2) {
@@ -342,22 +312,30 @@ export function VoucherForm({ initialType = 'receipt', voucherId, onSuccess }: V
                     setSaving(false);
                     return;
                 }
-                payload.total_amount = td;
-                payload.payment_mode = 'cash';
-                payload.lines = validLines.map(l => ({
-                    ledger_id: l.ledger!.id,
-                    debit: parseFloat(l.debit) || 0,
-                    credit: parseFloat(l.credit) || 0,
-                    description: l.description,
-                }));
             }
+
+            const payload = buildVoucherPayload(
+                voucherType,
+                date,
+                narration,
+                outletId,
+                partyLedger,
+                cashBankLedger,
+                totalAmount,
+                pendingBills,
+                billAmounts,
+                contraDebitLedger,
+                contraCreditLedger,
+                contraAmount ? parseFloat(contraAmount) : 0,
+                lines,
+                voucherId,
+                originalStatus,
+                reasonCode,
+                reasonText
+            );
 
             let voucher;
             if (voucherId) {
-                if (originalStatus === 'posted') {
-                    payload.revisionReasonCode = reasonCode;
-                    payload.revisionReasonText = reasonText;
-                }
                 const res = await api.put(`/vouchers/${voucherId}/`, payload);
                 voucher = res.data;
             } else {
@@ -401,40 +379,43 @@ export function VoucherForm({ initialType = 'receipt', voucherId, onSuccess }: V
     }
 
     return (
-        <div className="space-y-6">
-            {/* Voucher Type */}
-            <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* ── LEFT COLUMN (Main Form) ── */}
+            <div className="lg:col-span-8 xl:col-span-9 space-y-6">
+            {/* Voucher Type Segmented Control */}
+            <div className="flex p-1 bg-muted/50 rounded-lg border">
                 {(['receipt', 'payment', 'contra', 'journal'] as VoucherType[]).map((t) => (
                     <button
                         key={t}
                         type="button"
                         onClick={() => { setVoucherType(t); handleClear(); }}
                         className={cn(
-                            'rounded-lg border-2 py-3 text-sm font-medium transition-all',
+                            'flex-1 flex flex-col items-center justify-center py-2 px-2 rounded-md text-sm font-medium transition-all',
                             voucherType === t
-                                ? 'border-primary bg-primary text-white'
-                                : 'border-border bg-background text-muted-foreground hover:border-primary/40'
+                                ? 'bg-background text-foreground shadow-sm border border-border/50'
+                                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                         )}
                     >
-                        <div>{TYPE_LABELS[t]}</div>
-                        <div className="text-xs opacity-60 mt-0.5">
+                        <span>{TYPE_LABELS[t]}</span>
+                        <span className="text-[10px] uppercase font-semibold mt-0.5 opacity-60">
                             {t === 'receipt' ? 'F6' : t === 'payment' ? 'F5' : t === 'contra' ? 'F4' : 'F7'}
-                        </div>
+                        </span>
                     </button>
                 ))}
             </div>
 
-            {/* Date + Voucher No */}
-            <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                    <Label>Date</Label>
-                    <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <div className="bg-card text-card-foreground border rounded-xl shadow-sm p-6 space-y-6">
+                {/* Date + Voucher No */}
+                <div className="grid grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                        <Label className="text-slate-500 font-medium">Date</Label>
+                        <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-11 shadow-none border-slate-200 focus-visible:ring-primary/20 transition-all" />
+                    </div>
+                    <div className="space-y-2">
+                        <Label className="text-slate-500 font-medium">Voucher No</Label>
+                        <Input value={loadingNo ? 'Loading...' : voucherNo} readOnly className="h-11 bg-slate-50 border-slate-100 text-slate-600 font-medium shadow-none cursor-not-allowed" />
+                    </div>
                 </div>
-                <div className="space-y-1.5">
-                    <Label>Voucher No</Label>
-                    <Input value={loadingNo ? 'Loading...' : voucherNo} readOnly className="bg-muted" />
-                </div>
-            </div>
 
             {/* ── Receipt / Payment (Bill-by-Bill) ── */}
             {(voucherType === 'receipt' || voucherType === 'payment') && (
@@ -629,13 +610,6 @@ export function VoucherForm({ initialType = 'receipt', voucherId, onSuccess }: V
                         </div>
                     )}
 
-                    {/* Total Amount Display */}
-                    {partyLedger && (
-                        <div className="flex items-center justify-between rounded-lg bg-primary/5 border-2 border-primary/20 px-5 py-3">
-                            <span className="font-semibold text-foreground">Total Amount</span>
-                            <span className="text-2xl font-black text-primary">{fmt(totalAmount)}</span>
-                        </div>
-                    )}
 
                     {/* Cash/Bank Ledger */}
                     <div className="space-y-1.5">
@@ -699,15 +673,6 @@ export function VoucherForm({ initialType = 'receipt', voucherId, onSuccess }: V
                     <button type="button" onClick={() => setLines(prev => [...prev, newLine()])} className="flex items-center gap-1.5 text-xs text-primary hover:underline">
                         <Plus className="w-3.5 h-3.5" /> Add line
                     </button>
-                    <div className="grid grid-cols-[1fr_110px_110px_auto] gap-2 pt-2 border-t text-sm font-semibold">
-                        <span className="text-right text-muted-foreground">Total</span>
-                        <span className={cn('text-right', totalDebit !== totalCredit && 'text-destructive')}>₹{totalDebit.toFixed(2)}</span>
-                        <span className={cn('text-right', totalDebit !== totalCredit && 'text-destructive')}>₹{totalCredit.toFixed(2)}</span>
-                        <span />
-                    </div>
-                    {totalDebit !== totalCredit && totalDebit > 0 && (
-                        <p className="text-xs text-destructive">Journal entries must balance (Debit = Credit)</p>
-                    )}
                 </div>
             )}
 
@@ -750,23 +715,97 @@ export function VoucherForm({ initialType = 'receipt', voucherId, onSuccess }: V
                     </div>
                 </div>
             )}
-
-            {/* Actions */}
-            <div className="flex gap-3">
-                <Button onClick={() => handleSave()} disabled={saving} className="flex-1">
-                    {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Save <span className="ml-1.5 text-xs opacity-70">Ctrl+S</span>
-                </Button>
-                {(voucherType === 'receipt' || voucherType === 'payment') && (
-                    <Button variant="outline" disabled={saving} onClick={async () => { await handleSave(); }}>
-                        Save &amp; Print <span className="ml-1.5 text-xs opacity-70">Ctrl+P</span>
-                    </Button>
-                )}
-                <Button variant="outline" onClick={handleClear} disabled={saving}>
-                    Clear <span className="ml-1.5 text-xs opacity-70">Esc</span>
-                </Button>
+                </div>
             </div>
 
+            {/* ── RIGHT COLUMN (Summary & Actions Rail) ── */}
+            <div className="lg:col-span-4 xl:col-span-3">
+                <div className="sticky top-6 space-y-4">
+                    <div className="rounded-xl border bg-card text-card-foreground shadow-sm overflow-hidden flex flex-col">
+                        <div className="p-4 border-b bg-muted/40">
+                            <h3 className="font-semibold text-base tracking-tight">Voucher Summary</h3>
+                        </div>
+                        <div className="p-5 space-y-6 flex-1">
+                            {/* Summary Content based on Type */}
+                            {(voucherType === 'receipt' || voucherType === 'payment') && partyLedger && (
+                                <div className="space-y-1 bg-muted/30 p-4 rounded-lg border">
+                                    <div className="text-sm font-medium text-muted-foreground">Total Amount</div>
+                                    <div className="text-3xl font-bold text-foreground tracking-tight">{fmt(totalAmount)}</div>
+                                </div>
+                            )}
+                            
+                            {voucherType === 'contra' && contraAmount && (
+                                <div className="space-y-1 bg-muted/30 p-4 rounded-lg border">
+                                    <div className="text-sm font-medium text-muted-foreground">Contra Amount</div>
+                                    <div className="text-3xl font-bold text-foreground tracking-tight">{fmt(parseFloat(contraAmount) || 0)}</div>
+                                </div>
+                            )}
+
+                            {voucherType === 'journal' && (
+                                <div className="space-y-4">
+                                    <div className="flex justify-between items-center text-sm">
+                                        <span className="text-muted-foreground font-medium">Total Debit</span>
+                                        <span className="font-semibold text-base">₹{totalDebit.toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-sm">
+                                        <span className="text-muted-foreground font-medium">Total Credit</span>
+                                        <span className="font-semibold text-base">₹{totalCredit.toFixed(2)}</span>
+                                    </div>
+                                    <Separator />
+                                    {totalDebit !== totalCredit && totalDebit > 0 ? (
+                                        <div className="flex items-start gap-2.5 text-sm text-destructive bg-destructive/10 p-3 rounded-lg border border-destructive/20">
+                                            <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                                            <p className="font-medium">Journal entries must balance (Debit = Credit)</p>
+                                        </div>
+                                    ) : (totalDebit > 0 && totalDebit === totalCredit) ? (
+                                        <div className="flex items-start gap-2.5 text-sm text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 p-3 rounded-lg border border-emerald-200 dark:border-emerald-900/50">
+                                            <CheckSquare className="w-4 h-4 mt-0.5 shrink-0" />
+                                            <p className="font-medium">Journal is balanced.</p>
+                                        </div>
+                                    ) : null}
+                                </div>
+                            )}
+
+                            {/* Actions */}
+                            <div className="pt-2 space-y-3">
+                                <Button 
+                                    onClick={() => handleSave()} 
+                                    disabled={saving} 
+                                    className="w-full flex justify-between items-center h-12 rounded-lg"
+                                >
+                                    <div className="flex items-center text-sm">
+                                        {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                        <span className="font-semibold">Save Voucher</span>
+                                    </div>
+                                    <span className="text-[10px] uppercase bg-primary-foreground/20 px-1.5 py-0.5 rounded font-bold">Ctrl+S</span>
+                                </Button>
+                                
+                                {(voucherType === 'receipt' || voucherType === 'payment') && (
+                                    <Button 
+                                        variant="outline" 
+                                        disabled={saving} 
+                                        onClick={async () => { await handleSave(); }} 
+                                        className="w-full flex justify-between items-center h-10 rounded-lg"
+                                    >
+                                        <span className="font-medium text-sm">Save &amp; Print</span>
+                                        <span className="text-[10px] uppercase bg-muted px-1.5 py-0.5 rounded font-bold text-muted-foreground">Ctrl+P</span>
+                                    </Button>
+                                )}
+                                
+                                <Button 
+                                    variant="ghost" 
+                                    onClick={handleClear} 
+                                    disabled={saving} 
+                                    className="w-full flex justify-between items-center h-10 rounded-lg text-muted-foreground"
+                                >
+                                    <span className="font-medium text-sm">Clear Form</span>
+                                    <span className="text-[10px] uppercase bg-muted px-1.5 py-0.5 rounded font-bold">Esc</span>
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     );
 }

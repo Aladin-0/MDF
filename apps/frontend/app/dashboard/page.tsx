@@ -57,7 +57,7 @@ export default function DashboardPage() {
           <Card className="h-full min-h-0 min-w-0">
             <CardHeader className="pb-2">
               <CardTitle className="text-base">Hourly Sales</CardTitle>
-              <CardDescription>Today&apos;s billing activity</CardDescription>
+              <CardDescription>Billing activity for selected period</CardDescription>
             </CardHeader>
             <CardContent>
               <HourlySalesChart
@@ -72,7 +72,7 @@ export default function DashboardPage() {
           <Card className="h-full min-h-0 min-w-0">
             <CardHeader className="pb-2">
               <CardTitle className="text-base">Payment Breakdown</CardTitle>
-              <CardDescription>Today&apos;s collection</CardDescription>
+              <CardDescription>Collection for selected period</CardDescription>
             </CardHeader>
             <CardContent>
               <PaymentPieChart kpi={kpi} isLoading={kpiLoading} />

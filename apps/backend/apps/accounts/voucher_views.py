@@ -1543,6 +1543,10 @@ class DebitNoteDetailView(APIView):
         if not outlet_id:
             return Response({'error': 'outletId is required'}, status=400)
 
+        from apps.core.permissions import CanEditPurchaseReturns
+        if not CanEditPurchaseReturns().has_permission(request, self):
+            return Response({'error': 'Not authorized to edit debit notes'}, status=403)
+
         from apps.accounts.debit_note_update_service import atomic_debit_note_update
         try:
             note = atomic_debit_note_update(

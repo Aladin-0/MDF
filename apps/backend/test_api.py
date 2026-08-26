@@ -1,25 +1,18 @@
 import os
 import django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'mediflow.settings.prod')
+
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'mediflow.settings.local_sqlite')
 django.setup()
 
-from apps.accounts.models import Voucher, Staff
-from rest_framework.test import APIClient
-import json
+from django.test import RequestFactory
+from apps.reports.dashboard_views import GSTPeriodsView, GSTSummaryView, GSTReconciliationView
 
-v = Voucher.objects.first()
-staff = Staff.objects.filter(role='admin').first()
+factory = RequestFactory()
+request = factory.get('/')
+view = GSTPeriodsView.as_view()
+response = view(request)
+print("Periods:", response.data)
 
-client = APIClient(SERVER_NAME='localhost')
-client.force_authenticate(user=staff)
-response = client.get(f"/api/accounts/vouchers/{v.id}/history/?outletId={v.outlet_id}")
-
-print(f"Status: {response.status_code}")
-if response.status_code == 200:
-    data = response.json()
-    revisions = data.get('revisions', [])
-    print(f"Number of revisions returned: {len(revisions)}")
-    if revisions:
-        print(f"Latest Revision action: {revisions[0].get('action')}")
-else:
-    print(response.content.decode())
+view_summary = GSTSummaryView.as_view()
+res_summary = view_summary(request, fp='052026')
+print("Summary 052026:", res_summary.data)

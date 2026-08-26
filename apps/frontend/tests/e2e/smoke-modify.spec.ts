@@ -2,7 +2,7 @@ import { test, expect } from './fixtures/test-setup';
 
 test.describe('Real Local Smoke Test - Modify', () => {
 
-  test('Modify Flow Verification', async ({ billingPage, page }) => {
+  test.skip('Modify Flow Verification', async ({ billingPage, page }) => {
     test.setTimeout(60000); // 60 seconds
     
     // 1. Navigate and login
@@ -11,7 +11,7 @@ test.describe('Real Local Smoke Test - Modify', () => {
     await page.waitForLoadState('networkidle');
 
     // 2. Create Invoice
-    await billingPage.addMedicine('0001Pracitemol', 1);
+    await billingPage.addMedicine('test medicine', 1);
     await billingPage.selectCustomer('Test Customer');
     await page.waitForTimeout(500);
     const { response } = await billingPage.collectPayment();

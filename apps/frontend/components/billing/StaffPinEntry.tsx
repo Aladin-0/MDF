@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Pill, Delete, CheckCircle2 } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Pill, Delete, CheckCircle2, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { staffApi } from '@/lib/apiClient'
 import { useBillingStore } from '@/store/billingStore'
@@ -14,6 +15,8 @@ export function StaffPinEntry() {
     const [error, setError] = useState<string | null>(null)
     const [isSuccess, setIsSuccess] = useState(false)
     const [isShaking, setIsShaking] = useState(false)
+    
+    const router = useRouter()
     
     const user = useAuthStore(state => state.user)
     const selectedOutletId = useSettingsStore(state => state.selectedOutletId)
@@ -77,6 +80,14 @@ export function StaffPinEntry() {
                         <p className="text-xl font-semibold text-slate-900">Verified</p>
                     </div>
                 )}
+                
+                <button 
+                    onClick={() => router.push('/dashboard')}
+                    className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+                    title="Go back to Dashboard"
+                >
+                    <X className="w-5 h-5" />
+                </button>
                 
                 <div className="flex flex-col items-center">
                     <div className="bg-primary/10 p-3 rounded-full mb-4">

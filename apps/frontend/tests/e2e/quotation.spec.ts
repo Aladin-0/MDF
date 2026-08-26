@@ -13,7 +13,7 @@ test.describe('MediFlow Quotation System Flow', () => {
     await billingPage.selectQuotationMode();
 
     // 4. Search item/medicine
-    await billingPage.addMedicine('0001Pracitemol', 1);
+    await billingPage.addMedicine('test medicine', 1);
 
     // 5. Save Quotation
     const { request, response } = await billingPage.saveQuotation();

@@ -32,6 +32,7 @@ INSTALLED_APPS = [
     'apps.attendance',
     'apps.reports',
     'apps.audit',
+    'apps.gst',
     'rest_framework_simplejwt.token_blacklist',
     'import_export',
     'drf_spectacular',
@@ -76,6 +77,12 @@ DATABASES = {
         'OPTIONS': {
             # Force PostgreSQL session timezone to IST so that all timestamps
             # (both stored and displayed) use Asia/Kolkata time.
+            'options': '-c TimeZone=Asia/Kolkata',
+        },
+    },
+    'qa': {
+        **env.db('QA_DATABASE_URL', default='postgres://mediflow:mediflow@localhost:5432/mediflow_qa'),
+        'OPTIONS': {
             'options': '-c TimeZone=Asia/Kolkata',
         },
     }
@@ -124,6 +131,7 @@ REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 50,
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'COERCE_DECIMAL_TO_STRING': True,
 }
 
 CORS_ALLOWED_ORIGINS = env.list(
@@ -133,11 +141,18 @@ CORS_ALLOWED_ORIGINS = env.list(
         'http://127.0.0.1:3000',
     ]
 )
+import os
+import sys
 CORS_ALLOW_CREDENTIALS = True
+CORS_EXPOSE_HEADERS = ['Content-Disposition']
 
 # Celery
-CELERY_BROKER_URL = env('REDIS_URL', default='redis://redis:6379/0')
-CELERY_RESULT_BACKEND = env('REDIS_URL', default='redis://redis:6379/0')
+if 'test' in sys.argv or os.environ.get('CELERY_TASK_ALWAYS_EAGER') == 'True':
+    CELERY_BROKER_URL = 'memory://'
+    CELERY_RESULT_BACKEND = 'cache+memory://'
+else:
+    CELERY_BROKER_URL = env('REDIS_URL', default='redis://redis:6379/0')
+    CELERY_RESULT_BACKEND = env('REDIS_URL', default='redis://redis:6379/0')
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
@@ -185,9 +200,15 @@ LOGGING = {
     },
 }
 
+import os
 import sys
-if 'test' in sys.argv:
+if 'test' in sys.argv or os.environ.get('CELERY_TASK_ALWAYS_EAGER') == 'True':
     CELERY_TASK_ALWAYS_EAGER = True
     CELERY_TASK_EAGER_PROPAGATES = True
 AUDIT_V2_WRITE_ENABLED = True
 AUDIT_V2_READ_ENABLED = True
+
+# GST Sandbox Configuration
+SANDBOX_PROVIDER_MODE = env('SANDBOX_PROVIDER_MODE', default='test')
+SANDBOX_BASE_URL = env('SANDBOX_BASE_URL', default='https://test-api.sandbox.co.in')
+ENABLE_GST_SANDBOX_LIVE_MODE = env.bool('ENABLE_GST_SANDBOX_LIVE_MODE', default=False)

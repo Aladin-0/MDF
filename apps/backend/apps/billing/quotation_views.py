@@ -273,7 +273,7 @@ class QuotationConvertView(APIView):
         payload = {
             "outletId": str(quotation.outlet_id),
             "customerId": str(quotation.customer_id) if quotation.customer_id else None,
-            "doctorId": request.data.get("doctorId") or (str(quotation.doctor_id) if quotation.doctor_id else None),
+            "doctorId": request.data.get("doctorId"),
             "doctorName": request.data.get("doctorName") or quotation.doctor_name,
             "hospitalName": request.data.get("hospitalName") or quotation.hospital_name,
             "prescriptionNo": request.data.get("prescriptionNo"),

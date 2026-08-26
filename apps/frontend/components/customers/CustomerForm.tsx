@@ -13,6 +13,7 @@ import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { useCreateCustomer, useUpdateCustomer } from '@/hooks/useCustomers';
 import { useOutletId } from '@/hooks/useOutletId';
+import { buildCustomerPayload } from '@/utils/payloadBuilders';
 import { Customer, INDIAN_STATES } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -363,18 +364,7 @@ export default function CustomerForm({ open, onClose, customer }: CustomerFormPr
             return;
         }
 
-        const payload = {
-            outletId,
-            name: form.name.trim(),
-            phone: form.phone.trim(),
-            address: buildAddress() ?? undefined,
-            state: form.state || undefined,
-            dob: form.dob || undefined,
-            gstin: form.gstin.trim().toUpperCase() || undefined,
-            isChronic: form.isChronic,
-            creditLimit: parseFloat(form.creditLimit) || 0,
-            fixedDiscount: parseFloat(form.fixedDiscount) || 0,
-        };
+        const payload = buildCustomerPayload(outletId, form, buildAddress);
 
         try {
             if (customer) {

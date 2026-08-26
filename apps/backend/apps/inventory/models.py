@@ -215,3 +215,77 @@ class StockLedger(models.Model):
     def __str__(self):
         return f"{self.txn_date} | {self.txn_type} | {self.product} | IN:{self.qty_in} OUT:{self.qty_out}"
 
+
+class StockAdjustment(models.Model):
+    ADJUSTMENT_TYPE_CHOICES = [
+        ('EXPIRED', 'Expired'),
+        ('DAMAGED', 'Damaged'),
+        ('DESTROYED', 'Destroyed'),
+        ('THEFT_LOSS', 'Theft/Loss'),
+    ]
+    STATUS_CHOICES = [
+        ('PROPOSED', 'Proposed'),
+        ('APPROVED', 'Approved'),
+        ('INCLUDED_IN_EXPORT', 'Included in Export'),
+    ]
+    TRACEABILITY_STATUS_CHOICES = [
+        ('FIFO_MATCHED', 'FIFO Matched'),
+        ('NEEDS_REVIEW', 'Needs Review'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    outlet = models.ForeignKey('core.Outlet', on_delete=models.CASCADE, related_name='stock_adjustments')
+    batch = models.ForeignKey('inventory.Batch', on_delete=models.CASCADE, related_name='stock_adjustments')
+    source_ledger_entry = models.OneToOneField('inventory.StockLedger', on_delete=models.CASCADE, related_name='stock_adjustment', null=True, blank=True)
+    adjustment_type = models.CharField(max_length=50, choices=ADJUSTMENT_TYPE_CHOICES)
+    qty_strips = models.IntegerField(default=0)
+    qty_loose = models.IntegerField(default=0)
+    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='PROPOSED')
+    traceability_status = models.CharField(max_length=50, choices=TRACEABILITY_STATUS_CHOICES, default='NEEDS_REVIEW')
+    reason = models.TextField(blank=True, null=True)
+    effective_date = models.DateField()
+    gstr_reason_code = models.CharField(max_length=50, default='SECTION_17_5_H')
+    target_gstr3b_table = models.CharField(max_length=50, default='4(B)(1)')
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def clean(self):
+        if self.pk:
+            try:
+                orig = StockAdjustment.objects.get(pk=self.pk)
+                if orig.status == 'INCLUDED_IN_EXPORT' and self.status != 'INCLUDED_IN_EXPORT':
+                    raise ValidationError("Cannot modify an adjustment that has been included in an export.")
+                if orig.status == 'INCLUDED_IN_EXPORT' and (
+                    orig.qty_strips != self.qty_strips or
+                    orig.qty_loose != self.qty_loose or
+                    orig.batch_id != self.batch_id or
+                    orig.adjustment_type != self.adjustment_type
+                ):
+                    raise ValidationError("Cannot modify fields of an adjustment included in an export.")
+            except StockAdjustment.DoesNotExist:
+                pass
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+
+
+class StockAdjustmentAllocation(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    stock_adjustment = models.ForeignKey(StockAdjustment, on_delete=models.CASCADE, related_name='allocations')
+    source_purchase_item = models.ForeignKey('purchases.PurchaseItem', on_delete=models.PROTECT, related_name='adjustment_allocations')
+    allocated_qty = models.DecimalField(max_digits=12, decimal_places=3)
+    taxable_value = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    reversed_igst_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    reversed_cgst_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    reversed_sgst_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    reversed_cess_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    allocation_order = models.IntegerField(default=0)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['allocation_order']
+

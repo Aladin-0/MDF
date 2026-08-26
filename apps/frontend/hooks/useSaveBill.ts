@@ -8,6 +8,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { logger } from '@/lib/logger';
 import { salesApi } from '@/lib/apiClient';
 import { PaymentSplit } from '@/types';
+import { buildSalePayload, buildScheduleHPayload } from '@/utils/payloadBuilders';
 
 export function useSaveBill() {
     const queryClient = useQueryClient();
@@ -71,69 +72,11 @@ export function useSaveBill() {
                 return 0;
             };
 
-            const payload = {
-                outletId: resolvedOutletId,
-                invoiceDate: invoiceDateIso,
-                partyLedgerId,
-                customerId,
-                doctorId: (doctor && doctor.id !== 'mock') ? doctor.id : undefined,
-                doctorName: doctor?.name,      // Needed by quotation backend (stores text, not FK)
-                hospitalName: draft.hospitalName,
-                prescriptionNo: draft.prescriptionNo,
-                billedBy: activeStaff.id,
-                items: cart.map((item: any) => {
-                    const rawTotal = item.rate * item.totalQty;
-                    const gstRate = item.gstRate || 0;
-                    const discountFactor = extraDiscountPct > 0 ? 1 - extraDiscountPct / 100 : 1;
-                    const discountedTotal = rawTotal * discountFactor;
-                    const taxable = gstRate > 0
-                        ? Number((discountedTotal / (1 + gstRate / 100)).toFixed(2))
-                        : Number(discountedTotal.toFixed(2));
-                    const gst = Number((discountedTotal - taxable).toFixed(2));
-                    return {
-                        batchId: item.batchId,
-                        name: item.name,
-                        batchNo: item.batchNo,
-                        expiryDate: item.expiryDate,
-                        productId: item.productId,
-                        qtyStrips: item.qtyStrips,
-                        qtyLoose: item.qtyLoose,
-                        saleMode: item.saleMode,
-                        mrp: item.mrp || 0,            // Snapshot fields for quotation reopen
-                        packSize: item.packSize || 1,
-                        rate: item.rate,
-                        discountPct: item.discountPct,
-                        gstRate: item.gstRate,
-                        scheduleType: item.scheduleType || 'OTC',
-                        taxableAmount: taxable,
-                        gstAmount: gst,
-                        totalAmount: Number(discountedTotal.toFixed(2)),
-                    };
-                }),
-                subtotal: Number(totals.subtotal.toFixed(2)),
-                discountAmount: Number((totals.discountAmount + totals.extraDiscountAmount).toFixed(2)),
-                taxableAmount: Number(totals.taxableAmount.toFixed(2)),
-                cgstAmount: Number(totals.cgstAmount.toFixed(2)),
-                sgstAmount: Number(totals.sgstAmount.toFixed(2)),
-                igstAmount: 0,
-                cgst: Number(totals.cgstAmount.toFixed(2)),
-                sgst: Number(totals.sgstAmount.toFixed(2)),
-                igst: 0,
-                roundOff: Number(totals.roundOff.toFixed(2)),
-                grandTotal: Number(totals.grandTotal.toFixed(2)),
-                extraDiscountPct,
-                paymentMode: draft.payment.method,
-                cashPaid: draft.payment.method === 'cash' ? (draft.payment.cashTendered || totals.grandTotal) : getPaid('cash'),
-                upiPaid: getPaid('upi'),
-                cardPaid: getPaid('card'),
-                creditGiven: getPaid('credit'),
-                scheduleHData: (totals.requiresDoctorDetails || totals.hasScheduleH) ? scheduleHData : undefined,
-                revisionAction: draft.revisionAction,
-                revisionReasonCode: draft.revisionReasonCode,
-                revisionReasonText: draft.revisionReasonText,
-                quotationId: draft.quotationId,
-            };
+            const finalScheduleHData = (totals.requiresDoctorDetails || totals.hasScheduleH)
+                ? buildScheduleHPayload(customer, doctor, draft)
+                : undefined;
 
+            const payload = buildSalePayload(draft, finalScheduleHData, totals, activeStaff, resolvedOutletId);
             const editingSaleId = draft.editingSaleId;
             const revisionAction = draft.revisionAction;
             let invoice;

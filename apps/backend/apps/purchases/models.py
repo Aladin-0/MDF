@@ -219,3 +219,68 @@ class PurchaseItem(models.Model):
     def __str__(self):
         product_name = self.master_product.name if self.master_product else self.custom_product_name
         return f"{product_name} - {self.batch_no}"
+
+class Rule37Adjustment(models.Model):
+    """
+    Rule 37 Unpaid Supplier Invoice ITC Risk Tracker.
+    Tracks 180-day ITC reversals and subsequent re-availments.
+    """
+    STATUS_CHOICES = [
+        ('PROPOSED', 'Proposed'),
+        ('NEEDS_REVIEW', 'Needs Review (Missing Allocation)'),
+        ('APPROVED', 'Approved'),
+        ('INCLUDED_IN_EXPORT', 'Included in Export'),
+    ]
+    ACTION_CHOICES = [
+        ('REVERSAL_DUE', 'Reversal Due (Unpaid > 180 Days)'),
+        ('REAVAILMENT_ELIGIBLE', 'Re-availment Eligible (Subsequent Payment)'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    invoice = models.ForeignKey(PurchaseInvoice, on_delete=models.CASCADE, related_name='rule37_adjustments')
+    
+    # Core state
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PROPOSED')
+    action_type = models.CharField(max_length=30, choices=ACTION_CHOICES)
+    
+    # Rule 37 specific timing
+    rule37_due_date = models.DateField(help_text="invoice_date + 180 days")
+    days_outstanding_at_evaluation = models.IntegerField()
+    calculation_date = models.DateTimeField(auto_now_add=True)
+    
+    # Reclaim fields
+    payment_date = models.DateField(null=True, blank=True)
+    reclaim_period = models.CharField(max_length=6, null=True, blank=True, help_text="Format: MMYYYY")
+    reclaimed_igst = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    reclaimed_cgst = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    reclaimed_sgst = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    
+    # Snapshot state at evaluation
+    invoice_total_at_evaluation = models.DecimalField(max_digits=12, decimal_places=2)
+    amount_paid_at_evaluation = models.DecimalField(max_digits=12, decimal_places=2)
+    unpaid_amount_at_evaluation = models.DecimalField(max_digits=12, decimal_places=2)
+    unpaid_ratio = models.DecimalField(max_digits=5, decimal_places=4, help_text="Proportion of unpaid invoice value (0.0 to 1.0)")
+    
+    # Calculated ITC amounts
+    reversed_igst = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    reversed_cgst = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    reversed_sgst = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    reversed_cess = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    
+    # GSTR mapping configuration
+    gstr_reason_code = models.CharField(max_length=50, default='RULE_37')
+    target_gstr3b_table = models.CharField(max_length=50, default='4(B)(2)')
+    
+    # Audit trail & linked re-availments
+    source_reversal = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='reavailments', help_text="Links a REAVAILMENT_ELIGIBLE back to its REVERSAL_DUE")
+    metadata = models.JSONField(default=dict, help_text="Immutable calculation metadata/payment references")
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'purchases_rule37adjustment'
+        ordering = ['-calculation_date']
+
+    def __str__(self):
+        return f"{self.action_type} for {self.invoice.invoice_no} ({self.status})"

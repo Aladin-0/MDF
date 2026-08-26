@@ -31,7 +31,8 @@ urlpatterns = [
     path("api/v1/reports/", include("apps.reports.urls")),
     path("api/v1/outlet/", include("apps.core.outlet_urls")),
     path("api/v1/organizations/", include("apps.core.chain_urls")),
-    # Put these at the end because they map directly to api/v1/ without a specific app prefix
+    path("api/v1/gst/", include("apps.gst.urls")),
+    path("api/v1/gst/", include("apps.reports.gst_urls")),
     path("api/v1/", include("apps.inventory.urls")),
     path("api/v1/purchases/", include("apps.purchases.urls")),
     path("api/v1/", include("apps.billing.urls")),

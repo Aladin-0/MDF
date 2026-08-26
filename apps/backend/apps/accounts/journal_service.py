@@ -65,9 +65,9 @@ def _get_ledger(outlet, name):
 
 def _get_ledger_safe(outlet, name, fallback_name=None):
     """
-    Fetch a ledger by name, returning fallback or None on failure.
-    NEVER raises — used for rate-specific GST ledger lookups where
-    a missing ledger must never crash the invoice save.
+    Fetch a ledger by name, returning fallback or raising ValueError on failure.
+    Used for rate-specific GST ledger lookups where a missing ledger should fail
+    the save rather than causing a silent double-entry imbalance.
     """
     try:
         return Ledger.objects.select_for_update().get(outlet=outlet, name=name)
@@ -80,11 +80,11 @@ def _get_ledger_safe(outlet, name, fallback_name=None):
                     f"GST ledger '{name}' AND fallback '{fallback_name}' both not found "
                     f"for outlet '{outlet.name}'. Run seed_ledgers."
                 )
-                return None
+                raise ValueError('Required GST ledgers not found')
         logger.warning(
             f"GST ledger '{name}' not found for outlet '{outlet.name}'. Run seed_ledgers."
         )
-        return None
+        raise ValueError('Required GST ledgers not found')
 
 
 def _snap_to_standard_rate(rate):
@@ -315,6 +315,9 @@ def _build_sale_gst_lines(outlet, sale_invoice):
                     if sgst_amount > 0 and sgst_ledger:
                         lines.append(('credit', sgst_ledger, sgst_amount))
 
+    except ValueError:
+        # A required ledger was missing; re-raise to fail the save properly
+        raise
     except Exception as e:
         logger.error(
             f"Sale {sale_invoice.id}: error building GST lines: {e}. "
@@ -336,6 +339,8 @@ def _build_sale_gst_lines(outlet, sale_invoice):
                     sgst_ledger = _get_ledger_safe(outlet, 'GST Payable SGST')
                     if sgst_ledger:
                         lines.append(('credit', sgst_ledger, sgst_amount))
+        except ValueError:
+            raise
         except Exception as e2:
             logger.error(
                 f"Sale {sale_invoice.id}: hard fallback also failed: {e2}. "
@@ -426,6 +431,8 @@ def _build_purchase_gst_lines(outlet, purchase_invoice, gst_amount, distributor_
             if sgst_ledger:
                 lines.append(('debit', sgst_ledger, sgst_input))
 
+    except ValueError:
+        raise
     except Exception as e:
         logger.error(
             f"Purchase {purchase_invoice.id}: error building GST input lines: {e}. "
@@ -440,6 +447,8 @@ def _build_purchase_gst_lines(outlet, purchase_invoice, gst_amount, distributor_
                 lines.append(('debit', cgst_ledger, cgst_c))
             if sgst_ledger:
                 lines.append(('debit', sgst_ledger, sgst_c))
+        except ValueError:
+            raise
         except Exception as e2:
             logger.error(
                 f"Purchase {purchase_invoice.id}: hard fallback also failed: {e2}. "
@@ -653,12 +662,31 @@ def post_purchase_invoice(purchase_invoice, distributor_ledger=None):
 
         # Dr Purchase Account
         purchase_ledger = _get_ledger(outlet, 'Purchase Account')
-        lines.append(('debit', purchase_ledger, taxable_amount))
+        subtotal = getattr(purchase_invoice, 'subtotal', taxable_amount) or taxable_amount
+        lines.append(('debit', purchase_ledger, subtotal))
 
         # Dr GST Input — rate-specific with fallback, never raises
         if gst_amount > 0:
             gst_lines = _build_purchase_gst_lines(outlet, purchase_invoice, gst_amount, distributor_ledger)
             lines.extend(gst_lines)
+
+        # Dr Cess Account
+        cess_amount = getattr(purchase_invoice, 'cess_amount', Decimal('0')) or Decimal('0')
+        if cess_amount > 0:
+            cess_ledger = _get_ledger(outlet, 'Cess Account')
+            lines.append(('debit', cess_ledger, cess_amount))
+
+        # Dr Freight Inward
+        freight = getattr(purchase_invoice, 'freight', Decimal('0')) or Decimal('0')
+        if freight > 0:
+            freight_ledger = _get_ledger(outlet, 'Freight Inward')
+            lines.append(('debit', freight_ledger, freight))
+
+        # Cr Discount Received
+        discount_amount = getattr(purchase_invoice, 'discount_amount', Decimal('0')) or Decimal('0')
+        if discount_amount > 0:
+            discount_ledger = _get_ledger(outlet, 'Discount Received')
+            lines.append(('credit', discount_ledger, discount_amount))
 
         # Round Off — bridges the gap between (taxable + gst) and grand_total
         round_off = purchase_invoice.round_off or Decimal('0')

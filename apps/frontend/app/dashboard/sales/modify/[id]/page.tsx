@@ -57,7 +57,14 @@ export default function ModifySalePage({ params }: { params: { id: string } }) {
 
             const store = useBillingStore.getState();
             let targetDraftId = store.activeDraftId;
-            if (!targetDraftId) {
+            const currentDraft = targetDraftId ? store.drafts[targetDraftId] : null;
+
+            const hasItems = currentDraft?.cart && currentDraft.cart.length > 0;
+            const hasCustomer = !!currentDraft?.customer;
+            const hasEditingSale = !!currentDraft?.editingSaleId;
+            const isNonEmptyDraft = hasItems || hasCustomer || hasEditingSale;
+
+            if (!targetDraftId || isNonEmptyDraft) {
                 targetDraftId = store.createDraft();
             } else {
                 store.clearCart(targetDraftId);
@@ -80,6 +87,8 @@ export default function ModifySalePage({ params }: { params: { id: string } }) {
                 store.setCustomerLedger({
                     id: 'mock',
                     name: fullInvoice.customer.name,
+                    phone: fullInvoice.customer.phone || '',
+                    address: fullInvoice.customer.address || '',
                     groupName: 'Sundry Debtors',
                     currentBalance: 0,
                     isMock: true,
@@ -123,11 +132,25 @@ export default function ModifySalePage({ params }: { params: { id: string } }) {
                 store.setHospitalName(fullInvoice.hospitalName);
             }
 
-            if (fullInvoice.doctorName || fullInvoice.prescriptionNo) {
+            if (fullInvoice.scheduleHData) {
                  store.setScheduleHData({
-                     patientName: fullInvoice.patientName || '',
+                     patientName: fullInvoice.scheduleHData.patientName || '',
+                     patientAge: fullInvoice.scheduleHData.patientAge || 0,
+                     patientAddress: fullInvoice.scheduleHData.patientAddress || '',
+                     doctorName: fullInvoice.scheduleHData.doctorName || '',
+                     doctorRegNo: fullInvoice.scheduleHData.doctorRegNo || '',
+                     prescriptionNo: fullInvoice.scheduleHData.prescriptionNo || '',
+                 });
+                 if (fullInvoice.scheduleHData.prescriptionNo || fullInvoice.prescriptionNo) {
+                     store.updateDraftHeader(targetDraftId, { 
+                         prescriptionNo: fullInvoice.scheduleHData.prescriptionNo || fullInvoice.prescriptionNo 
+                     });
+                 }
+            } else if (fullInvoice.doctorName || fullInvoice.prescriptionNo) {
+                 store.setScheduleHData({
+                     patientName: '',
                      patientAge: 0,
-                     patientAddress: fullInvoice.patientAddress || '',
+                     patientAddress: '',
                      doctorName: fullInvoice.doctorName || '',
                      doctorRegNo: fullInvoice.doctorRegNo || '',
                      prescriptionNo: fullInvoice.prescriptionNo || '',
@@ -144,7 +167,7 @@ export default function ModifySalePage({ params }: { params: { id: string } }) {
                      const qtyLoose = item.qtyLoose || 0;
                      const totalQtyFractional = qtyStrips + (qtyLoose / packSize);
                      
-                     store.addToCart(store.activeDraftId, {
+                     store.addToCart(targetDraftId, {
                          ...item,
                          qtyStrips: qtyStrips,
                          qtyLoose: qtyLoose,

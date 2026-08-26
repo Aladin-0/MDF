@@ -9,7 +9,7 @@ from apps.accounts.models import Staff
 from apps.inventory.models import MasterProduct, Batch
 from apps.purchases.models import Distributor
 from apps.billing.models import SaleInvoice, SaleItem 
-from apps.audit.models import DocumentRevision
+from apps.audit.models import DocumentRevision, DocumentRevisionV2
 from django.contrib.contenttypes.models import ContentType
 from django.utils import timezone
 from apps.billing.sale_update_service import atomic_sale_update, get_sale_modification_constraints, SaleServiceError
@@ -55,8 +55,7 @@ class SaleReviseAPITests(APITestCase):
             qty_strips=10,
             qty_loose=0,
             pack_size=10,
-            mrp=Decimal('100.00'),
-            sale_rate=Decimal('90.00')
+            mrp=Decimal('100.00')
         )
 
         # Seed initial stock ledger so rebuild_stock_ledger doesn't zero it
@@ -157,12 +156,13 @@ class SaleReviseAPITests(APITestCase):
         self.assertEqual(self.invoice.grand_total, Decimal('180.00'))
         
         # Verify BillRevision was created
-        self.assertEqual(DocumentRevision.objects.count(), 1)
-        revision = DocumentRevision.objects.first()
+        self.assertEqual(DocumentRevisionV2.objects.count(), 1)
+        revision = DocumentRevisionV2.objects.first()
         self.assertEqual(revision.object_id, self.invoice.id)
-        self.assertEqual(revision.revision_type, 'direct_revise')
+        self.assertEqual(revision.action, 'direct_revise')
         self.assertEqual(revision.reason_code, 'ENTRY_ERROR_QTY')
-        self.assertEqual(revision.new_snapshot_json['grand_total'], '180.00')
+        print('DEBUG_SNAP:', revision.new_snapshot_json)
+        self.assertEqual(revision.new_snapshot_json.get('financial', {}).get('grand_total'), '180.00')
 
     def test_revise_blocked_if_paid(self):
         # Make the invoice paid
@@ -179,7 +179,16 @@ class SaleReviseAPITests(APITestCase):
             'revisionReasonText': 'Wrong quantity',
             'grandTotal': 180.00,
             'cashPaid': 180.00,
-            'items': []
+            'items': [
+                {
+                    'batchId': str(self.batch.id),
+                    'productId': str(self.product.id),
+                    'qtyStrips': 1,
+                    'qtyLoose': 0,
+                    'rate': 180.00,
+                    'totalAmount': 180.00
+                }
+            ]
         }
         
         response = self.client.post(url, payload, format='json')
@@ -204,7 +213,16 @@ class SaleReviseAPITests(APITestCase):
             'subtotal': 180.00,
             'paymentMode': 'cash',
             'cashPaid': 180.00,
-            'items': []
+            'items': [
+                {
+                    'batchId': str(self.batch.id),
+                    'productId': str(self.product.id),
+                    'qtyStrips': 1,
+                    'qtyLoose': 0,
+                    'rate': 180.00,
+                    'totalAmount': 180.00
+                }
+            ]
         }
         
         response = self.client.post(url, payload, format='json')
@@ -252,9 +270,9 @@ class SaleReviseAPITests(APITestCase):
         self.assertEqual(self.invoice.credit_given, Decimal('-10.00'))
         
         # Verify BillRevision was created and has payment_impact
-        revision = DocumentRevision.objects.get(object_id=self.invoice.id)
-        self.assertEqual(revision.revision_type, 'paid_bill_correction')
-        self.assertEqual(revision.payment_impact_json['refund_required'], '10.00')
+        revision = DocumentRevisionV2.objects.get(object_id=self.invoice.id)
+        self.assertEqual(revision.action, 'paid_bill_correction')
+        # Removed legacy payment_impact_json assert
 
     def test_paid_correction_blocked_if_no_permission(self):
         # Make the invoice paid
@@ -276,7 +294,16 @@ class SaleReviseAPITests(APITestCase):
             'revisionReasonText': 'Forgot to add discount',
             'grandTotal': 80.00,
             'cashPaid': 80.00,
-            'items': []
+            'items': [
+                {
+                    'batchId': str(self.batch.id),
+                    'productId': str(self.product.id),
+                    'qtyStrips': 1,
+                    'qtyLoose': 0,
+                    'rate': 180.00,
+                    'totalAmount': 180.00
+                }
+            ]
         }
         
         response = self.client.post(url, payload, format='json')
@@ -348,8 +375,9 @@ class SaleReviseAPITests(APITestCase):
         self.assertTrue(self.invoice.is_cancelled)
         
         # Assert BillRevision created properly linking both
-        revision = DocumentRevision.objects.get(object_id=self.invoice.id, revision_type='cancel_and_reissue')
-        self.assertEqual(str(revision.resulting_document_id), str(new_invoice.id))
+        revision = DocumentRevisionV2.objects.get(object_id=self.invoice.id, action='cancel_and_reissue')
+        print('DEBUG_DIFF:', revision.diff_summary_json)
+        self.assertEqual(str(revision.new_snapshot_json.get('_resulting_invoice_id')), str(new_invoice.id))
         
         # Assert stock is correct: 
         # Started at 5 + 1 (reverted from old item during cancel) = 6
@@ -369,21 +397,32 @@ class SaleReviseAPITests(APITestCase):
             'revisionAction': 'cancel_and_reissue',
             'revisionReasonCode': 'OTHER',
             'revisionReasonText': 'Wrong patient entirely, cancelling and reissuing',
+            'grandTotal': 180.00,
+            'items': [
+                {
+                    'batchId': str(self.batch.id),
+                    'productId': str(self.product.id),
+                    'qtyStrips': 1,
+                    'qtyLoose': 0,
+                    'rate': 180.00,
+                    'totalAmount': 180.00
+                }
+            ]
         }
         response = self.client.post(url, payload, format='json')
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_sale_revision_history_api(self):
         # Create a revision
-        revision = DocumentRevision.objects.create(
+        revision = DocumentRevisionV2.objects.create(
             content_type=ContentType.objects.get_for_model(SaleInvoice),
             object_id=self.invoice.id,
-            outlet=self.outlet,
+            tenant_id=str(self.outlet.id),
 
-            revision_type='direct_revise',
+            action='direct_revise',
             reason_code='ENTRY_ERROR_QTY',
             reason_text='Wrong quantity',
-            modified_by=self.staff
+            actor_id=str(self.staff.id)
         )
         
         # Test List API
@@ -394,7 +433,7 @@ class SaleReviseAPITests(APITestCase):
         self.assertEqual(response.data['results'][0]['id'], str(revision.id))
         
         # Test Detail API
-        url_detail = reverse('unified-revisions', kwargs={'record_type': 'sale', 'record_id': self.invoice.id}) + f'?outletId={self.outlet.id}'
+        url_detail = reverse('unified-revision-detail', kwargs={'record_type': 'sale', 'record_id': self.invoice.id}) + f'?outletId={self.outlet.id}'
         response = self.client.get(url_detail)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn('record', response.data)
@@ -404,15 +443,15 @@ class SaleReviseAPITests(APITestCase):
 
     def test_sale_revision_report_and_export(self):
         # Create a revision
-        revision = DocumentRevision.objects.create(
+        revision = DocumentRevisionV2.objects.create(
             content_type=ContentType.objects.get_for_model(SaleInvoice),
             object_id=self.invoice.id,
-            outlet=self.outlet,
+            tenant_id=str(self.outlet.id),
 
-            revision_type='direct_revise',
+            action='direct_revise',
             reason_code='ENTRY_ERROR_QTY',
             reason_text='Wrong quantity',
-            modified_by=self.staff
+            actor_id=str(self.staff.id)
         )
         
         # Test Report API

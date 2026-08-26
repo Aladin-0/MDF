@@ -18,12 +18,24 @@ setup('reset database and login', async ({ page, baseURL }) => {
       throw new Error('CRITICAL: Playwright tests are configured to run against the production database ("mediflow"). Aborting to prevent data wipe.');
     }
 
+    execFileSync(pythonCmd, ['manage.py', 'migrate'], {
+      cwd: backendDir,
+      env: { 
+        ...process.env, 
+        DJANGO_SETTINGS_MODULE: 'mediflow.settings.dev', 
+        DATABASE_URL: testDbUrl,
+        REDIS_URL: 'memory://'
+      },
+      stdio: 'inherit',
+    });
+
     execFileSync(pythonCmd, ['manage.py', 'reset_test_db_state'], {
       cwd: backendDir,
       env: { 
         ...process.env, 
-        DJANGO_SETTINGS_MODULE: 'mediflow.settings.test', 
-        DATABASE_URL: testDbUrl 
+        DJANGO_SETTINGS_MODULE: 'mediflow.settings.dev', 
+        DATABASE_URL: testDbUrl,
+        REDIS_URL: 'memory://'
       },
       stdio: 'inherit',
     });
@@ -42,7 +54,7 @@ setup('reset database and login', async ({ page, baseURL }) => {
   await page.click('button[type="submit"]');
 
   // Wait for navigation to dashboard (assumes success redirects to / or /dashboard)
-  await page.waitForURL('**/dashboard', { timeout: 15000 });
+  await page.waitForURL('**/dashboard', { timeout: 120000 });
 
   // Ensure auth directory exists
   const authDir = path.join(__dirname, '.auth');

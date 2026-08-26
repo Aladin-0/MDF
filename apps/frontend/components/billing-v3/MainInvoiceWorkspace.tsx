@@ -323,6 +323,7 @@ export function MainInvoiceWorkspace() {
                                 value={qtyStrips}
                                 onChange={(e) => setQtyStrips(e.target.value)}
                                 onKeyDown={handleQtyKeyDown}
+                                data-testid="quick-qty-strips"
                                 className="w-24 h-10 border-blue-300 focus-visible:ring-blue-500 font-bold text-lg text-center"
                             />
                         </div>
@@ -338,6 +339,7 @@ export function MainInvoiceWorkspace() {
                                     value={qtyLoose}
                                     onChange={(e) => setQtyLoose(e.target.value)}
                                     onKeyDown={handleQtyKeyDown}
+                                    data-testid="quick-qty-loose"
                                     className="w-20 h-10 border-slate-300 focus-visible:ring-blue-500 font-bold text-lg text-center"
                                 />
                             </div>

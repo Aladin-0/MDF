@@ -23,6 +23,7 @@ import { PurchaseItemRow } from './PurchaseItemRow';
 import { AddNewProductDrawer } from './AddNewProductDrawer';
 import { PurchaseItemFormData, ProductSearchResult, Ledger, PurchaseInvoiceFull } from '@/types';
 import { useOutletId } from '@/hooks/useOutletId';
+import { buildPurchasePayload } from '@/utils/payloadBuilders';
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
@@ -365,78 +366,36 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
 
     const onSubmit = async (data: FormData) => {
         try {
-            const payload = {
-                outletId,
-                partyLedgerId:    data.partyLedgerId,
-                purchaseType:     data.purchaseType,
-                invoiceNo:        data.invoiceNo,
-                invoiceDate:      data.invoiceDate,
-                dueDate:          data.purchaseType === 'credit' ? data.dueDate : undefined,
-                purchaseOrderRef: data.purchaseOrderRef,
-                godown:           data.godown,
-                freight,
-                notes:            data.notes,
-                subtotal:         parseFloat(goodsValue.toFixed(2)),
-                discountAmount:   parseFloat((totalTradeDisc + totalCashDisc).toFixed(2)),
-                taxableAmount:    parseFloat(taxableValue.toFixed(2)),
-                gstAmount:        parseFloat(totalGST.toFixed(2)),
-                cessAmount:       parseFloat(totalCess.toFixed(2)),
-                roundOff:          parseFloat(roundOff.toFixed(2)),
-                ledgerAdjustment:  parseFloat(effectiveAdjustment.toFixed(2)),
-                ledgerNote:        ledgerNote || undefined,
-                grandTotal:        parseFloat(netPayable.toFixed(2)),
-                items: items.map((it) => {
-                    const effPkg     = typeof it.pkg === 'number' && it.pkg > 0 ? it.pkg : 1;
-                    const effQty     = it.qty * effPkg;
-                    const base       = it.qty * it.purchaseRate * (1 - it.discountPct / 100) * (1 - it.cashDiscountPct / 100);
-                    const gstAmount  = base * (it.gstRate / 100);
-                    const cessAmount = base * (it.cess / 100);
-                    const baseLandingRate = (it.qty + it.freeQty) > 0 ? parseFloat((base / (it.qty + it.freeQty)).toFixed(2)) : 0;
-                    
-                    return {
-                        masterProductId:   it.isCustom ? null : it.productId,
-                        customProductName: it.isCustom ? it.productName : null,
-                        isCustomProduct:   it.isCustom ?? false,
-                        hsnCode:         it.hsnCode,
-                        batchNo:         it.batchNo,
-                        expiryDate:      it.expiryDate,
-                        pkg:             effPkg,
-                        qty:             it.qty,
-                        actualQty:       (it.qty + it.freeQty) * effPkg,
-                        freeQty:         it.freeQty,
-                        purchaseRate:    it.purchaseRate,
-                        baseLandingRate: baseLandingRate,
-                        freightPerUnit:  it.freightPerUnit,
-                        otherCostPerUnit: it.otherCostPerUnit,
-                        discountPct:     it.discountPct,
-                        cashDiscountPct: it.cashDiscountPct,
-                        gstRate:         it.gstRate,
-                        cess:            it.cess,
-                        mrp:             it.mrp,
-                        ptr:             it.ptr,
-                        pts:             it.pts,
-                        saleRate:        it.saleRate || it.mrp,
-                        taxableAmount:   parseFloat(base.toFixed(2)),
-                        gstAmount:       parseFloat(gstAmount.toFixed(2)),
-                        cessAmount:      parseFloat(cessAmount.toFixed(2)),
-                        totalAmount:     parseFloat((base + gstAmount + cessAmount).toFixed(2)),
-                    };
-                }),
-            };
-
-
             if (invoiceToEdit) {
                 if (!revisionReasonCode) {
                     toast({ variant: 'destructive', title: 'Revision reason code is required.' });
                     return;
                 }
-                if (!revisionReasonText || revisionReasonText.length < 5) {
-                    toast({ variant: 'destructive', title: 'A detailed revision reason explanation (min 5 characters) is required.' });
+                if (!revisionReasonText || revisionReasonText.length < 10) {
+                    toast({ variant: 'destructive', title: 'A detailed revision reason explanation (min 10 characters) is required.' });
                     return;
                 }
-                (payload as any).revisionReasonCode = revisionReasonCode;
-                (payload as any).revisionReasonText = revisionReasonText;
-                
+            }
+
+            const payload = buildPurchasePayload(
+                data,
+                items,
+                outletId!,
+                goodsValue,
+                totalTradeDisc,
+                totalCashDisc,
+                taxableValue,
+                totalGST,
+                totalCess,
+                roundOff,
+                effectiveAdjustment,
+                ledgerNote,
+                netPayable,
+                invoiceToEdit ? revisionReasonCode : undefined,
+                invoiceToEdit ? revisionReasonText : undefined
+            );
+
+            if (invoiceToEdit) {
                 await updatePurchase.mutateAsync({ id: invoiceToEdit.id, payload });
                 toast({
                     title:       'Purchase updated ✓',

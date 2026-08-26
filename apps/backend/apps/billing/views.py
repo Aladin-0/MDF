@@ -62,6 +62,13 @@ logger = logging.getLogger(__name__)
 def build_sale_response_payload(sale_invoice, message=None, revision_id=None):
     from decimal import Decimal
     sale_items = sale_invoice.items.all()
+    
+    schedule_h_record = None
+    for si in sale_items:
+        if hasattr(si, 'schedule_h_register'):
+            schedule_h_record = si.schedule_h_register
+            break
+
     response_data = {
         'id': str(sale_invoice.id),
         'outletId': str(sale_invoice.outlet.id),
@@ -74,6 +81,13 @@ def build_sale_response_payload(sale_invoice, message=None, revision_id=None):
             'phone': sale_invoice.customer.phone,
             'address': sale_invoice.customer.address,
         } if sale_invoice.customer else None,
+        'doctorId': str(sale_invoice.doctor.id) if sale_invoice.doctor else None,
+        'doctorName': schedule_h_record.doctor_name if schedule_h_record else (sale_invoice.doctor.name if sale_invoice.doctor else None),
+        'doctorRegNo': schedule_h_record.doctor_reg_no if schedule_h_record else (sale_invoice.doctor.reg_no if hasattr(sale_invoice.doctor, 'reg_no') and sale_invoice.doctor else None),
+        'patientName': schedule_h_record.patient_name if schedule_h_record else None,
+        'patientAddress': schedule_h_record.patient_address if schedule_h_record else None,
+        'prescriptionNo': schedule_h_record.prescription_no if schedule_h_record else sale_invoice.prescription_no,
+        'hospitalName': sale_invoice.hospital_name,
         'items': [
             {
                 'batchId': str(si.batch_id) if si.batch_id else '',
@@ -567,7 +581,7 @@ class SaleCreateView(APIView):
                                     patient_address=schedule_h_data.get('patientAddress') if schedule_h_data else '',
                                     doctor_name=schedule_h_data.get('doctorName') if schedule_h_data else None,
                                     doctor_reg_no=schedule_h_data.get('doctorRegNo') if schedule_h_data else '',
-                                    prescription_no=schedule_h_data.get('prescriptionNo') if schedule_h_data else '',
+                                    prescription_no=schedule_h_data.get('prescriptionNo') or '' if schedule_h_data else '',
                                 )
                                 logger.debug(f"Created ScheduleHRegister for {product.name}")
 
@@ -759,6 +773,12 @@ class SaleCreateView(APIView):
             )
         except UnitIntegrityError as e:
             logger.warning(f"Unit integrity error: {str(e)}")
+            return Response(
+                {'detail': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except ValueError as e:
+            logger.warning(f"Value error: {str(e)}")
             return Response(
                 {'detail': str(e)},
                 status=status.HTTP_400_BAD_REQUEST
@@ -1896,7 +1916,7 @@ class SaleDetailView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
             
-        items = SaleItem.objects.filter(invoice=invoice).select_related('batch', 'batch__product')
+        items = SaleItem.objects.filter(invoice=invoice).select_related('batch', 'batch__product', 'schedule_h_register')
         
         items_list = []
         for item in items:
@@ -1943,6 +1963,12 @@ class SaleDetailView(APIView):
             for r in sale_returns
         ]
             
+        schedule_h_record = None
+        for item in items:
+            if hasattr(item, 'schedule_h_register'):
+                schedule_h_record = item.schedule_h_register
+                break
+
         result = {
             'id': str(invoice.id),
             'outletId': str(invoice.outlet_id),
@@ -1977,10 +2003,20 @@ class SaleDetailView(APIView):
             'billedBy': str(invoice.billed_by.id) if invoice.billed_by else None,
             'billedByName': invoice.billed_by.name if invoice.billed_by else 'Unknown',
             'doctorId': str(invoice.doctor.id) if invoice.doctor else None,
-            'doctorName': invoice.doctor.name if invoice.doctor else None,
-            'doctorRegNo': invoice.doctor.registration_no if invoice.doctor else None,
+            'doctorName': schedule_h_record.doctor_name if schedule_h_record else (invoice.doctor.name if invoice.doctor else None),
+            'doctorRegNo': schedule_h_record.doctor_reg_no if schedule_h_record else (invoice.doctor.registration_no if invoice.doctor else None),
             'hospitalName': invoice.hospital_name,
-            'prescriptionNo': invoice.prescription_no,
+            'prescriptionNo': schedule_h_record.prescription_no if schedule_h_record else invoice.prescription_no,
+            'scheduleHData': {
+                'doctorId': str(invoice.doctor.id) if invoice.doctor else None,
+                'doctorName': schedule_h_record.doctor_name,
+                'doctorRegNo': schedule_h_record.doctor_reg_no,
+                'patientName': schedule_h_record.patient_name,
+                'patientAddress': schedule_h_record.patient_address,
+                'patientAge': schedule_h_record.patient_age,
+                'prescriptionNo': schedule_h_record.prescription_no,
+                'hospitalName': invoice.hospital_name,
+            } if schedule_h_record else None,
             'items': items_list,
             # Return metadata — used by billing page to show edit warning
             'hasReturns': return_count > 0,
@@ -2230,6 +2266,8 @@ class SaleReviseView(APIView):
             return Response(response_data, status=status.HTTP_200_OK)
 
         except SaleServiceError as e:
+            return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except ValueError as e:
             return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             import logging
@@ -2668,12 +2706,10 @@ class CreateSalesReturnView(APIView):
         )
         created_by_id = request.user.id
         try:
-            with open('/app/scratch_error.log', 'a') as f:
-                f.write(f"PAYLOAD: {request.data}\n")
+            logger.debug(f"PAYLOAD: {request.data}")
             sales_return = create_sales_return(request.data, outlet_id, created_by_id)
         except ReturnServiceError as e:
-            with open('/app/scratch_error.log', 'a') as f:
-                f.write(f"ERROR: {e}\n")
+            logger.error(f"ERROR: {e}")
             return Response({'error': {'code': 'RETURN_ERROR', 'message': str(e)}}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             logger.error(f"Error creating sales return: {e}", exc_info=True)
@@ -3168,23 +3204,23 @@ class SaleRevisionListView(APIView):
         if not outlet_id:
             return Response({'detail': 'outletId is required'}, status=400)
 
-        from apps.billing.models import BillRevision
-        from apps.billing.serializers import BillRevisionSerializer
+        from apps.audit.models import DocumentRevisionV2
+        from apps.audit.serializers import DocumentRevisionV2LegacyAdapterSerializer
         
         from django.core.exceptions import ValidationError
         try:
-            revisions = BillRevision.objects.filter(outlet_id=outlet_id).select_related('original_invoice', 'modified_by')
+            revisions = DocumentRevisionV2.objects.filter(tenant_id=outlet_id)
         except ValidationError:
             return Response({'detail': 'Invalid outletId'}, status=400)
         
         # Filters
         user_id = request.query_params.get('userId')
         if user_id:
-            revisions = revisions.filter(modified_by_id=user_id)
+            revisions = revisions.filter(actor_id=user_id)
             
         action_type = request.query_params.get('actionType')
         if action_type:
-            revisions = revisions.filter(revision_type=action_type)
+            revisions = revisions.filter(action=action_type)
             
         from_date = request.query_params.get('fromDate')
         to_date = request.query_params.get('toDate')
@@ -3195,15 +3231,15 @@ class SaleRevisionListView(APIView):
             
         invoice_id = request.query_params.get('invoiceId')
         if invoice_id:
-            revisions = revisions.filter(original_invoice_id=invoice_id)
+            revisions = revisions.filter(object_id=invoice_id)
             
         customer_id = request.query_params.get('customerId')
         if customer_id:
-            revisions = revisions.filter(original_invoice__customer_id=customer_id)
+            pass # Filter removed in V2
             
         invoice_no = request.query_params.get('invoiceNo')
         if invoice_no:
-            revisions = revisions.filter(original_invoice__invoice_no__icontains=invoice_no)
+            pass # Filter removed in V2
 
         revisions = revisions.order_by('-created_at')
 
@@ -3218,11 +3254,11 @@ class SaleRevisionListView(APIView):
             for rev in revisions:
                 writer.writerow([
                     rev.created_at.strftime('%Y-%m-%d %H:%M:%S'),
-                    rev.revision_number,
-                    rev.original_invoice.invoice_no if rev.original_invoice else '',
-                    rev.get_revision_type_display(),
-                    rev.get_revision_status_display(),
-                    rev.modified_by.name if rev.modified_by else 'System',
+                    rev.revision_no,
+                    str(rev.object_id),
+                    rev.action,
+                    'Completed',
+                    rev.actor_id or 'System',
                     rev.reason_code,
                     rev.reason_text
                 ])
@@ -3234,7 +3270,7 @@ class SaleRevisionListView(APIView):
         paginator.page_size = int(request.query_params.get('pageSize', 20))
         paginated_revisions = paginator.paginate_queryset(revisions, request)
         
-        serializer = BillRevisionSerializer(paginated_revisions, many=True)
+        serializer = DocumentRevisionV2LegacyAdapterSerializer(paginated_revisions, many=True)
         return paginator.get_paginated_response(serializer.data)
 
 class SaleRevisionDetailView(APIView):
@@ -3248,8 +3284,8 @@ class SaleRevisionDetailView(APIView):
         if not outlet_id:
             return Response({'detail': 'outletId is required'}, status=400)
 
-        from apps.billing.models import BillRevision, SaleInvoice
-        from apps.billing.serializers import BillRevisionSerializer
+        from apps.billing.models import SaleInvoice
+        from apps.audit.serializers import DocumentRevisionV2LegacyAdapterSerializer
         
         from django.core.exceptions import ValidationError
         try:
@@ -3257,15 +3293,13 @@ class SaleRevisionDetailView(APIView):
         except ValidationError:
             return Response({'detail': 'Invalid ID'}, status=404)
         
-        # Get all revisions related to this invoice
-        # Could be original_invoice or resulting_invoice
         from django.db.models import Q
-        revisions = BillRevision.objects.filter(
-            Q(original_invoice_id=sale_id) | Q(resulting_invoice_id=sale_id),
-            outlet_id=outlet_id
+        revisions = DocumentRevisionV2.objects.filter(
+            Q(object_id=sale_id),
+            tenant_id=outlet_id
         ).order_by('-created_at')
         
-        serializer = BillRevisionSerializer(revisions, many=True)
+        serializer = DocumentRevisionV2LegacyAdapterSerializer(revisions, many=True)
         return Response({
             'invoice': {
                 'id': str(invoice.id),
@@ -3289,12 +3323,12 @@ class SaleRevisionReportView(APIView):
         if not outlet_id:
             return Response({'detail': 'outletId is required'}, status=400)
 
-        from apps.billing.models import BillRevision
+        from apps.audit.models import DocumentRevisionV2
         from django.utils import timezone
         from django.db.models import Count
         from datetime import datetime, time
         
-        revisions = BillRevision.objects.filter(outlet_id=outlet_id)
+        revisions = DocumentRevisionV2.objects.filter(tenant_id=outlet_id)
         
         # Date filter
         from_date_str = request.query_params.get('fromDate')
@@ -3321,18 +3355,18 @@ class SaleRevisionReportView(APIView):
         total_modified = revisions.count()
         
         # Breakdown by Type
-        by_type_qs = revisions.values('revision_type').annotate(count=Count('id')).order_by('-count')
-        breakdown_by_type = {item['revision_type']: item['count'] for item in by_type_qs}
+        by_type_qs = revisions.values('action').annotate(count=Count('id')).order_by('-count')
+        breakdown_by_type = {item['action']: item['count'] for item in by_type_qs}
         
         # Top modifiers
         top_modifiers_qs = revisions.values(
-            'modified_by__id', 'modified_by__name'
+            'actor_id'
         ).annotate(count=Count('id')).order_by('-count')[:5]
         
         top_modifiers = [
             {
-                'id': item['modified_by__id'],
-                'name': item['modified_by__name'] or 'System',
+                'id': item['actor_id'],
+                'name': 'User',
                 'count': item['count']
             } for item in top_modifiers_qs
         ]

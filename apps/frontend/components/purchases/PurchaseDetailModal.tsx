@@ -100,7 +100,13 @@ export function PurchaseDetailModal({ open, onOpenChange, invoice, onEdit }: Pur
                     <div className="flex items-center gap-2">
 
                         {showEditBtn && (
-                            <Button variant="outline" size="sm" onClick={() => onEdit(displayInvoice)}>
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                data-testid="btn-edit-purchase" 
+                                onClick={() => onEdit(displayInvoice)}
+                                disabled={!displayInvoice?.items || !Array.isArray(displayInvoice.items)}
+                            >
                                 <Edit className="w-4 h-4 mr-2" />
                                 Edit
                             </Button>

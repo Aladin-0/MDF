@@ -61,7 +61,7 @@ class ActivityLogListView(generics.ListAPIView):
         return ActivityLogFilter
 
     ordering_fields = ['timestamp', 'occurred_at']
-    ordering = ['-timestamp']
+#    ordering = ['-timestamp']
 
     def get_queryset(self):
         from apps.audit.core import flags
@@ -92,7 +92,7 @@ class ActivityLogExportView(generics.ListAPIView):
             return None
         return ActivityLogFilter
 
-    ordering = ['-timestamp']
+#    ordering = ['-timestamp']
 
     def get_queryset(self):
         from apps.audit.core import flags

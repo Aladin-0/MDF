@@ -55,7 +55,6 @@ services:
       - ./apps/backend/.env
     environment:
       TZ: Asia/Kolkata
-      DJANGO_SETTINGS_MODULE: mediflow.settings.prod
     ports:
       - "8000:8000"
     depends_on:
@@ -112,7 +111,6 @@ services:
       - ./apps/backend/.env
     environment:
       TZ: Asia/Kolkata
-      DJANGO_SETTINGS_MODULE: mediflow.settings.prod
     depends_on:
       postgres:
         condition: service_healthy
@@ -136,7 +134,6 @@ services:
       - ./apps/backend/.env
     environment:
       TZ: Asia/Kolkata
-      DJANGO_SETTINGS_MODULE: mediflow.settings.prod
     depends_on:
       postgres:
         condition: service_healthy

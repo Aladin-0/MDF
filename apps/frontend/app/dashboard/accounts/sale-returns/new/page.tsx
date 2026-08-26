@@ -293,7 +293,7 @@ function NewCreditNoteContent() {
 
                 // MAGIC HAPPENS HERE: We use your app's built-in API tool!
                 const res = await voucherApi.createSalesReturn(payload);
-                router.push(`/dashboard/accounts/sale-returns/${res.data.id}`);
+                router.push(`/dashboard/accounts/sale-returns/`);
             }
         } catch (error: any) {
             console.error('Save Return Error:', error);

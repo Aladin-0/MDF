@@ -13,10 +13,11 @@ export default function VoucherEntryPage() {
     const reasonText = searchParams.get('reasonText') || undefined;
 
     return (
-        <div className="space-y-6 max-w-3xl">
-            <div className="space-y-1">
+        <div className="space-y-6">
+            {/* Header */}
+            <div className="space-y-1 pb-1">
                 <div className="flex items-center gap-2.5">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary border border-primary/20">
                         <BookOpen className="h-4 w-4" />
                     </div>
                     <h1 className="text-2xl font-bold tracking-tight">
@@ -24,10 +25,10 @@ export default function VoucherEntryPage() {
                     </h1>
                 </div>
                 <p className="pl-[46px] text-sm text-muted-foreground">
-                    {editId ? 'Modifying an existing voucher' : 'Record receipts, payments, contra & journal entries'}
+                    {editId ? 'Modifying an existing voucher record' : 'Record receipts, payments, contra & journal entries'}
                 </p>
             </div>
-
+            
             <Separator />
 
             <VoucherForm 

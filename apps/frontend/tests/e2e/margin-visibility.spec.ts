@@ -29,7 +29,7 @@ test.describe('Margin Visibility Features', () => {
     await page.waitForLoadState('networkidle');
 
     // 2. Add item so we can see row-level and total margin
-    await billingPage.addMedicine('0001Pracitemol', 1);
+    await billingPage.addMedicine('test medicine', 1);
 
     // 3. Verify margins are NOT visible initially
     await expect(page.getByText('Total Margin')).not.toBeVisible();

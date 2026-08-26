@@ -21,77 +21,29 @@ def test_sale_creation_concurrency():
     call_command('seed_ledgers', outlet_id=str(outlet.id))
     customer = CustomerFactory(outlet=outlet)
     product = MasterProductFactory()
-    
-    # Create batch with exactly 5 strips
     batch = BatchFactory(outlet=outlet, product=product, pack_size=10, qty_strips=5, qty_loose=0, mrp=Decimal('100.00'))
-
-    # Build up initial stock in ledger
     from apps.inventory.services import post_stock_ledger_entry
     with transaction.atomic():
-        post_stock_ledger_entry(
-            outlet=outlet,
-            product=product,
-            batch=batch,
-            txn_type='PURCHASE_IN',
-            txn_date=datetime.date(2025, 1, 1),
-            voucher_type='Purchase Invoice',
-            voucher_number='PINV-001',
-            party_name='Supplier',
-            qty_in=5,
-            qty_out=0,
-            rate=80.00
-        )
-
+        post_stock_ledger_entry(outlet=outlet, product=product, batch=batch, txn_type='PURCHASE_IN', txn_date=datetime.date(2025, 1, 1), voucher_type='Purchase Invoice', voucher_number='PINV-001', party_name='Supplier', qty_in=5, qty_out=0, rate=80.0)
     url = reverse('sale-list-create')
-    payload = {
-        'outletId': str(outlet.id),
-        'customerId': str(customer.id),
-        'grandTotal': '400.00',
-        'subtotal': '400.00',
-        'discountAmount': '0',
-        'cashPaid': '400.00',
-        'paymentMode': 'cash',
-        'invoiceDate': '2026-08-01',
-        'items': [
-            {
-                'productId': str(product.id),
-                'batchId': str(batch.id),
-                'qtyStrips': 4,
-                'qtyLoose': 0,
-                'rate': '100.00',
-                'gstRate': '0',
-                'taxableAmount': '400.00',
-                'gstAmount': '0',
-            }
-        ]
-    }
-    
-    # Needs to be committed to DB for threaded testing (hence transaction=True and create via client)
+    payload = {'outletId': str(outlet.id), 'customerId': str(customer.id), 'grandTotal': '400.00', 'subtotal': '400.00', 'discountAmount': '0', 'cashPaid': '400.00', 'paymentMode': 'cash', 'invoiceDate': '2026-08-01', 'items': [{'productId': str(product.id), 'batchId': str(batch.id), 'qtyStrips': 4, 'qtyLoose': 0, 'rate': '100.00', 'gstRate': '0', 'taxableAmount': '400.00', 'gstAmount': '0'}]}
     user = StaffFactory(outlet=outlet, role='super_admin')
     user.set_password('testpass123')
     user.save()
-    
     client1 = APIClient()
     client1.force_authenticate(user=user)
-    
     client2 = APIClient()
     client2.force_authenticate(user=user)
 
     def make_request(c, p):
         return c.post(url, p, format='json')
-        
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
         f1 = executor.submit(make_request, client1, payload)
         f2 = executor.submit(make_request, client2, payload)
-        
         r1 = f1.result()
         r2 = f2.result()
-        
-    # Assert that exactly ONE succeeds and ONE fails due to stock limits
     status_codes = [r1.status_code, r2.status_code]
-    assert 201 in status_codes, f"Neither request succeeded. Responses: {r1.data}, {r2.data}"
+    assert 201 in status_codes, f'Neither request succeeded. Responses: {r1.data}, {r2.data}'
     assert 400 in status_codes, f"Both requests succeeded, which shouldn't happen! Race condition failure."
-    
-    # Assert final batch quantity is exactly 1
     batch.refresh_from_db()
     assert batch.qty_strips == 1

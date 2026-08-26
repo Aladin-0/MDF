@@ -20,7 +20,7 @@ test.describe('MediFlow E2E Smoke Tests', () => {
     const searchInput = page.locator('input[placeholder*="Search Medicine" i]').first();
     await searchInput.waitFor({ state: 'visible' });
     
-    await searchInput.fill('test');
+    await searchInput.fill('test medicine');
     await page.waitForTimeout(2000); // Wait for debounce and search results
     
     // Press down to hover the first result, then Enter to select
@@ -211,7 +211,7 @@ test.describe('MediFlow E2E Smoke Tests', () => {
     await viewBtn.click();
 
     // 3. Click Edit inside the modal
-    const editBtn = page.locator('button:has-text("Edit")').first();
+    const editBtn = page.locator('[data-testid="btn-edit-purchase"]');
     await editBtn.waitFor({ state: 'visible' });
     await editBtn.click();
 

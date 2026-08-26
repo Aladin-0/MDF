@@ -315,6 +315,13 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
         existing_items_by_batch = {str(item.batch_id): item for item in old_items}
         matched_old_item_ids = set()
 
+        # PRE-LOCK: Lock all batches (old and new) in sorted order to prevent deadlocks
+        old_batch_ids = [str(item.batch_id) for item in old_items if item.batch_id]
+        new_batch_ids = [str(item.get('batchId')) for item in items_data if item.get('batchId')]
+        all_batch_ids = list(set(old_batch_ids + new_batch_ids))
+        if all_batch_ids:
+            list(Batch.objects.select_for_update().filter(id__in=all_batch_ids, outlet=outlet).order_by('id'))
+
         for old_item in old_items:
             batch = old_item.batch
             batches_to_rebuild.add(batch.pk)
@@ -454,7 +461,7 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
                             'patient_address': schedule_h_data.get('patientAddress') if schedule_h_data else '',
                             'doctor_name': schedule_h_data.get('doctorName') if schedule_h_data else None,
                             'doctor_reg_no': schedule_h_data.get('doctorRegNo') if schedule_h_data else '',
-                            'prescription_no': schedule_h_data.get('prescriptionNo') if schedule_h_data else '',
+                            'prescription_no': schedule_h_data.get('prescriptionNo') or '' if schedule_h_data else '',
                         }
                     )
 

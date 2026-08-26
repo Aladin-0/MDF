@@ -4,7 +4,7 @@ test.describe('Phase 1: Create Sale Bill Tests', () => {
   test('Create basic walk-in sale with single item', async ({ billingPage, page }) => {
     await billingPage.goto();
     await billingPage.enterPin('1234');
-    await billingPage.addMedicine('0001Pracitemol', 1);
+    await billingPage.addMedicine('test medicine', 1);
 
     const { request, response } = await billingPage.collectPayment();
     const postData = request.postDataJSON();
@@ -28,7 +28,7 @@ test.describe('Phase 1: Create Sale Bill Tests', () => {
     const searchResponsePromise = page.waitForResponse(response => 
       response.url().includes('/products/search/') && response.status() === 200
     );
-    await productInput.fill('0001Pracitemol');
+    await productInput.fill('test medicine');
     await searchResponsePromise;
     await page.waitForLoadState('domcontentloaded');
     await productInput.press('Enter');

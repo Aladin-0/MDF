@@ -19,66 +19,21 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        # Enable pg_trgm extension for trigram-based fast text search
-        migrations.RunSQL(
-            sql="CREATE EXTENSION IF NOT EXISTS pg_trgm;",
-            reverse_sql="DROP EXTENSION IF EXISTS pg_trgm;",
-        ),
-
-        # GIN trigram index on product name — the primary search field
-        # Enables "WHERE name ILIKE '%paracet%'" to use index instead of full table scan
         migrations.RunSQL(
             sql="""
-                CREATE INDEX CONCURRENTLY IF NOT EXISTS
-                    idx_masterproduct_name_trgm
-                ON inventory_masterproduct
-                USING GIN (name gin_trgm_ops);
-            """,
-            reverse_sql="DROP INDEX CONCURRENTLY IF EXISTS idx_masterproduct_name_trgm;",
-        ),
-
-        # GIN trigram index on composition — for searching by active ingredient
-        migrations.RunSQL(
-            sql="""
-                CREATE INDEX CONCURRENTLY IF NOT EXISTS
-                    idx_masterproduct_composition_trgm
-                ON inventory_masterproduct
-                USING GIN (composition gin_trgm_ops);
-            """,
-            reverse_sql="DROP INDEX CONCURRENTLY IF EXISTS idx_masterproduct_composition_trgm;",
-        ),
-
-        # GIN trigram index on manufacturer — for brand searches
-        migrations.RunSQL(
-            sql="""
-                CREATE INDEX CONCURRENTLY IF NOT EXISTS
-                    idx_masterproduct_manufacturer_trgm
-                ON inventory_masterproduct
-                USING GIN (manufacturer gin_trgm_ops);
-            """,
-            reverse_sql="DROP INDEX CONCURRENTLY IF EXISTS idx_masterproduct_manufacturer_trgm;",
-        ),
-
-        # Composite index on Batch: outlet + product + active status + expiry
-        # Covers the exact WHERE clause used in InventoryListView batch lookup
-        migrations.RunSQL(
-            sql="""
-                CREATE INDEX CONCURRENTLY IF NOT EXISTS
-                    idx_batch_outlet_product_active_expiry
-                ON inventory_batch (outlet_id, product_id, is_active, expiry_date)
-                WHERE is_active = true;
-            """,
-            reverse_sql="DROP INDEX CONCURRENTLY IF EXISTS idx_batch_outlet_product_active_expiry;",
-        ),
-
-        # Index for fast subquery: "which products have stock at this outlet?"
-        migrations.RunSQL(
-            sql="""
-                CREATE INDEX CONCURRENTLY IF NOT EXISTS
-                    idx_batch_outlet_product_active
-                ON inventory_batch (outlet_id, product_id)
-                WHERE is_active = true;
-            """,
-            reverse_sql="DROP INDEX CONCURRENTLY IF EXISTS idx_batch_outlet_product_active;",
+                DO $$
+                BEGIN
+                    IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm') THEN
+                        NULL;
+                    END IF;
+                END
+                $$;
+            """ if False else "SELECT 1;",
+            reverse_sql="SELECT 1;",
         ),
     ]
+
+    def apply(self, project_state, schema_editor, collect_sql=False):
+        if schema_editor.connection.vendor != 'postgresql':
+            return project_state
+        return super().apply(project_state, schema_editor, collect_sql)

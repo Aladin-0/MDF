@@ -1,28 +1,24 @@
-import sys
+import os
+import re
 
-def fix_views():
-    with open('apps/audit/views.py', 'r') as f:
-        content = f.read()
+paths = ['/home/asta/coding/MDF/apps/backend/apps/audit/tests']
 
-    target = "if flags.is_v2_read_enabled() or record_type in ('purchase', 'sale'):"
-    
-    if target in content:
-        print("ALREADY HAS sale in views.py")
-    else:
-        # Actually it's probably just "purchase"
-        target2 = "if flags.is_v2_read_enabled() or record_type in ('purchase',):"
-        target3 = "if flags.is_v2_read_enabled() or record_type == 'purchase':"
-        
-        if target2 in content:
-            content = content.replace(target2, "if flags.is_v2_read_enabled() or record_type in ('purchase', 'sale'):")
-            print("Replaced target2")
-        elif target3 in content:
-            content = content.replace(target3, "if flags.is_v2_read_enabled() or record_type in ('purchase', 'sale'):")
-            print("Replaced target3")
-        else:
-            print("NOT FOUND")
-            
-    with open('apps/audit/views.py', 'w') as f:
-        f.write(content)
+for root, _, files in os.walk(paths[0]):
+    for file in files:
+        if file.endswith('.py'):
+            filepath = os.path.join(root, file)
+            with open(filepath, 'r') as f:
+                content = f.read()
 
-fix_views()
+            content = content.replace("filter(action=", "filter(event_name=")
+            content = content.replace("filter(action__", "filter(event_name__")
+            content = content.replace("'action'", "'event_name'")
+            content = content.replace("'timestamp'", "'occurred_at'")
+            content = content.replace("-timestamp", "-occurred_at")
+            content = content.replace("order_by('timestamp')", "order_by('occurred_at')")
+            content = content.replace("order_by('-timestamp')", "order_by('-occurred_at')")
+
+            with open(filepath, 'w') as f:
+                f.write(content)
+
+print("Done")

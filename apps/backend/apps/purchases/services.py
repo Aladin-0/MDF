@@ -263,9 +263,12 @@ def atomic_purchase_save(payload: Dict[str, Any], outlet_id: str, created_by_id:
             else:
                 gst_per_unit = Decimal('0.0000')
                 
+            discount_pct = Decimal(str(item_payload.get('discountPct', 0)))
+            discount_amt = purchase_rate_val * (discount_pct / Decimal('100'))
+            cess_val = Decimal(str(item_payload.get('cess', 0)))
             freight_per_unit = Decimal('0.0000')
             other_cost_per_unit = Decimal('0.0000')
-            landing_rate = purchase_rate_val + gst_per_unit + freight_per_unit + other_cost_per_unit
+            landing_rate = (purchase_rate_val - discount_amt + cess_val + freight_per_unit + other_cost_per_unit).quantize(Decimal('0.0001'))
 
             # Create PurchaseItem (denormalized snapshot)
             purchase_item = PurchaseItem(
@@ -875,7 +878,6 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
                 if batch is not None:
                     batch.mrp = Decimal(str(item_payload['mrp']))
                     batch.purchase_rate = Decimal(str(item_payload.get('baseLandingRate', item_payload['purchaseRate'])))
-                    batch.mrp = Decimal(str(item_payload['saleRate']))
                     new_pkg = int(item_payload.get('pkg') or 1)
                     if new_pkg and new_pkg != batch.pack_size:
                         batch.pack_size = new_pkg
@@ -1047,3 +1049,155 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
         raise PurchaseServiceError(f"Validation error: {str(e)}")
     except Exception as e:
         raise PurchaseServiceError(f"Unexpected error: {str(e)}")
+
+
+class Rule37TrackerService:
+    """
+    Evaluates Purchase Invoices for 180-day ITC reversal and subsequent re-availments
+    under CGST Rule 37. Idempotent design.
+    """
+    
+    @classmethod
+    def evaluate_invoices(cls, run_date=None):
+        if not run_date:
+            run_date = datetime.now().date()
+            
+        from apps.purchases.models import PurchaseInvoice, Rule37Adjustment
+        
+        # 1. Evaluate Reversals (Unpaid > 180 days)
+        # We look at any invoice that still has an outstanding balance.
+        invoices_with_balance = PurchaseInvoice.objects.filter(outstanding__gt=0).prefetch_related('rule37_adjustments')
+        
+        for inv in invoices_with_balance:
+            rule37_due_date = inv.invoice_date + timedelta(days=180)
+            
+            # Check if reversal already proposed or approved
+            existing_reversals = [adj for adj in inv.rule37_adjustments.all() if adj.action_type == 'REVERSAL_DUE']
+            
+            if not existing_reversals and run_date > rule37_due_date:
+                # Need to trigger a reversal
+                unpaid_amount = inv.outstanding
+                amount_paid = inv.grand_total - unpaid_amount
+                
+                # Payment Allocation Traceability Check
+                status = 'PROPOSED'
+                if amount_paid > 0:
+                    from apps.billing.models import PaymentAllocation
+                    has_allocations = PaymentAllocation.objects.filter(invoice=inv).exists()
+                    if not has_allocations:
+                        status = 'NEEDS_REVIEW'
+                
+                # Snapshot ratio
+                unpaid_ratio = (unpaid_amount / inv.grand_total).quantize(Decimal('0.0001')) if inv.grand_total > 0 else Decimal('0')
+                
+                rev_igst = (inv.gst_amount * unpaid_ratio).quantize(Decimal('0.01')) if inv.items.first() and inv.items.first().gst_amount > 0 and inv.outlet.state != inv.distributor.state else Decimal('0')
+                rev_cgst = (inv.gst_amount / 2 * unpaid_ratio).quantize(Decimal('0.01')) if inv.items.first() and inv.items.first().gst_amount > 0 and inv.outlet.state == inv.distributor.state else Decimal('0')
+                rev_sgst = (inv.gst_amount / 2 * unpaid_ratio).quantize(Decimal('0.01')) if inv.items.first() and inv.items.first().gst_amount > 0 and inv.outlet.state == inv.distributor.state else Decimal('0')
+                rev_cess = (inv.cess_amount * unpaid_ratio).quantize(Decimal('0.01'))
+                
+                # If inter-state isn't easily determined by state, check the items or ledger, but for simplicity:
+                # We can deduce from the actual item ITC.
+                total_igst, total_cgst, total_sgst = Decimal('0'), Decimal('0'), Decimal('0')
+                for item in inv.items.all():
+                    if inv.outlet.state != inv.distributor.state:
+                        total_igst += item.gst_amount
+                    else:
+                        total_cgst += item.gst_amount / 2
+                        total_sgst += item.gst_amount / 2
+                
+                rev_igst = (total_igst * unpaid_ratio).quantize(Decimal('0.01'))
+                rev_cgst = (total_cgst * unpaid_ratio).quantize(Decimal('0.01'))
+                rev_sgst = (total_sgst * unpaid_ratio).quantize(Decimal('0.01'))
+                
+                Rule37Adjustment.objects.create(
+                    invoice=inv,
+                    status=status,
+                    action_type='REVERSAL_DUE',
+                    rule37_due_date=rule37_due_date,
+                    days_outstanding_at_evaluation=(run_date - inv.invoice_date).days,
+                    invoice_total_at_evaluation=inv.grand_total,
+                    amount_paid_at_evaluation=amount_paid,
+                    unpaid_amount_at_evaluation=unpaid_amount,
+                    unpaid_ratio=unpaid_ratio,
+                    reversed_igst=rev_igst,
+                    reversed_cgst=rev_cgst,
+                    reversed_sgst=rev_sgst,
+                    reversed_cess=rev_cess,
+                    metadata={"run_date": str(run_date)}
+                )
+                
+        # 2. Evaluate Re-availments (Paid after reversal)
+        invoices_with_reversals = PurchaseInvoice.objects.filter(rule37_adjustments__action_type='REVERSAL_DUE').distinct().prefetch_related('rule37_adjustments')
+        
+        for inv in invoices_with_reversals:
+            reversals = [adj for adj in inv.rule37_adjustments.all() if adj.action_type == 'REVERSAL_DUE' and adj.status in ('APPROVED', 'INCLUDED_IN_EXPORT')]
+            if not reversals:
+                continue
+                
+            reversal = reversals[0] # Take the primary reversal
+            
+            # Check current paid amount
+            current_paid_amount = inv.grand_total - inv.outstanding
+            
+            # The paid amount *at the time of reversal*
+            paid_at_reversal = reversal.amount_paid_at_evaluation
+            
+            # If we paid more since the reversal
+            if current_paid_amount > paid_at_reversal:
+                # Cumulative newly paid amount
+                newly_paid_total = current_paid_amount - paid_at_reversal
+                newly_paid_ratio = (newly_paid_total / inv.grand_total).quantize(Decimal('0.0001')) if inv.grand_total > 0 else Decimal('0')
+                
+                # Traceability check
+                status = 'PROPOSED'
+                from apps.billing.models import PaymentAllocation
+                if current_paid_amount > 0 and not PaymentAllocation.objects.filter(invoice=inv).exists():
+                    status = 'NEEDS_REVIEW'
+                
+                # Calculate what the total re-availment *should* be for this newly paid ratio
+                total_igst, total_cgst, total_sgst = Decimal('0'), Decimal('0'), Decimal('0')
+                for item in inv.items.all():
+                    if inv.outlet.state != inv.distributor.state:
+                        total_igst += item.gst_amount
+                    else:
+                        total_cgst += item.gst_amount / 2
+                        total_sgst += item.gst_amount / 2
+                        
+                target_reavail_igst = (total_igst * newly_paid_ratio).quantize(Decimal('0.01'))
+                target_reavail_cgst = (total_cgst * newly_paid_ratio).quantize(Decimal('0.01'))
+                target_reavail_sgst = (total_sgst * newly_paid_ratio).quantize(Decimal('0.01'))
+                target_reavail_cess = (inv.cess_amount * newly_paid_ratio).quantize(Decimal('0.01'))
+                
+                # Subtract already proposed/approved re-availments
+                existing_reavailments = [adj for adj in inv.rule37_adjustments.all() if adj.action_type == 'REAVAILMENT_ELIGIBLE']
+                
+                already_reavailed_igst = sum(adj.reversed_igst for adj in existing_reavailments)
+                already_reavailed_cgst = sum(adj.reversed_cgst for adj in existing_reavailments)
+                already_reavailed_sgst = sum(adj.reversed_sgst for adj in existing_reavailments)
+                already_reavailed_cess = sum(adj.reversed_cess for adj in existing_reavailments)
+                
+                net_reavail_igst = target_reavail_igst - already_reavailed_igst
+                net_reavail_cgst = target_reavail_cgst - already_reavailed_cgst
+                net_reavail_sgst = target_reavail_sgst - already_reavailed_sgst
+                net_reavail_cess = target_reavail_cess - already_reavailed_cess
+                
+                # Ensure we only create a new record if there is a net positive amount to re-avail
+                if any(v > Decimal('0') for v in [net_reavail_igst, net_reavail_cgst, net_reavail_sgst, net_reavail_cess]):
+                    Rule37Adjustment.objects.create(
+                        invoice=inv,
+                        status=status,
+                        action_type='REAVAILMENT_ELIGIBLE',
+                        source_reversal=reversal,
+                        rule37_due_date=inv.invoice_date + timedelta(days=180),
+                        days_outstanding_at_evaluation=(run_date - inv.invoice_date).days,
+                        invoice_total_at_evaluation=inv.grand_total,
+                        amount_paid_at_evaluation=current_paid_amount,
+                        unpaid_amount_at_evaluation=inv.outstanding,
+                        unpaid_ratio=(inv.outstanding / inv.grand_total).quantize(Decimal('0.0001')),
+                        reversed_igst=net_reavail_igst,
+                        reversed_cgst=net_reavail_cgst,
+                        reversed_sgst=net_reavail_sgst,
+                        reversed_cess=net_reavail_cess,
+                        target_gstr3b_table='4(A)(5)', # Default for re-availment reclaim
+                        metadata={"run_date": str(run_date), "cumulative_reclaim": True}
+                    )

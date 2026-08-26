@@ -16,6 +16,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { voucherApi } from '@/lib/apiClient';
 import { useOutletId } from '@/hooks/useOutletId';
+import { buildPurchaseReturnPayload } from '@/utils/payloadBuilders';
 import { DebitNote } from '@/types';
 
 interface PurchaseReturnEditModalProps {
@@ -108,21 +109,15 @@ export function PurchaseReturnEditModal({
         setSaving(true);
         setConflictError(null);
 
-        const payload = {
+        const payload = buildPurchaseReturnPayload(
             outletId,
             reason,
             status,
             revisionReasonCode,
             revisionReasonText,
-            // OCC token — must match server's current updated_at
-            expectedUpdatedAt: note.updatedAt,
-            items: items.map((item) => ({
-                batch_id: item.batchId,
-                product_name: item.productName,
-                qty: item.qty,
-                gst_rate: item.gstRate,
-            })),
-        };
+            note.updatedAt,
+            items
+        );
 
         try {
             const result = await voucherApi.updateDebitNote(note.id, payload);

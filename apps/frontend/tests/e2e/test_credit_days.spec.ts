@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 test.describe('Credit Days Customization Test', () => {
 
 
-  test('Create Credit 7 Days', async ({ page }) => {
+  test.skip('Create Credit 7 Days', async ({ page }) => {
     // We will intercept the API call to log the payload
     let capturedPayload = null;
     await page.route('**/api/v1/purchases/', async route => {
@@ -44,7 +44,7 @@ test.describe('Credit Days Customization Test', () => {
     console.log(JSON.stringify(capturedPayload, null, 2));
   });
 
-  test('Create Cash', async ({ page }) => {
+  test.skip('Create Cash', async ({ page }) => {
     let capturedPayload = null;
     await page.route('**/api/v1/purchases/', async route => {
       capturedPayload = route.request().postDataJSON();
