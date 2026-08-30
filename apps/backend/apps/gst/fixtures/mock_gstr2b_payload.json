@@ -1,0 +1,474 @@
+{
+  "data": {
+    "docdata": {
+      "b2b": [
+        {
+          "ctin": "27YYYYY1111B1Z2",
+          "trdnm": "SUPPLIER 27YYYYY1111B1Z2",
+          "inv": [
+            {
+              "inum": "PUR-082026-4",
+              "idt": "28-08-2026",
+              "val": 18648.47,
+              "pos": "27",
+              "inv_typ": "R",
+              "itms": [
+                {
+                  "num": 1,
+                  "itm_det": {
+                    "rt": 5.0,
+                    "txval": 17760.45,
+                    "iamt": 0.0,
+                    "csamt": 0.0,
+                    "camt": 444.01,
+                    "samt": 444.01
+                  }
+                }
+              ]
+            },
+            {
+              "inum": "PUR-082026-17",
+              "idt": "27-08-2026",
+              "val": 13046.47,
+              "pos": "27",
+              "inv_typ": "R",
+              "itms": [
+                {
+                  "num": 1,
+                  "itm_det": {
+                    "rt": 12.0,
+                    "txval": 11648.63,
+                    "iamt": 0.0,
+                    "csamt": 0.0,
+                    "camt": 698.92,
+                    "samt": 698.92
+                  }
+                }
+              ]
+            },
+            {
+              "inum": "PUR-082026-16",
+              "idt": "26-08-2026",
+              "val": 9907.22,
+              "pos": "27",
+              "inv_typ": "R",
+              "itms": [
+                {
+                  "num": 1,
+                  "itm_det": {
+                    "rt": 5.0,
+                    "txval": 9435.46,
+                    "iamt": 0.0,
+                    "csamt": 0.0,
+                    "camt": 235.88,
+                    "samt": 235.88
+                  }
+                }
+              ]
+            },
+            {
+              "inum": "PUR-082026-12",
+              "idt": "26-08-2026",
+              "val": 16170.33,
+              "pos": "27",
+              "inv_typ": "R",
+              "itms": [
+                {
+                  "num": 1,
+                  "itm_det": {
+                    "rt": 5.0,
+                    "txval": 15400.31,
+                    "iamt": 0.0,
+                    "csamt": 0.0,
+                    "camt": 385.01,
+                    "samt": 385.01
+                  }
+                }
+              ]
+            },
+            {
+              "inum": "PUR-082026-32",
+              "idt": "25-08-2026",
+              "val": 20081.25,
+              "pos": "27",
+              "inv_typ": "R",
+              "itms": [
+                {
+                  "num": 1,
+                  "itm_det": {
+                    "rt": 18.0,
+                    "txval": 17018.01,
+                    "iamt": 0.0,
+                    "csamt": 0.0,
+                    "camt": 1531.62,
+                    "samt": 1531.62
+                  }
+                }
+              ]
+            },
+            {
+              "inum": "PUR-082026-21",
+              "idt": "25-08-2026",
+              "val": 17948.44,
+              "pos": "27",
+              "inv_typ": "R",
+              "itms": [
+                {
+                  "num": 1,
+                  "itm_det": {
+                    "rt": 18.0,
+                    "txval": 15210.54,
+                    "iamt": 0.0,
+                    "csamt": 0.0,
+                    "camt": 1368.95,
+                    "samt": 1368.95
+                  }
+                }
+              ]
+            },
+            {
+              "inum": "PUR-082026-7",
+              "idt": "25-08-2026",
+              "val": 20570.48,
+              "pos": "27",
+              "inv_typ": "R",
+              "itms": [
+                {
+                  "num": 1,
+                  "itm_det": {
+                    "rt": 12.0,
+                    "txval": 18366.5,
+                    "iamt": 0.0,
+                    "csamt": 0.0,
+                    "camt": 1101.99,
+                    "samt": 1101.99
+                  }
+                }
+              ]
+            },
+            {
+              "inum": "PUR-082026-40",
+              "idt": "23-08-2026",
+              "val": 3676.51,
+              "pos": "27",
+              "inv_typ": "R",
+              "itms": [
+                {
+                  "num": 1,
+                  "itm_det": {
+                    "rt": 5.0,
+                    "txval": 3501.45,
+                    "iamt": 0.0,
+                    "csamt": 0.0,
+                    "camt": 87.53,
+                    "samt": 87.53
+                  }
+                }
+              ]
+            },
+            {
+              "inum": "PUR-082026-28",
+              "idt": "23-08-2026",
+              "val": 7996.68,
+              "pos": "27",
+              "inv_typ": "R",
+              "itms": [
+                {
+                  "num": 1,
+                  "itm_det": {
+                    "rt": 5.0,
+                    "txval": 7615.88,
+                    "iamt": 0.0,
+                    "csamt": 0.0,
+                    "camt": 190.4,
+                    "samt": 190.4
+                  }
+                }
+              ]
+            },
+            {
+              "inum": "PUR-082026-20",
+              "idt": "21-08-2026",
+              "val": 5363.71,
+              "pos": "27",
+              "inv_typ": "R",
+              "itms": [
+                {
+                  "num": 1,
+                  "itm_det": {
+                    "rt": 12.0,
+                    "txval": 4789.03,
+                    "iamt": 0.0,
+                    "csamt": 0.0,
+                    "camt": 287.34,
+                    "samt": 287.34
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "ctin": "27RNDM3310A1Z1",
+          "trdnm": "SUPPLIER 27RNDM3310A1Z1",
+          "inv": [
+            {
+              "inum": "RND-INV-1",
+              "idt": "08-08-2026",
+              "val": 8643.35,
+              "pos": "27",
+              "inv_typ": "R",
+              "itms": [
+                {
+                  "num": 1,
+                  "itm_det": {
+                    "rt": 18.0,
+                    "txval": 7324.87,
+                    "iamt": 0.0,
+                    "csamt": 0.0,
+                    "camt": 659.24,
+                    "samt": 659.24
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "ctin": "27RNDM6055A1Z2",
+          "trdnm": "SUPPLIER 27RNDM6055A1Z2",
+          "inv": [
+            {
+              "inum": "RND-INV-2",
+              "idt": "05-08-2026",
+              "val": 9954.73,
+              "pos": "27",
+              "inv_typ": "R",
+              "itms": [
+                {
+                  "num": 1,
+                  "itm_det": {
+                    "rt": 18.0,
+                    "txval": 8436.21,
+                    "iamt": 0.0,
+                    "csamt": 0.0,
+                    "camt": 759.26,
+                    "samt": 759.26
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "ctin": "27RNDM9975A1Z3",
+          "trdnm": "SUPPLIER 27RNDM9975A1Z3",
+          "inv": [
+            {
+              "inum": "RND-INV-3",
+              "idt": "20-08-2026",
+              "val": 44091.34,
+              "pos": "27",
+              "inv_typ": "R",
+              "itms": [
+                {
+                  "num": 1,
+                  "itm_det": {
+                    "rt": 18.0,
+                    "txval": 37365.54,
+                    "iamt": 0.0,
+                    "csamt": 0.0,
+                    "camt": 3362.9,
+                    "samt": 3362.9
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "ctin": "27RNDM7017A1Z4",
+          "trdnm": "SUPPLIER 27RNDM7017A1Z4",
+          "inv": [
+            {
+              "inum": "RND-INV-4",
+              "idt": "20-08-2026",
+              "val": 1874.72,
+              "pos": "27",
+              "inv_typ": "R",
+              "itms": [
+                {
+                  "num": 1,
+                  "itm_det": {
+                    "rt": 18.0,
+                    "txval": 1588.74,
+                    "iamt": 0.0,
+                    "csamt": 0.0,
+                    "camt": 142.99,
+                    "samt": 142.99
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "ctin": "27RNDM7461A1Z5",
+          "trdnm": "SUPPLIER 27RNDM7461A1Z5",
+          "inv": [
+            {
+              "inum": "RND-INV-5",
+              "idt": "14-08-2026",
+              "val": 51850.56,
+              "pos": "27",
+              "inv_typ": "R",
+              "itms": [
+                {
+                  "num": 1,
+                  "itm_det": {
+                    "rt": 18.0,
+                    "txval": 43941.16,
+                    "iamt": 0.0,
+                    "csamt": 0.0,
+                    "camt": 3954.7,
+                    "samt": 3954.7
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "ctin": "27RNDM2932A1Z6",
+          "trdnm": "SUPPLIER 27RNDM2932A1Z6",
+          "inv": [
+            {
+              "inum": "RND-INV-6",
+              "idt": "15-08-2026",
+              "val": 30628.03,
+              "pos": "27",
+              "inv_typ": "R",
+              "itms": [
+                {
+                  "num": 1,
+                  "itm_det": {
+                    "rt": 18.0,
+                    "txval": 25955.95,
+                    "iamt": 0.0,
+                    "csamt": 0.0,
+                    "camt": 2336.04,
+                    "samt": 2336.04
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "ctin": "27RNDM9859A1Z7",
+          "trdnm": "SUPPLIER 27RNDM9859A1Z7",
+          "inv": [
+            {
+              "inum": "RND-INV-7",
+              "idt": "18-08-2026",
+              "val": 9955.31,
+              "pos": "27",
+              "inv_typ": "R",
+              "itms": [
+                {
+                  "num": 1,
+                  "itm_det": {
+                    "rt": 18.0,
+                    "txval": 8436.71,
+                    "iamt": 0.0,
+                    "csamt": 0.0,
+                    "camt": 759.3,
+                    "samt": 759.3
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "ctin": "27RNDM2409A1Z8",
+          "trdnm": "SUPPLIER 27RNDM2409A1Z8",
+          "inv": [
+            {
+              "inum": "RND-INV-8",
+              "idt": "03-08-2026",
+              "val": 23818.39,
+              "pos": "27",
+              "inv_typ": "R",
+              "itms": [
+                {
+                  "num": 1,
+                  "itm_det": {
+                    "rt": 18.0,
+                    "txval": 20185.07,
+                    "iamt": 0.0,
+                    "csamt": 0.0,
+                    "camt": 1816.66,
+                    "samt": 1816.66
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "ctin": "27RNDM6158A1Z0",
+          "trdnm": "SUPPLIER 27RNDM6158A1Z0",
+          "inv": [
+            {
+              "inum": "RND-INV-9",
+              "idt": "06-08-2026",
+              "val": 19174.64,
+              "pos": "27",
+              "inv_typ": "R",
+              "itms": [
+                {
+                  "num": 1,
+                  "itm_det": {
+                    "rt": 18.0,
+                    "txval": 16249.7,
+                    "iamt": 0.0,
+                    "csamt": 0.0,
+                    "camt": 1462.47,
+                    "samt": 1462.47
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "ctin": "27RNDM7907A1Z1",
+          "trdnm": "SUPPLIER 27RNDM7907A1Z1",
+          "inv": [
+            {
+              "inum": "RND-INV-10",
+              "idt": "14-08-2026",
+              "val": 47717.34,
+              "pos": "27",
+              "inv_typ": "R",
+              "itms": [
+                {
+                  "num": 1,
+                  "itm_det": {
+                    "rt": 18.0,
+                    "txval": 40438.42,
+                    "iamt": 0.0,
+                    "csamt": 0.0,
+                    "camt": 3639.46,
+                    "samt": 3639.46
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
