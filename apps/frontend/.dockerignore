@@ -1,0 +1,35 @@
+# Git
+.git/
+.gitignore
+
+# Node dependencies
+node_modules/
+npm-debug.log
+
+# Next.js build output
+.next/
+.next-test/
+.swc/
+.turbo/
+out/
+
+# E2E & Unit Testing
+tests/
+test-results/
+playwright-report/
+coverage/
+playwright.config.ts
+jest.config.js
+jest.setup.js
+
+# Environment files (exclude local, allow production example if any)
+.env
+.env.local
+.env.development
+.env.test
+!.env.production.example
+
+# Documentation & Logs
+docs/
+*.md
+*.log

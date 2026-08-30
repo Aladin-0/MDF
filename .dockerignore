@@ -1,9 +1,59 @@
-**/node_modules/
-**/.next/
+# Git
+.git/
+.github/
+.gitignore
+
+# Python / Backend Development Artifacts
 **/__pycache__/
 **/*.pyc
 **/*.pyo
-**/venv/
-**/.env
-**/.env.local
-.git/
+**/*.pyd
+venv/
+apps/backend/venv/
+.pytest_cache/
+apps/backend/.pytest_cache/
+
+# Node / Frontend Build Artifacts
+node_modules/
+apps/frontend/node_modules/
+npm-debug.log
+apps/frontend/.next/
+apps/frontend/.next-test/
+apps/frontend/.swc/
+apps/frontend/.turbo/
+.turbo/
+
+# Testing Suites & Coverage
+apps/frontend/tests/
+apps/frontend/playwright-report/
+apps/frontend/test-results/
+coverage/
+apps/frontend/playwright.config.ts
+apps/frontend/jest.config.js
+apps/frontend/jest.setup.js
+
+# Documentation
+docs/
+apps/backend/docs/
+**/*.md
+!README.deployment.md
+
+# Logs & Debug Scripts
+logs/
+apps/backend/logs/
+*.log
+*.txt
+scratch/
+fix_*.py
+patch_*.py
+test_*.py
+debug_*.py
+check_*.py
+simulate_*.py
+
+# Environment Files
+.env
+.env.local
+.env.development
+.env.test
+!.env.production.example
