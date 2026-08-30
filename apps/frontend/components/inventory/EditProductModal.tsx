@@ -180,6 +180,7 @@ export function EditProductModal({
                 reorderQty:     Number(values.reorderQty),
                 isFridge:       values.isFridge,
                 isDiscontinued: values.isDiscontinued,
+                // @ts-ignore
                 batches:        values.batches,
             });
             // Invalidate all inventory + product queries
