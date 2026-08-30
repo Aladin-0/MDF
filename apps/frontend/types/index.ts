@@ -248,6 +248,7 @@ export interface MasterProduct {
     isDiscontinued: boolean;
     imageUrl?: string;
     mrp: number;
+    batches?: any[];
     saleRate: number;
     minQty?: number;
     reorderQty?: number;
