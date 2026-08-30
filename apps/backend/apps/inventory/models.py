@@ -94,6 +94,7 @@ class Batch(models.Model):
     expiry_date = models.DateField()
     mrp = models.DecimalField(max_digits=10, decimal_places=2, help_text='Maximum Retail Price')
     purchase_rate = models.DecimalField(max_digits=10, decimal_places=2, help_text='Cost price per pack')
+    landing_rate = models.DecimalField(max_digits=10, decimal_places=2, help_text='Landing cost per pack', null=True, blank=True)
     pack_size = models.IntegerField(default=1, help_text='Number of units per pack (e.g., 10 tablets per strip)')
     pack_unit = models.CharField(max_length=50, default='tablet', help_text='Unit name (e.g., tablet, capsule, ml, etc.)')
     pack_type = models.CharField(max_length=20, choices=MasterProduct.PACK_TYPE_CHOICES)
@@ -193,12 +194,12 @@ class StockLedger(models.Model):
     batch_number    = models.CharField(max_length=100, blank=True, default='')  # snapshot
     expiry_date     = models.DateField(null=True, blank=True)                   # snapshot
 
-    qty_in          = models.DecimalField(max_digits=12, decimal_places=3, default=0)
-    qty_out         = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    qty_in          = models.DecimalField(max_digits=12, decimal_places=4, default=0)
+    qty_out         = models.DecimalField(max_digits=12, decimal_places=4, default=0)
     rate            = models.DecimalField(max_digits=12, decimal_places=4, default=0)
     value_in        = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     value_out       = models.DecimalField(max_digits=14, decimal_places=2, default=0)
-    running_qty     = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    running_qty     = models.DecimalField(max_digits=12, decimal_places=4, default=0)
     running_value   = models.DecimalField(max_digits=14, decimal_places=2, default=0)
 
     created_at      = models.DateTimeField(auto_now_add=True)

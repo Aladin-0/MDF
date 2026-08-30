@@ -640,39 +640,67 @@ class InventoryValuationView(APIView):
                     'genericName': product.composition,
                     'manufacturer': product.manufacturer,
                     'totalQty': 0,
-                    'totalValuation': 0.0,
+                    'valuation_purchase': 0.0,
+                    'valuation_landing': 0.0,
+                    'valuation_mrp': 0.0,
                     'purchaseRates': [],
                     'mrp': float(batch.mrp),
                     'batches': [],
                 }
-            batch_val = float(batch.qty_strips * batch.purchase_rate)
+            
+            effective_qty = float(batch.qty_strips + (batch.qty_loose / (batch.pack_size or 1)))
+            val_purchase = effective_qty * float(batch.purchase_rate)
+            val_landing = effective_qty * float(batch.landing_rate or batch.purchase_rate)
+            val_mrp = effective_qty * float(batch.mrp)
+
             product_map[pid]['totalQty'] += batch.qty_strips
-            product_map[pid]['totalValuation'] += batch_val
+            product_map[pid]['valuation_purchase'] += val_purchase
+            product_map[pid]['valuation_landing'] += val_landing
+            product_map[pid]['valuation_mrp'] += val_mrp
             product_map[pid]['purchaseRates'].append(float(batch.purchase_rate))
             product_map[pid]['mrp'] = float(batch.mrp)
             product_map[pid]['batches'].append({
                 'batchNo': batch.batch_no,
                 'expiryDate': batch.expiry_date.isoformat(),
                 'qty': batch.qty_strips,
+                'qtyLoose': batch.qty_loose,
                 'purchaseRate': float(batch.purchase_rate),
-                'valuation': round(batch_val, 2),
+                'landingRate': float(batch.landing_rate) if batch.landing_rate else None,
+                'mrp': float(batch.mrp),
+                'valuation_purchase': round(val_purchase, 2),
+                'valuation_landing': round(val_landing, 2),
+                'valuation_mrp': round(val_mrp, 2),
+                'valuation': round(val_purchase, 2), # Legacy fallback
             })
 
         products = []
-        total_valuation = 0.0
+        total_value_purchase = 0.0
+        total_value_landing = 0.0
+        total_value_mrp = 0.0
+
         for p in product_map.values():
             avg_rate = sum(p['purchaseRates']) / len(p['purchaseRates']) if p['purchaseRates'] else 0
             p['avgPurchaseRate'] = round(avg_rate, 2)
-            p['valuationAmount'] = round(p['totalValuation'], 2)
+            
+            p['valuationAmount'] = round(p['valuation_purchase'], 2) # Legacy
+            p['valuation_purchase'] = round(p['valuation_purchase'], 2)
+            p['valuation_landing'] = round(p['valuation_landing'], 2)
+            p['valuation_mrp'] = round(p['valuation_mrp'], 2)
+
+            total_value_purchase += p['valuation_purchase']
+            total_value_landing += p['valuation_landing']
+            total_value_mrp += p['valuation_mrp']
+
             del p['purchaseRates']
-            del p['totalValuation']
-            total_valuation += p['valuationAmount']
             products.append(p)
 
         return Response({
             'success': True,
             'data': {
-                'totalValuation': round(total_valuation, 2),
+                'totalValuation': round(total_value_purchase, 2), # Legacy
+                'total_value_purchase': round(total_value_purchase, 2),
+                'total_value_landing': round(total_value_landing, 2),
+                'total_value_mrp': round(total_value_mrp, 2),
                 'totalProducts': len(products),
                 'products': products,
             },

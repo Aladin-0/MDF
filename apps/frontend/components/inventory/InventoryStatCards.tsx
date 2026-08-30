@@ -7,9 +7,11 @@ import { reportsApi, inventoryApi } from '@/lib/apiClient';
 import { formatCurrency } from '@/lib/gst';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useOutletId } from '@/hooks/useOutletId';
+import { useInventoryStore } from '@/store/inventoryStore';
 
 export function InventoryStatCards({ onTabChange }: { onTabChange?: (tab: string) => void }) {
     const outletId = useOutletId();
+    const { valuationMode } = useInventoryStore();
 
     // Total products count (paginated, just need totalRecords)
     const { data: stockData, isLoading: stockLoading } = useQuery({
@@ -56,26 +58,39 @@ export function InventoryStatCards({ onTabChange }: { onTabChange?: (tab: string
     }
 
     const totalProducts   = stockData?.pagination?.totalRecords ?? stockData?.data?.length ?? 0;
-    const stockValue      = valuationData?.data?.totalValuation ?? 0;
+    
+    let stockValue = 0;
+    if (valuationData?.data) {
+        if (valuationMode === 'PURCHASE') stockValue = valuationData.data.total_value_purchase ?? valuationData.data.totalValuation ?? 0;
+        else if (valuationMode === 'LANDING') stockValue = valuationData.data.total_value_landing ?? 0;
+        else if (valuationMode === 'MRP') stockValue = valuationData.data.total_value_mrp ?? 0;
+    }
+
     const activeBatches   = valuationData?.data?.products?.reduce((sum: number, p: any) => sum + (p.batches?.length ?? 0), 0) ?? 0;
     const expiringCount   = expiringData?.pagination?.totalRecords ?? 0;
     const lowStockCount   = lowStockData?.pagination?.totalRecords ?? 0;
 
+    const subtitleMap = {
+        'PURCHASE': 'At Purchase Price',
+        'LANDING': 'At Landing Price',
+        'MRP': 'At MRP Price'
+    };
+
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard
-                icon={<Package className="text-blue-600 w-5 h-5" />}
-                bg="bg-blue-100"
+                icon={<Package className="text-indigo-600 w-5 h-5" />}
+                bg="bg-indigo-100"
                 title="Total Products"
                 value={`${totalProducts} products`}
                 subtitle={`${activeBatches} active batches`}
             />
             <StatCard
-                icon={<IndianRupee className="text-green-600 w-5 h-5" />}
-                bg="bg-green-100"
+                icon={<IndianRupee className="text-emerald-600 w-5 h-5" />}
+                bg="bg-emerald-100"
                 title="Stock Value"
                 value={formatCurrency(stockValue)}
-                subtitle="At purchase price"
+                subtitle={subtitleMap[valuationMode]}
             />
             <StatCard
                 icon={<AlertTriangle className="text-amber-600 w-5 h-5" />}

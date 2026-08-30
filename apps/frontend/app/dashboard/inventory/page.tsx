@@ -21,6 +21,7 @@ import { exportToCSV } from '@/lib/export';
 import { useToast } from '@/hooks/use-toast';
 import { EditProductModal } from '@/components/inventory/EditProductModal';
 import { useAuthStore } from '@/store/authStore';
+import { useInventoryStore, ValuationMode } from '@/store/inventoryStore';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -33,6 +34,7 @@ export default function InventoryPage() {
     const { toast } = useToast();
     const { filters, setFilter, clearFilters } = useInventoryFilters();
     const { outlet } = useAuthStore();
+    const { valuationMode, setValuationMode } = useInventoryStore();
 
     const [activeTab, setActiveTab] = useState<string>('all');
     const [showAdjustmentModal, setShowAdjustmentModal] = useState(false);
@@ -181,7 +183,7 @@ export default function InventoryPage() {
     });
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 bg-slate-50 min-h-[calc(100vh-4rem)] p-6 rounded-xl">
              <div className="flex items-center justify-between">
                  <div>
                      <h1 className="text-2xl font-bold tracking-tight">Inventory</h1>
@@ -210,6 +212,24 @@ export default function InventoryPage() {
                              Add Stock (GRN)
                          </Button>
                      </PermissionGate>
+                 </div>
+             </div>
+
+             <div className="flex justify-end">
+                 <div className="flex items-center bg-slate-200/60 p-1 rounded-lg">
+                     {(['PURCHASE', 'LANDING', 'MRP'] as ValuationMode[]).map((mode) => (
+                         <button
+                             key={mode}
+                             onClick={() => setValuationMode(mode)}
+                             className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
+                                 valuationMode === mode 
+                                     ? 'bg-white text-indigo-600 shadow-sm' 
+                                     : 'text-slate-500 hover:text-slate-700'
+                             }`}
+                         >
+                             {mode.charAt(0) + mode.slice(1).toLowerCase()}
+                         </button>
+                     ))}
                  </div>
              </div>
 

@@ -225,10 +225,10 @@ def atomic_sale_save(
                 )
                 sale_items.append(sale_item)
 
-                deducted_qty = Decimal(str(qty_to_deduct)) + (
+                deducted_qty = (Decimal(str(qty_to_deduct)) + (
                     Decimal(str(loose_to_deduct)) / Decimal(str(batch.pack_size or 1))
                     if loose_to_deduct else Decimal('0')
-                )
+                )).quantize(Decimal('0.0001'))
                 post_stock_ledger_entry(
                     outlet         = sale_invoice.outlet,
                     product        = batch.product,

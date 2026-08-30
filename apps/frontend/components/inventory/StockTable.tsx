@@ -1,7 +1,7 @@
 'use client'
 import { formatQty } from '@/lib/utils';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useStockList } from '@/hooks/useInventory';
 import { useInventoryFilters } from '@/hooks/useInventoryFilters';
 import { 
@@ -9,14 +9,15 @@ import {
 } from '@/components/ui/table';
 import { 
     ColumnDef, flexRender, getCoreRowModel, getSortedRowModel, 
-    SortingState, useReactTable 
+    SortingState, useReactTable, getExpandedRowModel, ExpandedState
 } from '@tanstack/react-table';
-import { ProductSearchResult } from '@/types';
+import { ProductSearchResult, Batch } from '@/types';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, PackageSearch, Eye, SlidersHorizontal, ChevronUp, ChevronDown, Pencil } from 'lucide-react';
+import { Search, PackageSearch, Eye, SlidersHorizontal, ChevronUp, ChevronDown, ChevronRight, Pencil } from 'lucide-react';
 import { formatCurrency } from '@/lib/gst';
+import { useInventoryStore } from '@/store/inventoryStore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PermissionGate } from '@/components/shared/PermissionGate';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -35,11 +36,13 @@ export function StockTable({ onProductClick, onAdjustClick, onEditClick }: any) 
 
     const { data: stockData, isLoading } = useStockList(filters);
     const data = stockData?.data || [];
+    const { valuationMode } = useInventoryStore();
 
     const [sorting, setSorting] = useState<SortingState>([{ 
          id: filters.sortBy || 'name', 
          desc: filters.sortOrder === 'desc' 
     }]);
+    const [expanded, setExpanded] = useState<ExpandedState>({});
 
     useEffect(() => {
         if (sorting.length > 0) {
@@ -49,6 +52,23 @@ export function StockTable({ onProductClick, onAdjustClick, onEditClick }: any) 
     }, [sorting]);
 
     const columns: ColumnDef<ProductSearchResult>[] = [
+        {
+            id: 'expander',
+            header: () => null,
+            cell: ({ row }) => {
+                return row.getCanExpand() ? (
+                    <button
+                        {...{
+                            onClick: row.getToggleExpandedHandler(),
+                            style: { cursor: 'pointer' },
+                        }}
+                        className="p-1 rounded hover:bg-slate-200 text-slate-500"
+                    >
+                        {row.getIsExpanded() ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                    </button>
+                ) : null
+            },
+        },
         {
             accessorKey: 'name',
             header: ({ column }) => <SortableHeader column={column} title="Product" />,
@@ -158,14 +178,27 @@ export function StockTable({ onProductClick, onAdjustClick, onEditClick }: any) 
             }
         },
         {
-            id: 'mrp',
-            accessorFn: row => row.batches[0]?.mrp || 0,
-            header: ({ column }) => <SortableHeader column={column} title="MRP" />,
-            cell: ({ row }) => (
-                <div className="w-24 text-right text-sm">
-                    {formatCurrency(row.original.batches[0]?.mrp || 0)}
-                </div>
-            )
+            id: 'valuation',
+            header: ({ column }) => <SortableHeader column={column} title="Total Value" />,
+            cell: ({ row }) => {
+                const batches = row.original.batches || [];
+                const packSize = row.original.packSize || 1;
+                let totalVal = 0;
+                
+                batches.forEach(b => {
+                    const effectiveQty = b.qtyStrips + (b.qtyLoose / packSize);
+                    let rate = b.purchaseRate;
+                    if (valuationMode === 'LANDING') rate = b.landingRate || b.purchaseRate;
+                    else if (valuationMode === 'MRP') rate = b.mrp;
+                    totalVal += (effectiveQty * rate);
+                });
+
+                return (
+                    <div className="w-24 text-right text-sm font-semibold text-slate-700">
+                        {formatCurrency(totalVal)}
+                    </div>
+                )
+            }
         },
         {
             id: 'actions',
@@ -205,10 +238,13 @@ export function StockTable({ onProductClick, onAdjustClick, onEditClick }: any) 
         getCoreRowModel: getCoreRowModel(),
         onSortingChange: setSorting,
         getSortedRowModel: getSortedRowModel(),
-        state: { sorting }
+        getExpandedRowModel: getExpandedRowModel(),
+        onExpandedChange: setExpanded,
+        getRowCanExpand: (row) => row.original.batches?.length > 0,
+        state: { sorting, expanded }
     });
 
-    const hasFilters = filters.search || (filters.scheduleType && filters.scheduleType !== 'all') || filters.lowStock || filters.expiringSoon;
+    const hasFilters = filters.search || (filters.scheduleType && filters.scheduleType !== 'all');
 
     return (
         <div className="space-y-4">
@@ -234,22 +270,6 @@ export function StockTable({ onProductClick, onAdjustClick, onEditClick }: any) 
                            ))}
                       </SelectContent>
                  </Select>
-
-                 <Button 
-                      variant={filters.lowStock ? "default" : "outline"} 
-                      onClick={() => setFilter('lowStock', !filters.lowStock)}
-                      className={filters.lowStock ? "bg-primary/10 border-primary text-primary hover:bg-primary/20" : ""}
-                 >
-                      Low Stock Only
-                 </Button>
-
-                 <Button 
-                      variant={filters.expiringSoon ? "default" : "outline"} 
-                      onClick={() => setFilter('expiring', !filters.expiringSoon)}
-                      className={filters.expiringSoon ? "bg-primary/10 border-primary text-primary hover:bg-primary/20" : ""}
-                 >
-                      Expiring &lt; 90d
-                 </Button>
 
                  {hasFilters && (
                       <Button variant="ghost" size="sm" onClick={() => { setSearchTerm(''); clearFilters(); }} className="text-sm text-muted-foreground hover:text-slate-900">
@@ -282,13 +302,45 @@ export function StockTable({ onProductClick, onAdjustClick, onEditClick }: any) 
                                 ))
                            ) : table.getRowModel().rows.length > 0 ? (
                                 table.getRowModel().rows.map(row => (
-                                    <TableRow key={row.id} className="hover:bg-slate-50 transition-colors even:bg-slate-50/50">
-                                         {row.getVisibleCells().map(cell => (
-                                              <TableCell key={cell.id}>
-                                                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                              </TableCell>
-                                         ))}
-                                    </TableRow>
+                                    <React.Fragment key={row.id}>
+                                        <TableRow className="hover:bg-slate-50 transition-colors even:bg-slate-50/50">
+                                            {row.getVisibleCells().map(cell => (
+                                                <TableCell key={cell.id}>
+                                                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                                </TableCell>
+                                            ))}
+                                        </TableRow>
+                                        {row.getIsExpanded() && (
+                                            <TableRow>
+                                                <TableCell colSpan={row.getVisibleCells().length} className="p-0 border-b-2 border-indigo-100">
+                                                    <div className="bg-slate-100/80 p-4 shadow-inner inset-0">
+                                                        <table className="w-full text-sm">
+                                                            <thead className="text-left text-slate-500 font-semibold border-b border-slate-200">
+                                                                <tr>
+                                                                    <th className="pb-2">Batch No</th>
+                                                                    <th className="pb-2">Qty (Strips / Loose)</th>
+                                                                    <th className="pb-2">Expiry Date</th>
+                                                                    <th className="pb-2">Landing Rate</th>
+                                                                    <th className="pb-2">MRP</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                {row.original.batches.map((batch: Batch) => (
+                                                                    <tr key={batch.id || batch.batchNo} className="border-b border-slate-200/60 last:border-0 text-slate-700">
+                                                                        <td className="py-2">{batch.batchNo}</td>
+                                                                        <td className="py-2">{batch.qtyStrips} / {batch.qtyLoose}</td>
+                                                                        <td className="py-2">{new Date(batch.expiryDate).toLocaleDateString('en-IN', { month: 'short', year: 'numeric'})}</td>
+                                                                        <td className="py-2">{formatCurrency(batch.landingRate || batch.purchaseRate)}</td>
+                                                                        <td className="py-2">{formatCurrency(batch.mrp)}</td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        )}
+                                    </React.Fragment>
                                 ))
                            ) : (
                                 <TableRow>
