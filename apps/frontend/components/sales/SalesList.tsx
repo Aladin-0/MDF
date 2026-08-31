@@ -81,7 +81,7 @@ export default function SalesList() {
 
     const handleEditSale = (invoice: SaleInvoice) => {
         setSelectedInvoiceId(null);
-        router.push(`/dashboard/sales/modify/${invoice.id}`);
+        router.push(`/billing?edit=${invoice.id}`);
     };
 
 

@@ -69,8 +69,9 @@ export function useDeleteStaff() {
 
 // ✅ FIXED — matches apiClient: (staffId, startDate, endDate)
 export function useStaffPerformance(id: string, from: string, to: string) {
+    const outletId = useOutletId();
     return useQuery({
-        queryKey: ['staff', 'performance', id, from, to],
+        queryKey: ['staff', 'performance', id, outletId, from, to],
         queryFn: () => staffApi.getPerformance(id, from, to),
         enabled: !!id,
     });

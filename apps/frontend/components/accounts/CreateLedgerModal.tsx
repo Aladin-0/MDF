@@ -19,6 +19,7 @@ interface CreateLedgerModalProps {
      * shown as a read-only badge (so billing staff never see the dropdown).
      */
     defaultGroupName?: string;
+    isQuickCustomerMode?: boolean;
     onSave: (ledger: Ledger) => void;
     onClose: () => void;
 }
@@ -30,6 +31,7 @@ export function CreateLedgerModal({
     outletId,
     ledgerToEdit,
     defaultGroupName,
+    isQuickCustomerMode = false,
     onSave,
     onClose,
 }: CreateLedgerModalProps) {
@@ -154,7 +156,8 @@ export function CreateLedgerModal({
         }
         // In billing context, groupName is sent as fallback so groupId is optional.
         // For non-billing context (full ledger form), groupId is strictly required.
-        if (!groupId && !defaultGroupName) {
+        // In Quick Mode, it's bypassed as we auto-inject Sundry Debtors.
+        if (!isQuickCustomerMode && !groupId && !defaultGroupName) {
             toast({ variant: 'destructive', title: 'Account group is required' });
             return;
         }
@@ -163,15 +166,15 @@ export function CreateLedgerModal({
             const payload: Record<string, any> = {
                 outletId,
                 name: name.trim(),
-                groupId: groupId || undefined,
+                groupId: isQuickCustomerMode ? undefined : (groupId || undefined),
                 // Send groupName as fallback so backend can get_or_create if outlet
                 // doesn't have the group seeded yet.
-                groupName: !groupId && defaultGroupName ? defaultGroupName : undefined,
-                // Set ledgerCategory to CUSTOMER when called from billing
-                ledgerCategory: defaultGroupName ? 'CUSTOMER' : ledgerCategory,
-                openingBalance: parseFloat(openingBalance) || 0,
-                balanceType,
-                balancingMethod,
+                groupName: isQuickCustomerMode ? 'Sundry Debtors' : (!groupId && defaultGroupName ? defaultGroupName : undefined),
+                // Set ledgerCategory to CUSTOMER when called from billing or quick mode
+                ledgerCategory: (isQuickCustomerMode || defaultGroupName) ? 'CUSTOMER' : ledgerCategory,
+                openingBalance: isQuickCustomerMode ? 0 : (parseFloat(openingBalance) || 0),
+                balanceType: isQuickCustomerMode ? 'Dr' : balanceType,
+                balancingMethod: isQuickCustomerMode ? 'bill_by_bill' : balancingMethod,
                 phone,
                 gstin,
                 address,
@@ -216,7 +219,7 @@ export function CreateLedgerModal({
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 py-4 border-b shrink-0">
                     <h2 className="text-lg font-semibold">
-                        {ledgerToEdit ? 'Edit Ledger' : 'Create Ledger'}
+                        {isQuickCustomerMode ? 'Add Quick Customer' : (ledgerToEdit ? 'Edit Ledger' : 'Create Ledger')}
                     </h2>
                     <button type="button" onClick={onClose} className="p-1.5 rounded hover:bg-muted">
                         <X className="w-4 h-4" />
@@ -230,13 +233,29 @@ export function CreateLedgerModal({
                         <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Basic</h3>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-1.5 col-span-2">
-                                <Label>Ledger Name *</Label>
+                                <Label>{isQuickCustomerMode ? 'Customer Name *' : 'Ledger Name *'}</Label>
                                 <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. ABC Pharma" />
                             </div>
-                            <div className="space-y-1.5">
-                                <Label>Station</Label>
-                                <Input value={station} onChange={(e) => setStation(e.target.value)} placeholder="City / Station" />
-                            </div>
+                            
+                            {isQuickCustomerMode && (
+                                <>
+                                    <div className="space-y-1.5 col-span-1">
+                                        <Label>Mobile Number</Label>
+                                        <Input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="10-digit number" />
+                                    </div>
+                                    <div className="space-y-1.5 col-span-1">
+                                        <Label>Address</Label>
+                                        <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Full address" />
+                                    </div>
+                                </>
+                            )}
+
+                            {!isQuickCustomerMode && (
+                                <>
+                                    <div className="space-y-1.5">
+                                        <Label>Station</Label>
+                                        <Input value={station} onChange={(e) => setStation(e.target.value)} placeholder="City / Station" />
+                                    </div>
                             <div className="space-y-1.5">
                                 <Label>Account Group *</Label>
                                 {defaultGroupName ? (
@@ -311,11 +330,16 @@ export function CreateLedgerModal({
                                     </div>
                                 </div>
                             </div>
+                                </>
+                            )}
                         </div>
                     </div>
 
-                    {/* Section 2 — Contact (collapsible; hidden by default in billing context) */}
-                    <div>
+                    {/* Additional Sections - Hidden in Quick Mode */}
+                    {!isQuickCustomerMode && (
+                        <>
+                            {/* Section 2 — Contact (collapsible; hidden by default in billing context) */}
+                            <div>
                         <button
                             type="button"
                             className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 hover:text-foreground transition-colors"
@@ -552,6 +576,8 @@ export function CreateLedgerModal({
                             </div>
                         </div>}
                     </div>
+                        </>
+                    )}
                 </div>
 
                 {/* Footer */}

@@ -80,21 +80,21 @@ export function InventoryStatCards({ onTabChange }: { onTabChange?: (tab: string
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard
                 icon={<Package className="text-indigo-600 w-5 h-5" />}
-                bg="bg-indigo-100"
+                bg="bg-indigo-50"
                 title="Total Products"
                 value={`${totalProducts} products`}
                 subtitle={`${activeBatches} active batches`}
             />
             <StatCard
                 icon={<IndianRupee className="text-emerald-600 w-5 h-5" />}
-                bg="bg-emerald-100"
+                bg="bg-emerald-50"
                 title="Stock Value"
                 value={formatCurrency(stockValue)}
                 subtitle={subtitleMap[valuationMode]}
             />
             <StatCard
                 icon={<AlertTriangle className="text-amber-600 w-5 h-5" />}
-                bg="bg-amber-100"
+                bg="bg-amber-50"
                 title="Expiring Soon"
                 value={`${expiringCount} batches`}
                 subtitle="Within 90 days"
@@ -103,7 +103,7 @@ export function InventoryStatCards({ onTabChange }: { onTabChange?: (tab: string
             />
             <StatCard
                 icon={<PackageX className="text-red-600 w-5 h-5" />}
-                bg="bg-red-100"
+                bg="bg-red-50"
                 title="Low Stock"
                 value={`${lowStockCount} items`}
                 subtitle="Below reorder level"
@@ -116,7 +116,7 @@ export function InventoryStatCards({ onTabChange }: { onTabChange?: (tab: string
 
 function StatCard({ icon, bg, title, value, subtitle, onClick, cursor }: any) {
     return (
-        <Card className={cursor} onClick={onClick}>
+        <Card className={`shadow-sm border-slate-200 rounded-xl ${cursor || ''}`} onClick={onClick}>
             <CardContent className="p-6">
                 <div className="flex items-center gap-4">
                     <div className={`p-3 rounded-full flex items-center justify-center h-12 w-12 ${bg}`}>
@@ -124,7 +124,7 @@ function StatCard({ icon, bg, title, value, subtitle, onClick, cursor }: any) {
                     </div>
                     <div>
                         <p className="text-sm text-slate-500 font-medium">{title}</p>
-                        <h3 className="text-2xl font-bold text-slate-900 mt-1">{value}</h3>
+                        <h3 className="text-3xl font-bold text-slate-900 mt-1">{value}</h3>
                         <p className="text-sm text-slate-500 mt-1">{subtitle}</p>
                     </div>
                 </div>

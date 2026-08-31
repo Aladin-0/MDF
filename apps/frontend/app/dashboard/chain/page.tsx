@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import { format, startOfMonth } from 'date-fns';
 import { Building2, TrendingUp, ShoppingCart, CreditCard, ArrowDownCircle, RefreshCw, AlertTriangle, ArrowRight, Loader2 } from 'lucide-react';
 import { chainApi, authApi } from '@/lib/apiClient';
@@ -43,6 +44,8 @@ function KPICard({
 
 export default function ChainDashboardPage() {
     const user = useAuthStore((s) => s.user);
+    const queryClient = useQueryClient();
+    const router = useRouter();
     const [from, setFrom] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
     const [to, setTo] = useState(format(new Date(), 'yyyy-MM-dd'));
 
@@ -74,8 +77,9 @@ export default function ChainDashboardPage() {
             // 4. Save new JWT token
             document.cookie = `access_token=${data.access}; path=/;`;
 
-            // 5. Hard refresh to clear react-query cache and remount layout with new outlet scope
-            window.location.href = '/dashboard';
+            // 5. Clear react-query cache and navigate without full page reload
+            queryClient.clear();
+            router.push('/dashboard');
         },
         onError: (err: any) => {
             alert(err?.detail || 'Failed to switch outlet');

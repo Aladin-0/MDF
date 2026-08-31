@@ -11,6 +11,7 @@ import {
     DistributorLedgerEntry,
     AttendanceRecord,
 } from '../types';
+import { toast } from 'sonner';
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL!; // Required — set NEXT_PUBLIC_API_URL in .env
 
@@ -74,6 +75,13 @@ export async function assertOk(response: Response): Promise<void> {
         }
 
         throw { detail: message, status: response.status, isHtmlError: true };
+    }
+
+    if (errorData?.code === 'OTP_REQUIRED') {
+        if (typeof window !== 'undefined') {
+            toast.error('Taxpayer session expired. Please verify OTP.');
+            window.location.href = '/gst/sandbox';
+        }
     }
 
     throw errorData;

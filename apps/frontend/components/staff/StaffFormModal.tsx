@@ -16,13 +16,53 @@ import {
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { useCreateStaff, useUpdateStaff } from '@/hooks/useStaff';
+import { cn } from '@/lib/utils';
+import { Info } from 'lucide-react';
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 const ROLES = [
     { value: 'admin', label: 'Admin' },
     { value: 'manager', label: 'Manager' },
     { value: 'billing_staff', label: 'Billing Staff' },
     { value: 'view_only', label: 'View Only' },
+    { value: 'custom', label: 'Custom' },
 ];
+
+const ROLE_PERMISSIONS: Record<string, any> = {
+    admin: {
+        canEditSales: true, canModifyPaidBill: true, canModifyDraftUnpaidBill: true, canCorrectHeaderFields: true, canCorrectQuantities: true,
+        canOverridePricing: true, canCorrectCustomer: true,
+        canCreatePurchases: true, canViewPurchaseRates: true, canEditPurchases: true, canModifyPaidPurchases: true,
+        canEditVouchers: true, canModifySettledVouchers: true, canEditReturns: true, canModifySettledReturns: true,
+        canAccessReports: true, canVoidRecords: true, canViewAuditHistory: true,
+    },
+    manager: {
+        canEditSales: true, canModifyPaidBill: true, canModifyDraftUnpaidBill: true, canCorrectHeaderFields: true, canCorrectQuantities: true,
+        canOverridePricing: true, canCorrectCustomer: true,
+        canCreatePurchases: true, canViewPurchaseRates: true, canEditPurchases: true, canModifyPaidPurchases: true,
+        canEditVouchers: true, canModifySettledVouchers: true, canEditReturns: true, canModifySettledReturns: true,
+        canAccessReports: true, canVoidRecords: false, canViewAuditHistory: true,
+    },
+    billing_staff: {
+        canEditSales: true, canModifyPaidBill: false, canModifyDraftUnpaidBill: true, canCorrectHeaderFields: false, canCorrectQuantities: false,
+        canOverridePricing: false, canCorrectCustomer: false,
+        canCreatePurchases: false, canViewPurchaseRates: false, canEditPurchases: false, canModifyPaidPurchases: false,
+        canEditVouchers: false, canModifySettledVouchers: false, canEditReturns: false, canModifySettledReturns: false,
+        canAccessReports: false, canVoidRecords: false, canViewAuditHistory: false,
+    },
+    view_only: {
+        canEditSales: false, canModifyPaidBill: false, canModifyDraftUnpaidBill: false, canCorrectHeaderFields: false, canCorrectQuantities: false,
+        canOverridePricing: false, canCorrectCustomer: false,
+        canCreatePurchases: false, canViewPurchaseRates: false, canEditPurchases: false, canModifyPaidPurchases: false,
+        canEditVouchers: false, canModifySettledVouchers: false, canEditReturns: false, canModifySettledReturns: false,
+        canAccessReports: true, canVoidRecords: false, canViewAuditHistory: false,
+    }
+};
 
 interface StaffFormModalProps {
     open: boolean;
@@ -49,30 +89,28 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                 joinDate: new Date().toISOString().split('T')[0],
                 salary: '',
                 maxDiscount: 0,
-                canEditRate: false,
-                canViewPurchaseRates: false,
-                canCreatePurchases: false,
-                canAccessReports: false,
                 canEditSales: false,
+                canModifyPaidBill: false,
+                canModifyDraftUnpaidBill: false,
+                canCorrectHeaderFields: false,
+                canCorrectQuantities: false,
+                
+                canOverridePricing: false,
+                canCorrectCustomer: false,
+
+                canCreatePurchases: false,
+                canViewPurchaseRates: false,
                 canEditPurchases: false,
                 canModifyPaidPurchases: false,
-                canModifySettledVouchers: false,
-                canModifySettledReturns: false,
-                canEditSaleReturns: false,
-                canEditPurchaseReturns: false,
+
                 canEditVouchers: false,
-                canViewAuditHistory: false,
+                canModifySettledVouchers: false,
+                canEditReturns: false,
+                canModifySettledReturns: false,
+
+                canAccessReports: false,
                 canVoidRecords: false,
-                canModifyDraftBill: false,
-                canModifyUnpaidBill: false,
-                canCorrectHeaderFields: false,
-                canCorrectRatesDiscounts: false,
-                canCorrectQuantities: false,
-                canCorrectCustomer: false,
-                canModifyBillWithReturn: false,
-                canModifyPaidBill: false,
-                canCancelAndReissueBill: false,
-                canViewBillRevisionHistory: false,
+                canViewAuditHistory: false,
             }
         });
 
@@ -91,30 +129,28 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                 joinDate: editingStaff.joinDate ?? '',
                 salary: editingStaff.salary ?? '',
                 maxDiscount: editingStaff.maxDiscount ?? 0,
-                canEditRate: editingStaff.canEditRate ?? false,
-                canViewPurchaseRates: editingStaff.canViewPurchaseRates ?? false,
-                canCreatePurchases: editingStaff.canCreatePurchases ?? false,
-                canAccessReports: editingStaff.canAccessReports ?? false,
                 canEditSales: editingStaff.canEditSales ?? false,
+                canModifyPaidBill: editingStaff.canModifyPaidBill ?? false,
+                canModifyDraftUnpaidBill: (editingStaff.canModifyDraftBill || editingStaff.canModifyUnpaidBill) ?? false,
+                canCorrectHeaderFields: editingStaff.canCorrectHeaderFields ?? false,
+                canCorrectQuantities: editingStaff.canCorrectQuantities ?? false,
+                
+                canOverridePricing: (editingStaff.canEditRate || editingStaff.canCorrectRatesDiscounts) ?? false,
+                canCorrectCustomer: editingStaff.canCorrectCustomer ?? false,
+
+                canCreatePurchases: editingStaff.canCreatePurchases ?? false,
+                canViewPurchaseRates: editingStaff.canViewPurchaseRates ?? false,
                 canEditPurchases: editingStaff.canEditPurchases ?? false,
                 canModifyPaidPurchases: editingStaff.canModifyPaidPurchases ?? false,
-                canModifySettledVouchers: editingStaff.canModifySettledVouchers ?? false,
-                canModifySettledReturns: editingStaff.canModifySettledReturns ?? false,
-                canEditSaleReturns: editingStaff.canEditSaleReturns ?? false,
-                canEditPurchaseReturns: editingStaff.canEditPurchaseReturns ?? false,
+
                 canEditVouchers: editingStaff.canEditVouchers ?? false,
-                canViewAuditHistory: editingStaff.canViewAuditHistory ?? false,
+                canModifySettledVouchers: editingStaff.canModifySettledVouchers ?? false,
+                canEditReturns: (editingStaff.canEditSaleReturns || editingStaff.canEditPurchaseReturns) ?? false,
+                canModifySettledReturns: editingStaff.canModifySettledReturns ?? false,
+
+                canAccessReports: editingStaff.canAccessReports ?? false,
                 canVoidRecords: editingStaff.canVoidRecords ?? false,
-                canModifyDraftBill: editingStaff.canModifyDraftBill ?? false,
-                canModifyUnpaidBill: editingStaff.canModifyUnpaidBill ?? false,
-                canCorrectHeaderFields: editingStaff.canCorrectHeaderFields ?? false,
-                canCorrectRatesDiscounts: editingStaff.canCorrectRatesDiscounts ?? false,
-                canCorrectQuantities: editingStaff.canCorrectQuantities ?? false,
-                canCorrectCustomer: editingStaff.canCorrectCustomer ?? false,
-                canModifyBillWithReturn: editingStaff.canModifyBillWithReturn ?? false,
-                canModifyPaidBill: editingStaff.canModifyPaidBill ?? false,
-                canCancelAndReissueBill: editingStaff.canCancelAndReissueBill ?? false,
-                canViewBillRevisionHistory: editingStaff.canViewBillRevisionHistory ?? false,
+                canViewAuditHistory: editingStaff.canViewAuditHistory ?? false,
             });
         } else {
             reset();
@@ -130,6 +166,25 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
         if (isEdit && !data.password) delete data.password;
         if (isEdit && !data.pin) delete data.pin;
 
+        // Map unified UI fields back to backend payload
+        data.canEditRate = data.canOverridePricing;
+        data.canCorrectRatesDiscounts = data.canOverridePricing;
+
+        data.canModifyDraftBill = data.canModifyDraftUnpaidBill;
+        data.canModifyUnpaidBill = data.canModifyDraftUnpaidBill;
+        
+        data.canEditSaleReturns = data.canEditReturns;
+        data.canEditPurchaseReturns = data.canEditReturns;
+        
+        data.canViewBillRevisionHistory = data.canViewAuditHistory;
+        data.canCancelAndReissueBill = data.canVoidRecords;
+        data.canModifyBillWithReturn = data.canEditSales; // Covered by master
+
+        // Remove virtual fields from payload
+        delete data.canOverridePricing;
+        delete data.canModifyDraftUnpaidBill;
+        delete data.canEditReturns;
+
         if (isEdit) {
             updateMutation.mutate(
                 { id: editingStaff.id, data },
@@ -142,16 +197,42 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
 
     const isPending = createMutation.isPending || updateMutation.isPending;
 
+    const handleRoleChange = (roleValue: string) => {
+        setValue('role', roleValue);
+        if (roleValue !== 'custom' && ROLE_PERMISSIONS[roleValue]) {
+            const perms = ROLE_PERMISSIONS[roleValue];
+            Object.keys(perms).forEach(k => {
+                setValue(k as any, perms[k]);
+            });
+        }
+    };
+
+    const handleChildChange = (key: string, value: boolean) => {
+        setValue(key as any, value);
+        setValue('role', 'custom');
+    };
+
+    const handleMasterChange = (masterKey: string, value: boolean, childKeys: string[]) => {
+        setValue(masterKey as any, value);
+        if (value) {
+            childKeys.forEach(k => setValue(k as any, true));
+        } else {
+            childKeys.forEach(k => setValue(k as any, false));
+        }
+        setValue('role', 'custom');
+    };
+
     return (
         <Dialog open={open} onOpenChange={onClose}>
-            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
+            <DialogContent className="max-w-5xl max-h-[90vh] p-0 overflow-hidden flex flex-col">
+                <DialogHeader className="px-6 py-4 border-b shrink-0 bg-white sticky top-0 z-10">
                     <DialogTitle>
                         {isEdit ? `Edit — ${editingStaff?.name}` : 'Add New Staff Member'}
                     </DialogTitle>
                 </DialogHeader>
 
-                <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+                <div className="flex-1 overflow-y-auto px-6 py-4">
+                    <form id="staff-form" onSubmit={handleSubmit(onSubmit)} className="space-y-6">
 
                     {/* Basic Info */}
                     <div className="space-y-3">
@@ -174,8 +255,8 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                             <div className="space-y-1">
                                 <Label>Role *</Label>
                                 <Select
-                                    defaultValue={watch('role')}
-                                    onValueChange={(v) => setValue('role', v)}
+                                    value={watch('role')}
+                                    onValueChange={handleRoleChange}
                                 >
                                     <SelectTrigger>
                                         <SelectValue placeholder="Select role" />
@@ -364,64 +445,279 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                     <Separator />
 
                     {/* Permissions */}
-                    <div className="space-y-3">
-                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    <div className="space-y-4">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
                             Permissions
                         </p>
+                        <TooltipProvider>
 
-                        <div className="space-y-3">
-                            {[
-                                { key: 'canEditRate', label: 'Can Edit Sale Rate', desc: 'Override MRP during billing' },
-                                { key: 'canViewPurchaseRates', label: 'Can View Purchase Rates', desc: 'See cost price in inventory' },
-                                { key: 'canCreatePurchases', label: 'Can Create Purchases', desc: 'Add new GRN / purchase invoices' },
-                                { key: 'canAccessReports', label: 'Can Access Reports', desc: 'View sales, GST, stock reports' },
-                                { key: 'canEditSales', label: 'Can Edit Sales', desc: 'Modify existing sale invoices' },
-                                { key: 'canEditPurchases', label: 'Can Edit Purchases', desc: 'Modify existing purchase invoices' },
-                                { key: 'canModifyPaidPurchases', label: 'Modify Paid Purchases', desc: 'Modify purchases that are fully paid' },
-                                { key: 'canModifySettledVouchers', label: 'Modify Settled Vouchers', desc: 'Modify vouchers linked to bills' },
-                                { key: 'canModifySettledReturns', label: 'Modify Settled Returns', desc: 'Modify returns linked to payments/bills' },
-                                { key: 'canEditSaleReturns', label: 'Can Edit Sale Returns', desc: 'Modify existing sale returns' },
-                                { key: 'canEditPurchaseReturns', label: 'Can Edit Purchase Returns', desc: 'Modify existing purchase returns' },
-                                { key: 'canEditVouchers', label: 'Can Edit Vouchers', desc: 'Modify receipt/payment/journal/contra' },
-                                { key: 'canViewAuditHistory', label: 'Can View Audit History', desc: 'View revision logs across modules' },
-                                { key: 'canVoidRecords', label: 'Can Void/Cancel Records', desc: 'Cancel or void bills and vouchers' },
-                                { key: 'canModifyDraftBill', label: 'Can Modify Draft Bill', desc: 'Modify saved draft bills' },
-                                { key: 'canModifyUnpaidBill', label: 'Can Modify Unpaid Bill', desc: 'Modify bills that have no payments' },
-                                { key: 'canCorrectHeaderFields', label: 'Can Correct Header Fields', desc: 'Change date, doctor details' },
-                                { key: 'canCorrectRatesDiscounts', label: 'Can Correct Rates/Discounts', desc: 'Change rates and discounts on items' },
-                                { key: 'canCorrectQuantities', label: 'Can Correct Quantities', desc: 'Change quantities of items' },
-                                { key: 'canCorrectCustomer', label: 'Can Correct Customer', desc: 'Change the customer for the bill' },
-                                { key: 'canModifyBillWithReturn', label: 'Can Modify Bill With Return', desc: 'Modify a bill even if it has returns' },
-                                { key: 'canModifyPaidBill', label: 'Can Modify Paid Bill', desc: 'Modify bills with payments/adjustments' },
-                                { key: 'canCancelAndReissueBill', label: 'Can Cancel & Reissue', desc: 'Cancel bill and create a new one' },
-                                { key: 'canViewBillRevisionHistory', label: 'Can View Revision History', desc: 'See full edit history' },
-                            ].map(({ key, label, desc }) => (
-                                <div key={key} className="flex items-center justify-between p-3 rounded-lg bg-slate-50">
-                                    <div>
-                                        <p className="text-sm font-medium">{label}</p>
-                                        <p className="text-xs text-muted-foreground">{desc}</p>
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                            {/* Sales & Billing */}
+                            <div className="space-y-0 p-3 rounded-xl border border-slate-200 bg-white">
+                                <h4 className="font-semibold text-slate-800 text-sm mb-3">Sales & Billing</h4>
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm font-medium leading-none">Can Edit Sales</p>
+                                            <p className="text-xs text-muted-foreground mt-1">Master permission to modify invoices</p>
+                                        </div>
+                                        <Switch
+                                            checked={watch('canEditSales')}
+                                            onCheckedChange={(v) => handleMasterChange('canEditSales', v, ['canModifyDraftUnpaidBill', 'canModifyPaidBill', 'canCorrectHeaderFields', 'canCorrectQuantities'])}
+                                        />
                                     </div>
-                                    <Switch
-                                        checked={watch(key as any)}
-                                        onCheckedChange={(v) => setValue(key as any, v)}
-                                    />
+                                    <div className={cn(
+                                        "p-3 rounded-md bg-slate-50 border-l-4 border-indigo-500 space-y-3 mt-2 transition-opacity", 
+                                        !watch('canEditSales') && "opacity-50 pointer-events-none"
+                                    )}>
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center">
+                                                <p className="text-xs font-medium text-slate-700">Modify Draft/Unpaid Bills</p>
+                                                <Tooltip>
+                                                    <TooltipTrigger type="button" tabIndex={-1}>
+                                                        <Info className="h-4 w-4 text-slate-400 ml-1.5" />
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>
+                                                        <p>Modify existing draft or unpaid bills</p>
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            </div>
+                                            <Switch checked={watch('canModifyDraftUnpaidBill')} onCheckedChange={(v) => handleChildChange('canModifyDraftUnpaidBill', v)} />
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center">
+                                                <p className="text-xs font-medium text-slate-700">Modify Paid Bills</p>
+                                                <Tooltip>
+                                                    <TooltipTrigger type="button" tabIndex={-1}>
+                                                        <Info className="h-4 w-4 text-slate-400 ml-1.5" />
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>
+                                                        <p>Modify invoices that have already been paid</p>
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            </div>
+                                            <Switch checked={watch('canModifyPaidBill')} onCheckedChange={(v) => handleChildChange('canModifyPaidBill', v)} />
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center">
+                                                <p className="text-xs font-medium text-slate-700">Correct Header Fields</p>
+                                                <Tooltip>
+                                                    <TooltipTrigger type="button" tabIndex={-1}>
+                                                        <Info className="h-4 w-4 text-slate-400 ml-1.5" />
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>
+                                                        <p>Edit doctor or customer on an invoice</p>
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            </div>
+                                            <Switch checked={watch('canCorrectHeaderFields')} onCheckedChange={(v) => handleChildChange('canCorrectHeaderFields', v)} />
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center">
+                                                <p className="text-xs font-medium text-slate-700">Correct Quantities</p>
+                                                <Tooltip>
+                                                    <TooltipTrigger type="button" tabIndex={-1}>
+                                                        <Info className="h-4 w-4 text-slate-400 ml-1.5" />
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>
+                                                        <p>Modify item quantities on an invoice</p>
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            </div>
+                                            <Switch checked={watch('canCorrectQuantities')} onCheckedChange={(v) => handleChildChange('canCorrectQuantities', v)} />
+                                        </div>
+                                    </div>
                                 </div>
-                            ))}
-                        </div>
-                    </div>
+                            </div>
 
-                    <DialogFooter>
-                        <Button type="button" variant="outline" onClick={onClose}>
-                            Cancel
-                        </Button>
-                        <Button type="submit" disabled={isPending}>
-                            {isPending
-                                ? (isEdit ? 'Saving...' : 'Creating...')
-                                : (isEdit ? 'Save Changes' : 'Create Staff Member')
-                            }
-                        </Button>
-                    </DialogFooter>
-                </form>
+                            {/* Pricing Authority */}
+                            <div className="space-y-0 p-3 rounded-xl border border-slate-200 bg-white">
+                                <h4 className="font-semibold text-slate-800 text-sm mb-3">Pricing & Customer</h4>
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm font-medium leading-none">Override Pricing</p>
+                                            <p className="text-xs text-muted-foreground mt-1">Override MRP & apply discounts</p>
+                                        </div>
+                                        <Switch checked={watch('canOverridePricing')} onCheckedChange={(v) => handleChildChange('canOverridePricing', v)} />
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm font-medium leading-none">Correct Customer</p>
+                                            <p className="text-xs text-muted-foreground mt-1">Change customer on existing bills</p>
+                                        </div>
+                                        <Switch checked={watch('canCorrectCustomer')} onCheckedChange={(v) => handleChildChange('canCorrectCustomer', v)} />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Purchases & Inventory */}
+                            <div className="space-y-0 p-3 rounded-xl border border-slate-200 bg-white">
+                                <h4 className="font-semibold text-slate-800 text-sm mb-3">Purchases & Inventory</h4>
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm font-medium leading-none">Create Purchases</p>
+                                            <p className="text-xs text-muted-foreground mt-1">Add new GRN / purchase invoices</p>
+                                        </div>
+                                        <Switch checked={watch('canCreatePurchases')} onCheckedChange={(v) => handleChildChange('canCreatePurchases', v)} />
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm font-medium leading-none">View Purchase Rates</p>
+                                            <p className="text-xs text-muted-foreground mt-1">See cost price in inventory</p>
+                                        </div>
+                                        <Switch checked={watch('canViewPurchaseRates')} onCheckedChange={(v) => handleChildChange('canViewPurchaseRates', v)} />
+                                    </div>
+                                    
+                                    <div className="pt-1">
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <p className="text-sm font-medium leading-none">Edit Purchases</p>
+                                                <p className="text-xs text-muted-foreground mt-1">Modify existing purchases</p>
+                                            </div>
+                                            <Switch
+                                                checked={watch('canEditPurchases')}
+                                                onCheckedChange={(v) => handleMasterChange('canEditPurchases', v, ['canModifyPaidPurchases'])}
+                                            />
+                                        </div>
+                                        <div className={cn(
+                                            "p-3 rounded-md bg-slate-50 border-l-4 border-indigo-500 mt-2 transition-opacity", 
+                                            !watch('canEditPurchases') && "opacity-50 pointer-events-none"
+                                        )}>
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center">
+                                                <p className="text-xs font-medium text-slate-700">Modify Paid Purchases</p>
+                                                <Tooltip>
+                                                    <TooltipTrigger type="button" tabIndex={-1}>
+                                                        <Info className="h-4 w-4 text-slate-400 ml-1.5" />
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>
+                                                        <p>Edit purchase invoices that are paid</p>
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            </div>
+                                            <Switch checked={watch('canModifyPaidPurchases')} onCheckedChange={(v) => handleChildChange('canModifyPaidPurchases', v)} />
+                                        </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Vouchers & Returns */}
+                            <div className="space-y-0 p-3 rounded-xl border border-slate-200 bg-white">
+                                <h4 className="font-semibold text-slate-800 text-sm mb-3">Vouchers & Returns</h4>
+                                <div className="space-y-4">
+                                    <div>
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <p className="text-sm font-medium leading-none">Edit Vouchers</p>
+                                                <p className="text-xs text-muted-foreground mt-1">Modify receipt/payment/contra</p>
+                                            </div>
+                                            <Switch
+                                                checked={watch('canEditVouchers')}
+                                                onCheckedChange={(v) => handleMasterChange('canEditVouchers', v, ['canModifySettledVouchers'])}
+                                            />
+                                        </div>
+                                        <div className={cn(
+                                            "p-3 rounded-md bg-slate-50 border-l-4 border-indigo-500 mt-2 transition-opacity", 
+                                            !watch('canEditVouchers') && "opacity-50 pointer-events-none"
+                                        )}>
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center">
+                                                <p className="text-xs font-medium text-slate-700">Modify Settled Vouchers</p>
+                                                <Tooltip>
+                                                    <TooltipTrigger type="button" tabIndex={-1}>
+                                                        <Info className="h-4 w-4 text-slate-400 ml-1.5" />
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>
+                                                        <p>Edit vouchers that are already settled</p>
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            </div>
+                                            <Switch checked={watch('canModifySettledVouchers')} onCheckedChange={(v) => handleChildChange('canModifySettledVouchers', v)} />
+                                        </div>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <p className="text-sm font-medium leading-none">Edit Returns</p>
+                                                <p className="text-xs text-muted-foreground mt-1">Modify existing returns</p>
+                                            </div>
+                                            <Switch
+                                                checked={watch('canEditReturns')}
+                                                onCheckedChange={(v) => handleMasterChange('canEditReturns', v, ['canModifySettledReturns'])}
+                                            />
+                                        </div>
+                                        <div className={cn(
+                                            "p-3 rounded-md bg-slate-50 border-l-4 border-indigo-500 mt-2 transition-opacity", 
+                                            !watch('canEditReturns') && "opacity-50 pointer-events-none"
+                                        )}>
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center">
+                                                <p className="text-xs font-medium text-slate-700">Modify Settled Returns</p>
+                                                <Tooltip>
+                                                    <TooltipTrigger type="button" tabIndex={-1}>
+                                                        <Info className="h-4 w-4 text-slate-400 ml-1.5" />
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>
+                                                        <p>Edit returns that are already settled</p>
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            </div>
+                                            <Switch checked={watch('canModifySettledReturns')} onCheckedChange={(v) => handleChildChange('canModifySettledReturns', v)} />
+                                        </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* System & Audit */}
+                            <div className="space-y-0 p-3 rounded-xl border border-slate-200 bg-white lg:col-span-2">
+                                <h4 className="font-semibold text-slate-800 text-sm mb-3">System & Audit</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm font-medium leading-none">Access Reports</p>
+                                            <p className="text-xs text-muted-foreground mt-1">View sales, GST, stock</p>
+                                        </div>
+                                        <Switch checked={watch('canAccessReports')} onCheckedChange={(v) => handleChildChange('canAccessReports', v)} />
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm font-medium leading-none">Void/Cancel Records</p>
+                                            <p className="text-xs text-muted-foreground mt-1">Cancel bills/vouchers</p>
+                                        </div>
+                                        <Switch checked={watch('canVoidRecords')} onCheckedChange={(v) => handleChildChange('canVoidRecords', v)} />
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm font-medium leading-none">View Audit History</p>
+                                            <p className="text-xs text-muted-foreground mt-1">See full revision logs</p>
+                                        </div>
+                                        <Switch checked={watch('canViewAuditHistory')} onCheckedChange={(v) => handleChildChange('canViewAuditHistory', v)} />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        </TooltipProvider>
+                    </div>
+                    </form>
+                </div>
+
+                <DialogFooter className="px-6 py-4 border-t bg-slate-50 shrink-0 sticky bottom-0 z-10">
+                    <Button type="button" variant="outline" onClick={onClose}>
+                        Cancel
+                    </Button>
+                    <Button type="submit" form="staff-form" disabled={isPending}>
+                        {isPending
+                            ? (isEdit ? 'Saving...' : 'Creating...')
+                            : (isEdit ? 'Save Changes' : 'Create Staff Member')
+                        }
+                    </Button>
+                </DialogFooter>
             </DialogContent>
         </Dialog>
     );

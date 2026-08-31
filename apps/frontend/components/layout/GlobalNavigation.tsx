@@ -12,7 +12,7 @@ import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Sidebar } from '@/components/shared/Sidebar';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { OutletSwitcher } from '@/components/shared/OutletSwitcher';
+
 import { shortcutRegistry } from '@/lib/shortcuts';
 
 export function GlobalNavigation() {
@@ -359,12 +359,7 @@ export function GlobalNavigation() {
 
                 {/* Right Side Actions */}
                 <div className="ml-auto flex items-center gap-2">
-                    {/* Outlet Switcher for Super Admins */}
-                    {user?.role === 'super_admin' && (
-                        <div className="hidden md:block mr-2 w-48">
-                            <OutletSwitcher isCollapsed={false} />
-                        </div>
-                    )}
+
 
                     {/* Notifications & Settings */}
                     <button className="hidden sm:flex items-center justify-center w-8 h-8 rounded text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition-colors nav-item" tabIndex={-1}>

@@ -77,7 +77,7 @@ export function StockTable({ onProductClick, onAdjustClick, onEditClick }: any) 
                     className="flex-1 min-w-[200px] cursor-pointer" 
                     onClick={() => onProductClick(row.original)}
                 >
-                    <div className="text-sm font-semibold text-slate-900">{row.original.name}</div>
+                    <div className="text-sm font-medium text-slate-900">{row.original.name}</div>
                     <div className="text-xs text-muted-foreground truncate">{row.original.composition}</div>
                     <div className="text-xs text-slate-400">{row.original.manufacturer}</div>
                 </div>
@@ -89,21 +89,21 @@ export function StockTable({ onProductClick, onAdjustClick, onEditClick }: any) 
             cell: ({ row }) => {
                 const s = row.original.scheduleType;
                 const colors: Record<string, string> = {
-                    OTC:        'bg-green-100 text-green-700',
-                    G:          'bg-blue-100 text-blue-700',
-                    H:          'bg-amber-100 text-amber-700',
-                    H1:         'bg-orange-100 text-orange-700',
-                    X:          'bg-red-100 text-red-700',
-                    C:          'bg-cyan-100 text-cyan-700',
-                    Narcotic:   'bg-purple-100 text-purple-700',
-                    Ayurvedic:  'bg-emerald-100 text-emerald-700',
-                    Surgical:   'bg-slate-100 text-slate-700',
-                    Cosmetic:   'bg-pink-100 text-pink-700',
-                    Veterinary: 'bg-amber-100 text-amber-800',
+                    OTC:        'bg-green-50 text-green-700',
+                    G:          'bg-blue-50 text-blue-700',
+                    H:          'bg-amber-50 text-amber-700',
+                    H1:         'bg-orange-50 text-orange-700',
+                    X:          'bg-red-50 text-red-700',
+                    C:          'bg-cyan-50 text-cyan-700',
+                    Narcotic:   'bg-purple-50 text-purple-700',
+                    Ayurvedic:  'bg-emerald-50 text-emerald-700',
+                    Surgical:   'bg-slate-50 text-slate-700',
+                    Cosmetic:   'bg-pink-50 text-pink-700',
+                    Veterinary: 'bg-amber-50 text-amber-800',
                 };
                 return (
                     <div className="w-20 text-center">
-                        <span className={`inline-block px-2 rounded text-xs font-semibold ${colors[s] || 'bg-slate-100 text-slate-700'}`}>
+                        <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${colors[s] || 'bg-slate-50 text-slate-700'}`}>
                             {s}
                         </span>
                     </div>
@@ -148,7 +148,7 @@ export function StockTable({ onProductClick, onAdjustClick, onEditClick }: any) 
                 const len = row.original.batches.length;
                 return (
                     <div className="w-20 text-center">
-                        <span className="bg-slate-100 text-slate-600 text-xs px-2 py-1 rounded">
+                        <span className="bg-slate-50 border border-slate-200 text-slate-600 text-xs px-3 py-1 rounded-full">
                             {len} batch{len !== 1 ? 'es' : ''}
                         </span>
                     </div>
@@ -278,9 +278,9 @@ export function StockTable({ onProductClick, onAdjustClick, onEditClick }: any) 
                  )}
              </div>
 
-             <div className="bg-white border rounded-xl overflow-hidden">
+              <div className="bg-white border rounded-xl overflow-hidden">
                   <Table>
-                      <TableHeader className="bg-slate-50 border-b">
+                      <TableHeader className="bg-slate-50 border-b text-xs font-semibold text-slate-500 uppercase tracking-wider">
                            {table.getHeaderGroups().map(hg => (
                                <TableRow key={hg.id}>
                                    {hg.headers.map(h => (
@@ -313,7 +313,7 @@ export function StockTable({ onProductClick, onAdjustClick, onEditClick }: any) 
                                         {row.getIsExpanded() && (
                                             <TableRow>
                                                 <TableCell colSpan={row.getVisibleCells().length} className="p-0 border-b-2 border-indigo-100">
-                                                    <div className="bg-slate-100/80 p-4 shadow-inner inset-0">
+                                                    <div className="bg-slate-50 p-4 shadow-inner border-l-4 border-indigo-500 inset-0">
                                                         <table className="w-full text-sm">
                                                             <thead className="text-left text-slate-500 font-semibold border-b border-slate-200">
                                                                 <tr>
@@ -365,7 +365,7 @@ export function StockTable({ onProductClick, onAdjustClick, onEditClick }: any) 
 
 function SortableHeader({ column, title }: any) {
      return (
-          <Button variant="ghost" className="-ml-4 h-8 px-4" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
+          <Button variant="ghost" className="-ml-4 h-8 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
                {title}
                {column.getIsSorted() === 'asc' ? <ChevronUp className="w-3 h-3 ml-2" /> : column.getIsSorted() === 'desc' ? <ChevronDown className="w-3 h-3 ml-2" /> : null}
           </Button>

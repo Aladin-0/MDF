@@ -203,6 +203,7 @@ export function LedgerPicker({
                     initialName={search}
                     outletId={outletId}
                     defaultGroupName={group}
+                    isQuickCustomerMode={group === 'Sundry Debtors'}
                     onSave={handleCreateLedger}
                     onClose={() => setShowCreateModal(false)}
                 />

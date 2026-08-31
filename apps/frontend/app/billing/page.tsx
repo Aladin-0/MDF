@@ -12,8 +12,9 @@ import { useAutosaveDraft } from '@/hooks/useAutosaveDraft';
 import { useLoadDrafts } from '@/hooks/useLoadDrafts';
 import { BillSuccessScreen } from '@/components/billing/BillSuccessScreen';
 import { InvoicePreviewModal } from '@/components/billing/InvoicePreviewModal';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { shortcutRegistry } from '@/lib/shortcuts';
+import { EditSaleHydrator } from '@/components/billing-v3/EditSaleHydrator';
 
 export default function FullScreenBillingPage() {
     const { isPinVerified, activeDraftId, lastInvoice, setLastInvoice } = useBillingStore();
@@ -65,6 +66,9 @@ export default function FullScreenBillingPage() {
 
     return (
         <div className="h-screen w-screen overflow-hidden flex flex-col bg-[#F8FAFC] font-sans">
+            <Suspense fallback={null}>
+                <EditSaleHydrator />
+            </Suspense>
             {/* Global Top Navigation */}
             <div className="sticky top-0 z-50 w-full flex flex-col shrink-0">
                 <GlobalNavigation />

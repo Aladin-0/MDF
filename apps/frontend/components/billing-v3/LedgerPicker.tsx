@@ -194,6 +194,7 @@ export function LedgerPicker({
                     outletId={outletId}
                     initialName={searchQuery}
                     defaultGroupName={defaultGroupName}
+                    isQuickCustomerMode={defaultGroupName === 'Sundry Debtors'}
                     onSave={handleCreateLedger}
                     onClose={() => setIsCreateOpen(false)}
                 />

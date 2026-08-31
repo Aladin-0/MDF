@@ -99,7 +99,7 @@ export function useUpdateDistributor() {
 export function useDistributorHistory(distributorId: string | null) {
     const outletId = useOutletId();
     return useQuery<PaginatedResponse<PurchaseInvoiceFull>>({
-        queryKey: ['purchases', 'distributor', distributorId],
+        queryKey: ['purchases', 'distributor', distributorId, outletId],
         queryFn: () => purchasesApi.list(outletId, { distributorId: distributorId! }),
         enabled: !!distributorId && !!outletId,
         staleTime: 30000,

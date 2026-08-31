@@ -62,13 +62,8 @@ test.describe('Phase 2: Edit Sale Bill Tests', () => {
 
   test('Edit flow UI hydration, modification and persistence', async ({ page, billingPage }) => {
     // 1. Open Modify Flow
-    await page.goto(`/dashboard/sales/modify/${saleId}`);
+    await page.goto(`/billing?edit=${saleId}`);
     await page.waitForLoadState('networkidle');
-
-    await Promise.all([
-        page.waitForURL('**/billing'),
-        page.getByText('Paid Bill Correction').first().click()
-    ]);
     // Enter billing PIN (1234 for admin)
     await expect(page.getByText('Enter Your PIN')).toBeVisible({ timeout: 5000 });
     for (const char of '1234') {
@@ -128,21 +123,17 @@ test.describe('Phase 2: Edit Sale Bill Tests', () => {
     console.log('Revise request payload:', reqBody);
     console.log('Revise response status:', res.status(), reviseResponseBody.substring(0, 300));
     
-    await expect(page.getByText('Bill Saved Successfully!')).toBeVisible({ timeout: 8000 });
+    await expect(page.getByText('Bill Saved Successfully!').first()).toBeVisible({ timeout: 8000 });
 
     // 5. Reload and Verify Persistence
-    await page.goto(`/dashboard/sales/modify/${saleId}`);
+    await page.goto(`/billing?edit=${saleId}`);
     await page.waitForLoadState('networkidle');
-    await Promise.all([
-        page.waitForURL('**/billing'),
-        page.getByText('Paid Bill Correction').first().click()
-    ]);
     // Re-enter PIN after page reload
     await expect(page.getByText('Enter Your PIN')).toBeVisible({ timeout: 5000 });
     for (const char of '1234') {
         await page.keyboard.press(char);
     }
-    await expect(page.getByText('test medicine')).toBeVisible({ timeout: 8000 });
+    await expect(page.getByText('test medicine').first()).toBeVisible({ timeout: 8000 });
 
     await expect(page.getByText('Dr. John Doe').first()).toBeVisible();
     await expect(page.getByTestId('grand-total-amount')).toContainText('30');

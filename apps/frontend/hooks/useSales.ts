@@ -16,10 +16,11 @@ export function useCustomerInvoices(customerId: string) {
 }
 
 export function useInvoiceItems(invoiceId: string | null) {
+    const outletId = useOutletId();
     return useQuery<{ data: SaleItemDetail[] }>({
-        queryKey: ['sale-items', invoiceId],
+        queryKey: ['sale-items', invoiceId, outletId],
         queryFn: () => salesApi.getItems(invoiceId!),
-        enabled: !!invoiceId,
+        enabled: !!invoiceId && !!outletId,
         staleTime: 300_000,
     });
 }
