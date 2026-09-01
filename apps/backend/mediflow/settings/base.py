@@ -158,16 +158,24 @@ CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'Asia/Kolkata'
 
-# Cache — use the existing Redis service (db=1 to separate from Celery on db=0)
-CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
-        'LOCATION': env('REDIS_URL', default='redis://redis:6379/1'),
-        'TIMEOUT': 120,  # 2 minutes default TTL
-        'KEY_PREFIX': 'mediflow',
+# Cache — use the existing Redis service or fallback to LocMemCache
+cache_url = env('REDIS_URL', default='redis://redis:6379/1')
+if cache_url.startswith('memory://'):
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'test-cache',
+        }
     }
-}
-
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'LOCATION': cache_url,
+            'TIMEOUT': 120,
+            'KEY_PREFIX': 'mediflow',
+        }
+    }
 CELERY_TASK_ROUTES = {
     'apps.audit.tasks.create_audit_log_async': {'queue': 'audit'},
 }
@@ -184,10 +192,7 @@ LOGGING = {
     'handlers': {
         'audit_fallback': {
             'level': 'ERROR',
-            'class': 'logging.handlers.RotatingFileHandler',
-            'filename': '/app/logs/audit_fallback.log',
-            'maxBytes': 1024 * 1024 * 10,
-            'backupCount': 5,
+            'class': 'logging.StreamHandler',
             'formatter': 'verbose',
         },
     },
