@@ -99,6 +99,9 @@ export function CreateLedgerModal({
     const [isHidden, setIsHidden] = useState(ledgerToEdit?.isHidden ?? false);
     const [retailioId, setRetailioId] = useState(ledgerToEdit?.retailioId ?? '');
 
+    // Progressive Disclosure State
+    const [showAdvanced, setShowAdvanced] = useState(false);
+
     useEffect(() => {
         voucherApi.getLedgerGroups(outletId).then((loaded) => {
             setGroups(loaded);
@@ -237,350 +240,326 @@ export function CreateLedgerModal({
                                 <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. ABC Pharma" />
                             </div>
                             
-                            {isQuickCustomerMode && (
-                                <>
-                                    <div className="space-y-1.5 col-span-1">
-                                        <Label>Mobile Number</Label>
-                                        <Input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="10-digit number" />
-                                    </div>
-                                    <div className="space-y-1.5 col-span-1">
-                                        <Label>Address</Label>
-                                        <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Full address" />
-                                    </div>
-                                </>
-                            )}
-
-                            {!isQuickCustomerMode && (
-                                <>
-                                    <div className="space-y-1.5">
-                                        <Label>Station</Label>
-                                        <Input value={station} onChange={(e) => setStation(e.target.value)} placeholder="City / Station" />
-                                    </div>
-                            <div className="space-y-1.5">
-                                <Label>Account Group *</Label>
-                                {defaultGroupName ? (
-                                    // Locked mode — called from billing / a context that enforces the group.
-                                    // Show a read-only badge so staff don't need to touch this field.
-                                    <div className="flex items-center h-10 px-3 rounded-md border border-input bg-slate-50 text-sm text-slate-700 gap-2">
-                                        <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                                        <span className="font-medium">{defaultGroupName}</span>
-                                        <span className="text-xs text-slate-400 ml-auto">auto-selected</span>
-                                    </div>
-                                ) : (
-                                    <div className="flex gap-2">
-                                        <select
-                                            className="flex-1 h-10 rounded-md border border-input bg-background px-3 text-sm"
-                                            value={groupId}
-                                            onChange={(e) => setGroupId(e.target.value)}
-                                        >
-                                            <option value="">Select group...</option>
-                                            {groups.map((g) => (
-                                                <option key={g.id} value={g.id}>{g.name}</option>
-                                            ))}
-                                        </select>
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            className="shrink-0 h-10 px-3 text-xs"
-                                            onClick={() => setShowNewGroup(true)}
-                                        >
-                                            + New Group
-                                        </Button>
-                                    </div>
-                                )}
+                            <div className="space-y-1.5 col-span-1">
+                                <Label>Mobile Number</Label>
+                                <Input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="10-digit number" />
                             </div>
-                            <div className="space-y-1.5">
-                                <Label>Balancing Method</Label>
-                                <select
-                                    className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
-                                    value={balancingMethod}
-                                    onChange={(e) => setBalancingMethod(e.target.value as 'bill_by_bill' | 'on_account')}
-                                >
-                                    <option value="bill_by_bill">Bill by Bill</option>
-                                    <option value="on_account">On Account</option>
-                                </select>
+                            <div className="space-y-1.5 col-span-1">
+                                <Label>Address</Label>
+                                <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Full address" />
                             </div>
-                            <div className="space-y-1.5">
-                                <Label>Opening Balance</Label>
-                                <div className="flex gap-2">
-                                    <Input
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
-                                        value={openingBalance}
-                                        onChange={(e) => setOpeningBalance(e.target.value)}
-                                        className="flex-1"
-                                    />
-                                    <div className="flex rounded-md border overflow-hidden">
-                                        {(['Dr', 'Cr'] as const).map((bt) => (
-                                            <button
-                                                key={bt}
-                                                type="button"
-                                                onClick={() => setBalanceType(bt)}
-                                                className={`px-3 text-sm font-medium transition-colors ${
-                                                    balanceType === bt
-                                                        ? 'bg-primary text-white'
-                                                        : 'bg-background text-muted-foreground hover:bg-muted'
-                                                }`}
-                                            >
-                                                {bt}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                                </>
-                            )}
                         </div>
                     </div>
 
-                    {/* Additional Sections - Hidden in Quick Mode */}
-                    {!isQuickCustomerMode && (
-                        <>
-                            {/* Section 2 — Contact (collapsible; hidden by default in billing context) */}
-                            <div>
-                        <button
-                            type="button"
-                            className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 hover:text-foreground transition-colors"
-                            onClick={() => setShowContact(v => !v)}
-                        >
-                            <span>{showContact ? '▾' : '▸'}</span>
-                            Contact {isBillingContext && !showContact && <span className="text-xs font-normal normal-case text-muted-foreground/60">(tap to expand)</span>}
-                        </button>
-                        {showContact && <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-1.5">
-                                <Label>Mail To</Label>
-                                <Input value={mailTo} onChange={(e) => setMailTo(e.target.value)} />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>Address</Label>
-                                <Input value={address} onChange={(e) => setAddress(e.target.value)} />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>Pin Code</Label>
-                                <Input value={pincode} onChange={(e) => setPincode(e.target.value)} />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>E-Mail</Label>
-                                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>Web Site</Label>
-                                <Input value={website} onChange={(e) => setWebsite(e.target.value)} />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>Contact Person</Label>
-                                <Input value={contactPerson} onChange={(e) => setContactPerson(e.target.value)} />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>Designation</Label>
-                                <Input value={designation} onChange={(e) => setDesignation(e.target.value)} />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>Phone (Office)</Label>
-                                <Input type="tel" value={phoneOffice} onChange={(e) => setPhoneOffice(e.target.value)} />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>Phone (Residence)</Label>
-                                <Input type="tel" value={phoneResidence} onChange={(e) => setPhoneResidence(e.target.value)} />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>Mobile</Label>
-                                <Input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>Fax No.</Label>
-                                <Input type="tel" value={faxNo} onChange={(e) => setFaxNo(e.target.value)} />
-                            </div>
-                        </div>}
-                    </div>
+                        <div>
+                            <button
+                                type="button"
+                                className="flex items-center gap-2 text-sm font-semibold text-primary uppercase tracking-wide mb-3 hover:text-primary/80 transition-colors w-full text-left"
+                                onClick={() => setShowAdvanced(v => !v)}
+                            >
+                                <span>{showAdvanced ? '▼' : '▶'}</span>
+                                Advanced Accounting & B2B Details
+                            </button>
+                            
+                            {showAdvanced && (
+                                <div className="space-y-6 mt-4 border-t pt-4">
+                                    {/* Accounting fields previously in Basic */}
+                                    <div>
+                                        <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Accounting</h4>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-1.5">
+                                                <Label>Station</Label>
+                                                <Input value={station} onChange={(e) => setStation(e.target.value)} placeholder="City / Station" />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label>Account Group *</Label>
+                                                {defaultGroupName ? (
+                                                    <div className="flex items-center h-10 px-3 rounded-md border border-input bg-slate-50 text-sm text-slate-700 gap-2">
+                                                        <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                                                        <span className="font-medium">{defaultGroupName}</span>
+                                                        <span className="text-xs text-slate-400 ml-auto">auto-selected</span>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex gap-2">
+                                                        <select
+                                                            className="flex-1 h-10 rounded-md border border-input bg-background px-3 text-sm"
+                                                            value={groupId}
+                                                            onChange={(e) => setGroupId(e.target.value)}
+                                                        >
+                                                            <option value="">Select group...</option>
+                                                            {groups.map((g) => (
+                                                                <option key={g.id} value={g.id}>{g.name}</option>
+                                                            ))}
+                                                        </select>
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="shrink-0 h-10 px-3 text-xs"
+                                                            onClick={() => setShowNewGroup(true)}
+                                                        >
+                                                            + New Group
+                                                        </Button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label>Balancing Method</Label>
+                                                <select
+                                                    className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                                                    value={balancingMethod}
+                                                    onChange={(e) => setBalancingMethod(e.target.value as 'bill_by_bill' | 'on_account')}
+                                                >
+                                                    <option value="bill_by_bill">Bill by Bill</option>
+                                                    <option value="on_account">On Account</option>
+                                                </select>
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label>Opening Balance</Label>
+                                                <div className="flex gap-2">
+                                                    <Input
+                                                        type="number"
+                                                        min="0"
+                                                        step="0.01"
+                                                        value={openingBalance}
+                                                        onChange={(e) => setOpeningBalance(e.target.value)}
+                                                        className="flex-1"
+                                                    />
+                                                    <div className="flex rounded-md border overflow-hidden">
+                                                        {(['Dr', 'Cr'] as const).map((bt) => (
+                                                            <button
+                                                                key={bt}
+                                                                type="button"
+                                                                onClick={() => setBalanceType(bt)}
+                                                                className={`px-3 text-sm font-medium transition-colors ${
+                                                                    balanceType === bt
+                                                                        ? 'bg-primary text-white'
+                                                                        : 'bg-background text-muted-foreground hover:bg-muted'
+                                                                }`}
+                                                            >
+                                                                {bt}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Contact (Secondary) */}
+                                    <div>
+                                        <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Contact (Secondary)</h4>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-1.5">
+                                                <Label>Mail To</Label>
+                                                <Input value={mailTo} onChange={(e) => setMailTo(e.target.value)} />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label>Pin Code</Label>
+                                                <Input value={pincode} onChange={(e) => setPincode(e.target.value)} />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label>E-Mail</Label>
+                                                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label>Web Site</Label>
+                                                <Input value={website} onChange={(e) => setWebsite(e.target.value)} />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label>Contact Person</Label>
+                                                <Input value={contactPerson} onChange={(e) => setContactPerson(e.target.value)} />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label>Designation</Label>
+                                                <Input value={designation} onChange={(e) => setDesignation(e.target.value)} />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label>Phone (Office)</Label>
+                                                <Input type="tel" value={phoneOffice} onChange={(e) => setPhoneOffice(e.target.value)} />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label>Phone (Residence)</Label>
+                                                <Input type="tel" value={phoneResidence} onChange={(e) => setPhoneResidence(e.target.value)} />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label>Fax No.</Label>
+                                                <Input type="tel" value={faxNo} onChange={(e) => setFaxNo(e.target.value)} />
+                                            </div>
+                                        </div>
+                                    </div>
 
-                    {/* Section 3 — Compliance (collapsible; collapsed by default) */}
-                    <div>
-                        <button
-                            type="button"
-                            className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 hover:text-foreground transition-colors"
-                            onClick={() => setShowCompliance(v => !v)}
-                        >
-                            <span>{showCompliance ? '▾' : '▸'}</span>
-                            Compliance <span className="text-xs font-normal normal-case text-muted-foreground/60">(tap to expand)</span>
-                        </button>
-                        {showCompliance && <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-1.5">
-                                <Label>Freeze Upto</Label>
-                                <Input type="date" value={freezeUpto ?? ''} onChange={(e) => setFreezeUpto(e.target.value)} />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>GST Heading</Label>
-                                <select
-                                    className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
-                                    value={gstHeading}
-                                    onChange={(e) => setGstHeading(e.target.value as 'local' | 'central' | 'exempt')}
-                                >
-                                    <option value="local">Local</option>
-                                    <option value="central">Central</option>
-                                    <option value="exempt">Exempt</option>
-                                </select>
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>D.L. No.</Label>
-                                <Input value={dlNo} onChange={(e) => setDlNo(e.target.value)} />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>D.L. Expiry</Label>
-                                <Input type="date" value={dlExpiry ?? ''} onChange={(e) => setDlExpiry(e.target.value)} />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>GSTIN No.</Label>
-                                <Input value={gstin} onChange={(e) => setGstin(e.target.value)} placeholder="15-char GSTIN" />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>VAT No.</Label>
-                                <Input value={vatNo} onChange={(e) => setVatNo(e.target.value)} />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>VAT Expiry</Label>
-                                <Input type="date" value={vatExpiry ?? ''} onChange={(e) => setVatExpiry(e.target.value)} />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>S.T. No.</Label>
-                                <Input value={stNo} onChange={(e) => setStNo(e.target.value)} />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>S.T. Expiry</Label>
-                                <Input type="date" value={stExpiry ?? ''} onChange={(e) => setStExpiry(e.target.value)} />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>Food Licence No.</Label>
-                                <Input value={foodLicenceNo} onChange={(e) => setFoodLicenceNo(e.target.value)} />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>Food Licence Expiry</Label>
-                                <Input type="date" value={foodLicenceExpiry ?? ''} onChange={(e) => setFoodLicenceExpiry(e.target.value)} />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>Extra Heading No.</Label>
-                                <Input value={extraHeadingNo} onChange={(e) => setExtraHeadingNo(e.target.value)} />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>Extra Heading Expiry</Label>
-                                <Input type="date" value={extraHeadingExpiry ?? ''} onChange={(e) => setExtraHeadingExpiry(e.target.value)} />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>I.T. PAN No.</Label>
-                                <Input value={itPanNo} onChange={(e) => setItPanNo(e.target.value)} maxLength={10} />
-                            </div>
-                        </div>}
-                    </div>
-
-                    {/* Section 4 — Settings (collapsible; collapsed by default) */}
-                    <div>
-                        <button
-                            type="button"
-                            className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 hover:text-foreground transition-colors"
-                            onClick={() => setShowSettings(v => !v)}
-                        >
-                            <span>{showSettings ? '▾' : '▸'}</span>
-                            Settings <span className="text-xs font-normal normal-case text-muted-foreground/60">(tap to expand)</span>
-                        </button>
-                        {showSettings && <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-1.5">
-                                <Label>Bill Export</Label>
-                                <select
-                                    className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
-                                    value={billExport}
-                                    onChange={(e) => setBillExport(e.target.value as 'gstn' | 'non_gstn')}
-                                >
-                                    <option value="gstn">GSTN</option>
-                                    <option value="non_gstn">Non-GSTN</option>
-                                </select>
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>Ledger Category</Label>
-                                <select
-                                    className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
-                                    value={ledgerCategory}
-                                    onChange={(e) => setLedgerCategory(e.target.value)}
-                                >
-                                    {LEDGER_CATEGORIES.map((c) => (
-                                        <option key={c} value={c}>{c}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>State</Label>
-                                <select
-                                    className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
-                                    value={state}
-                                    onChange={(e) => setState(e.target.value)}
-                                >
-                                    <option value="">Select state...</option>
-                                    {INDIAN_STATES.map((s) => (
-                                        <option key={s.code} value={s.name}>{s.name}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>Country</Label>
-                                <Input value={country} onChange={(e) => setCountry(e.target.value)} />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>Ledger Type</Label>
-                                <select
-                                    className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
-                                    value={ledgerType}
-                                    onChange={(e) => setLedgerType(e.target.value as 'registered' | 'unregistered' | 'composition' | 'consumer')}
-                                >
-                                    <option value="registered">Registered</option>
-                                    <option value="unregistered">Unregistered</option>
-                                    <option value="composition">Composition</option>
-                                    <option value="consumer">Consumer</option>
-                                </select>
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>Color</Label>
-                                <select
-                                    className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
-                                    value={color}
-                                    onChange={(e) => setColor(e.target.value as 'normal' | 'red' | 'green' | 'blue')}
-                                >
-                                    <option value="normal">Normal</option>
-                                    <option value="red">Red</option>
-                                    <option value="green">Green</option>
-                                    <option value="blue">Blue</option>
-                                </select>
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>Hide</Label>
-                                <div className="flex gap-2">
-                                    {[false, true].map((v) => (
-                                        <button
-                                            key={String(v)}
-                                            type="button"
-                                            onClick={() => setIsHidden(v)}
-                                            className={`flex-1 py-2 rounded-md border text-sm font-medium transition-colors ${
-                                                isHidden === v
-                                                    ? 'border-primary bg-primary/10 text-primary'
-                                                    : 'border-border text-muted-foreground hover:border-primary/30'
-                                            }`}
-                                        >
-                                            {v ? 'Yes' : 'No'}
-                                        </button>
-                                    ))}
+                                    {/* Compliance */}
+                                    <div>
+                                        <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Compliance & Tax</h4>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-1.5">
+                                                <Label>GSTIN No.</Label>
+                                                <Input value={gstin} onChange={(e) => setGstin(e.target.value)} placeholder="15-char GSTIN" />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label>I.T. PAN No.</Label>
+                                                <Input value={itPanNo} onChange={(e) => setItPanNo(e.target.value)} maxLength={10} />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label>GST Heading</Label>
+                                                <select
+                                                    className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                                                    value={gstHeading}
+                                                    onChange={(e) => setGstHeading(e.target.value as 'local' | 'central' | 'exempt')}
+                                                >
+                                                    <option value="local">Local</option>
+                                                    <option value="central">Central</option>
+                                                    <option value="exempt">Exempt</option>
+                                                </select>
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label>Freeze Upto</Label>
+                                                <Input type="date" value={freezeUpto ?? ''} onChange={(e) => setFreezeUpto(e.target.value)} />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label>D.L. No.</Label>
+                                                <Input value={dlNo} onChange={(e) => setDlNo(e.target.value)} />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label>D.L. Expiry</Label>
+                                                <Input type="date" value={dlExpiry ?? ''} onChange={(e) => setDlExpiry(e.target.value)} />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label>VAT No.</Label>
+                                                <Input value={vatNo} onChange={(e) => setVatNo(e.target.value)} />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label>VAT Expiry</Label>
+                                                <Input type="date" value={vatExpiry ?? ''} onChange={(e) => setVatExpiry(e.target.value)} />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label>S.T. No.</Label>
+                                                <Input value={stNo} onChange={(e) => setStNo(e.target.value)} />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label>S.T. Expiry</Label>
+                                                <Input type="date" value={stExpiry ?? ''} onChange={(e) => setStExpiry(e.target.value)} />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label>Food Licence No.</Label>
+                                                <Input value={foodLicenceNo} onChange={(e) => setFoodLicenceNo(e.target.value)} />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label>Food Licence Expiry</Label>
+                                                <Input type="date" value={foodLicenceExpiry ?? ''} onChange={(e) => setFoodLicenceExpiry(e.target.value)} />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label>Extra Heading No.</Label>
+                                                <Input value={extraHeadingNo} onChange={(e) => setExtraHeadingNo(e.target.value)} />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label>Extra Heading Expiry</Label>
+                                                <Input type="date" value={extraHeadingExpiry ?? ''} onChange={(e) => setExtraHeadingExpiry(e.target.value)} />
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Settings */}
+                                    <div>
+                                        <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Settings</h4>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-1.5">
+                                                <Label>Bill Export</Label>
+                                                <select
+                                                    className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                                                    value={billExport}
+                                                    onChange={(e) => setBillExport(e.target.value as 'gstn' | 'non_gstn')}
+                                                >
+                                                    <option value="gstn">GSTN</option>
+                                                    <option value="non_gstn">Non-GSTN</option>
+                                                </select>
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label>Ledger Category</Label>
+                                                <select
+                                                    className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                                                    value={ledgerCategory}
+                                                    onChange={(e) => setLedgerCategory(e.target.value)}
+                                                >
+                                                    {LEDGER_CATEGORIES.map((c) => (
+                                                        <option key={c} value={c}>{c}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label>State</Label>
+                                                <select
+                                                    className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                                                    value={state}
+                                                    onChange={(e) => setState(e.target.value)}
+                                                >
+                                                    <option value="">Select state...</option>
+                                                    {INDIAN_STATES.map((s) => (
+                                                        <option key={s.code} value={s.name}>{s.name}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label>Country</Label>
+                                                <Input value={country} onChange={(e) => setCountry(e.target.value)} />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label>Ledger Type</Label>
+                                                <select
+                                                    className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                                                    value={ledgerType}
+                                                    onChange={(e) => setLedgerType(e.target.value as 'registered' | 'unregistered' | 'composition' | 'consumer')}
+                                                >
+                                                    <option value="registered">Registered</option>
+                                                    <option value="unregistered">Unregistered</option>
+                                                    <option value="composition">Composition</option>
+                                                    <option value="consumer">Consumer</option>
+                                                </select>
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label>Color</Label>
+                                                <select
+                                                    className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                                                    value={color}
+                                                    onChange={(e) => setColor(e.target.value as 'normal' | 'red' | 'green' | 'blue')}
+                                                >
+                                                    <option value="normal">Normal</option>
+                                                    <option value="red">Red</option>
+                                                    <option value="green">Green</option>
+                                                    <option value="blue">Blue</option>
+                                                </select>
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label>Hide</Label>
+                                                <div className="flex gap-2">
+                                                    {[false, true].map((v) => (
+                                                        <button
+                                                            key={String(v)}
+                                                            type="button"
+                                                            onClick={() => setIsHidden(v)}
+                                                            className={`flex-1 py-2 rounded-md border text-sm font-medium transition-colors ${
+                                                                isHidden === v
+                                                                    ? 'border-primary bg-primary/10 text-primary'
+                                                                    : 'border-border text-muted-foreground hover:border-primary/30'
+                                                            }`}
+                                                        >
+                                                            {v ? 'Yes' : 'No'}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label>Retailio ID</Label>
+                                                <Input value={retailioId} onChange={(e) => setRetailioId(e.target.value)} />
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>Retailio ID</Label>
-                                <Input value={retailioId} onChange={(e) => setRetailioId(e.target.value)} />
-                            </div>
-                        </div>}
-                    </div>
-                        </>
-                    )}
+                            )}
+                        </div>
                 </div>
-
-                {/* Footer */}
+{/* Footer */}
                 <div className="flex gap-3 px-6 py-4 border-t shrink-0">
                     <Button onClick={handleSave} disabled={saving} className="flex-1">
                         {saving ? 'Saving...' : ledgerToEdit ? 'Update' : 'Save'}

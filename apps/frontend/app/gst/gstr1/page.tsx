@@ -30,7 +30,7 @@ type InvoiceRow = {
 const columnHelper = createColumnHelper<InvoiceRow>();
 
 export default function GSTR1Page() {
-    const { selectedPeriod } = useGSTStore();
+    
     const [summaryData, setSummaryData] = useState<any>(null);
     const [invoiceData, setInvoiceData] = useState<InvoiceRow[]>([]);
     
@@ -100,13 +100,13 @@ export default function GSTR1Page() {
       }), { taxable_value: 0, igst: 0, cgst: 0, sgst: 0, total: 0 });
     }, [invoiceData]);
 
-    const loadDashboardData = useCallback(async () => {
-        if (!selectedPeriod) return;
+    const loadDashboardData = useCallback(async (period: string) => {
+        if (!period) return;
         setLoading(true);
         try {
             const [summary, invoices] = await Promise.all([
-                gstApi.getSummary(selectedPeriod),
-                gstApi.getGSTR1Invoices(selectedPeriod, { report_type: reportType, tax_filter: taxFilter })
+                gstApi.getSummary(period),
+                gstApi.getGSTR1Invoices(period, { report_type: reportType, tax_filter: taxFilter })
             ]);
             setSummaryData(summary);
             setInvoiceData(invoices);
@@ -116,21 +116,18 @@ export default function GSTR1Page() {
         } finally {
             setLoading(false);
         }
-    }, [selectedPeriod, reportType, taxFilter, toast]);
+    }, [reportType, taxFilter, toast]);
 
-    useEffect(() => {
-        loadDashboardData();
-    }, [selectedPeriod]); // Only auto-fetch on period change. Search button handles filter triggers.
-
-    const handleSearch = () => {
-        loadDashboardData();
+    
+    const handleSearch = (period: string) => {
+        loadDashboardData(period);
     };
 
-    const handleExportExcel = async () => {
-        if (!selectedPeriod) return;
+    const handleExportExcel = async (period: string) => {
+        if (!period) return;
         setExporting(true);
         try {
-            await gstApi.generateExport(selectedPeriod, 'gstr1_excel');
+            await gstApi.generateExport(period, 'gstr1_excel');
             toast({ title: 'Export successful. Check Export History for audit details.' });
         } catch (error: any) {
             toast({ variant: 'destructive', title: 'Export failed', description: error?.detail || 'An error occurred' });
@@ -139,11 +136,11 @@ export default function GSTR1Page() {
         }
     };
     
-    const handleExportJson = async () => {
-        if (!selectedPeriod) return;
+    const handleExportJson = async (period: string) => {
+        if (!period) return;
         setExporting(true);
         try {
-            await gstApi.generateExport(selectedPeriod, 'gstr1_json');
+            await gstApi.generateExport(period, 'gstr1_json');
             toast({ title: 'JSON Export successful.' });
         } catch (error: any) {
             toast({ variant: 'destructive', title: 'Export failed', description: error?.detail || 'An error occurred' });

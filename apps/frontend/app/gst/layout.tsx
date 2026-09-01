@@ -13,7 +13,7 @@ import { useGlobalNavigationShortcuts } from '@/hooks/useGlobalNavigationShortcu
 import { ShortcutHelpModal } from '@/components/shared/ShortcutHelpModal';
 import { GlobalOverlays } from '@/components/shared/GlobalOverlays';
 import { cn } from '@/lib/utils';
-import { GSTPeriodSelector } from '@/components/gst/GSTPeriodSelector';
+
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     const { isAuthenticated, _hasHydrated } = useAuthStore();
@@ -69,7 +69,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         {/* Title */}
                         <div className="pt-8 pb-6 flex items-center justify-between">
                             <h1 className="text-3xl font-bold text-slate-900 tracking-tight">GST - GSTR & Reconciliations</h1>
-                            <GSTPeriodSelector />
+
                         </div>
 
                         {/* GST Sub-Navigation */}

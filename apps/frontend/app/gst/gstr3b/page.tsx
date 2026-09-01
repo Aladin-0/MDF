@@ -37,7 +37,7 @@ const col31 = createColumnHelper<Table31Row>();
 const col4 = createColumnHelper<Table4Row>();
 
 export default function GSTR3BPage() {
-    const { selectedPeriod } = useGSTStore();
+    
     const [summaryData, setSummaryData] = useState<any>(null);
     const [loading, setLoading] = useState(false);
     const [exporting, setExporting] = useState(false);
@@ -47,11 +47,11 @@ export default function GSTR3BPage() {
     const [reportType, setReportType] = useState('all');
     const [taxFilter, setTaxFilter] = useState('all');
 
-    const loadDashboardData = useCallback(async () => {
-        if (!selectedPeriod) return;
+    const loadDashboardData = useCallback(async (period: string) => {
+        if (!period) return;
         setLoading(true);
         try {
-            const summary = await gstApi.getSummary(selectedPeriod);
+            const summary = await gstApi.getSummary(period);
             setSummaryData(summary);
         } catch (error) {
             console.error("Failed to load dashboard data", error);
@@ -59,7 +59,7 @@ export default function GSTR3BPage() {
         } finally {
             setLoading(false);
         }
-    }, [selectedPeriod, toast]);
+    }, [toast]);
 
     useEffect(() => {
         loadDashboardData();
@@ -190,11 +190,11 @@ export default function GSTR3BPage() {
     }, [data4]);
 
 
-    const handleExportExcel = async () => {
-        if (!selectedPeriod) return;
+    const handleExportExcel = async (period: string) => {
+        if (!period) return;
         setExporting(true);
         try {
-            await gstApi.generateExport(selectedPeriod, 'gstr3b_excel');
+            await gstApi.generateExport(period, 'gstr3b_excel');
             toast({ title: 'Export successful. Check Export History for audit details.' });
         } catch (error: any) {
             toast({ variant: 'destructive', title: 'Export failed', description: error?.detail || 'An error occurred' });
@@ -203,11 +203,11 @@ export default function GSTR3BPage() {
         }
     };
     
-    const handleExportJson = async () => {
-        if (!selectedPeriod) return;
+    const handleExportJson = async (period: string) => {
+        if (!period) return;
         setExporting(true);
         try {
-            await gstApi.generateExport(selectedPeriod, 'gstr3b_json');
+            await gstApi.generateExport(period, 'gstr3b_json');
             toast({ title: 'JSON Export successful.' });
         } catch (error: any) {
             toast({ variant: 'destructive', title: 'Export failed', description: error?.detail || 'An error occurred' });
