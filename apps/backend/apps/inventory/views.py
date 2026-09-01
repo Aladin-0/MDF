@@ -1021,12 +1021,16 @@ class InventoryAdjustView(APIView):
         # Validate PIN - staff exists in this outlet
         staff = None
         if pin:
-            try:
-                staff = Staff.objects.get(outlet=outlet, staff_pin=pin)
-            except Staff.DoesNotExist:
+            from django.contrib.auth.hashers import check_password
+            for s in Staff.objects.filter(outlet=outlet, is_active=True):
+                if check_password(pin, s.staff_pin):
+                    staff = s
+                    break
+                    
+            if not staff:
                 return Response(
                     {'error': {'code': 'INVALID_PIN', 'message': 'Invalid PIN'}},
-                    status=status.HTTP_400_BAD_REQUEST
+                    status=status.HTTP_401_UNAUTHORIZED
                 )
 
         # Fetch batch

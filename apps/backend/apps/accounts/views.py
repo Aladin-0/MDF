@@ -1252,6 +1252,12 @@ class StaffCreateView(APIView):
         if Staff.objects.filter(phone=phone).exists():
             return Response({'error': 'A staff member with this phone number already exists'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Enforce PIN uniqueness per-outlet
+        from django.contrib.auth.hashers import check_password
+        for existing_staff in Staff.objects.filter(outlet=outlet, is_active=True):
+            if check_password(pin, existing_staff.staff_pin):
+                return Response({'error': 'This PIN is already in use by another staff member in this outlet.'}, status=status.HTTP_400_BAD_REQUEST)
+
         staff = Staff.objects.create_user(
             phone=phone,
             password=password,          # app login password (create_user calls set_password internally)
@@ -1385,7 +1391,12 @@ class StaffDetailView(APIView):
             staff.set_password(str(request.data['password']))
 
         if 'pin' in request.data and request.data['pin']:
-            staff.staff_pin = make_password(str(request.data['pin']))
+            raw_pin = str(request.data['pin'])
+            from django.contrib.auth.hashers import check_password
+            for existing_staff in Staff.objects.filter(outlet=outlet, is_active=True).exclude(id=staff.id):
+                if check_password(raw_pin, existing_staff.staff_pin):
+                    return Response({'error': 'This PIN is already in use by another staff member in this outlet.'}, status=status.HTTP_400_BAD_REQUEST)
+            staff.staff_pin = make_password(raw_pin)
 
         staff.save()
 
@@ -1907,7 +1918,11 @@ class ChangePinView(APIView):
         if not new_pin.isdigit() or not (4 <= len(new_pin) <= 6):
             return Response({'error': 'New PIN must be 4-6 digits'}, status=status.HTTP_400_BAD_REQUEST)
 
-        staff.staff_pin = new_pin
+        for existing_staff in Staff.objects.filter(outlet=staff.outlet, is_active=True).exclude(id=staff.id):
+            if check_password(new_pin, existing_staff.staff_pin):
+                return Response({'error': 'This PIN is already in use by another staff member in this outlet.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        staff.staff_pin = make_password(new_pin)
         staff.set_password(make_password(new_pin))
         staff.save(update_fields=['staff_pin', 'password'])
 
