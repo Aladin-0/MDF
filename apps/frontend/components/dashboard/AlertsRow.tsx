@@ -26,8 +26,9 @@ export default function AlertsRow({ alerts, isLoading }: AlertsRowProps) {
   }
 
   // --- Map Low Stock Alerts ---
-  const lowStockCount = alerts.lowStock.length;
-  const lowStockItems: AlertItem[] = alerts.lowStock.map((item) => ({
+  const lowStockAlerts = alerts?.lowStock || [];
+  const lowStockCount = lowStockAlerts.length;
+  const lowStockItems: AlertItem[] = lowStockAlerts.map((item) => ({
     label: item.batch.productName,
     sublabel: `Current: ${item.currentStock} | Reorder: ${item.reorderLevel}`,
     badge: (
@@ -38,8 +39,9 @@ export default function AlertsRow({ alerts, isLoading }: AlertsRowProps) {
   }));
 
   // --- Map Expiry Alerts ---
-  const expiryCount = alerts.expiringSoon.length;
-  const expiryItems: AlertItem[] = alerts.expiringSoon.map((item) => {
+  const expiringSoonAlerts = alerts?.expiringSoon || [];
+  const expiryCount = expiringSoonAlerts.length;
+  const expiryItems: AlertItem[] = expiringSoonAlerts.map((item) => {
     const daysLeft = item.daysUntilExpiry;
     let badgeColor = 'bg-yellow-100 text-yellow-700'; // 60-90
     if (daysLeft <= 30) badgeColor = 'bg-red-100 text-red-700';
@@ -57,9 +59,10 @@ export default function AlertsRow({ alerts, isLoading }: AlertsRowProps) {
   });
 
   // --- Map Overdue Credit Alerts ---
-  const overdueCount = alerts.overdueAccounts.length;
-  const overdueSum = alerts.overdueAccounts.reduce((acc, curr) => acc + curr.outstandingAmount, 0);
-  const overdueItems: AlertItem[] = alerts.overdueAccounts.map((account) => ({
+  const overdueAccountsAlerts = alerts?.overdueAccounts || [];
+  const overdueCount = overdueAccountsAlerts.length;
+  const overdueSum = overdueAccountsAlerts.reduce((acc, curr) => acc + curr.outstandingAmount, 0);
+  const overdueItems: AlertItem[] = overdueAccountsAlerts.map((account) => ({
     label: account.customerName,
     sublabel: `${formatCurrency(account.outstandingAmount)} outstanding`,
     badge: (

@@ -9,8 +9,9 @@ interface HourlySalesChartProps {
 }
 
 const CustomTooltip = ({ active, payload, label }: any) => {
-  if (active && payload && payload.length) {
-    const data = payload[0].payload;
+  if (active && payload && payload?.length > 0) {
+    const data = payload?.[0]?.payload;
+    if (!data) return null;
     return (
       <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-3">
         <p className="font-semibold text-slate-800 mb-1">{label}</p>

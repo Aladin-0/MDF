@@ -11,9 +11,10 @@ interface PaymentPieChartProps {
 }
 
 const CustomTooltip = ({ active, payload }: any) => {
-  if (active && payload && payload.length) {
-    const data = payload[0].payload;
-    const total = payload[0].payload.totalContext || 1; // Passed down via data mapping hack if needed, or we just show absolute
+  if (active && payload && payload?.length > 0) {
+    const data = payload?.[0]?.payload;
+    if (!data) return null;
+    const total = data.totalContext || 1; // Passed down via data mapping hack if needed, or we just show absolute
     return (
       <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-3 min-w-[120px]">
         <div className="flex items-center gap-2 mb-1">
