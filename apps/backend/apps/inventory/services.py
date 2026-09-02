@@ -185,8 +185,18 @@ def rebuild_stock_ledger(batch_id: str, from_date):
         txn_date__lt=from_date
     ).order_by('-txn_date', '-created_at').first()
 
-    running_qty = prev.running_qty if prev else Decimal('0')
-    running_value = prev.running_value if prev else Decimal('0')
+    batch = Batch.objects.filter(pk=batch_id).first()
+    
+    if prev:
+        running_qty = prev.running_qty
+        running_value = prev.running_value
+    else:
+        # Fallback to batch's opening_qty if no prior ledger entries exist
+        running_qty = batch.opening_qty if (batch and batch.opening_qty) else Decimal('0')
+        if batch and batch.opening_qty and batch.purchase_rate:
+             running_value = batch.opening_qty * batch.purchase_rate
+        else:
+             running_value = Decimal('0')
 
     for entry in entries:
         running_qty = running_qty + entry.qty_in - entry.qty_out

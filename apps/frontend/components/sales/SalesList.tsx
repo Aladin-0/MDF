@@ -401,7 +401,7 @@ export default function SalesList() {
                                     </td>
                                     <td className="px-4 py-3 text-slate-600">{inv.doctorName ?? '—'}</td>
                                     <td className="px-4 py-3 text-slate-600">{inv.hospitalName ?? '—'}</td>
-                                    <td className="px-4 py-3 text-right text-slate-600">{inv.items?.length ?? 0}</td>
+                                    <td className="px-4 py-3 text-right text-slate-600">{inv.itemsCount ?? inv.items?.length ?? 0}</td>
                                     <td className="px-4 py-3 text-right font-semibold tabular-nums text-slate-900">{fmt(inv.grandTotal)}</td>
                                     <td className="px-4 py-3">
                                         <span className={cn('px-2 py-0.5 rounded-full text-[10px] font-semibold border uppercase', PAYMENT_COLORS[inv.paymentMode] ?? 'bg-slate-100 text-slate-700 border-slate-200')}>

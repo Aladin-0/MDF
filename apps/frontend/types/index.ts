@@ -532,6 +532,7 @@ export interface SaleInvoice {
     isReturn: boolean;
     billedBy: string;
     billedByName: string;
+    itemsCount?: number;
     items: CartItem[];
     createdAt: string;
     doctorHospitalName?: string;

@@ -25,7 +25,7 @@ from apps.billing.services import generate_invoice_number, schedule_h_validate, 
 from apps.billing.utils.pricing import validate_sale_price
 from apps.billing.services import InsufficientStockError, ScheduleHViolationError, UnitIntegrityError
 from apps.accounts.journal_service import post_sale_invoice
-# from apps.reports.gst_snapshot_service import create_sale_snapshots
+from apps.reports.gst_snapshot_service import create_sale_snapshots
 
 logger = logging.getLogger(__name__)
 
@@ -382,7 +382,7 @@ def atomic_sale_save(
         post_sale_invoice(sale_invoice)
 
         # ====== PHASE 2 GST SNAPSHOT CREATION ======
-        # create_sale_snapshots(sale_invoice)
+        create_sale_snapshots(sale_invoice)
         # ============================================
 
         return sale_invoice

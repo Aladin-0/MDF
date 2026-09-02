@@ -89,10 +89,34 @@ class LedgerListView(APIView):
         try:
             outlet = Outlet.objects.get(id=outlet_id)
             d = request.data
+            
+            group_id = d.get('groupId')
+            if not group_id and d.get('groupName'):
+                # Fallback to groupName if groupId is missing
+                from apps.accounts.models import LedgerGroup
+                group_name = d['groupName'].strip()
+                nature = 'asset'
+                if 'creditor' in group_name.lower() or 'payable' in group_name.lower():
+                    nature = 'liability'
+                elif 'expense' in group_name.lower() or 'purchase' in group_name.lower():
+                    nature = 'expense'
+                elif 'income' in group_name.lower() or 'sale' in group_name.lower():
+                    nature = 'income'
+                    
+                group, _ = LedgerGroup.objects.get_or_create(
+                    outlet=outlet, 
+                    name__iexact=group_name,
+                    defaults={'name': group_name, 'nature': nature, 'is_system': True}
+                )
+                group_id = group.id
+                
+            if not group_id:
+                return Response({'detail': "'groupId' is required"}, status=400)
+
             ledger = Ledger.objects.create(
                 outlet=outlet,
                 name=d['name'],
-                group_id=d['groupId'],
+                group_id=group_id,
                 opening_balance=d.get('openingBalance', 0),
                 balance_type=d.get('balanceType', 'Dr'),
                 phone=d.get('phone', ''),

@@ -43,13 +43,16 @@ class GSTPeriodsView(APIView):
 class GSTSummaryView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get(self, request, fp):
+    def get(self, request):
         outlet = get_current_outlet(request)
         if not outlet:
             return Response({"error": "No outlet found"}, status=404)
             
+        start = request.query_params.get('start')
+        end = request.query_params.get('end')
+            
         # GSTR-1
-        b1 = GSTR1Builder(outlet.gstin, fp)
+        b1 = GSTR1Builder(outlet.gstin, period=None, start_date=start, end_date=end)
         payload1 = b1.generate_json()
         
         b2b_total = sum(i.get('itm_det', {}).get('txval', 0) for b in payload1.get('b2b', []) for inv in b.get('inv', []) for i in inv.get('itms', []))
@@ -60,7 +63,7 @@ class GSTSummaryView(APIView):
         hsn_count = len(payload1.get('hsn', {}).get('data', []))
         
         # GSTR-3B
-        b3 = GSTR3BBuilder(outlet.gstin, fp)
+        b3 = GSTR3BBuilder(outlet.gstin, period=None, start_date=start, end_date=end)
         payload3 = b3.generate_json()
         
         sup = payload3.get('sup_details', {})

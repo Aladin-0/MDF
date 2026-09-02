@@ -31,15 +31,28 @@ from apps.reports.models import GSTTransactionSnapshot
 
 class GSTR1Builder:
     """Builds the GSTR-1 payload from GST Transaction Snapshots."""
-    def __init__(self, gstin: str, period: str, db: str = 'default'):
+    def __init__(self, gstin: str, period: str = None, db: str = 'default', start_date: str = None, end_date: str = None):
         self.gstin = gstin
         self.period = period
         self.db = db
-        self.snapshots = GSTTransactionSnapshot.objects.using(self.db).filter(
+
+        if not self.period and start_date:
+            try:
+                from datetime import datetime
+                dt = datetime.strptime(start_date, "%Y-%m-%d")
+                self.period = dt.strftime("%m%Y")
+            except ValueError:
+                pass
+
+        qs = GSTTransactionSnapshot.objects.using(self.db).filter(
             outlet__gstin=gstin,
-            period=period,
             transaction_type__in=['sale', 'sales_return', 'sales_credit_note', 'sales_debit_note']
         )
+        if period:
+            qs = qs.filter(period=period)
+        if start_date and end_date:
+            qs = qs.filter(document_date__gte=start_date, document_date__lte=end_date)
+        self.snapshots = qs
         
         from apps.core.models import Outlet
         import os
@@ -393,14 +406,27 @@ class GSTR3BBuilder:
     Builds the GSTR-3B payload structure strictly based on GST rules
     for ITC, Output tax, Reverse Charge, and Exemptions.
     """
-    def __init__(self, gstin: str, period: str, db: str = 'default'):
+    def __init__(self, gstin: str, period: str = None, db: str = 'default', start_date: str = None, end_date: str = None):
         self.gstin = gstin
         self.period = period
         self.db = db
-        self.snapshots = GSTTransactionSnapshot.objects.using(self.db).filter(
-            outlet__gstin=gstin,
-            period=period
+
+        if not self.period and start_date:
+            try:
+                from datetime import datetime
+                dt = datetime.strptime(start_date, "%Y-%m-%d")
+                self.period = dt.strftime("%m%Y")
+            except ValueError:
+                pass
+
+        qs = GSTTransactionSnapshot.objects.using(self.db).filter(
+            outlet__gstin=gstin
         )
+        if period:
+            qs = qs.filter(period=period)
+        if start_date and end_date:
+            qs = qs.filter(document_date__gte=start_date, document_date__lte=end_date)
+        self.snapshots = qs
 
     def generate_json(self) -> Dict[str, Any]:
         from decimal import Decimal

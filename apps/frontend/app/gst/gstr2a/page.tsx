@@ -133,7 +133,7 @@ export default function GSTR2APage() {
         taxFilter={taxFilter}
         setTaxFilter={setTaxFilter}
         customActionRight={FetchButton}
-        onSearch={() => toast('Filters applied')}
+        onSearch={(start, end) => toast('Filters applied')}
         onPrint={() => window.print()}
         exportDisabled={true}
       />

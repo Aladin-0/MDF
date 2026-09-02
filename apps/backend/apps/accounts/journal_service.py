@@ -503,32 +503,51 @@ def post_sale_invoice(sale_invoice):
 
         lines = []
 
-        # ── DEBIT side: one entry per payment method used ──
-        if cash_paid > 0:
-            cash_ledger = _get_ledger(outlet, 'Cash')
-            lines.append(('debit', cash_ledger, cash_paid))
-
-        if upi_paid > 0:
-            upi_ledger = _get_ledger(outlet, 'UPI Collections')
-            lines.append(('debit', upi_ledger, upi_paid))
-
-        if card_paid > 0:
-            card_ledger = _get_ledger(outlet, 'Card/POS Settlement')
-            lines.append(('debit', card_ledger, card_paid))
-
-        if credit_given != 0:
+        # ── DEBIT side: Multi-Tender Routing ──
+        customer_ledger = None
+        if sale_invoice.customer:
             customer_ledger = _get_customer_ledger(outlet, sale_invoice.customer)
-            if customer_ledger:
-                if credit_given > 0:
-                    lines.append(('debit', customer_ledger, credit_given))
-                else:
-                    lines.append(('credit', customer_ledger, abs(credit_given)))
-            else:
+            if not customer_ledger:
                 raise ValueError(
-                    f"Sale {sale_invoice.id}: credit_given={credit_given} but no customer "
-                    f"ledger found for customer {sale_invoice.customer_id}. "
-                    f"Run sync_customer_ledgers first."
+                    f"Sale {sale_invoice.id}: has customer {sale_invoice.customer_id} but no customer "
+                    f"ledger found. Run sync_customer_ledgers first."
                 )
+
+        if customer_ledger:
+            # 1. Debit the customer for the full grand total
+            if grand_total > 0:
+                lines.append(('debit', customer_ledger, grand_total))
+            elif grand_total < 0:
+                lines.append(('credit', customer_ledger, abs(grand_total)))
+            
+            # 2. Credit the customer for instant payments and debit the respective asset accounts
+            if cash_paid > 0:
+                cash_ledger = _get_ledger(outlet, 'Cash')
+                lines.append(('debit', cash_ledger, cash_paid))
+                lines.append(('credit', customer_ledger, cash_paid))
+
+            if upi_paid > 0:
+                upi_ledger = _get_ledger(outlet, 'UPI Collections')
+                lines.append(('debit', upi_ledger, upi_paid))
+                lines.append(('credit', customer_ledger, upi_paid))
+
+            if card_paid > 0:
+                card_ledger = _get_ledger(outlet, 'Card/POS Settlement')
+                lines.append(('debit', card_ledger, card_paid))
+                lines.append(('credit', customer_ledger, card_paid))
+        else:
+            # Fallback for walk-in (no customer attached)
+            if cash_paid > 0:
+                cash_ledger = _get_ledger(outlet, 'Cash')
+                lines.append(('debit', cash_ledger, cash_paid))
+
+            if upi_paid > 0:
+                upi_ledger = _get_ledger(outlet, 'UPI Collections')
+                lines.append(('debit', upi_ledger, upi_paid))
+
+            if card_paid > 0:
+                card_ledger = _get_ledger(outlet, 'Card/POS Settlement')
+                lines.append(('debit', card_ledger, card_paid))
 
         # ── CREDIT side: Sales Account ──
         sales_ledger = _get_ledger(outlet, 'Sales Account')

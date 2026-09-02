@@ -100,13 +100,13 @@ export default function GSTR1Page() {
       }), { taxable_value: 0, igst: 0, cgst: 0, sgst: 0, total: 0 });
     }, [invoiceData]);
 
-    const loadDashboardData = useCallback(async (period: string) => {
-        if (!period) return;
+    const loadDashboardData = useCallback(async (start: string, end: string) => {
+        if (!start || !end) return;
         setLoading(true);
         try {
             const [summary, invoices] = await Promise.all([
-                gstApi.getSummary(period),
-                gstApi.getGSTR1Invoices(period, { report_type: reportType, tax_filter: taxFilter })
+                gstApi.getSummary(start, end),
+                gstApi.getGSTR1Invoices(start, end, { report_type: reportType, tax_filter: taxFilter })
             ]);
             setSummaryData(summary);
             setInvoiceData(invoices);
@@ -119,8 +119,8 @@ export default function GSTR1Page() {
     }, [reportType, taxFilter, toast]);
 
     
-    const handleSearch = (period: string) => {
-        loadDashboardData(period);
+    const handleSearch = (start: string, end: string) => {
+        loadDashboardData(start, end);
     };
 
     const handleExportExcel = async (period: string) => {

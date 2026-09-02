@@ -40,6 +40,6 @@ class Command(BaseCommand):
             b = BatchFactory(outlet=outlet, product=product)
             StockLedgerFactory(outlet=outlet, product=product, batch=b, qty_in=10, running_qty=10)
             
-        call_command('seed_gst_e2e_data', outlet_id=str(outlet.id))
+        call_command('seed_gst_e2e_data')
             
         self.stdout.write(self.style.SUCCESS('Successfully seeded baseline state for Playwright E2E tests!'))

@@ -1,0 +1,56 @@
+{
+  "template": "GSTR3B_Excel_Utility_V5.6.xlsm",
+  "sha256": "dc99832e012bc7a9e1d89c34f68a086f4882ae325bb480fcf3e434c23e45c0d1",
+  "has_macro": true,
+  "mapping": {
+    "header": {
+      "gstin": "C5",
+      "year": "F5",
+      "legal_name": "C6",
+      "month": "F6"
+    },
+    "table_3_1": {
+      "a_outward_taxable": {"txval": "C11", "iamt": "D11", "camt": "E11", "csamt": "G11"},
+      "b_outward_zero_rated": {"txval": "C12", "iamt": "D12", "csamt": "G12"},
+      "c_outward_nil_exempt": {"txval": "C13"},
+      "d_inward_rev_charge": {"txval": "C14", "iamt": "D14", "camt": "E14", "csamt": "G14"},
+      "e_non_gst_outward": {"txval": "C15"}
+    },
+    "table_3_1_1": {
+      "i_eco_pays_tax": {"txval": "C22", "iamt": "D22", "camt": "E22", "csamt": "G22"},
+      "ii_registered_person_through_eco": {"txval": "C23"}
+    },
+    "table_4": {
+      "a_1_import_goods": {"iamt": "C31", "csamt": "F31"},
+      "a_2_import_services": {"iamt": "C32", "csamt": "F32"},
+      "a_3_inward_rev_charge": {"iamt": "C33", "camt": "D33", "csamt": "F33"},
+      "a_4_inward_isd": {"iamt": "C34", "camt": "D34", "csamt": "F34"},
+      "a_5_all_other_itc": {"iamt": "C35", "camt": "D35", "csamt": "F35"},
+      "b_1_itc_reversed_rules": {"iamt": "C37", "camt": "D37", "csamt": "F37"},
+      "b_2_itc_reversed_others": {"iamt": "C38", "camt": "D38", "samt": "E38", "csamt": "F38"},
+      "d_1_itc_reclaimed": {"iamt": "C41", "camt": "D41", "csamt": "F41"},
+      "d_2_ineligible_itc": {"iamt": "C42", "camt": "D42", "csamt": "F42"}
+    },
+    "table_5": {
+      "composition_exempt_nil": {"inter": "D48", "intra": "E48"},
+      "non_gst": {"inter": "D49", "intra": "E49"}
+    },
+    "table_5_1": {
+      "interest": {"iamt": "C65", "camt": "D65", "samt": "E65", "csamt": "F65"},
+      "late_fee": {"iamt": "C66", "camt": "D66", "samt": "E66", "csamt": "F66"}
+    },
+    "table_3_2": {
+      "start_row": 88,
+      "end_row": 124,
+      "cols": {
+        "pos": 2,
+        "unreg_txval": 3,
+        "unreg_iamt": 4,
+        "comp_txval": 5,
+        "comp_iamt": 6,
+        "uin_txval": 7,
+        "uin_iamt": 8
+      }
+    }
+  }
+}

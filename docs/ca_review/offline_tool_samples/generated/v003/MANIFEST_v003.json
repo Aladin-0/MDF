@@ -1,0 +1,31 @@
+{
+  "version": "v003",
+  "timestamp_utc": "2026-08-19T12:35:20.522740",
+  "template_sha256": "89cbc4131e3f3e20d3cebf82f5a31f0d646bf94a3fff37823999a33b23651a40",
+  "outputs": {
+    "Clean": {
+      "path": "/home/asta/coding/MDF/docs/ca_review/offline_tool_samples/generated/v003/GSTR1_Clean_092026_v003.xlsx",
+      "sha256": "47b1130befed0d593fd3dd63a82d79db64f878898c9d6d59b86f05dba0e06bb5",
+      "size": 6181440,
+      "modified_members": [
+        "xl/worksheets/sheet2.xml",
+        "xl/worksheets/sheet19.xml"
+      ]
+    },
+    "Advanced": {
+      "path": "/home/asta/coding/MDF/docs/ca_review/offline_tool_samples/generated/v003/GSTR1_Advanced_102026_v003.xlsx",
+      "sha256": "03c885f83326e09e039ad7f052173477fc4b44b943d261b1f22773df50677384",
+      "size": 6182979,
+      "modified_members": [
+        "xl/worksheets/sheet2.xml",
+        "xl/worksheets/sheet4.xml",
+        "xl/worksheets/sheet6.xml",
+        "xl/worksheets/sheet8.xml",
+        "xl/worksheets/sheet19.xml",
+        "xl/worksheets/sheet20.xml"
+      ]
+    }
+  },
+  "tests": "See report for tests",
+  "status": "EXCEL_OPEN_PENDING"
+}

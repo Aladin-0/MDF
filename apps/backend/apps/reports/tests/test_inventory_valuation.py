@@ -2,12 +2,12 @@ import pytest
 from django.urls import reverse
 from rest_framework.test import APIClient
 from apps.inventory.tests.factories import BatchFactory, ProductFactory
-from apps.accounts.tests.factories import OutletFactory, UserFactory
+from apps.accounts.tests.factories import OutletFactory, StaffFactory
 
 @pytest.mark.django_db
 def test_inventory_valuation_endpoint():
     outlet = OutletFactory()
-    user = UserFactory(is_staff=True)
+    user = StaffFactory(outlet=outlet)
     
     product = ProductFactory(name="Test Med", pack_size=10, pack_type="strip")
     batch = BatchFactory(

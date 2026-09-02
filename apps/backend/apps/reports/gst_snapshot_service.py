@@ -2,9 +2,19 @@ import logging
 from collections import defaultdict
 from decimal import Decimal
 from typing import Dict, Any
+from django.utils.timezone import localtime, is_aware
 from apps.reports.models import GSTTransactionSnapshot
 
 logger = logging.getLogger(__name__)
+
+def _get_local_date(dt):
+    if not dt:
+        return None
+    if hasattr(dt, 'date'):
+        if is_aware(dt):
+            return localtime(dt).date()
+        return dt.date()
+    return dt
 
 def _get_state_code(gstin: str, state: str, default: str) -> str:
     """Extracts 2-digit state code from GSTIN or falls back to state map/default."""
@@ -108,7 +118,7 @@ def create_sale_snapshots(sale_invoice) -> GSTTransactionSnapshot:
         transaction_type='sale',
         document_id=sale_invoice.id,
         document_number=sale_invoice.invoice_no,
-        document_date=sale_invoice.invoice_date.date(),
+        document_date=_get_local_date(sale_invoice.invoice_date),
         snapshot_json=snapshot_json
     )
 
@@ -228,7 +238,7 @@ def create_sales_return_snapshots(sales_return) -> GSTTransactionSnapshot:
         transaction_type='sales_return',
         document_id=sales_return.id,
         document_number=sales_return.return_no,
-        document_date=sales_return.return_date,
+        document_date=_get_local_date(sales_return.return_date),
         snapshot_json=snapshot_json
     )
 
@@ -323,7 +333,7 @@ def create_purchase_snapshots(purchase_invoice) -> GSTTransactionSnapshot:
         transaction_type='purchase',
         document_id=purchase_invoice.id,
         document_number=purchase_invoice.invoice_no,
-        document_date=purchase_invoice.invoice_date,
+        document_date=_get_local_date(purchase_invoice.invoice_date),
         snapshot_json=snapshot_json
     )
 
@@ -422,6 +432,6 @@ def create_purchase_return_snapshots(debit_note) -> GSTTransactionSnapshot:
         transaction_type='purchase_return',
         document_id=debit_note.id,
         document_number=debit_note.debit_note_no,
-        document_date=debit_note.date,
+        document_date=_get_local_date(debit_note.date),
         snapshot_json=snapshot_json
     )

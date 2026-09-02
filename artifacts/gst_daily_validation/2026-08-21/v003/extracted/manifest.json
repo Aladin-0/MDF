@@ -1,0 +1,89 @@
+{
+  "files": [
+    {
+      "file": "README.md",
+      "sha256": "da07680e82454fa19edf73a0e159e6eeb718c984cf8a24ce10addd3998cefdc5",
+      "size": 86
+    },
+    {
+      "file": "integrity_report.json",
+      "sha256": "3f22876cfcbca9f11fa3abc3695c41321abb5a7095c62839cbe31423d68b51e3",
+      "size": 42
+    },
+    {
+      "file": "expected_results.json",
+      "sha256": "295ebee5bb4632bde709cc7c9fbad2f410990f02101ec8dc8bfa32930e98a5b1",
+      "size": 391
+    },
+    {
+      "file": "actual_results.json",
+      "sha256": "295ebee5bb4632bde709cc7c9fbad2f410990f02101ec8dc8bfa32930e98a5b1",
+      "size": 391
+    },
+    {
+      "file": "qa_transaction_manifest.json",
+      "sha256": "ac17b3f7adfc104a8ee5494b4da9f007cb3bff215b7b5bff8b828376fb7129dd",
+      "size": 132
+    },
+    {
+      "file": "snapshot_summary.json",
+      "sha256": "8f0fd7fec3c1610262f6b4b1eb97e44ceea7e9b171f36e76ca0df05a1dadfe6a",
+      "size": 173
+    },
+    {
+      "file": "sales_register.csv",
+      "sha256": "ed9baf8487361b9fe8c1065043233c97ee60dc8b53ab918e73055b7264c66b86",
+      "size": 596
+    },
+    {
+      "file": "purchase_register.csv",
+      "sha256": "aeb3784b86b44d63665acf93637204b3a0d6cbf5f9dd76cd3b21a6885e3d726b",
+      "size": 245
+    },
+    {
+      "file": "returns_report.csv",
+      "sha256": "d2a8da367d98f3e05683f47fe135b2a7b72c5ce215f8bd4c6eed9e413014c8de",
+      "size": 523
+    },
+    {
+      "file": "credit_debit_notes.csv",
+      "sha256": "859fbcf0e0ea1517b48e780dca190e07c1d5db6cff7f741ffca1373f697825e9",
+      "size": 529
+    },
+    {
+      "file": "payment_report.csv",
+      "sha256": "f3e9e4f4808b39cbec9b07a98c7567aa998125ed625b104cd2cf9ef868fbc417",
+      "size": 120
+    },
+    {
+      "file": "tax_summary.csv",
+      "sha256": "d47b88b100595893f3c944cbd3cd89ad8d1bee5f659f947c2bce15df21d58e37",
+      "size": 191
+    },
+    {
+      "file": "itc_reconciliation.csv",
+      "sha256": "a8a0e6ffb2aaacd81d37d8066aa69a2f09518dcba19e6206df1a9635e270ffad",
+      "size": 62
+    },
+    {
+      "file": "exception_report.csv",
+      "sha256": "0f60758b872167d5e2ada4e80e1d64f864cce88ccededb038354efe646bd9032",
+      "size": 14
+    },
+    {
+      "file": "draft_gstr1_builder_output.json",
+      "sha256": "b5c52fed62459285e0decee0c03e6c135224f8d36b6c887a8c94240ef49d0e02",
+      "size": 3244
+    },
+    {
+      "file": "draft_gstr3b_builder_output.json",
+      "sha256": "6d40d2ed018edd777e94127bb1dac128e21684249d395f6f680e4819cb2509b2",
+      "size": 1255
+    },
+    {
+      "file": "PHASE3_COMPLETION_REPORT.md",
+      "sha256": "39730b6df161b424d5968a03c3d2fe191866295b129fad4777353c0145a8151a",
+      "size": 148
+    }
+  ]
+}

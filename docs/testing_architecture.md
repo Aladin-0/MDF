@@ -42,3 +42,25 @@ When testing TanStack Table Master-Detail expansions (like the `StockTable`):
 For complex modals like the Tabbed `EditProductModal`:
 - **Navigation**: Verify Radix Tab interactions via `page.getByRole('tab')`.
 - **Reactive Hooks**: Verify `react-hook-form` and `useFieldArray` integrations by clicking "Add Batch", inputting numbers (`MRP`, `Margin%`), and asserting that auto-calculator hooks (like the Landing Rate calculator) instantly populate the derived values.
+
+## GST Engine Testing
+
+The GST Engine tests (`apps.gst.tests`) rigorously verify API behaviors, date-boundary snapshot syncs, and sandbox integrations.
+
+### Snapshot Syncing Lifecycle (Timezone Handling)
+- **Local Time vs UTC**: The snapshot sync service (`apps/reports/gst_snapshot_service.py`) relies on `django.utils.timezone.localtime` to convert timezone-aware datetimes before calling `.date()`.
+- **Test Standard**: When writing GST sync tests, you MUST mock boundary conditions (e.g., a bill created late at night local time where UTC rolls over to the previous day) to ensure `create_sale_snapshots` records the correct LOCAL date. 
+  ```python
+  # Always test UTC boundary conditions explicitly
+  inv = SaleInvoice.objects.create(
+      invoice_date=make_aware(datetime(2026, 9, 3, 2, 0, 0)) # UTC: 2026-09-02 20:30:00
+  )
+  create_sale_snapshots(inv)
+  snap = GSTTransactionSnapshot.objects.get(document_id=inv.id)
+  assert snap.document_date.strftime('%Y-%m-%d') == '2026-09-03'
+  ```
+
+### Date-Range Filtering Protocols
+- The Live GSTR-1, 2B, and 3B dashboard views derive period parameters from explicit date-ranges.
+- Validations (e.g., `GSTR3BValidator`) which strictly expect a `MMYYYY` period string must dynamically synthesize it from `start_date` bounds if the direct `period` query parameter is omitted.
+- Test suites must verify that `VAL-002` blocking errors do not emerge when querying endpoints solely via `?start=YYYY-MM-DD&end=YYYY-MM-DD`.

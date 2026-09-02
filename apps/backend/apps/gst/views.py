@@ -416,19 +416,24 @@ from apps.reports.models import GSTTransactionSnapshot
 class GSTR1InvoicesView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get(self, request, fp):
+    def get(self, request):
         outlet = get_user_outlet(request)
         if not outlet:
             return Response({"error": "No assigned outlet."}, status=403)
             
         report_type = request.query_params.get('report_type', 'all')
         tax_filter = request.query_params.get('tax_filter', 'all')
+        start = request.query_params.get('start')
+        end = request.query_params.get('end')
 
-        snapshots = GSTTransactionSnapshot.objects.filter(
+        qs = GSTTransactionSnapshot.objects.filter(
             outlet=outlet,
-            period=fp,
             transaction_type='sale'
-        ).order_by('-document_date', 'document_number')
+        )
+        if start and end:
+            qs = qs.filter(document_date__gte=start, document_date__lte=end)
+            
+        snapshots = qs.order_by('-document_date', 'document_number')
 
         results = []
         for s in snapshots:

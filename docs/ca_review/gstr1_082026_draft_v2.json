@@ -1,0 +1,103 @@
+{
+  "gstin": "24BBBBB0000B1Z5",
+  "fp": "082026",
+  "gt": 0.0,
+  "cur_gt": 0.0,
+  "b2b": [],
+  "b2cs": [
+    {
+      "sply_ty": "INTRA",
+      "rt": 18.0,
+      "typ": "OE",
+      "pos": "24",
+      "txval": 17500.0,
+      "iamt": 0.0,
+      "camt": 1575.0,
+      "samt": 1575.0,
+      "csamt": 0.0
+    },
+    {
+      "sply_ty": "INTRA",
+      "rt": 12.0,
+      "typ": "OE",
+      "pos": "24",
+      "txval": 1850.0,
+      "iamt": 0.0,
+      "camt": 111.0,
+      "samt": 111.0,
+      "csamt": 0.0
+    }
+  ],
+  "cdnr": [],
+  "cdnur": [],
+  "hsn": {
+    "data": [
+      {
+        "num": 1,
+        "hsn_sc": "21069099",
+        "uqc": "PAC",
+        "qty": 2.0,
+        "txval": 500.0,
+        "rt": 18.0,
+        "iamt": 0.0,
+        "camt": 45.0,
+        "samt": 45.0,
+        "csamt": 0.0
+      },
+      {
+        "num": 2,
+        "hsn_sc": "90189020",
+        "uqc": "PAC",
+        "qty": 7.0,
+        "txval": 3500.0,
+        "rt": 18.0,
+        "iamt": 0.0,
+        "camt": 315.0,
+        "samt": 315.0,
+        "csamt": 0.0
+      },
+      {
+        "num": 3,
+        "hsn_sc": "90189019",
+        "uqc": "PAC",
+        "qty": 9.0,
+        "txval": 13500.0,
+        "rt": 18.0,
+        "iamt": 0.0,
+        "camt": 1215.0,
+        "samt": 1215.0,
+        "csamt": 0.0
+      },
+      {
+        "num": 4,
+        "hsn_sc": "12340002",
+        "uqc": "PAC",
+        "qty": 10.0,
+        "txval": 1200.0,
+        "rt": 12.0,
+        "iamt": 0.0,
+        "camt": 72.0,
+        "samt": 72.0,
+        "csamt": 0.0
+      },
+      {
+        "num": 5,
+        "hsn_sc": "12340001",
+        "uqc": "PAC",
+        "qty": 13.0,
+        "txval": 650.0,
+        "rt": 12.0,
+        "iamt": 0.0,
+        "camt": 39.0,
+        "samt": 39.0,
+        "csamt": 0.0
+      }
+    ]
+  },
+  "_metadata": {
+    "validation_warnings": [],
+    "blocking_errors": [],
+    "info": [],
+    "is_valid_for_export": true
+  }
+}

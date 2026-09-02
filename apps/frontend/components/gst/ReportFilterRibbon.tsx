@@ -14,7 +14,7 @@ interface ReportFilterRibbonProps {
   setReportType: (val: string) => void;
   taxFilter: string;
   setTaxFilter: (val: string) => void;
-  onSearch?: (period: string) => void;
+  onSearch?: (start: string, end: string) => void;
   onPrint?: () => void;
   onDownloadExcel?: (period: string) => void;
   onDownloadJson?: (period: string) => void;
@@ -59,12 +59,11 @@ export function ReportFilterRibbon({
   };
 
   const handleSearch = () => {
-    try {
-      const period = deriveGstPeriod(fromDate, toDate);
-      if (onSearch) onSearch(period);
-    } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Search Failed', description: e.message });
+    if (!fromDate || !toDate) {
+      toast({ variant: 'destructive', title: 'Search Failed', description: 'Please select both start and end dates.' });
+      return;
     }
+    if (onSearch) onSearch(fromDate, toDate);
   };
 
   const handleDownloadExcel = () => {

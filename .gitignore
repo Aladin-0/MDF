@@ -35,3 +35,20 @@ db_backup_*.sql
 mediflow_backup_*.sql
 *.dump
 *.bak
+
+# Offline Tests & QA
+**/test_*.py
+**/*.spec.ts
+apps/frontend/tests/
+
+# Debug Scripts & Logs
+fix_*.py
+patch_*.py
+debug_*.py
+agent_*.md
+*.log
+*.sql
+*.bak
+failures.json
+test_output.txt
+test_results.txt

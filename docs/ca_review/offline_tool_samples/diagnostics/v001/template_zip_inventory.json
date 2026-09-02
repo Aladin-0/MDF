@@ -1,0 +1,1034 @@
+{
+  "[Content_Types].xml": {
+    "filename": "[Content_Types].xml",
+    "uncompressed_size": 7034,
+    "compressed_size": 669,
+    "crc": 3464905639,
+    "compression_type": 8,
+    "sha256": "4096df2c9f8d6e17bd3479269de8a186e66d7f5a9f8b76a7961e24b54985a5ed"
+  },
+  "_rels/.rels": {
+    "filename": "_rels/.rels",
+    "uncompressed_size": 881,
+    "compressed_size": 305,
+    "crc": 1657740482,
+    "compression_type": 8,
+    "sha256": "0232528331d562bf624eefe3a130075aaeeb8061f35ba77f5fd3e659ae5a61fa"
+  },
+  "xl/workbook.xml": {
+    "filename": "xl/workbook.xml",
+    "uncompressed_size": 7290,
+    "compressed_size": 1795,
+    "crc": 2891537565,
+    "compression_type": 8,
+    "sha256": "965460a768b3969d182ad05bf59a4a88c28cf341f3242f729985ca0f118cd639"
+  },
+  "xl/_rels/workbook.xml.rels": {
+    "filename": "xl/_rels/workbook.xml.rels",
+    "uncompressed_size": 6128,
+    "compressed_size": 565,
+    "crc": 2565625154,
+    "compression_type": 8,
+    "sha256": "598e7416ac52af428ef7a17d123f0e67a568aa52222a809afa3e9e811cfeb5aa"
+  },
+  "xl/worksheets/sheet1.xml": {
+    "filename": "xl/worksheets/sheet1.xml",
+    "uncompressed_size": 6921920,
+    "compressed_size": 1015320,
+    "crc": 1377725115,
+    "compression_type": 8,
+    "sha256": "406db70b24671ee0c078d35112f663006091a5a7e594b51a86784c2fb8ed5ccb"
+  },
+  "xl/worksheets/sheet2.xml": {
+    "filename": "xl/worksheets/sheet2.xml",
+    "uncompressed_size": 6502900,
+    "compressed_size": 773733,
+    "crc": 248702508,
+    "compression_type": 8,
+    "sha256": "4f24838905fac72e1b3f91f5e32a716555ae42ae803c1dc018d08de6d8522b8f"
+  },
+  "xl/worksheets/sheet3.xml": {
+    "filename": "xl/worksheets/sheet3.xml",
+    "uncompressed_size": 9220014,
+    "compressed_size": 997575,
+    "crc": 2111577568,
+    "compression_type": 8,
+    "sha256": "e21e9ae442f3356e2f441244dec61cf5f64c1efb990a7171e6c85b965cdba066"
+  },
+  "xl/worksheets/sheet4.xml": {
+    "filename": "xl/worksheets/sheet4.xml",
+    "uncompressed_size": 5194641,
+    "compressed_size": 632380,
+    "crc": 2289117085,
+    "compression_type": 8,
+    "sha256": "08b349421cf873a222c27d5ec78a3f76d3ce65d177f038f31c0c99b578fe73a8"
+  },
+  "xl/worksheets/sheet5.xml": {
+    "filename": "xl/worksheets/sheet5.xml",
+    "uncompressed_size": 5991,
+    "compressed_size": 2147,
+    "crc": 3730066126,
+    "compression_type": 8,
+    "sha256": "8c8239abea55dcb7e3a36974d8a5e310c7b4ae0dd6f5fa77eed514f6cda03bf8"
+  },
+  "xl/worksheets/sheet6.xml": {
+    "filename": "xl/worksheets/sheet6.xml",
+    "uncompressed_size": 4764606,
+    "compressed_size": 573280,
+    "crc": 3253018791,
+    "compression_type": 8,
+    "sha256": "68e69eb45f69d6df103061bc2c87fcc9d3639fae32458f5e926cfd3a564cf38e"
+  },
+  "xl/worksheets/sheet7.xml": {
+    "filename": "xl/worksheets/sheet7.xml",
+    "uncompressed_size": 6010,
+    "compressed_size": 1918,
+    "crc": 3295247119,
+    "compression_type": 8,
+    "sha256": "a003a9f40214f0fa01800b17128a6b50b4ba10bbdbe2ee4c85d57a0046df0275"
+  },
+  "xl/worksheets/sheet8.xml": {
+    "filename": "xl/worksheets/sheet8.xml",
+    "uncompressed_size": 6793018,
+    "compressed_size": 814171,
+    "crc": 2677841288,
+    "compression_type": 8,
+    "sha256": "115601f0acefac0f260884554d7de59e58f36f54e093a3360d986dab7e390a08"
+  },
+  "xl/worksheets/sheet9.xml": {
+    "filename": "xl/worksheets/sheet9.xml",
+    "uncompressed_size": 2060138,
+    "compressed_size": 237609,
+    "crc": 2787030042,
+    "compression_type": 8,
+    "sha256": "412c897823349f942942c0d8f49e0aeb8572b1447d11da0748e90fa64dffca58"
+  },
+  "xl/worksheets/sheet10.xml": {
+    "filename": "xl/worksheets/sheet10.xml",
+    "uncompressed_size": 3331586,
+    "compressed_size": 405536,
+    "crc": 911796563,
+    "compression_type": 8,
+    "sha256": "db13709f812cdb1468d7fb94894d29878960f151bc1e8cafff271e1232ff8ab0"
+  },
+  "xl/worksheets/sheet11.xml": {
+    "filename": "xl/worksheets/sheet11.xml",
+    "uncompressed_size": 1421308,
+    "compressed_size": 153913,
+    "crc": 429785053,
+    "compression_type": 8,
+    "sha256": "c41a884dffdbf8064981f81adc67b9d7e890a2c4c5f87d22e172cef57796be53"
+  },
+  "xl/worksheets/sheet12.xml": {
+    "filename": "xl/worksheets/sheet12.xml",
+    "uncompressed_size": 4765547,
+    "compressed_size": 579607,
+    "crc": 911118283,
+    "compression_type": 8,
+    "sha256": "037f91e1bea882828c5b599e6958cdcfa8a7a2414d2e757333943ee9040403ba"
+  },
+  "xl/worksheets/sheet13.xml": {
+    "filename": "xl/worksheets/sheet13.xml",
+    "uncompressed_size": 274676,
+    "compressed_size": 38169,
+    "crc": 383120700,
+    "compression_type": 8,
+    "sha256": "7a2103c85e92560c3d75c6c508a235a496064c8c4a444a83708e5719de8cd70f"
+  },
+  "xl/worksheets/sheet14.xml": {
+    "filename": "xl/worksheets/sheet14.xml",
+    "uncompressed_size": 1486163,
+    "compressed_size": 150081,
+    "crc": 1233123627,
+    "compression_type": 8,
+    "sha256": "5bce8e791085665904db2c8309cec1d8b1bf5cd59d3ece2b74fcfb1c759e1185"
+  },
+  "xl/worksheets/sheet15.xml": {
+    "filename": "xl/worksheets/sheet15.xml",
+    "uncompressed_size": 1098498,
+    "compressed_size": 106867,
+    "crc": 1220205275,
+    "compression_type": 8,
+    "sha256": "e5e84b3cf6555fbe4cd7e6f0866c38c9bd4f7d89e3f56aa66d1e3fb1cf10d6cb"
+  },
+  "xl/worksheets/sheet16.xml": {
+    "filename": "xl/worksheets/sheet16.xml",
+    "uncompressed_size": 1486178,
+    "compressed_size": 150404,
+    "crc": 3183578937,
+    "compression_type": 8,
+    "sha256": "9b340553cbb4a5e6643cda0256b96cdafe5e6c6bba918a7d5b5b57bb9d4d6f86"
+  },
+  "xl/worksheets/sheet17.xml": {
+    "filename": "xl/worksheets/sheet17.xml",
+    "uncompressed_size": 1245440,
+    "compressed_size": 130160,
+    "crc": 2052416953,
+    "compression_type": 8,
+    "sha256": "c710b3ca14bd05eff1942948b4ae6054e9309afa834bd42e76a6fa0ce1ce6bf0"
+  },
+  "xl/worksheets/sheet18.xml": {
+    "filename": "xl/worksheets/sheet18.xml",
+    "uncompressed_size": 3565,
+    "compressed_size": 1397,
+    "crc": 146330730,
+    "compression_type": 8,
+    "sha256": "7528fe57514e02218546e0a82346c0011af4014b006f645604a7dc3da0c7e3a8"
+  },
+  "xl/worksheets/sheet19.xml": {
+    "filename": "xl/worksheets/sheet19.xml",
+    "uncompressed_size": 545168,
+    "compressed_size": 68401,
+    "crc": 3139160784,
+    "compression_type": 8,
+    "sha256": "76a2a7304a0eaddb22a48e2398e06e57acf7da59afac0ae2d91e3be8c2325078"
+  },
+  "xl/worksheets/sheet20.xml": {
+    "filename": "xl/worksheets/sheet20.xml",
+    "uncompressed_size": 545140,
+    "compressed_size": 68486,
+    "crc": 3469695178,
+    "compression_type": 8,
+    "sha256": "92d16cd19ca70e2a673a97bb0367ba095a567a0c7b1214bfd62e6551255f5632"
+  },
+  "xl/worksheets/sheet21.xml": {
+    "filename": "xl/worksheets/sheet21.xml",
+    "uncompressed_size": 149110,
+    "compressed_size": 16750,
+    "crc": 784219433,
+    "compression_type": 8,
+    "sha256": "dd4dd1e5dc4c189749f19a18e937a77acc4a98f2cc54d211ad1cf48bb023ea95"
+  },
+  "xl/worksheets/sheet22.xml": {
+    "filename": "xl/worksheets/sheet22.xml",
+    "uncompressed_size": 4654,
+    "compressed_size": 1767,
+    "crc": 3074061861,
+    "compression_type": 8,
+    "sha256": "fd30e56dc4a60f650c8fe3ff3773980836e5fa1bd523b97eb31c5ab49ca8f831"
+  },
+  "xl/worksheets/sheet23.xml": {
+    "filename": "xl/worksheets/sheet23.xml",
+    "uncompressed_size": 5885,
+    "compressed_size": 2095,
+    "crc": 2286456942,
+    "compression_type": 8,
+    "sha256": "db9866123ee54c460e2aa9dad218a002a02650a969ee28a35092c92a84ef06cb"
+  },
+  "xl/worksheets/sheet24.xml": {
+    "filename": "xl/worksheets/sheet24.xml",
+    "uncompressed_size": 6098,
+    "compressed_size": 2131,
+    "crc": 4134214540,
+    "compression_type": 8,
+    "sha256": "9c4dac40ceb82b15c6741bbd16368d0fd254101c228ff89d533bce2252e72752"
+  },
+  "xl/worksheets/sheet25.xml": {
+    "filename": "xl/worksheets/sheet25.xml",
+    "uncompressed_size": 5545,
+    "compressed_size": 2017,
+    "crc": 2831632120,
+    "compression_type": 8,
+    "sha256": "c7f158a064a579c1ed47e216d62a5177051dba341184bb0b53513aab5fd06f7b"
+  },
+  "xl/worksheets/sheet26.xml": {
+    "filename": "xl/worksheets/sheet26.xml",
+    "uncompressed_size": 4117,
+    "compressed_size": 1562,
+    "crc": 2630525693,
+    "compression_type": 8,
+    "sha256": "6cae4e45289aa8cf40b0fe896f2cd41c227d441c395566b5a79f168b1c0cae6f"
+  },
+  "xl/worksheets/sheet27.xml": {
+    "filename": "xl/worksheets/sheet27.xml",
+    "uncompressed_size": 3531,
+    "compressed_size": 1440,
+    "crc": 628682134,
+    "compression_type": 8,
+    "sha256": "5b6217e11fb3ee69847fbbbc2f0cb12a681185dca2eed11cd3b9a97ee3b36228"
+  },
+  "xl/worksheets/sheet28.xml": {
+    "filename": "xl/worksheets/sheet28.xml",
+    "uncompressed_size": 7829,
+    "compressed_size": 2524,
+    "crc": 2726754503,
+    "compression_type": 8,
+    "sha256": "e4085928ec2a78f6339a8aac424ffff90e2d1f431f0945be6ab2a13b5538e9f6"
+  },
+  "xl/worksheets/sheet29.xml": {
+    "filename": "xl/worksheets/sheet29.xml",
+    "uncompressed_size": 5231,
+    "compressed_size": 1985,
+    "crc": 925808263,
+    "compression_type": 8,
+    "sha256": "87702b29e7b64eb5784819a0799437bf132dec879f2255b7edde6d7e873a7aed"
+  },
+  "xl/worksheets/sheet30.xml": {
+    "filename": "xl/worksheets/sheet30.xml",
+    "uncompressed_size": 6989,
+    "compressed_size": 2358,
+    "crc": 2714963416,
+    "compression_type": 8,
+    "sha256": "8c550100dcdbed7f229386665d7007cff11d56b7b4e54a69ad0c62091c7c9713"
+  },
+  "xl/worksheets/sheet31.xml": {
+    "filename": "xl/worksheets/sheet31.xml",
+    "uncompressed_size": 4730,
+    "compressed_size": 1792,
+    "crc": 190635386,
+    "compression_type": 8,
+    "sha256": "2f0df7df5c57f05be6e48ab99eb7105da6b0b1799326d4e30afc3ef7a0f80f46"
+  },
+  "xl/worksheets/sheet32.xml": {
+    "filename": "xl/worksheets/sheet32.xml",
+    "uncompressed_size": 21648,
+    "compressed_size": 4446,
+    "crc": 4210847198,
+    "compression_type": 8,
+    "sha256": "24795029de37f2c969574eb24ac2d854b24eac0993657f8603601092b8ec44af"
+  },
+  "xl/worksheets/_rels/sheet15.xml.rels": {
+    "filename": "xl/worksheets/_rels/sheet15.xml.rels",
+    "uncompressed_size": 323,
+    "compressed_size": 195,
+    "crc": 396701500,
+    "compression_type": 8,
+    "sha256": "8f8096d586b783af88951481ad8b75f12c106247f157641972ed613a402dceeb"
+  },
+  "xl/worksheets/_rels/sheet16.xml.rels": {
+    "filename": "xl/worksheets/_rels/sheet16.xml.rels",
+    "uncompressed_size": 323,
+    "compressed_size": 195,
+    "crc": 1337689620,
+    "compression_type": 8,
+    "sha256": "8a50416d11928ab7d1c8be600a6cbc36216974853558bdcf99214eaa1eaa8dc5"
+  },
+  "xl/theme/theme1.xml": {
+    "filename": "xl/theme/theme1.xml",
+    "uncompressed_size": 6738,
+    "compressed_size": 1663,
+    "crc": 472931092,
+    "compression_type": 8,
+    "sha256": "10147cec37372b956834fd706d00f5b1fd3baebd734fe254f236b0d4a6da315f"
+  },
+  "xl/styles.xml": {
+    "filename": "xl/styles.xml",
+    "uncompressed_size": 71885,
+    "compressed_size": 4682,
+    "crc": 1709235257,
+    "compression_type": 8,
+    "sha256": "6cc8689ee3ca3a6eff570c2989ffdbb62eb0d464f2975ff2d84824ebdb99ffcd"
+  },
+  "xl/sharedStrings.xml": {
+    "filename": "xl/sharedStrings.xml",
+    "uncompressed_size": 53279,
+    "compressed_size": 12514,
+    "crc": 2921158045,
+    "compression_type": 8,
+    "sha256": "d76bc22bb678492a39af861a48de07fa3383fc6ddee3aadf30be660257ae7cd6"
+  },
+  "xl/worksheets/_rels/sheet17.xml.rels": {
+    "filename": "xl/worksheets/_rels/sheet17.xml.rels",
+    "uncompressed_size": 323,
+    "compressed_size": 195,
+    "crc": 3466519347,
+    "compression_type": 8,
+    "sha256": "95fa3bc786b0d088c4950d80938595b407807a5ab44fa2d346eb08e9efc0934b"
+  },
+  "xl/worksheets/_rels/sheet18.xml.rels": {
+    "filename": "xl/worksheets/_rels/sheet18.xml.rels",
+    "uncompressed_size": 323,
+    "compressed_size": 195,
+    "crc": 764143866,
+    "compression_type": 8,
+    "sha256": "69169488958f41957c7efaffab3fd9d1c1680a3f750929bbb8300d6e008b82df"
+  },
+  "xl/drawings/drawing1.xml": {
+    "filename": "xl/drawings/drawing1.xml",
+    "uncompressed_size": 1231,
+    "compressed_size": 634,
+    "crc": 1025952651,
+    "compression_type": 8,
+    "sha256": "1cac7fe97a3538fcf9898bb3204279b6ed6a2a9c6bc78b506289a86c0b6cb584"
+  },
+  "xl/drawings/vmlDrawing1.vml": {
+    "filename": "xl/drawings/vmlDrawing1.vml",
+    "uncompressed_size": 1525,
+    "compressed_size": 606,
+    "crc": 3887460188,
+    "compression_type": 8,
+    "sha256": "c4ffa4788dd495e708dab9b2f9462b2315471df2f9ceb47ff9472df6f77b4a2e"
+  },
+  "xl/media/image1.png": {
+    "filename": "xl/media/image1.png",
+    "uncompressed_size": 21385,
+    "compressed_size": 21385,
+    "crc": 753556272,
+    "compression_type": 0,
+    "sha256": "e135f014d4aea250cae0f1190adb8357d0b0dd5295b7bb15a9c22318bf5d9482"
+  },
+  "xl/media/image2.png": {
+    "filename": "xl/media/image2.png",
+    "uncompressed_size": 6027,
+    "compressed_size": 6027,
+    "crc": 2725240588,
+    "compression_type": 0,
+    "sha256": "64abd5623851ccf246d8c545e555ce3bafc452bac0acae810a80add107072703"
+  },
+  "xl/media/image3.jpeg": {
+    "filename": "xl/media/image3.jpeg",
+    "uncompressed_size": 2231,
+    "compressed_size": 2231,
+    "crc": 576956843,
+    "compression_type": 0,
+    "sha256": "165bb1cec705f2ebc913ac45c2d05a1d4a4d9c11ee85908cfa4243d854cdf44e"
+  },
+  "xl/worksheets/_rels/sheet19.xml.rels": {
+    "filename": "xl/worksheets/_rels/sheet19.xml.rels",
+    "uncompressed_size": 323,
+    "compressed_size": 195,
+    "crc": 2897120733,
+    "compression_type": 8,
+    "sha256": "5e0b1465ef6013b5ba9cdb154029e07babdd7f018aaaea727d6710e00cf252d4"
+  },
+  "xl/worksheets/_rels/sheet20.xml.rels": {
+    "filename": "xl/worksheets/_rels/sheet20.xml.rels",
+    "uncompressed_size": 323,
+    "compressed_size": 195,
+    "crc": 3396035095,
+    "compression_type": 8,
+    "sha256": "24a6afa588cf0b2b260606282a4b5ff581e532abc9aabcb2118925065de14dad"
+  },
+  "xl/worksheets/_rels/sheet21.xml.rels": {
+    "filename": "xl/worksheets/_rels/sheet21.xml.rels",
+    "uncompressed_size": 323,
+    "compressed_size": 195,
+    "crc": 1263404848,
+    "compression_type": 8,
+    "sha256": "28ec08d33a36b9d96e3d06f7342b6f0fe8f2748c64e04bfd9b83340b86b71f31"
+  },
+  "xl/worksheets/_rels/sheet22.xml.rels": {
+    "filename": "xl/worksheets/_rels/sheet22.xml.rels",
+    "uncompressed_size": 323,
+    "compressed_size": 195,
+    "crc": 324054552,
+    "compression_type": 8,
+    "sha256": "878daa5c6e174b796e803a1bb42243ae210c0739ce27c2310ae10a7e251ce74e"
+  },
+  "xl/worksheets/_rels/sheet23.xml.rels": {
+    "filename": "xl/worksheets/_rels/sheet23.xml.rels",
+    "uncompressed_size": 323,
+    "compressed_size": 195,
+    "crc": 2457193279,
+    "compression_type": 8,
+    "sha256": "6b655e4231d844b4a2560c8b46a15d52361aadbfb579a7d3e1ed85f2f44158e8"
+  },
+  "xl/worksheets/_rels/sheet25.xml.rels": {
+    "filename": "xl/worksheets/_rels/sheet25.xml.rels",
+    "uncompressed_size": 323,
+    "compressed_size": 195,
+    "crc": 575183215,
+    "compression_type": 8,
+    "sha256": "5cb0a813c29aa70c9b7a2c8380e05daf4daf55f5bc19df7c85254a8f58cf286d"
+  },
+  "xl/worksheets/_rels/sheet26.xml.rels": {
+    "filename": "xl/worksheets/_rels/sheet26.xml.rels",
+    "uncompressed_size": 323,
+    "compressed_size": 195,
+    "crc": 2052468807,
+    "compression_type": 8,
+    "sha256": "9323f6303ad3c0c76aa83faa41386d00288f5d53e1017a691af76c05c1d87215"
+  },
+  "xl/worksheets/_rels/sheet27.xml.rels": {
+    "filename": "xl/worksheets/_rels/sheet27.xml.rels",
+    "uncompressed_size": 323,
+    "compressed_size": 195,
+    "crc": 4218639712,
+    "compression_type": 8,
+    "sha256": "163af81402480054cc7636b2a5363884f98275b2ad2554f65923e77f59b6b738"
+  },
+  "xl/worksheets/_rels/sheet28.xml.rels": {
+    "filename": "xl/worksheets/_rels/sheet28.xml.rels",
+    "uncompressed_size": 323,
+    "compressed_size": 195,
+    "crc": 409362089,
+    "compression_type": 8,
+    "sha256": "2ece78f08bdf82608c269d9e273ae2126fa6d21768b1e3029f59f0350bd028fd"
+  },
+  "xl/worksheets/_rels/sheet29.xml.rels": {
+    "filename": "xl/worksheets/_rels/sheet29.xml.rels",
+    "uncompressed_size": 323,
+    "compressed_size": 195,
+    "crc": 2571320206,
+    "compression_type": 8,
+    "sha256": "747f66caab56554658ae5e7d1144b20deec34edc4e5f7bf7b3722665f5639a98"
+  },
+  "xl/worksheets/_rels/sheet30.xml.rels": {
+    "filename": "xl/worksheets/_rels/sheet30.xml.rels",
+    "uncompressed_size": 323,
+    "compressed_size": 195,
+    "crc": 1877013017,
+    "compression_type": 8,
+    "sha256": "7712b67cdc9df94233bdc2ea3394f574d2d8c0d0c01da508a3ca067717f57a1e"
+  },
+  "xl/worksheets/_rels/sheet31.xml.rels": {
+    "filename": "xl/worksheets/_rels/sheet31.xml.rels",
+    "uncompressed_size": 323,
+    "compressed_size": 195,
+    "crc": 4005926718,
+    "compression_type": 8,
+    "sha256": "0b04d46a00debc971ecacf7bcb790ece77416295c279683048f1a96d101d7150"
+  },
+  "xl/worksheets/_rels/sheet32.xml.rels": {
+    "filename": "xl/worksheets/_rels/sheet32.xml.rels",
+    "uncompressed_size": 323,
+    "compressed_size": 195,
+    "crc": 3067821590,
+    "compression_type": 8,
+    "sha256": "d97d9e046917eaabbde2be6864674708d98d46c8883cd6cb574b60adea06fe93"
+  },
+  "xl/drawings/_rels/drawing1.xml.rels": {
+    "filename": "xl/drawings/_rels/drawing1.xml.rels",
+    "uncompressed_size": 292,
+    "compressed_size": 190,
+    "crc": 3371379759,
+    "compression_type": 8,
+    "sha256": "15a140b2ab9e3d49a7b49f824413744cc4959bc34c427cf50f7d6016697293c0"
+  },
+  "xl/drawings/_rels/vmlDrawing1.vml.rels": {
+    "filename": "xl/drawings/_rels/vmlDrawing1.vml.rels",
+    "uncompressed_size": 428,
+    "compressed_size": 202,
+    "crc": 2958426908,
+    "compression_type": 8,
+    "sha256": "6baef0c3fd32197850be5503e29ca8579a3ab9a4054de1b3c756e809682a6989"
+  },
+  "xl/worksheets/_rels/sheet24.xml.rels": {
+    "filename": "xl/worksheets/_rels/sheet24.xml.rels",
+    "uncompressed_size": 323,
+    "compressed_size": 195,
+    "crc": 2741894216,
+    "compression_type": 8,
+    "sha256": "bb7534e8681ab5823f03522316cf5775c1db498a5ca736bc97f9a7bda1bfe8d0"
+  },
+  "xl/worksheets/_rels/sheet8.xml.rels": {
+    "filename": "xl/worksheets/_rels/sheet8.xml.rels",
+    "uncompressed_size": 322,
+    "compressed_size": 194,
+    "crc": 404370594,
+    "compression_type": 8,
+    "sha256": "1185519f2e5a18dc4d091fa4e083b98e84e0b826da37d7dd240a9d4a22ab7574"
+  },
+  "xl/worksheets/_rels/sheet1.xml.rels": {
+    "filename": "xl/worksheets/_rels/sheet1.xml.rels",
+    "uncompressed_size": 612,
+    "compressed_size": 240,
+    "crc": 3464824079,
+    "compression_type": 8,
+    "sha256": "e211b6e8c9699f386f1f8eaee9774fb808873b593cb06e260b31c167c01a04b6"
+  },
+  "xl/worksheets/_rels/sheet2.xml.rels": {
+    "filename": "xl/worksheets/_rels/sheet2.xml.rels",
+    "uncompressed_size": 322,
+    "compressed_size": 194,
+    "crc": 321700883,
+    "compression_type": 8,
+    "sha256": "fe0fffb5ec78558e2b46557177888c220c2b7d2389c24965089ed5618d66be54"
+  },
+  "xl/worksheets/_rels/sheet3.xml.rels": {
+    "filename": "xl/worksheets/_rels/sheet3.xml.rels",
+    "uncompressed_size": 322,
+    "compressed_size": 194,
+    "crc": 2450104628,
+    "compression_type": 8,
+    "sha256": "08bb3cc2258e8b92a5b8837d7580917fafdf0341a466d85361d3543a9960f1ef"
+  },
+  "xl/worksheets/_rels/sheet4.xml.rels": {
+    "filename": "xl/worksheets/_rels/sheet4.xml.rels",
+    "uncompressed_size": 322,
+    "compressed_size": 194,
+    "crc": 2735838787,
+    "compression_type": 8,
+    "sha256": "65f64f2d5485665d95c01d2fd7736b1b05aa5026aa5d53ae853cd62c2a4a11be"
+  },
+  "xl/worksheets/_rels/sheet5.xml.rels": {
+    "filename": "xl/worksheets/_rels/sheet5.xml.rels",
+    "uncompressed_size": 322,
+    "compressed_size": 194,
+    "crc": 573895524,
+    "compression_type": 8,
+    "sha256": "e5ff5e7ca6d52c4b1d0f88b5a214642250a64161743925acd2934d3fadbe5016"
+  },
+  "xl/worksheets/_rels/sheet6.xml.rels": {
+    "filename": "xl/worksheets/_rels/sheet6.xml.rels",
+    "uncompressed_size": 322,
+    "compressed_size": 194,
+    "crc": 2049595980,
+    "compression_type": 8,
+    "sha256": "39732beec8e33802039ec2e74c623524abd6b1a30a53373a778b7eb6003983a0"
+  },
+  "xl/worksheets/_rels/sheet7.xml.rels": {
+    "filename": "xl/worksheets/_rels/sheet7.xml.rels",
+    "uncompressed_size": 322,
+    "compressed_size": 195,
+    "crc": 4212080491,
+    "compression_type": 8,
+    "sha256": "fe6233c26910d6f4c48aa116527b5acc779a4b3f1fc0ff15a86d17a7d52d2326"
+  },
+  "xl/worksheets/_rels/sheet9.xml.rels": {
+    "filename": "xl/worksheets/_rels/sheet9.xml.rels",
+    "uncompressed_size": 322,
+    "compressed_size": 195,
+    "crc": 2571063685,
+    "compression_type": 8,
+    "sha256": "93e31827744b25c205553e76185072d3b0364226fe9f50530e41c22e71150d6a"
+  },
+  "xl/worksheets/_rels/sheet10.xml.rels": {
+    "filename": "xl/worksheets/_rels/sheet10.xml.rels",
+    "uncompressed_size": 323,
+    "compressed_size": 194,
+    "crc": 4287026244,
+    "compression_type": 8,
+    "sha256": "0440daf0eef7091cdf3297bf62a593c250305ecfdac844587079aa94f68b31cf"
+  },
+  "xl/worksheets/_rels/sheet11.xml.rels": {
+    "filename": "xl/worksheets/_rels/sheet11.xml.rels",
+    "uncompressed_size": 323,
+    "compressed_size": 195,
+    "crc": 2124656995,
+    "compression_type": 8,
+    "sha256": "2892c45d191bf3a7b5e3d24ad7612fc8d7021043f7aabf56e896437983a50989"
+  },
+  "xl/worksheets/_rels/sheet12.xml.rels": {
+    "filename": "xl/worksheets/_rels/sheet12.xml.rels",
+    "uncompressed_size": 323,
+    "compressed_size": 195,
+    "crc": 649926731,
+    "compression_type": 8,
+    "sha256": "a09b7b68e3dc35e9c51012400ca2c58730bd267cbd267d38aee8d0e552042114"
+  },
+  "xl/worksheets/_rels/sheet13.xml.rels": {
+    "filename": "xl/worksheets/_rels/sheet13.xml.rels",
+    "uncompressed_size": 323,
+    "compressed_size": 195,
+    "crc": 2811788652,
+    "compression_type": 8,
+    "sha256": "dfc85f4b67fe3576af68460dff36bdab1c21452489024d994533963d832e2611"
+  },
+  "xl/worksheets/_rels/sheet14.xml.rels": {
+    "filename": "xl/worksheets/_rels/sheet14.xml.rels",
+    "uncompressed_size": 323,
+    "compressed_size": 195,
+    "crc": 2524989979,
+    "compression_type": 8,
+    "sha256": "27523cfd107175d2c4a64d25093fce6a9b62077ac097cf3b217eab53310b7bec"
+  },
+  "xl/externalLinks/externalLink1.xml": {
+    "filename": "xl/externalLinks/externalLink1.xml",
+    "uncompressed_size": 8804,
+    "compressed_size": 2311,
+    "crc": 1145116735,
+    "compression_type": 8,
+    "sha256": "961b3a21a8cd40b4bb240e3aea2afeeb6d4cb050e9fbfe8f6087ebb6872baf5f"
+  },
+  "xl/externalLinks/externalLink2.xml": {
+    "filename": "xl/externalLinks/externalLink2.xml",
+    "uncompressed_size": 1346,
+    "compressed_size": 471,
+    "crc": 657877097,
+    "compression_type": 8,
+    "sha256": "4f3e343c3835f50240436a3b52b41c7c75ab504076def6d16925be54e0c85ba4"
+  },
+  "xl/metadata.xml": {
+    "filename": "xl/metadata.xml",
+    "uncompressed_size": 733,
+    "compressed_size": 422,
+    "crc": 2953642128,
+    "compression_type": 8,
+    "sha256": "e80e07c27a0f75b94442fc8956f6a9c68c062168b3d15e9f252f231006fac867"
+  },
+  "xl/printerSettings/printerSettings1.bin": {
+    "filename": "xl/printerSettings/printerSettings1.bin",
+    "uncompressed_size": 5428,
+    "compressed_size": 435,
+    "crc": 4215809936,
+    "compression_type": 8,
+    "sha256": "10a10e7cb4f1ba6350cd603f38abec9ea4422b8c3a9e2c9603b9615c68fd5144"
+  },
+  "xl/printerSettings/printerSettings2.bin": {
+    "filename": "xl/printerSettings/printerSettings2.bin",
+    "uncompressed_size": 8544,
+    "compressed_size": 893,
+    "crc": 1595586761,
+    "compression_type": 8,
+    "sha256": "47d089cd204b7ee1db22e168e9e7139a5be668e65e52017508d69420db18385a"
+  },
+  "xl/printerSettings/printerSettings3.bin": {
+    "filename": "xl/printerSettings/printerSettings3.bin",
+    "uncompressed_size": 8544,
+    "compressed_size": 891,
+    "crc": 2880601027,
+    "compression_type": 8,
+    "sha256": "d3b86a7a58db0607d59de3aa950d02ccac60da015155cb2e03ddfe7c639a086a"
+  },
+  "xl/printerSettings/printerSettings4.bin": {
+    "filename": "xl/printerSettings/printerSettings4.bin",
+    "uncompressed_size": 8544,
+    "compressed_size": 893,
+    "crc": 1595586761,
+    "compression_type": 8,
+    "sha256": "47d089cd204b7ee1db22e168e9e7139a5be668e65e52017508d69420db18385a"
+  },
+  "xl/printerSettings/printerSettings5.bin": {
+    "filename": "xl/printerSettings/printerSettings5.bin",
+    "uncompressed_size": 8544,
+    "compressed_size": 892,
+    "crc": 1880000021,
+    "compression_type": 8,
+    "sha256": "1a35eb608b7bd89cbb31775c7c51d0083825fcc0f5be83eb4be44f83709a3f00"
+  },
+  "xl/printerSettings/printerSettings6.bin": {
+    "filename": "xl/printerSettings/printerSettings6.bin",
+    "uncompressed_size": 8544,
+    "compressed_size": 893,
+    "crc": 1595586761,
+    "compression_type": 8,
+    "sha256": "47d089cd204b7ee1db22e168e9e7139a5be668e65e52017508d69420db18385a"
+  },
+  "xl/printerSettings/printerSettings7.bin": {
+    "filename": "xl/printerSettings/printerSettings7.bin",
+    "uncompressed_size": 8544,
+    "compressed_size": 892,
+    "crc": 1880000021,
+    "compression_type": 8,
+    "sha256": "1a35eb608b7bd89cbb31775c7c51d0083825fcc0f5be83eb4be44f83709a3f00"
+  },
+  "xl/printerSettings/printerSettings8.bin": {
+    "filename": "xl/printerSettings/printerSettings8.bin",
+    "uncompressed_size": 8544,
+    "compressed_size": 893,
+    "crc": 1595586761,
+    "compression_type": 8,
+    "sha256": "47d089cd204b7ee1db22e168e9e7139a5be668e65e52017508d69420db18385a"
+  },
+  "xl/printerSettings/printerSettings9.bin": {
+    "filename": "xl/printerSettings/printerSettings9.bin",
+    "uncompressed_size": 8544,
+    "compressed_size": 892,
+    "crc": 1880000021,
+    "compression_type": 8,
+    "sha256": "1a35eb608b7bd89cbb31775c7c51d0083825fcc0f5be83eb4be44f83709a3f00"
+  },
+  "xl/printerSettings/printerSettings10.bin": {
+    "filename": "xl/printerSettings/printerSettings10.bin",
+    "uncompressed_size": 8544,
+    "compressed_size": 893,
+    "crc": 1595586761,
+    "compression_type": 8,
+    "sha256": "47d089cd204b7ee1db22e168e9e7139a5be668e65e52017508d69420db18385a"
+  },
+  "xl/printerSettings/printerSettings11.bin": {
+    "filename": "xl/printerSettings/printerSettings11.bin",
+    "uncompressed_size": 8544,
+    "compressed_size": 892,
+    "crc": 1880000021,
+    "compression_type": 8,
+    "sha256": "1a35eb608b7bd89cbb31775c7c51d0083825fcc0f5be83eb4be44f83709a3f00"
+  },
+  "xl/printerSettings/printerSettings12.bin": {
+    "filename": "xl/printerSettings/printerSettings12.bin",
+    "uncompressed_size": 1052,
+    "compressed_size": 344,
+    "crc": 4043668026,
+    "compression_type": 8,
+    "sha256": "0207ba09d3225b6291a35ca25db5211648fb6e3edd27ad54c4d02a16a6758593"
+  },
+  "xl/printerSettings/printerSettings13.bin": {
+    "filename": "xl/printerSettings/printerSettings13.bin",
+    "uncompressed_size": 1052,
+    "compressed_size": 342,
+    "crc": 3780828055,
+    "compression_type": 8,
+    "sha256": "0003e96d20facc1999c64f9150a9c804ab96c72ad3ac64bcc9b9b6aa85632a22"
+  },
+  "xl/printerSettings/printerSettings14.bin": {
+    "filename": "xl/printerSettings/printerSettings14.bin",
+    "uncompressed_size": 8544,
+    "compressed_size": 893,
+    "crc": 1595586761,
+    "compression_type": 8,
+    "sha256": "47d089cd204b7ee1db22e168e9e7139a5be668e65e52017508d69420db18385a"
+  },
+  "xl/printerSettings/printerSettings15.bin": {
+    "filename": "xl/printerSettings/printerSettings15.bin",
+    "uncompressed_size": 8544,
+    "compressed_size": 892,
+    "crc": 1880000021,
+    "compression_type": 8,
+    "sha256": "1a35eb608b7bd89cbb31775c7c51d0083825fcc0f5be83eb4be44f83709a3f00"
+  },
+  "xl/printerSettings/printerSettings16.bin": {
+    "filename": "xl/printerSettings/printerSettings16.bin",
+    "uncompressed_size": 8544,
+    "compressed_size": 893,
+    "crc": 1595586761,
+    "compression_type": 8,
+    "sha256": "47d089cd204b7ee1db22e168e9e7139a5be668e65e52017508d69420db18385a"
+  },
+  "xl/printerSettings/printerSettings17.bin": {
+    "filename": "xl/printerSettings/printerSettings17.bin",
+    "uncompressed_size": 8544,
+    "compressed_size": 892,
+    "crc": 1880000021,
+    "compression_type": 8,
+    "sha256": "1a35eb608b7bd89cbb31775c7c51d0083825fcc0f5be83eb4be44f83709a3f00"
+  },
+  "xl/printerSettings/printerSettings30.bin": {
+    "filename": "xl/printerSettings/printerSettings30.bin",
+    "uncompressed_size": 8528,
+    "compressed_size": 788,
+    "crc": 2025653550,
+    "compression_type": 8,
+    "sha256": "881511c019df21a6da0a77199f9925744964a8c760e3a0a7ac1f899549fc20eb"
+  },
+  "xl/printerSettings/printerSettings31.bin": {
+    "filename": "xl/printerSettings/printerSettings31.bin",
+    "uncompressed_size": 8528,
+    "compressed_size": 788,
+    "crc": 2025653550,
+    "compression_type": 8,
+    "sha256": "881511c019df21a6da0a77199f9925744964a8c760e3a0a7ac1f899549fc20eb"
+  },
+  "xl/printerSettings/printerSettings32.bin": {
+    "filename": "xl/printerSettings/printerSettings32.bin",
+    "uncompressed_size": 1052,
+    "compressed_size": 342,
+    "crc": 3780828055,
+    "compression_type": 8,
+    "sha256": "0003e96d20facc1999c64f9150a9c804ab96c72ad3ac64bcc9b9b6aa85632a22"
+  },
+  "xl/calcChain.xml": {
+    "filename": "xl/calcChain.xml",
+    "uncompressed_size": 2400,
+    "compressed_size": 582,
+    "crc": 3008384332,
+    "compression_type": 8,
+    "sha256": "eabfc61face9d0be8c5f52be5099578f6365ce74698abdbd8722f73a9af471ca"
+  },
+  "customXml/item1.xml": {
+    "filename": "customXml/item1.xml",
+    "uncompressed_size": 219,
+    "compressed_size": 144,
+    "crc": 593659069,
+    "compression_type": 8,
+    "sha256": "5efcaf9ad70d9c29f406ee438f8f428b021a881d2c5afff0e53b00b1f67ae51e"
+  },
+  "customXml/itemProps1.xml": {
+    "filename": "customXml/itemProps1.xml",
+    "uncompressed_size": 335,
+    "compressed_size": 242,
+    "crc": 593430182,
+    "compression_type": 8,
+    "sha256": "ce32cff03c655ffeb6f7fa10ddd7121788341503c448b741f3e0ca0e4cde9ccc"
+  },
+  "customXml/item2.xml": {
+    "filename": "customXml/item2.xml",
+    "uncompressed_size": 9892,
+    "compressed_size": 1907,
+    "crc": 2889999378,
+    "compression_type": 8,
+    "sha256": "be599ecb09b59333396f40fb1b20f629e6fcd73bbd390aacecf7da53c00d7100"
+  },
+  "customXml/itemProps2.xml": {
+    "filename": "customXml/itemProps2.xml",
+    "uncompressed_size": 1088,
+    "compressed_size": 413,
+    "crc": 3291902241,
+    "compression_type": 8,
+    "sha256": "4737542c80a705da215fe59814ee6276ed070cd43fcca7605675051c1e58aab2"
+  },
+  "customXml/item3.xml": {
+    "filename": "customXml/item3.xml",
+    "uncompressed_size": 290,
+    "compressed_size": 192,
+    "crc": 3275983743,
+    "compression_type": 8,
+    "sha256": "b21b9cc9ff7d68daa06bcedaff78dd324bc614fe6c7d930ff92d2fd4a04a1106"
+  },
+  "customXml/itemProps3.xml": {
+    "filename": "customXml/itemProps3.xml",
+    "uncompressed_size": 893,
+    "compressed_size": 394,
+    "crc": 2533105862,
+    "compression_type": 8,
+    "sha256": "03da5ffa32b19de3373263c44316cc92790121bea6996bbcd44115c365d3d7cd"
+  },
+  "docMetadata/LabelInfo.xml": {
+    "filename": "docMetadata/LabelInfo.xml",
+    "uncompressed_size": 325,
+    "compressed_size": 246,
+    "crc": 2980466924,
+    "compression_type": 8,
+    "sha256": "93e410175875503ce030b121c7622c98df3b340c4e820bea67308e33e2697542"
+  },
+  "docProps/core.xml": {
+    "filename": "docProps/core.xml",
+    "uncompressed_size": 758,
+    "compressed_size": 422,
+    "crc": 1081573306,
+    "compression_type": 8,
+    "sha256": "95f51baba8a125c48561080db2f6433c9c70928273be437208b17b2aaa7c8db8"
+  },
+  "docProps/app.xml": {
+    "filename": "docProps/app.xml",
+    "uncompressed_size": 2553,
+    "compressed_size": 732,
+    "crc": 1681501075,
+    "compression_type": 8,
+    "sha256": "aca06d39a9f3c5c8dab2f3c3562d75033d1e6434a6f9727bbb1b63ffb537d9f7"
+  },
+  "docProps/custom.xml": {
+    "filename": "docProps/custom.xml",
+    "uncompressed_size": 1649,
+    "compressed_size": 490,
+    "crc": 3474072504,
+    "compression_type": 8,
+    "sha256": "a2f2d11a45387061ba6b3e71c6a8a6883ccdff72c522b8d59ae384e57b315bfc"
+  },
+  "xl/printerSettings/printerSettings21.bin": {
+    "filename": "xl/printerSettings/printerSettings21.bin",
+    "uncompressed_size": 1052,
+    "compressed_size": 344,
+    "crc": 4043668026,
+    "compression_type": 8,
+    "sha256": "0207ba09d3225b6291a35ca25db5211648fb6e3edd27ad54c4d02a16a6758593"
+  },
+  "xl/printerSettings/printerSettings20.bin": {
+    "filename": "xl/printerSettings/printerSettings20.bin",
+    "uncompressed_size": 1072,
+    "compressed_size": 159,
+    "crc": 3064509169,
+    "compression_type": 8,
+    "sha256": "812cf731a04a2f62f89467087635ff0fe6500af8c068c0ca669734b666eb1d6a"
+  },
+  "xl/printerSettings/printerSettings19.bin": {
+    "filename": "xl/printerSettings/printerSettings19.bin",
+    "uncompressed_size": 1072,
+    "compressed_size": 159,
+    "crc": 3064509169,
+    "compression_type": 8,
+    "sha256": "812cf731a04a2f62f89467087635ff0fe6500af8c068c0ca669734b666eb1d6a"
+  },
+  "xl/printerSettings/printerSettings22.bin": {
+    "filename": "xl/printerSettings/printerSettings22.bin",
+    "uncompressed_size": 8528,
+    "compressed_size": 788,
+    "crc": 2025653550,
+    "compression_type": 8,
+    "sha256": "881511c019df21a6da0a77199f9925744964a8c760e3a0a7ac1f899549fc20eb"
+  },
+  "xl/printerSettings/printerSettings23.bin": {
+    "filename": "xl/printerSettings/printerSettings23.bin",
+    "uncompressed_size": 8528,
+    "compressed_size": 788,
+    "crc": 2025653550,
+    "compression_type": 8,
+    "sha256": "881511c019df21a6da0a77199f9925744964a8c760e3a0a7ac1f899549fc20eb"
+  },
+  "xl/printerSettings/printerSettings24.bin": {
+    "filename": "xl/printerSettings/printerSettings24.bin",
+    "uncompressed_size": 8528,
+    "compressed_size": 788,
+    "crc": 2025653550,
+    "compression_type": 8,
+    "sha256": "881511c019df21a6da0a77199f9925744964a8c760e3a0a7ac1f899549fc20eb"
+  },
+  "xl/printerSettings/printerSettings25.bin": {
+    "filename": "xl/printerSettings/printerSettings25.bin",
+    "uncompressed_size": 8528,
+    "compressed_size": 788,
+    "crc": 2025653550,
+    "compression_type": 8,
+    "sha256": "881511c019df21a6da0a77199f9925744964a8c760e3a0a7ac1f899549fc20eb"
+  },
+  "xl/printerSettings/printerSettings26.bin": {
+    "filename": "xl/printerSettings/printerSettings26.bin",
+    "uncompressed_size": 8528,
+    "compressed_size": 788,
+    "crc": 2025653550,
+    "compression_type": 8,
+    "sha256": "881511c019df21a6da0a77199f9925744964a8c760e3a0a7ac1f899549fc20eb"
+  },
+  "xl/printerSettings/printerSettings27.bin": {
+    "filename": "xl/printerSettings/printerSettings27.bin",
+    "uncompressed_size": 8528,
+    "compressed_size": 788,
+    "crc": 2025653550,
+    "compression_type": 8,
+    "sha256": "881511c019df21a6da0a77199f9925744964a8c760e3a0a7ac1f899549fc20eb"
+  },
+  "xl/externalLinks/_rels/externalLink1.xml.rels": {
+    "filename": "xl/externalLinks/_rels/externalLink1.xml.rels",
+    "uncompressed_size": 742,
+    "compressed_size": 408,
+    "crc": 1000410390,
+    "compression_type": 8,
+    "sha256": "a71d82cd8902add632dffd6226067054b0db7e7129c2fa4f42b72f665bbee384"
+  },
+  "xl/externalLinks/_rels/externalLink2.xml.rels": {
+    "filename": "xl/externalLinks/_rels/externalLink2.xml.rels",
+    "uncompressed_size": 442,
+    "compressed_size": 292,
+    "crc": 878500058,
+    "compression_type": 8,
+    "sha256": "e2c70a83d6238e837e2fe8e7f593edd9ce59ddca6f4c827d5e57ee433387d1b6"
+  },
+  "xl/printerSettings/printerSettings28.bin": {
+    "filename": "xl/printerSettings/printerSettings28.bin",
+    "uncompressed_size": 8528,
+    "compressed_size": 788,
+    "crc": 2025653550,
+    "compression_type": 8,
+    "sha256": "881511c019df21a6da0a77199f9925744964a8c760e3a0a7ac1f899549fc20eb"
+  },
+  "xl/printerSettings/printerSettings18.bin": {
+    "filename": "xl/printerSettings/printerSettings18.bin",
+    "uncompressed_size": 1052,
+    "compressed_size": 344,
+    "crc": 4043668026,
+    "compression_type": 8,
+    "sha256": "0207ba09d3225b6291a35ca25db5211648fb6e3edd27ad54c4d02a16a6758593"
+  },
+  "customXml/_rels/item1.xml.rels": {
+    "filename": "customXml/_rels/item1.xml.rels",
+    "uncompressed_size": 296,
+    "compressed_size": 194,
+    "crc": 2050572148,
+    "compression_type": 8,
+    "sha256": "80482f86e196171d66001e0e74d1900408a3aaf2463e54005d251b5f2db9a0b0"
+  },
+  "customXml/_rels/item2.xml.rels": {
+    "filename": "customXml/_rels/item2.xml.rels",
+    "uncompressed_size": 296,
+    "compressed_size": 195,
+    "crc": 573019740,
+    "compression_type": 8,
+    "sha256": "2a6aee4c8a9714223a3568077411a0c82d11b484b1c9ab93a19d50b99c57baa5"
+  },
+  "customXml/_rels/item3.xml.rels": {
+    "filename": "customXml/_rels/item3.xml.rels",
+    "uncompressed_size": 296,
+    "compressed_size": 195,
+    "crc": 2734879611,
+    "compression_type": 8,
+    "sha256": "3aa4054f7f463c6d441102c960783aa7f937d6945a0a885b624a66aafaeedb6c"
+  },
+  "xl/printerSettings/printerSettings29.bin": {
+    "filename": "xl/printerSettings/printerSettings29.bin",
+    "uncompressed_size": 1052,
+    "compressed_size": 300,
+    "crc": 615798749,
+    "compression_type": 8,
+    "sha256": "1c6548f4491255ee5a74e65f94e47b470b38a70d7598dbcae3df7e0ef467f0d7"
+  }
+}

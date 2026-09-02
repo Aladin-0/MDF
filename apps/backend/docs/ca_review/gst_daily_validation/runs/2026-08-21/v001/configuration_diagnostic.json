@@ -1,0 +1,6 @@
+{
+    "SANDBOX_PROVIDER_MODE": "live",
+    "SANDBOX_BASE_URL": "https://api.sandbox.co.in",
+    "ENABLE_GST_SANDBOX_LIVE_MODE": true,
+    "COERCE_DECIMAL_TO_STRING": true
+}

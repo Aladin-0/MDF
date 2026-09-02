@@ -1,0 +1,232 @@
+{
+  "gstin": "27AAPCM1753L2ZX",
+  "fp": "082026",
+  "gt": 0.0,
+  "cur_gt": 0.0,
+  "b2b": [
+    {
+      "ctin": "24GGGGG0000G1Z5",
+      "inv": [
+        {
+          "inum": "SEED-INV-90",
+          "idt": "05-08-2026",
+          "val": 16030.0,
+          "pos": "24",
+          "rchrg": "N",
+          "inv_typ": "R",
+          "itms": [
+            {
+              "num": 1,
+              "itm_det": {
+                "rt": 0.0,
+                "txval": 100.0,
+                "iamt": 0.0,
+                "camt": 0.0,
+                "samt": 0.0,
+                "csamt": 0.0
+              }
+            },
+            {
+              "num": 2,
+              "itm_det": {
+                "rt": 18.0,
+                "txval": 13500.0,
+                "iamt": 2430.0,
+                "camt": 0.0,
+                "samt": 0.0,
+                "csamt": 0.0
+              }
+            }
+          ]
+        },
+        {
+          "inum": "SEED-INV-75",
+          "idt": "02-08-2026",
+          "val": 11157.6,
+          "pos": "24",
+          "rchrg": "N",
+          "inv_typ": "R",
+          "itms": [
+            {
+              "num": 1,
+              "itm_det": {
+                "rt": 12.0,
+                "txval": 480.0,
+                "iamt": 57.6,
+                "camt": 0.0,
+                "samt": 0.0,
+                "csamt": 0.0
+              }
+            },
+            {
+              "num": 2,
+              "itm_det": {
+                "rt": 18.0,
+                "txval": 9000.0,
+                "iamt": 1620.0,
+                "camt": 0.0,
+                "samt": 0.0,
+                "csamt": 0.0
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "ctin": "27CCCCC0000C1Z5",
+      "inv": [
+        {
+          "inum": "SEED-INV-55",
+          "idt": "05-08-2026",
+          "val": 575.0,
+          "pos": "27",
+          "rchrg": "N",
+          "inv_typ": "R",
+          "itms": [
+            {
+              "num": 1,
+              "itm_det": {
+                "rt": 12.0,
+                "txval": 250.0,
+                "iamt": 0.0,
+                "camt": 15.0,
+                "samt": 15.0,
+                "csamt": 0.0
+              }
+            },
+            {
+              "num": 2,
+              "itm_det": {
+                "rt": 18.0,
+                "txval": 250.0,
+                "iamt": 0.0,
+                "camt": 22.5,
+                "samt": 22.5,
+                "csamt": 0.0
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "b2cs": [
+    {
+      "sply_ty": "INTER",
+      "rt": 12.0,
+      "typ": "OE",
+      "pos": "MH",
+      "txval": 240.0,
+      "iamt": 28.8,
+      "camt": 0.0,
+      "samt": 0.0,
+      "csamt": 0.0
+    },
+    {
+      "sply_ty": "INTER",
+      "rt": 18.0,
+      "typ": "OE",
+      "pos": "MH",
+      "txval": 1000.0,
+      "iamt": 180.0,
+      "camt": 0.0,
+      "samt": 0.0,
+      "csamt": 0.0
+    }
+  ],
+  "cdnr": [
+    {
+      "ctin": "27CCCCC0000C1Z5",
+      "nt": [
+        {
+          "nt_num": "SEED-RET-1",
+          "nt_dt": "2026-08-01",
+          "ntty": "C",
+          "p_gst": "N",
+          "rsn": "Damaged/Expired",
+          "val": 2065.0,
+          "itms": [
+            {
+              "num": 1,
+              "itm_det": {
+                "rt": 18.0,
+                "txval": 1750.0,
+                "iamt": 0.0,
+                "camt": 157.5,
+                "samt": 157.5,
+                "csamt": 0.0
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "cdnur": [],
+  "hsn": {
+    "data": [
+      {
+        "num": 1,
+        "hsn_sc": "12340002",
+        "uqc": "PAC",
+        "qty": 6.0,
+        "txval": 720.0,
+        "rt": 12.0,
+        "iamt": 86.4,
+        "camt": 0.0,
+        "samt": 0.0,
+        "csamt": 0.0
+      },
+      {
+        "num": 2,
+        "hsn_sc": "21069099",
+        "uqc": "PAC",
+        "qty": -2.0,
+        "txval": -500.0,
+        "rt": 18.0,
+        "iamt": 180.0,
+        "camt": -135.0,
+        "samt": -135.0,
+        "csamt": 0.0
+      },
+      {
+        "num": 3,
+        "hsn_sc": "90189019",
+        "uqc": "PAC",
+        "qty": 15.0,
+        "txval": 22500.0,
+        "rt": 18.0,
+        "iamt": 4050.0,
+        "camt": 0.0,
+        "samt": 0.0,
+        "csamt": 0.0
+      },
+      {
+        "num": 4,
+        "hsn_sc": "12340001",
+        "uqc": "PAC",
+        "qty": 5.0,
+        "txval": 250.0,
+        "rt": 12.0,
+        "iamt": 0.0,
+        "camt": 15.0,
+        "samt": 15.0,
+        "csamt": 0.0
+      }
+    ]
+  },
+  "_metadata": {
+    "validation_warnings": [],
+    "blocking_errors": [
+      {
+        "level": "BLOCKING_ERROR",
+        "code": "HSN-001d",
+        "message": "Dummy HSN '00000000' is not allowed on SEED-INV-90.",
+        "reference_id": "SEED-INV-90"
+      }
+    ],
+    "info": [],
+    "is_valid_for_export": false
+  }
+}

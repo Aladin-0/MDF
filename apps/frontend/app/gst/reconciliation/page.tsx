@@ -178,7 +178,7 @@ export default function ReconciliationPage() {
         customActionRight={SyncButton}
         excelDownloadLabel="Download Reconciliation Audit Report (.xlsx)"
         excelDownloadIcon={<FileSpreadsheet className="mr-2 h-4 w-4" />}
-        onSearch={() => toast('Filters applied')}
+        onSearch={(start, end) => toast('Filters applied')}
         onPrint={() => window.print()}
         onDownloadExcel={async () => {
           if (!period) return;

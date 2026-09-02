@@ -1,0 +1,210 @@
+{
+  "GSTR1": {
+    "filename": "Copy of GSTR1_Excel_Workbook_Template_V2.2.xlsx",
+    "purpose": "GSTR1",
+    "source_url": "https://www.gst.gov.in/download/returns",
+    "version": "V2.2",
+    "extension": "xlsx",
+    "size_bytes": 7055318,
+    "sha256": "89cbc4131e3f3e20d3cebf82f5a31f0d646bf94a3fff37823999a33b23651a40",
+    "vba_present": false,
+    "sheets": [
+      {
+        "name": "Help Instruction",
+        "visibility": "visible",
+        "dimensions": "B1:XFC419"
+      },
+      {
+        "name": "b2b,sez,de",
+        "visibility": "visible",
+        "dimensions": "A1:N20003"
+      },
+      {
+        "name": "b2ba",
+        "visibility": "visible",
+        "dimensions": "A1:O120000"
+      },
+      {
+        "name": "b2cl",
+        "visibility": "visible",
+        "dimensions": "A1:I20003"
+      },
+      {
+        "name": "b2cla",
+        "visibility": "visible",
+        "dimensions": "A1:K4"
+      },
+      {
+        "name": "b2cs",
+        "visibility": "visible",
+        "dimensions": "A1:H20003"
+      },
+      {
+        "name": "b2csa",
+        "visibility": "visible",
+        "dimensions": "A1:I9"
+      },
+      {
+        "name": "cdnr",
+        "visibility": "visible",
+        "dimensions": "A1:M20003"
+      },
+      {
+        "name": "cdnra",
+        "visibility": "visible",
+        "dimensions": "A1:O20003"
+      },
+      {
+        "name": "cdnur",
+        "visibility": "visible",
+        "dimensions": "A1:J20003"
+      },
+      {
+        "name": "cdnura",
+        "visibility": "visible",
+        "dimensions": "A1:L20003"
+      },
+      {
+        "name": "exp",
+        "visibility": "visible",
+        "dimensions": "A1:J20003"
+      },
+      {
+        "name": "expa",
+        "visibility": "visible",
+        "dimensions": "A1:L2000"
+      },
+      {
+        "name": "at",
+        "visibility": "visible",
+        "dimensions": "A1:E20003"
+      },
+      {
+        "name": "ata",
+        "visibility": "visible",
+        "dimensions": "A1:G20003"
+      },
+      {
+        "name": "atadj",
+        "visibility": "visible",
+        "dimensions": "A1:E20003"
+      },
+      {
+        "name": "atadja",
+        "visibility": "visible",
+        "dimensions": "A1:G20003"
+      },
+      {
+        "name": "exemp",
+        "visibility": "visible",
+        "dimensions": "A1:D8"
+      },
+      {
+        "name": "hsn(b2b)",
+        "visibility": "visible",
+        "dimensions": "A1:K1999"
+      },
+      {
+        "name": "hsn(b2c)",
+        "visibility": "visible",
+        "dimensions": "A1:K1999"
+      },
+      {
+        "name": "docs",
+        "visibility": "visible",
+        "dimensions": "A1:E1003"
+      },
+      {
+        "name": "eco",
+        "visibility": "visible",
+        "dimensions": "A1:H7"
+      },
+      {
+        "name": "ecoa",
+        "visibility": "visible",
+        "dimensions": "A1:K7"
+      },
+      {
+        "name": "ecob2b",
+        "visibility": "visible",
+        "dimensions": "A1:L6"
+      },
+      {
+        "name": "ecourp2b",
+        "visibility": "visible",
+        "dimensions": "A1:J4"
+      },
+      {
+        "name": "ecob2c",
+        "visibility": "visible",
+        "dimensions": "A1:F4"
+      },
+      {
+        "name": "ecourp2c",
+        "visibility": "visible",
+        "dimensions": "A1:D4"
+      },
+      {
+        "name": "ecoab2b",
+        "visibility": "visible",
+        "dimensions": "A1:N14"
+      },
+      {
+        "name": "ecoab2c",
+        "visibility": "visible",
+        "dimensions": "A1:H5"
+      },
+      {
+        "name": "ecoaurp2b",
+        "visibility": "visible",
+        "dimensions": "A1:L12"
+      },
+      {
+        "name": "ecoaurp2c",
+        "visibility": "visible",
+        "dimensions": "A1:K8"
+      },
+      {
+        "name": "master",
+        "visibility": "hidden",
+        "dimensions": "A1:P56"
+      }
+    ],
+    "status": "VERIFIED_TEMPLATE",
+    "inspection_timestamp": "2026-08-16T16:11:50+05:30"
+  },
+  "GSTR3B": {
+    "filename": "GSTR3B_Excel_Utility_V5.6.xlsm",
+    "purpose": "GSTR3B",
+    "source_url": "https://www.gst.gov.in/download/returns",
+    "version": "V5.6",
+    "extension": "xlsm",
+    "size_bytes": 102406,
+    "sha256": "dc99832e012bc7a9e1d89c34f68a086f4882ae325bb480fcf3e434c23e45c0d1",
+    "vba_present": true,
+    "sheets": [
+      {
+        "name": "Help Instructions ",
+        "visibility": "visible",
+        "dimensions": "B1:B12"
+      },
+      {
+        "name": "GSTR-3B",
+        "visibility": "visible",
+        "dimensions": "A1:M126"
+      },
+      {
+        "name": "Sheet1",
+        "visibility": "hidden",
+        "dimensions": "A1:A9"
+      },
+      {
+        "name": "Master",
+        "visibility": "hidden",
+        "dimensions": "A1:U39"
+      }
+    ],
+    "status": "VERIFIED_TEMPLATE",
+    "inspection_timestamp": "2026-08-16T16:11:50+05:30"
+  }
+}

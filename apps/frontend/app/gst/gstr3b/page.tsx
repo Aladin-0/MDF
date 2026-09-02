@@ -47,11 +47,11 @@ export default function GSTR3BPage() {
     const [reportType, setReportType] = useState('all');
     const [taxFilter, setTaxFilter] = useState('all');
 
-    const loadDashboardData = useCallback(async (period: string) => {
-        if (!period) return;
+    const loadDashboardData = useCallback(async (start?: string, end?: string) => {
+        if (!start || !end) return;
         setLoading(true);
         try {
-            const summary = await gstApi.getSummary(period);
+            const summary = await gstApi.getSummary(start, end);
             setSummaryData(summary);
         } catch (error) {
             console.error("Failed to load dashboard data", error);
@@ -62,7 +62,7 @@ export default function GSTR3BPage() {
     }, [toast]);
 
     useEffect(() => {
-        loadDashboardData();
+        // loadDashboardData(); // Initial load skipped since we need explicit dates
     }, [loadDashboardData]);
 
     // Data for Table 3.1
@@ -236,7 +236,7 @@ export default function GSTR3BPage() {
               setReportType={setReportType}
               taxFilter={taxFilter}
               setTaxFilter={setTaxFilter}
-              onSearch={() => loadDashboardData()}
+              onSearch={(start, end) => loadDashboardData(start, end)}
               onPrint={handlePrint}
               onDownloadExcel={handleExportExcel}
               onDownloadJson={handleExportJson}

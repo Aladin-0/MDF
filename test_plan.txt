@@ -1,4 +1,0 @@
-1. Add qty_returned_strips, qty_returned_loose to SaleItem and SaleReturnItem.
-2. Add FF_DUAL_RETURN_MODEL to settings.
-3. Update atomic_sale_return_update and post_sale_return to handle the adapter logic and dual write.
-4. Write test_sale_return_rollout.py in billing/tests.

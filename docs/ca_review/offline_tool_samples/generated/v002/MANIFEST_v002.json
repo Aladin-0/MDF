@@ -1,0 +1,31 @@
+{
+  "version": "v002",
+  "timestamp_utc": "2026-08-19T11:03:09.208442",
+  "template_sha256": "89cbc4131e3f3e20d3cebf82f5a31f0d646bf94a3fff37823999a33b23651a40",
+  "outputs": {
+    "Clean": {
+      "path": "/home/asta/coding/MDF/docs/ca_review/offline_tool_samples/generated/v002/GSTR1_Clean_092026_v002.xlsx",
+      "sha256": "5b9c2124463c80c1fa53db8b7cd042cef99a0b45e5991204b6d004a181aa22f1",
+      "size": 6181411,
+      "modified_members": [
+        "xl/worksheets/sheet2.xml",
+        "xl/worksheets/sheet19.xml"
+      ]
+    },
+    "Advanced": {
+      "path": "/home/asta/coding/MDF/docs/ca_review/offline_tool_samples/generated/v002/GSTR1_Advanced_102026_v002.xlsx",
+      "sha256": "f9382db6ab39a666b451598a23f1c11d2cfaa47e6ecf548dd9e8f67bd607e652",
+      "size": 6182907,
+      "modified_members": [
+        "xl/worksheets/sheet2.xml",
+        "xl/worksheets/sheet4.xml",
+        "xl/worksheets/sheet6.xml",
+        "xl/worksheets/sheet8.xml",
+        "xl/worksheets/sheet19.xml",
+        "xl/worksheets/sheet20.xml"
+      ]
+    }
+  },
+  "tests": "============================= test session starts ==============================\nplatform linux -- Python 3.12.3, pytest-9.1.0, pluggy-1.6.0 -- /home/asta/coding/MDF/apps/backend/venv/bin/python3\ncachedir: .pytest_cache\ndjango: version: 5.0.3, settings: mediflow.settings.dev (from env)\nrootdir: /home/asta/coding/MDF/apps/backend\nconfigfile: pytest.ini\nplugins: Faker-40.36.0, django-4.12.0\ncollecting ... collected 2 items\n\napps/reports/tests/test_ooxml_integrity.py::OOXMLIntegrityTestCase::test_advanced_sample_integrity PASSED [ 50%]\napps/reports/tests/test_ooxml_integrity.py::OOXMLIntegrityTestCase::test_clean_sample_integrity PASSED [100%]\n\n=============================== warnings summary ===============================\napps/reports/tests/test_ooxml_integrity.py::OOXMLIntegrityTestCase::test_advanced_sample_integrity\napps/reports/tests/test_ooxml_integrity.py::OOXMLIntegrityTestCase::test_advanced_sample_integrity\napps/reports/tests/test_ooxml_integrity.py::OOXMLIntegrityTestCase::test_clean_sample_integrity\napps/reports/tests/test_ooxml_integrity.py::OOXMLIntegrityTestCase::test_clean_sample_integrity\n  /home/asta/coding/MDF/apps/backend/venv/lib/python3.12/site-packages/openpyxl/packaging/core.py:99: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).\n    now = datetime.datetime.utcnow()\n\napps/reports/tests/test_ooxml_integrity.py::OOXMLIntegrityTestCase::test_advanced_sample_integrity\napps/reports/tests/test_ooxml_integrity.py::OOXMLIntegrityTestCase::test_clean_sample_integrity\n  /home/asta/coding/MDF/apps/backend/venv/lib/python3.12/site-packages/openpyxl/worksheet/_reader.py:329: UserWarning: Data Validation extension is not supported and will be removed\n    warn(msg)\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n=================== 2 passed, 6 warnings in 88.54s (0:01:28) ===================\n\n",
+  "status": "EXCEL_OPEN_PENDING"
+}

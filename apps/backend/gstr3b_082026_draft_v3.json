@@ -1,0 +1,72 @@
+{
+  "gstin": "27AAAAA1234A1Z5",
+  "ret_period": "082026",
+  "sup_details": {
+    "osup_det": {
+      "txval": "20000.00",
+      "iamt": "3600.00",
+      "camt": "0.00",
+      "samt": "0.00",
+      "csamt": "0.00"
+    },
+    "osup_zero": {
+      "txval": "0.00",
+      "iamt": "0.00",
+      "csamt": "0.00"
+    },
+    "osup_nil_exmp": {
+      "txval": "0.00",
+      "iamt": "0.00",
+      "camt": "0.00",
+      "samt": "0.00"
+    },
+    "isup_rev": {
+      "txval": "0.00",
+      "iamt": "0.00",
+      "camt": "0.00",
+      "samt": "0.00",
+      "csamt": "0.00"
+    },
+    "osup_nongst": {
+      "txval": "0.00",
+      "iamt": "0.00",
+      "camt": "0.00",
+      "samt": "0.00",
+      "csamt": "0.00"
+    }
+  },
+  "inter_sup": {
+    "unreg_details": [],
+    "comp_details": [],
+    "uin_details": []
+  },
+  "itc_elg": {
+    "itc_avl": [
+      {
+        "ty": "All other ITC",
+        "iamt": "0.00",
+        "camt": "1080.00",
+        "samt": "1080.00",
+        "csamt": "0.00"
+      }
+    ],
+    "itc_rev": [],
+    "itc_inelg": []
+  },
+  "other_details": [
+    {
+      "ty": "ITC reclaimed which was reversed under Table 4(B)(2) in earlier tax period",
+      "iamt": "0.00",
+      "camt": "180.00",
+      "samt": "180.00",
+      "csamt": "0.00"
+    }
+  ],
+  "_metadata": {
+    "disclaimer": "Draft GSTR-3B generated based on snapshots.",
+    "validation_warnings": [],
+    "blocking_errors": [],
+    "info": [],
+    "is_valid_for_export": true
+  }
+}

@@ -1,0 +1,88 @@
+# Forensic OOXML ZIP Inventory Report
+
+## 1. Missing in OpenPyxl (Corrupted/Lost Data)
+The following files existed in the original template but were dropped by OpenPyxl:
+- `xl/worksheets/_rels/sheet15.xml.rels`
+- `xl/worksheets/_rels/sheet16.xml.rels`
+- `xl/sharedStrings.xml`
+- `xl/worksheets/_rels/sheet17.xml.rels`
+- `xl/worksheets/_rels/sheet18.xml.rels`
+- `xl/drawings/vmlDrawing1.vml`
+- `xl/media/image2.png`
+- `xl/media/image3.jpeg`
+- `xl/worksheets/_rels/sheet19.xml.rels`
+- `xl/worksheets/_rels/sheet20.xml.rels`
+- `xl/worksheets/_rels/sheet21.xml.rels`
+- `xl/worksheets/_rels/sheet22.xml.rels`
+- `xl/worksheets/_rels/sheet23.xml.rels`
+- `xl/worksheets/_rels/sheet25.xml.rels`
+- `xl/worksheets/_rels/sheet26.xml.rels`
+- `xl/worksheets/_rels/sheet27.xml.rels`
+- `xl/worksheets/_rels/sheet28.xml.rels`
+- `xl/worksheets/_rels/sheet29.xml.rels`
+- `xl/worksheets/_rels/sheet30.xml.rels`
+- `xl/worksheets/_rels/sheet31.xml.rels`
+- `xl/worksheets/_rels/sheet32.xml.rels`
+- `xl/drawings/_rels/vmlDrawing1.vml.rels`
+- `xl/worksheets/_rels/sheet24.xml.rels`
+- `xl/worksheets/_rels/sheet8.xml.rels`
+- `xl/worksheets/_rels/sheet2.xml.rels`
+- `xl/worksheets/_rels/sheet3.xml.rels`
+- `xl/worksheets/_rels/sheet4.xml.rels`
+- `xl/worksheets/_rels/sheet5.xml.rels`
+- `xl/worksheets/_rels/sheet6.xml.rels`
+- `xl/worksheets/_rels/sheet7.xml.rels`
+- `xl/worksheets/_rels/sheet9.xml.rels`
+- `xl/worksheets/_rels/sheet10.xml.rels`
+- `xl/worksheets/_rels/sheet11.xml.rels`
+- `xl/worksheets/_rels/sheet12.xml.rels`
+- `xl/worksheets/_rels/sheet13.xml.rels`
+- `xl/worksheets/_rels/sheet14.xml.rels`
+- `xl/metadata.xml`
+- `xl/printerSettings/printerSettings1.bin`
+- `xl/printerSettings/printerSettings2.bin`
+- `xl/printerSettings/printerSettings3.bin`
+- `xl/printerSettings/printerSettings4.bin`
+- `xl/printerSettings/printerSettings5.bin`
+- `xl/printerSettings/printerSettings6.bin`
+- `xl/printerSettings/printerSettings7.bin`
+- `xl/printerSettings/printerSettings8.bin`
+- `xl/printerSettings/printerSettings9.bin`
+- `xl/printerSettings/printerSettings10.bin`
+- `xl/printerSettings/printerSettings11.bin`
+- `xl/printerSettings/printerSettings12.bin`
+- `xl/printerSettings/printerSettings13.bin`
+- `xl/printerSettings/printerSettings14.bin`
+- `xl/printerSettings/printerSettings15.bin`
+- `xl/printerSettings/printerSettings16.bin`
+- `xl/printerSettings/printerSettings17.bin`
+- `xl/printerSettings/printerSettings30.bin`
+- `xl/printerSettings/printerSettings31.bin`
+- `xl/printerSettings/printerSettings32.bin`
+- `xl/calcChain.xml`
+- `customXml/item1.xml`
+- `customXml/itemProps1.xml`
+- `customXml/item2.xml`
+- `customXml/itemProps2.xml`
+- `customXml/item3.xml`
+- `customXml/itemProps3.xml`
+- `docMetadata/LabelInfo.xml`
+- `xl/printerSettings/printerSettings21.bin`
+- `xl/printerSettings/printerSettings20.bin`
+- `xl/printerSettings/printerSettings19.bin`
+- `xl/printerSettings/printerSettings22.bin`
+- `xl/printerSettings/printerSettings23.bin`
+- `xl/printerSettings/printerSettings24.bin`
+- `xl/printerSettings/printerSettings25.bin`
+- `xl/printerSettings/printerSettings26.bin`
+- `xl/printerSettings/printerSettings27.bin`
+- `xl/printerSettings/printerSettings28.bin`
+- `xl/printerSettings/printerSettings18.bin`
+- `customXml/_rels/item1.xml.rels`
+- `customXml/_rels/item2.xml.rels`
+- `customXml/_rels/item3.xml.rels`
+- `xl/printerSettings/printerSettings29.bin`
+
+## 2. Missing in OOXMLInjector
+The following files existed in the original template but were dropped by OOXMLInjector:
+*(None. All ZIP members from template are perfectly preserved.)*

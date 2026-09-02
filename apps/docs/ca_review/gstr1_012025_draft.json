@@ -1,0 +1,144 @@
+{
+  "gstin": "27AAPCM1753L2ZX",
+  "fp": "012025",
+  "gt": 0.0,
+  "cur_gt": 0.0,
+  "b2b": [
+    {
+      "ctin": "27CCCCC0000C1Z5",
+      "inv": [
+        {
+          "inum": "SEED-ANCHOR-INV-1",
+          "idt": "15-01-2025",
+          "val": 112.0,
+          "pos": "27",
+          "rchrg": "N",
+          "inv_typ": "R",
+          "itms": [
+            {
+              "num": 1,
+              "itm_det": {
+                "rt": 12.0,
+                "txval": 100.0,
+                "iamt": 0.0,
+                "camt": 6.0,
+                "samt": 6.0,
+                "csamt": 0.0
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "b2cl": [
+    {
+      "pos": "DL",
+      "inv": [
+        {
+          "inum": "SEED-ANCHOR-INV-3-B2CL",
+          "idt": "15-01-2025",
+          "val": 168000.0,
+          "itms": [
+            {
+              "num": 1,
+              "itm_det": {
+                "rt": 12.0,
+                "txval": 150000.0,
+                "iamt": 18000.0,
+                "csamt": 0.0
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "b2cs": [
+    {
+      "sply_ty": "INTER",
+      "rt": 12.0,
+      "typ": "OE",
+      "pos": "DL",
+      "txval": 200.0,
+      "iamt": 24.0,
+      "camt": 0.0,
+      "samt": 0.0,
+      "csamt": 0.0
+    }
+  ],
+  "cdnr": [
+    {
+      "ctin": "27CCCCC0000C1Z5",
+      "nt": [
+        {
+          "nt_num": "SEED-ANCHOR-RET-1",
+          "nt_dt": "2025-01-16",
+          "ntty": "C",
+          "p_gst": "N",
+          "rsn": "Damaged",
+          "val": 56.0,
+          "itms": [
+            {
+              "num": 1,
+              "itm_det": {
+                "rt": 12.0,
+                "txval": 50.0,
+                "iamt": 0.0,
+                "camt": 3.0,
+                "samt": 3.0,
+                "csamt": 0.0
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "cdnur": [
+    {
+      "typ": "B2CL",
+      "nt_num": "SEED-ANCHOR-RET-2-B2CL",
+      "nt_dt": "2025-01-16",
+      "ntty": "C",
+      "p_gst": "N",
+      "rsn": "Damaged",
+      "val": 11200.0,
+      "itms": [
+        {
+          "num": 1,
+          "itm_det": {
+            "rt": 12.0,
+            "txval": 10000.0,
+            "iamt": 1200.0,
+            "camt": 0.0,
+            "samt": 0.0,
+            "csamt": 0.0
+          }
+        }
+      ]
+    }
+  ],
+  "hsn": {
+    "data": [
+      {
+        "num": 1,
+        "hsn_sc": "12340002",
+        "uqc": "PAC",
+        "qty": 14025.0,
+        "txval": 140250.0,
+        "rt": 12.0,
+        "iamt": 16824.0,
+        "camt": 3.0,
+        "samt": 3.0,
+        "csamt": 0.0
+      }
+    ]
+  },
+  "_metadata": {
+    "validation_warnings": [],
+    "blocking_errors": [],
+    "info": [],
+    "is_valid_for_export": true
+  }
+}

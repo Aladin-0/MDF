@@ -8,7 +8,7 @@ from apps.reports import dashboard_views
 
 urlpatterns = [
     path('periods/', dashboard_views.GSTPeriodsView.as_view(), name='gst-periods'),
-    path('summary/<str:fp>/', dashboard_views.GSTSummaryView.as_view(), name='gst-summary'),
+    path('summary/', dashboard_views.GSTSummaryView.as_view(), name='gst-summary'),
     path('reconciliation/<str:fp>/', dashboard_views.GSTReconciliationView.as_view(), name='gst-reconciliation'),
     path('export/<str:fp>/gstr1_excel/', GSTR1ExcelExportView.as_view(), name='gst-export-gstr1-excel'),
     path('export/<str:fp>/gstr3b_excel/', GSTR3BExcelExportView.as_view(), name='gst-export-gstr3b-excel'),

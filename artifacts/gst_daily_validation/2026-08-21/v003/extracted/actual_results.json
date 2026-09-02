@@ -1,0 +1,14 @@
+{
+  "base_sales_gst": "36635.00",
+  "sales_return_gst": "24.00",
+  "sales_credit_note_gst": "6.00",
+  "sales_debit_note_gst": "0.00",
+  "base_purchase_gst": "300.00",
+  "purchase_return_gst": "12.00",
+  "purchase_credit_note_gst": "0.00",
+  "purchase_debit_note_gst": "12.00",
+  "output_tax": "36605.00",
+  "eligible_itc": "300.00",
+  "itc_reversal": "12.00",
+  "net_liability": "36305.00"
+}

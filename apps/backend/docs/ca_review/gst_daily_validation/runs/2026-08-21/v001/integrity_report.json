@@ -1,0 +1,6 @@
+{
+    "immutability_guaranteed": true,
+    "raw_payload_hash_tracked": null,
+    "pagination_completeness_tracked": true,
+    "decimal_preservation": true
+}

@@ -1,0 +1,64 @@
+{
+  "gstin": "27AADCB2230M1Z2",
+  "ret_period": "012025",
+  "sup_details": {
+    "osup_det": {
+      "txval": "304150.00",
+      "iamt": "36360.00",
+      "camt": "122.50",
+      "samt": "122.50",
+      "csamt": "0.00"
+    },
+    "osup_zero": {
+      "txval": "0.00",
+      "iamt": "0.00",
+      "csamt": "0.00"
+    },
+    "osup_nil_exmp": {
+      "txval": "0.00",
+      "iamt": "0.00",
+      "camt": "0.00",
+      "samt": "0.00"
+    },
+    "isup_rev": {
+      "txval": "0.00",
+      "iamt": "0.00",
+      "camt": "0.00",
+      "samt": "0.00",
+      "csamt": "0.00"
+    },
+    "osup_nongst": {
+      "txval": "0.00",
+      "iamt": "0.00",
+      "camt": "0.00",
+      "samt": "0.00",
+      "csamt": "0.00"
+    }
+  },
+  "inter_sup": {
+    "unreg_details": [],
+    "comp_details": [],
+    "uin_details": []
+  },
+  "itc_elg": {
+    "itc_avl": [
+      {
+        "ty": "All other ITC",
+        "iamt": "180.00",
+        "camt": "66.00",
+        "samt": "66.00",
+        "csamt": "0.00"
+      }
+    ],
+    "itc_rev": [],
+    "itc_inelg": []
+  },
+  "other_details": [],
+  "_metadata": {
+    "disclaimer": "Draft GSTR-3B generated based on snapshots.",
+    "validation_warnings": [],
+    "blocking_errors": [],
+    "info": [],
+    "is_valid_for_export": true
+  }
+}
