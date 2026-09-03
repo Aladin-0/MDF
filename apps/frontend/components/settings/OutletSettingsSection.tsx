@@ -15,6 +15,7 @@ import { Separator } from '@/components/ui/separator';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useAuthStore } from '@/store/authStore';
 import { useToast } from '@/hooks/use-toast';
+import { settingsApi } from '@/lib/apiClient';
 import { outletSettingsSchema, type OutletSettingsFormValues } from '@/lib/validations/settings';
 import { INDIAN_STATES } from '@/types';
 import { SettingsSectionHeader } from './SettingsSectionHeader';
@@ -94,7 +95,16 @@ export function OutletSettingsSection({ onDirty, onSaved, discardKey }: OutletSe
         reader.readAsDataURL(file);
     }
 
-    function onSubmit(data: OutletSettingsFormValues) {
+    async function onSubmit(data: OutletSettingsFormValues) {
+        if (outlet) {
+            try {
+                await settingsApi.updateSettings(outlet.id, { outletGstin: data.outletGstin });
+            } catch (error) {
+                toast({ variant: 'destructive', title: 'Failed to sync outlet settings with server' });
+                return;
+            }
+        }
+
         store.updateOutletSettings({ ...data, outletLogoUrl: logoPreview });
         // Also update authStore.outlet so invoice preview shows the new details immediately
         if (outlet) {

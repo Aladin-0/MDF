@@ -87,4 +87,13 @@ class OutletSettingsView(APIView):
         if updated_fields:
             settings.save(update_fields=updated_fields)
 
+        # Handle updating the base Outlet model fields (e.g. GSTIN)
+        outlet_updated = []
+        if 'outletGstin' in request.data:
+            outlet.gstin = (request.data['outletGstin'] or '').strip().upper()
+            outlet_updated.append('gstin')
+        
+        if outlet_updated:
+            outlet.save(update_fields=outlet_updated)
+
         return Response({'success': True, 'data': self._serialize(settings)}, status=status.HTTP_200_OK)
