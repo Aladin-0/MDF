@@ -1834,6 +1834,11 @@ const realGstApi = {
         await assertOk(response);
         return response.json();
     },
+    validateGSTR1: async (mmyyyy: string) => {
+        const response = await fetch(`${API_URL}/gst/validate/${mmyyyy}/gstr1/`, { headers: getHeaders() });
+        await assertOk(response);
+        return response.json();
+    },
     getGSTR1Invoices: async (start: string, end: string, filters: { report_type?: string, tax_filter?: string } = {}) => {
         const query = new URLSearchParams({ start, end, ...filters } as Record<string, string>).toString();
         const response = await fetch(`${API_URL}/gst/gstr1-invoices/?${query}`, { headers: getHeaders() });

@@ -171,6 +171,7 @@ export interface StaffMember {
     canAccessReports: boolean;
     canEditSales: boolean;
     canEditPurchases: boolean;
+    canExportGst: boolean;
     canModifyPaidPurchases: boolean;
     canModifySettledVouchers: boolean;
     canModifySettledReturns: boolean;
@@ -204,6 +205,7 @@ export interface StaffPinVerifyResponse {
     canViewPurchaseRates?: boolean;
     canEditSales?: boolean;
     canEditPurchases?: boolean;
+    canExportGst?: boolean;
     canModifyPaidPurchases?: boolean;
     canModifySettledVouchers?: boolean;
     canModifySettledReturns?: boolean;

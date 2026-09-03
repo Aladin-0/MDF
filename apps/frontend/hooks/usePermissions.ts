@@ -39,11 +39,44 @@ const ROLE_PERMISSIONS: Record<StaffRole, Permission[] | ['*']> = {
 export function usePermissions() {
     const { user } = useAuthStore();
 
-    const hasPermission = (permission: Permission): boolean => {
+    const PERMISSION_MAP: Record<string, string> = {
+        'view_sales': 'canEditSales',
+        'create_bills': 'canEditSales',
+        'view_purchases': 'canCreatePurchases',
+        'create_purchases': 'canCreatePurchases',
+        'view_gst': 'canExportGst',
+        'export_reports': 'canExportGst',
+        'view_reports': 'canAccessReports',
+        'view_purchase_rates': 'canViewPurchaseRates',
+        'override_credit': 'canEditRate',
+    };
+
+    const hasPermission = (permission: Permission | string): boolean => {
+        // 1. Failsafe: No user state
         if (!user) return false;
+
+        // 2. Master Admin Bypass (Prevents lockouts)
+        if (user.role === 'admin' || user.role === 'super_admin') return true;
+
+        // 3. Direct DB Boolean Check (For 'custom' roles)
+        // If the permission matches an exact boolean key on the user object, return it.
+        const dbKey = PERMISSION_MAP[permission as string] || permission;
+        if (dbKey in user && typeof (user as any)[dbKey] === 'boolean') {
+            return (user as any)[dbKey] as boolean;
+        }
+
+        // 4. Dictionary Lookup
         const perms = ROLE_PERMISSIONS[user.role as StaffRole];
+
+        // 5. CRITICAL FIX: The null/array check MUST happen before reading perms[0]
+        if (!perms || !Array.isArray(perms) || perms.length === 0) {
+            return false;
+        }
+
+        // 6. Wildcard & Inclusion Check
         if (perms[0] === '*') return true;
-        return (perms as Permission[]).includes(permission);
+        
+        return (perms as Permission[]).includes(permission as Permission);
     };
 
     const hasAnyPermission = (...permissions: Permission[]): boolean =>

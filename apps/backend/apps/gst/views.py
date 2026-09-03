@@ -603,3 +603,50 @@ class GSTR2AWarningView(APIView):
             })
             
         return Response(results)
+
+class GSTR1ValidationView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, mmyyyy):
+        from apps.core.utils import get_user_outlet
+        outlet = get_user_outlet(request) if hasattr(request, 'user') else getattr(request.user, 'outlet', None)
+        if not outlet:
+            return Response({"error": "No assigned outlet."}, status=403)
+            
+        if len(mmyyyy) != 6 or not mmyyyy.isdigit():
+            return Response({"error": "Invalid period format."}, status=400)
+            
+        # We query snapshots by the exact period format 'MMYYYY'
+        from apps.reports.models import GSTTransactionSnapshot
+        snapshots = GSTTransactionSnapshot.objects.filter(
+            outlet=outlet,
+            period=mmyyyy,
+            transaction_type__in=['sale', 'sales_return', 'sales_credit_note', 'sales_debit_note']
+        )
+        
+        warnings = []
+        for snap in snapshots:
+            snap_json = snap.snapshot_json
+            inv_no = snap.transaction_number
+            for item in snap_json.get('items', []):
+                hsn = item.get('hsn_sc')
+                rt = item.get('rt')
+                if rt is None:
+                    warnings.append({"invoice_no": inv_no, "issue": "Missing tax rate"})
+                if not hsn or str(hsn).strip() == "":
+                    warnings.append({"invoice_no": inv_no, "issue": "Missing HSN code"})
+            
+            pos = snap_json.get('pos')
+            if not pos:
+                warnings.append({"invoice_no": inv_no, "issue": "Missing Place of Supply"})
+                
+        # Deduplicate warnings
+        unique_warnings = []
+        seen = set()
+        for w in warnings:
+            t = (w['invoice_no'], w['issue'])
+            if t not in seen:
+                seen.add(t)
+                unique_warnings.append(w)
+                
+        return Response({"warnings": unique_warnings})

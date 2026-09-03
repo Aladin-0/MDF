@@ -23,7 +23,9 @@ class ReconciliationExcelExportView(APIView):
         if not outlet:
             raise NotFound(detail="No outlet found")
             
-        if not request.user.has_perm('reports.export_gst') and not request.user.is_superuser:
+        is_admin_or_super = getattr(request.user, 'role', '') in ('admin', 'super_admin')
+        can_export = getattr(request.user, 'can_export_gst', False)
+        if not (is_admin_or_super or can_export):
             raise PermissionDenied(detail="Missing GST export permission")
 
         run = ITCReconciliationRun.objects.filter(outlet=outlet, period=fp).last()

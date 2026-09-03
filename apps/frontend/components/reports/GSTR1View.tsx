@@ -1,8 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useGSTR1Report, useLockGSTReport, useUnlockGSTReport } from '@/hooks/useReports';
-import { Lock, Unlock, ShieldCheck, ShieldAlert } from 'lucide-react';
+import { Lock, Unlock, ShieldCheck, ShieldAlert, AlertTriangle } from 'lucide-react';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 
 import { DateRangeFilter } from '@/types';
 import { exportGSTR1_JSON, exportGSTR1_CSV } from '@/lib/reportExport';
@@ -10,6 +11,7 @@ import { useAuthStore } from '@/store/authStore';
 import { Button } from '@/components/ui/button';
 import { Download } from 'lucide-react';
 import { formatCurrency } from '@/lib/gst';
+import { gstApi } from '@/lib/apiClient';
 import { Loader2 } from 'lucide-react';
 import {
     Table,
@@ -30,6 +32,36 @@ export function GSTR1View({ dateRange }: GSTR1ViewProps) {
     const { data, isLoading, error } = useGSTR1Report(dateRange);
     const lockMutation = useLockGSTReport();
     const unlockMutation = useUnlockGSTReport();
+
+    const [warnings, setWarnings] = useState<any[]>([]);
+    const [isValidating, setIsValidating] = useState<boolean>(false);
+
+    useEffect(() => {
+        if (!dateRange.from) return;
+        
+        const dateObj = new Date(dateRange.from);
+        if (isNaN(dateObj.getTime())) return;
+        
+        const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const yyyy = dateObj.getFullYear();
+        const mmyyyy = `${mm}${yyyy}`;
+        
+        const fetchWarnings = async () => {
+            setIsValidating(true);
+            try {
+                const res = await gstApi.validateGSTR1(mmyyyy);
+                if (res.warnings) {
+                    setWarnings(res.warnings);
+                }
+            } catch (err) {
+                console.error("Failed to fetch GSTR-1 warnings", err);
+                setWarnings([]);
+            } finally {
+                setIsValidating(false);
+            }
+        };
+        fetchWarnings();
+    }, [dateRange.from]);
 
     const handleLock = () => {
         if (!outlet) return;
@@ -73,6 +105,31 @@ export function GSTR1View({ dateRange }: GSTR1ViewProps) {
     return (
         <div className="space-y-6 mt-6">
             
+            {warnings && warnings.length > 0 && (
+                <Alert className="mb-6 bg-amber-50 border-amber-200 text-amber-800 shadow-sm rounded-md animate-in fade-in slide-in-from-top-2 duration-300">
+                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                    <AlertTitle className="font-semibold text-amber-900">
+                        Export Warning for {new Date(dateRange.from).toLocaleString('default', { month: 'long', year: 'numeric' })}
+                    </AlertTitle>
+                    <AlertDescription>
+                        <p className="text-sm mb-3 mt-1">
+                            The following invoices have missing data and will be exported with default values (0% or 0000). Please manually correct your Excel file before filing.
+                        </p>
+                        <ul className="text-xs list-disc list-inside space-y-1 text-amber-700 bg-amber-100/50 p-2 rounded max-h-32 overflow-y-auto">
+                            {warnings.slice(0, 5).map((w, idx) => (
+                                <li key={idx}>
+                                    <span className="font-medium">{w.invoice_no}</span>: {w.issue}
+                                </li>
+                            ))}
+                            {warnings.length > 5 && (
+                                <li className="list-none mt-1 ml-1">
+                                    <span className="font-medium">...and {warnings.length - 5} more issues.</span>
+                                </li>
+                            )}
+                        </ul>
+                    </AlertDescription>
+                </Alert>
+            )}
 
             <div className="flex justify-between items-center mb-4">
                 <div className="flex items-center gap-3">
@@ -104,11 +161,11 @@ export function GSTR1View({ dateRange }: GSTR1ViewProps) {
                         </Button>
                     )}
                     
-                    <Button variant="outline" size="sm" onClick={() => exportGSTR1_JSON(data, outlet, dateRange)}>
-                        <Download className="w-4 h-4 mr-2" /> {data.meta?.status === 'locked' ? 'Export JSON' : 'Draft JSON'}
+                    <Button variant="outline" size="sm" onClick={() => exportGSTR1_JSON(data, outlet, dateRange)} disabled={isValidating}>
+                        {isValidating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />} {data.meta?.status === 'locked' ? 'Export JSON' : 'Draft JSON'}
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => exportGSTR1_CSV(data, outlet, dateRange)}>
-                        <Download className="w-4 h-4 mr-2" /> {data.meta?.status === 'locked' ? 'Export CSV' : 'Draft CSV'}
+                    <Button variant="outline" size="sm" onClick={() => exportGSTR1_CSV(data, outlet, dateRange)} disabled={isValidating}>
+                        {isValidating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />} {data.meta?.status === 'locked' ? 'Export CSV' : 'Draft CSV'}
                     </Button>
                 </div>
             </div>

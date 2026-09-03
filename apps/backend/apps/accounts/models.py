@@ -58,6 +58,7 @@ class Staff(AbstractBaseUser, PermissionsMixin):
     can_access_reports = models.BooleanField(default=False)
     can_edit_sales = models.BooleanField(default=False)
     can_edit_purchases = models.BooleanField(default=False)
+    can_export_gst = models.BooleanField(default=False)
     
     # Granular modification permissions (Priority 2)
     can_edit_sale_returns = models.BooleanField(default=False)

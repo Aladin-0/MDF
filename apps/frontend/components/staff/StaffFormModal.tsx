@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import {
     Dialog, DialogContent, DialogHeader,
     DialogTitle, DialogFooter
@@ -39,28 +39,28 @@ const ROLE_PERMISSIONS: Record<string, any> = {
         canOverridePricing: true, canCorrectCustomer: true,
         canCreatePurchases: true, canViewPurchaseRates: true, canEditPurchases: true, canModifyPaidPurchases: true,
         canEditVouchers: true, canModifySettledVouchers: true, canEditReturns: true, canModifySettledReturns: true,
-        canAccessReports: true, canVoidRecords: true, canViewAuditHistory: true,
+        canAccessReports: true, canVoidRecords: true, canViewAuditHistory: true, canExportGst: true,
     },
     manager: {
         canEditSales: true, canModifyPaidBill: true, canModifyDraftUnpaidBill: true, canCorrectHeaderFields: true, canCorrectQuantities: true,
         canOverridePricing: true, canCorrectCustomer: true,
         canCreatePurchases: true, canViewPurchaseRates: true, canEditPurchases: true, canModifyPaidPurchases: true,
         canEditVouchers: true, canModifySettledVouchers: true, canEditReturns: true, canModifySettledReturns: true,
-        canAccessReports: true, canVoidRecords: false, canViewAuditHistory: true,
+        canAccessReports: true, canVoidRecords: false, canViewAuditHistory: true, canExportGst: true,
     },
     billing_staff: {
         canEditSales: true, canModifyPaidBill: false, canModifyDraftUnpaidBill: true, canCorrectHeaderFields: false, canCorrectQuantities: false,
         canOverridePricing: false, canCorrectCustomer: false,
         canCreatePurchases: false, canViewPurchaseRates: false, canEditPurchases: false, canModifyPaidPurchases: false,
         canEditVouchers: false, canModifySettledVouchers: false, canEditReturns: false, canModifySettledReturns: false,
-        canAccessReports: false, canVoidRecords: false, canViewAuditHistory: false,
+        canAccessReports: false, canVoidRecords: false, canViewAuditHistory: false, canExportGst: false,
     },
     view_only: {
         canEditSales: false, canModifyPaidBill: false, canModifyDraftUnpaidBill: false, canCorrectHeaderFields: false, canCorrectQuantities: false,
         canOverridePricing: false, canCorrectCustomer: false,
         canCreatePurchases: false, canViewPurchaseRates: false, canEditPurchases: false, canModifyPaidPurchases: false,
         canEditVouchers: false, canModifySettledVouchers: false, canEditReturns: false, canModifySettledReturns: false,
-        canAccessReports: true, canVoidRecords: false, canViewAuditHistory: false,
+        canAccessReports: true, canVoidRecords: false, canViewAuditHistory: false, canExportGst: false,
     }
 };
 
@@ -75,7 +75,7 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
     const createMutation = useCreateStaff();
     const updateMutation = useUpdateStaff();
 
-    const { register, handleSubmit, reset, setValue, watch, getValues, formState: { errors } } =
+    const { register, handleSubmit, reset, setValue, watch, getValues, control, formState: { errors } } =
         useForm({
             defaultValues: {
                 name: '',
@@ -111,6 +111,7 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                 canAccessReports: false,
                 canVoidRecords: false,
                 canViewAuditHistory: false,
+                canExportGst: false,
             }
         });
 
@@ -151,6 +152,7 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                 canAccessReports: editingStaff.canAccessReports ?? false,
                 canVoidRecords: editingStaff.canVoidRecords ?? false,
                 canViewAuditHistory: editingStaff.canViewAuditHistory ?? false,
+                canExportGst: editingStaff.canExportGst ?? false,
             });
         } else {
             reset();
@@ -207,9 +209,30 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
         }
     };
 
+    const evaluateRoleMatch = (currentValues: any) => {
+        let matchedRole = 'custom';
+        const rolesToCheck = ['admin', 'manager', 'billing_staff', 'view_only'];
+
+        for (const role of rolesToCheck) {
+            const preset = ROLE_PERMISSIONS[role];
+            let isMatch = true;
+            for (const key of Object.keys(preset)) {
+                if (currentValues[key] !== preset[key]) {
+                    isMatch = false;
+                    break;
+                }
+            }
+            if (isMatch) {
+                matchedRole = role;
+                break;
+            }
+        }
+        setValue('role', matchedRole);
+    };
+
     const handleChildChange = (key: string, value: boolean) => {
         setValue(key as any, value);
-        setValue('role', 'custom');
+        evaluateRoleMatch(getValues());
     };
 
     const handleMasterChange = (masterKey: string, value: boolean, childKeys: string[]) => {
@@ -219,7 +242,7 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
         } else {
             childKeys.forEach(k => setValue(k as any, false));
         }
-        setValue('role', 'custom');
+        evaluateRoleMatch(getValues());
     };
 
     return (
@@ -698,6 +721,32 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                                             <p className="text-xs text-muted-foreground mt-1">See full revision logs</p>
                                         </div>
                                         <Switch checked={watch('canViewAuditHistory')} onCheckedChange={(v) => handleChildChange('canViewAuditHistory', v)} />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Tax & Compliance */}
+                            <div className="space-y-0 p-3 rounded-xl border border-slate-200 bg-white lg:col-span-1">
+                                <h4 className="font-semibold text-slate-800 text-sm mb-3">Tax & Compliance</h4>
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm font-medium leading-none">Export GST Reports</p>
+                                            <p className="text-xs text-muted-foreground mt-1">Allow downloading of official GSTR-1 and tax files.</p>
+                                        </div>
+                                        <Controller
+                                            name="canExportGst"
+                                            control={control}
+                                            render={({ field }) => (
+                                                <Switch 
+                                                    checked={field.value} 
+                                                    onCheckedChange={(v) => {
+                                                        field.onChange(v);
+                                                        handleChildChange('canExportGst', v);
+                                                    }} 
+                                                />
+                                            )}
+                                        />
                                     </div>
                                 </div>
                             </div>

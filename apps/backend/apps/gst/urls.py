@@ -9,7 +9,8 @@ from apps.gst.views import (
     GSTExportAuditView,
     GSTR1InvoicesView,
     GSTR2BReconciliationDataView,
-    GSTR2AWarningView
+    GSTR2AWarningView,
+    GSTR1ValidationView
 )
 
 urlpatterns = [
@@ -23,4 +24,5 @@ urlpatterns = [
     path('gstr1-invoices/', GSTR1InvoicesView.as_view(), name='gstr1-invoices'),
     path('periods/<str:fp>/gstr2b-reconciliation/', GSTR2BReconciliationDataView.as_view(), name='gstr2b-reconciliation'),
     path('periods/<str:fp>/gstr2a-warning/', GSTR2AWarningView.as_view(), name='gstr2a-warning'),
+    path('validate/<str:mmyyyy>/gstr1/', GSTR1ValidationView.as_view(), name='gstr1-validate'),
 ]
