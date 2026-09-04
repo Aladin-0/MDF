@@ -195,7 +195,12 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
         if (watchedPurchaseType === 'credit' && watchedInvoiceDate) {
             const date = new Date(watchedInvoiceDate);
             if (!isNaN(date.getTime())) {
-                setValue('dueDate', format(addDays(date, creditDays), 'yyyy-MM-dd'));
+                const safeDays = Number.isFinite(creditDays) ? creditDays : 30;
+                try {
+                    setValue('dueDate', format(addDays(date, safeDays), 'yyyy-MM-dd'));
+                } catch (e) {
+                    console.error('Failed to calculate due date:', e);
+                }
             }
         } else if (watchedPurchaseType === 'cash') {
             setValue('dueDate', undefined);
@@ -567,8 +572,11 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                         <div className="space-y-1.5">
                             <Label className="text-xs font-medium text-slate-600">Credit Days</Label>
                             <Select
-                                value={creditDays.toString()}
-                                onValueChange={(val) => setCreditDays(parseInt(val, 10))}
+                                value={Number.isFinite(creditDays) ? creditDays.toString() : "30"}
+                                onValueChange={(val) => {
+                                    const parsed = parseInt(val, 10);
+                                    setCreditDays(Number.isFinite(parsed) ? parsed : 30);
+                                }}
                             >
                                 <SelectTrigger className="h-9 text-sm bg-white border-slate-200">
                                     <SelectValue placeholder="Select days" />

@@ -73,6 +73,8 @@ class GSTR1ExcelExportView(APIView):
         # Map B2B
         if 'b2b,sez,de' in sheet_meta and payload.get('b2b'):
             rows = []
+            total_taxable = Decimal('0.00')
+            total_cess = Decimal('0.00')
             for b in payload['b2b']:
                 gstin = b.get('ctin')
                 for inv in b.get('inv', []):
@@ -83,7 +85,11 @@ class GSTR1ExcelExportView(APIView):
                     inv_typ = inv.get('inv_typ')
                     for itm in inv.get('itms', []):
                         rt = itm.get('itm_det', {}).get('rt')
-                        txval = itm.get('itm_det', {}).get('txval')
+                        txval = Decimal(str(itm.get('itm_det', {}).get('txval') or 0))
+                        cess = Decimal(str(itm.get('itm_det', {}).get('csamt') or 0))
+                        
+                        total_taxable += txval
+                        total_cess += cess
                         
                         rows.append({
                             1: gstin,
@@ -97,36 +103,50 @@ class GSTR1ExcelExportView(APIView):
                             9: inv_typ,
                             10: "", # E-Commerce
                             11: Decimal(str(rt)) if rt is not None else Decimal('0.00'),
-                            12: Decimal(str(txval)) if txval is not None else Decimal('0.00'),
-                            13: "" # Cess
+                            12: txval,
+                            13: cess if cess else "" # Cess
                         })
             if rows:
-                data_map['b2b,sez,de'] = [{"start_row": 5, "rows": rows}]
+                data_map['b2b,sez,de'] = [
+                    {"start_row": 2, "rows": [{12: total_taxable, 13: total_cess}]},
+                    {"start_row": 5, "rows": rows}
+                ]
                         
         # Map B2CS
         if 'b2cs' in sheet_meta and payload.get('b2cs'):
             rows = []
+            total_taxable = Decimal('0.00')
+            total_cess = Decimal('0.00')
             for b in payload['b2cs']:
                 typ = b.get('typ')
                 pos = b.get('pos')
                 rt = b.get('rt')
-                txval = b.get('txval')
+                txval = Decimal(str(b.get('txval', 0) or 0))
+                cess = Decimal(str(b.get('csamt', 0) or 0))
+                
+                total_taxable += txval
+                total_cess += cess
                 
                 rows.append({
                     1: typ,
                     2: pos if pos else "27-Maharashtra",
                     3: "", # Applicable % of Tax Rate
                     4: Decimal(str(rt)) if rt is not None else Decimal('0.00'),
-                    5: Decimal(str(txval)) if txval is not None else Decimal('0.00'),
-                    6: "", # Cess
+                    5: txval,
+                    6: cess if cess else "", # Cess
                     7: "" # E-Commerce
                 })
             if rows:
-                data_map['b2cs'] = [{"start_row": 5, "rows": rows}]
+                data_map['b2cs'] = [
+                    {"start_row": 2, "rows": [{5: total_taxable, 6: total_cess}]},
+                    {"start_row": 5, "rows": rows}
+                ]
                 
         # Map B2CL
         if 'b2cl' in sheet_meta and payload.get('b2cl'):
             rows = []
+            total_taxable = Decimal('0.00')
+            total_cess = Decimal('0.00')
             for b in payload['b2cl']:
                 pos = b.get('pos')
                 for inv in b.get('inv', []):
@@ -135,7 +155,11 @@ class GSTR1ExcelExportView(APIView):
                     val = inv.get('val')
                     for itm in inv.get('itms', []):
                         rt = itm.get('itm_det', {}).get('rt')
-                        txval = itm.get('itm_det', {}).get('txval')
+                        txval = Decimal(str(itm.get('itm_det', {}).get('txval') or 0))
+                        cess = Decimal(str(itm.get('itm_det', {}).get('csamt') or 0))
+                        
+                        total_taxable += txval
+                        total_cess += cess
                         
                         rows.append({
                             1: inum,
@@ -144,16 +168,21 @@ class GSTR1ExcelExportView(APIView):
                             4: pos if pos else "27-Maharashtra",
                             5: "", # Applicable % of Tax Rate
                             6: Decimal(str(rt)) if rt is not None else Decimal('0.00'),
-                            7: Decimal(str(txval)) if txval is not None else Decimal('0.00'),
-                            8: "", # Cess
+                            7: txval,
+                            8: cess if cess else "", # Cess
                             9: "" # E-Commerce
                         })
             if rows:
-                data_map['b2cl'] = [{"start_row": 5, "rows": rows}]
+                data_map['b2cl'] = [
+                    {"start_row": 2, "rows": [{7: total_taxable, 8: total_cess}]},
+                    {"start_row": 5, "rows": rows}
+                ]
                         
         # Map CDNR
         if 'cdnr' in sheet_meta and payload.get('cdnr'):
             rows = []
+            total_taxable = Decimal('0.00')
+            total_cess = Decimal('0.00')
             for b in payload['cdnr']:
                 gstin = b.get('ctin')
                 for nt in b.get('nt', []):
@@ -162,9 +191,14 @@ class GSTR1ExcelExportView(APIView):
                     nt_ty = nt.get('ntty') or nt.get('nt_ty')
                     p_gst = nt.get('p_gst')
                     val = nt.get('val')
+                    pos = nt.get('pos') or "" # POS can be at note level
                     for itm in nt.get('itms', []):
                         rt = itm.get('itm_det', {}).get('rt')
-                        txval = itm.get('itm_det', {}).get('txval')
+                        txval = Decimal(str(itm.get('itm_det', {}).get('txval') or 0))
+                        cess = Decimal(str(itm.get('itm_det', {}).get('csamt') or 0))
+                        
+                        total_taxable += txval
+                        total_cess += cess
                         
                         rows.append({
                             1: gstin,
@@ -178,15 +212,20 @@ class GSTR1ExcelExportView(APIView):
                             9: Decimal(str(val)) if val is not None else Decimal('0.00'),
                             10: "", # Applicable % of Tax Rate
                             11: Decimal(str(rt)) if rt is not None else Decimal('0.00'),
-                            12: Decimal(str(txval)) if txval is not None else Decimal('0.00'),
-                            13: "" # Cess
+                            12: txval,
+                            13: cess if cess else "" # Cess
                         })
             if rows:
-                data_map['cdnr'] = [{"start_row": 5, "rows": rows}]
+                data_map['cdnr'] = [
+                    {"start_row": 2, "rows": [{12: total_taxable, 13: total_cess}]},
+                    {"start_row": 5, "rows": rows}
+                ]
                         
         # Map CDNUR
         if 'cdnur' in sheet_meta and payload.get('cdnur'):
             rows = []
+            total_taxable = Decimal('0.00')
+            total_cess = Decimal('0.00')
             for b in payload['cdnur']:
                 typ = b.get('typ')
                 nt_num = b.get('nt_num')
@@ -196,7 +235,11 @@ class GSTR1ExcelExportView(APIView):
                 pos = b.get('pos')
                 for itm in b.get('itms', []):
                     rt = itm.get('itm_det', {}).get('rt')
-                    txval = itm.get('itm_det', {}).get('txval')
+                    txval = Decimal(str(itm.get('itm_det', {}).get('txval') or 0))
+                    cess = Decimal(str(itm.get('itm_det', {}).get('csamt') or 0))
+                    
+                    total_taxable += txval
+                    total_cess += cess
                     
                     rows.append({
                         1: typ,
@@ -207,34 +250,62 @@ class GSTR1ExcelExportView(APIView):
                         6: Decimal(str(val)) if val is not None else Decimal('0.00'),
                         7: "", # Applicable % of Tax Rate
                         8: Decimal(str(rt)) if rt is not None else Decimal('0.00'),
-                        9: Decimal(str(txval)) if txval is not None else Decimal('0.00'),
-                        10: "" # Cess
+                        9: txval,
+                        10: cess if cess else "" # Cess
                     })
             if rows:
-                data_map['cdnur'] = [{"start_row": 5, "rows": rows}]
+                data_map['cdnur'] = [
+                    {"start_row": 2, "rows": [{9: total_taxable, 10: total_cess}]},
+                    {"start_row": 5, "rows": rows}
+                ]
 
         # Map HSN(B2B) and HSN(B2C) via Aggregation
         from apps.reports.models import GSTTransactionSnapshot
         hsn_agg = {}
-        snapshots = GSTTransactionSnapshot.objects.filter(outlet=outlet, period=fp, transaction_type='sale')
+        
+        # Query all outward supplies (sales and sales returns/credit notes) for the period
+        snapshots = GSTTransactionSnapshot.objects.filter(
+            outlet=outlet, 
+            period=fp, 
+            transaction_type__in=['sale', 'sales_return', 'sales_credit_note']
+        )
         
         for snap in snapshots:
             snap_json = snap.snapshot_json
-            is_b2b = snap_json.get('is_b2b', False)
-            sheet_key = 'hsn(b2b)' if is_b2b else 'hsn(b2c)'
+            # Determine the multiplier: sales add to the total, returns subtract from it
+            multiplier = Decimal('-1.0') if snap.transaction_type in ['sales_return', 'sales_credit_note'] else Decimal('1.0')
+            
+            bucket = 'B2C'
+            explicit_classification = snap_json.get('hsn_recipient_classification')
+            if explicit_classification in ['B2B', 'B2C']:
+                bucket = explicit_classification
+            else:
+                if snap.transaction_type in ['sales_return', 'sales_credit_note']:
+                    orig_cls = snap_json.get('original_supply_classification')
+                    if orig_cls == 'B2B':
+                        bucket = 'B2B'
+                else:
+                    if snap_json.get('is_b2b') is True:
+                        bucket = 'B2B'
+            
+            sheet_key = 'hsn(b2b)' if bucket == 'B2B' else 'hsn(b2c)'
             
             for item in snap_json.get('items', []):
-                hsn_sc = item.get('hsn_sc', '')
+                hsn_sc = item.get('hsn_sc', '0000')
                 if not hsn_sc:
                     hsn_sc = "0000"
+                    
                 rt = float(item.get('rt') or 0.0)
-                agg_key = (sheet_key, hsn_sc, rt)
+                uqc = item.get('uqc', 'NOS')
+                
+                # Group by Sheet, HSN, UQC, and Rate
+                agg_key = (sheet_key, hsn_sc, uqc, rt)
                 
                 if agg_key not in hsn_agg:
                     hsn_agg[agg_key] = {
                         'hsn_sc': hsn_sc,
                         'desc': item.get('desc', 'Medicines'),
-                        'uqc': item.get('uqc', 'NOS'),
+                        'uqc': uqc,
                         'qty': Decimal("0.00"),
                         'val': Decimal("0.00"),
                         'rt': Decimal(str(rt)),
@@ -245,12 +316,13 @@ class GSTR1ExcelExportView(APIView):
                         'csamt': Decimal("0.00")
                     }
                 
-                qty = Decimal(str(item.get('qty', 0)))
-                txval = Decimal(str(item.get('txval', 0)))
-                iamt = Decimal(str(item.get('iamt', 0)))
-                camt = Decimal(str(item.get('camt', 0)))
-                samt = Decimal(str(item.get('samt', 0)))
-                csamt = Decimal(str(item.get('csamt', 0)))
+                # Extract and multiply values
+                qty = Decimal(str(item.get('qty', 0))) * multiplier
+                txval = Decimal(str(item.get('txval', 0))) * multiplier
+                iamt = Decimal(str(item.get('iamt', 0))) * multiplier
+                camt = Decimal(str(item.get('camt', 0))) * multiplier
+                samt = Decimal(str(item.get('samt', 0))) * multiplier
+                csamt = Decimal(str(item.get('csamt', 0))) * multiplier
                 
                 hsn_agg[agg_key]['qty'] += qty
                 hsn_agg[agg_key]['txval'] += txval
@@ -260,29 +332,52 @@ class GSTR1ExcelExportView(APIView):
                 hsn_agg[agg_key]['csamt'] += csamt
                 hsn_agg[agg_key]['val'] += (txval + iamt + camt + samt + csamt)
 
-        # Write to sheets
+        # Write to the separated 'hsn(b2b)' and 'hsn(b2c)' sheets
         for sheet_name in ['hsn(b2b)', 'hsn(b2c)']:
             if sheet_name in sheet_meta:
                 rows = []
-                for (s_key, hsn_sc, rt), data in hsn_agg.items():
+                total_hsn_count = 0
+                total_val, total_txval = Decimal("0.00"), Decimal("0.00")
+                total_iamt, total_camt, total_samt, total_csamt = Decimal("0.00"), Decimal("0.00"), Decimal("0.00"), Decimal("0.00")
+            
+                for (s_key, hsn_sc, uqc, rt), data in hsn_agg.items():
                     if s_key != sheet_name:
                         continue
                         
-                    rows.append({
-                        1: data['hsn_sc'],
-                        2: data['desc'],
-                        3: data['uqc'],
-                        4: data['qty'] if data['qty'] is not None else None,
-                        5: data['val'] if data['val'] is not None else None,
-                        6: data['rt'],
-                        7: data['txval'] if data['txval'] is not None else None,
-                        8: data['iamt'] if data['iamt'] is not None else None,
-                        9: data['camt'] if data['camt'] is not None else None,
-                        10: data['samt'] if data['samt'] is not None else None,
-                        11: data['csamt'] if data['csamt'] is not None else None
-                    })
+                    # Only output rows with non-zero quantity or value to avoid empty lines from perfectly cancelled returns
+                    if data['qty'] != 0 or data['val'] != 0:
+                        total_hsn_count += 1
+                        total_val += data['val']
+                        total_txval += data['txval']
+                        total_iamt += data['iamt']
+                        total_camt += data['camt']
+                        total_samt += data['samt']
+                        total_csamt += data['csamt']
+                        
+                        rows.append({
+                            1: data['hsn_sc'],
+                            2: data['desc'],
+                            3: data['uqc'],
+                            4: data['qty'],
+                            5: data['val'],
+                            6: data['rt'],
+                            7: data['txval'],
+                            8: data['iamt'],
+                            9: data['camt'],
+                            10: data['samt'],
+                            11: data['csamt']
+                        })
+                        
                 if rows:
-                    data_map[sheet_name] = [{"start_row": 5, "rows": rows}]
+                    data_map[sheet_name] = [
+                        # Inject summary headers (Row 3)
+                        {"start_row": 3, "rows": [{
+                            1: total_hsn_count, 5: total_val, 7: total_txval, 
+                            8: total_iamt, 9: total_camt, 10: total_samt, 11: total_csamt
+                        }]},
+                        # Inject data rows
+                        {"start_row": 5, "rows": rows}
+                    ]
                 
         print("DATA MAP:", data_map)
         
