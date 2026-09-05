@@ -93,13 +93,17 @@ class GSTExportAuditView(APIView):
 from django.conf import settings
 
 def is_sandbox_allowed(user, outlet):
-    if getattr(settings, 'ENVIRONMENT', os.environ.get('ENVIRONMENT', 'development')) != 'development':
-        return False, "Sandbox endpoints are only available in the local development environment."
-        
+    is_dev = getattr(settings, 'ENVIRONMENT', os.environ.get('ENVIRONMENT', 'development')) == 'development'
     provider_mode = os.environ.get('SANDBOX_PROVIDER_MODE', getattr(settings, 'SANDBOX_PROVIDER_MODE', 'test'))
-    if provider_mode == 'live':
-        enable_live = str(os.environ.get('ENABLE_GST_SANDBOX_LIVE_MODE', getattr(settings, 'ENABLE_GST_SANDBOX_LIVE_MODE', 'False'))).lower() == 'true'
-        if not enable_live:
+    enable_live = str(os.environ.get('ENABLE_GST_SANDBOX_LIVE_MODE', getattr(settings, 'ENABLE_GST_SANDBOX_LIVE_MODE', 'False'))).lower() == 'true'
+    
+    if not is_dev:
+        # Override standard production block if live Sandbox is explicitly configured
+        if provider_mode != 'live' or not enable_live:
+            return False, "Sandbox endpoints are only available in the local development environment, or when explicitly enabled with LIVE mode."
+    else:
+        # In development, still enforce the safeguard if live mode is requested
+        if provider_mode == 'live' and not enable_live:
             return False, "Live Sandbox provider is blocked. Explicit permission 'ENABLE_GST_SANDBOX_LIVE_MODE=True' is required."
             
     if getattr(outlet, 'name', '').lower().startswith('test'):
