@@ -48,8 +48,8 @@ export function InlineRowEditor({ item, onSave, onCancel, onRemove }: InlineRowE
 
     const productInfo: ProductSearchResult | undefined = searchResults?.find((p: ProductSearchResult) => p.id === item.productId);
     
-    // We can fall back to a mock batch if the API hasn't returned yet, so the UI doesn't crash
-    const availableBatches: Batch[] = productInfo?.batches || [
+    // We can fall back to a mock batch if the API hasn't returned yet, or if it returned an empty array, so the UI doesn't crash
+    const availableBatches: Batch[] = (productInfo?.batches?.length ? productInfo.batches : null) || [
         {
             id: item.batchId,
             outletId: '',
