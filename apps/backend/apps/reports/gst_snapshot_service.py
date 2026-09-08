@@ -43,8 +43,8 @@ def create_sale_snapshots(sale_invoice) -> GSTTransactionSnapshot:
     period = sale_invoice.invoice_date.strftime('%m%Y')
     
     customer = sale_invoice.customer
-    customer_name = customer.name if customer else "Cash/Walk-in"
-    customer_gstin = customer.gstin if customer and customer.gstin else ""
+    customer_name = customer.name.strip() if customer and customer.name and customer.name.strip() else "Cash/Walk-in"
+    customer_gstin = customer.gstin.strip() if customer and customer.gstin and customer.gstin.strip() else ""
     is_b2b = bool(customer_gstin)
     
     outlet_state_code = outlet.state_code or (outlet.gstin[:2] if outlet.gstin else "27")
@@ -71,32 +71,32 @@ def create_sale_snapshots(sale_invoice) -> GSTTransactionSnapshot:
     })
 
     for item in sale_invoice.items.all():
-        rate_str = str(item.gst_rate)
-        taxable = item.taxable_amount
-        gst_amt = item.gst_amount
+        rate_str = str(item.gst_rate or Decimal('0'))
+        taxable = item.taxable_amount or Decimal('0.00')
+        gst_amt = item.gst_amount or Decimal('0.00')
         
-        igst = gst_amt if is_interstate else Decimal('0')
-        cgst = (gst_amt / Decimal('2')) if not is_interstate else Decimal('0')
-        sgst = (gst_amt / Decimal('2')) if not is_interstate else Decimal('0')
+        igst = gst_amt if is_interstate else Decimal('0.00')
+        cgst = (gst_amt / Decimal('2')) if not is_interstate else Decimal('0.00')
+        sgst = (gst_amt / Decimal('2')) if not is_interstate else Decimal('0.00')
         
         items_by_rate[rate_str]['taxable_amount'] += taxable
         items_by_rate[rate_str]['igst'] += igst
         items_by_rate[rate_str]['cgst'] += cgst
         items_by_rate[rate_str]['sgst'] += sgst
         
-        hsn = item.hsn_code or 'UNKNOWN'
+        hsn = item.hsn_code.strip() if item.hsn_code and item.hsn_code.strip() else '0000'
         hsn_summary[hsn]['taxable_amount'] += taxable
         hsn_summary[hsn]['igst'] += igst
         hsn_summary[hsn]['cgst'] += cgst
         hsn_summary[hsn]['sgst'] += sgst
-        hsn_summary[hsn]['qty'] += Decimal(item.qty_strips)
+        hsn_summary[hsn]['qty'] += Decimal(str(item.qty_strips or 0))
 
     # Convert Decimals to float for JSON
     def _jsonify_dict(d: dict) -> dict:
         return {k: {sk: float(sv) if isinstance(sv, Decimal) else sv for sk, sv in v.items()} for k, v in d.items()}
 
     from apps.gst.conf import B2CL_THRESHOLD
-    orig_total = sale_invoice.grand_total
+    orig_total = sale_invoice.grand_total or Decimal('0.00')
     supply_class = "B2B" if is_b2b else ("B2CL" if is_interstate and orig_total > Decimal(str(B2CL_THRESHOLD)) else "B2CS")
 
     snapshot_json = {

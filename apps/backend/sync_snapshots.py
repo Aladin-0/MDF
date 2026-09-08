@@ -12,13 +12,20 @@ from apps.reports.models import GSTTransactionSnapshot
 today = date.today()
 # Get invoices from today
 invoices = SaleInvoice.objects.filter(invoice_date__date=today, is_return=False)
+import logging
+logger = logging.getLogger(__name__)
+
 count = 0
 for inv in invoices:
-    # check if snapshot exists
-    exists = GSTTransactionSnapshot.objects.filter(document_id=inv.id, transaction_type='sale').exists()
-    if not exists:
-        create_sale_snapshots(inv)
-        count += 1
-        print(f"Created snapshot for Invoice {inv.invoice_no}")
+    try:
+        # check if snapshot exists
+        exists = GSTTransactionSnapshot.objects.filter(document_id=inv.id, transaction_type='sale').exists()
+        if not exists:
+            create_sale_snapshots(inv)
+            count += 1
+            print(f"Created snapshot for Invoice {inv.invoice_no}")
+    except Exception as e:
+        logger.exception(f"Failed to create GST snapshot for SaleInvoice ID {inv.id}: {str(e)}")
+        print(f"Error processing Invoice ID {inv.id}: {str(e)}")
 
 print(f"Total missing snapshots created: {count}")
