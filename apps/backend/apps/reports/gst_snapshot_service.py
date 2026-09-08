@@ -67,7 +67,9 @@ def create_sale_snapshots(sale_invoice) -> GSTTransactionSnapshot:
         'sgst': Decimal('0'),
         'cess': Decimal('0'),
         'qty': Decimal('0'),
-        'uqc': 'PAC' # Using Pack as default UQC for pharma
+        'uqc': 'PAC',
+        'rate': 0.0,
+        'hsn_code': '0000'
     })
 
     for item in sale_invoice.items.all():
@@ -85,11 +87,14 @@ def create_sale_snapshots(sale_invoice) -> GSTTransactionSnapshot:
         items_by_rate[rate_str]['sgst'] += sgst
         
         hsn = item.hsn_code.strip() if item.hsn_code and item.hsn_code.strip() else '0000'
-        hsn_summary[hsn]['taxable_amount'] += taxable
-        hsn_summary[hsn]['igst'] += igst
-        hsn_summary[hsn]['cgst'] += cgst
-        hsn_summary[hsn]['sgst'] += sgst
-        hsn_summary[hsn]['qty'] += Decimal(str(item.qty_strips or 0))
+        composite_key = f"{hsn}_{rate_str}"
+        hsn_summary[composite_key]['hsn_code'] = hsn
+        hsn_summary[composite_key]['rate'] = float(rate_str)
+        hsn_summary[composite_key]['taxable_amount'] += taxable
+        hsn_summary[composite_key]['igst'] += igst
+        hsn_summary[composite_key]['cgst'] += cgst
+        hsn_summary[composite_key]['sgst'] += sgst
+        hsn_summary[composite_key]['qty'] += Decimal(str(item.qty_strips or 0))
 
     # Convert Decimals to float for JSON
     def _jsonify_dict(d: dict) -> dict:
@@ -168,7 +173,9 @@ def create_sales_return_snapshots(sales_return) -> GSTTransactionSnapshot:
         'sgst': Decimal('0'),
         'cess': Decimal('0'),
         'qty': Decimal('0'),
-        'uqc': 'PAC'
+        'uqc': 'PAC',
+        'rate': 0.0,
+        'hsn_code': '0000'
     })
 
     for ret_item in sales_return.items.all():
@@ -202,11 +209,14 @@ def create_sales_return_snapshots(sales_return) -> GSTTransactionSnapshot:
         items_by_rate[rate_str]['cgst'] += cgst
         items_by_rate[rate_str]['sgst'] += sgst
 
-        hsn_summary[hsn]['taxable_amount'] += taxable
-        hsn_summary[hsn]['igst'] += igst
-        hsn_summary[hsn]['cgst'] += cgst
-        hsn_summary[hsn]['sgst'] += sgst
-        hsn_summary[hsn]['qty'] += Decimal(ret_item.qty_returned)
+        composite_key = f"{hsn}_{rate_str}"
+        hsn_summary[composite_key]['hsn_code'] = hsn
+        hsn_summary[composite_key]['rate'] = float(rate_str)
+        hsn_summary[composite_key]['taxable_amount'] += taxable
+        hsn_summary[composite_key]['igst'] += igst
+        hsn_summary[composite_key]['cgst'] += cgst
+        hsn_summary[composite_key]['sgst'] += sgst
+        hsn_summary[composite_key]['qty'] += Decimal(ret_item.qty_returned)
 
     def _jsonify_dict(d: dict) -> dict:
         return {k: {sk: float(sv) if isinstance(sv, Decimal) else sv for sk, sv in v.items()} for k, v in d.items()}
@@ -282,7 +292,9 @@ def create_purchase_snapshots(purchase_invoice) -> GSTTransactionSnapshot:
         'sgst': Decimal('0'),
         'cess': Decimal('0'),
         'qty': Decimal('0'),
-        'uqc': 'PAC'
+        'uqc': 'PAC',
+        'rate': 0.0,
+        'hsn_code': '0000'
     })
 
     for item in purchase_invoice.items.all():
@@ -302,12 +314,15 @@ def create_purchase_snapshots(purchase_invoice) -> GSTTransactionSnapshot:
         items_by_rate[rate_str]['cess'] += cess_amt
         
         hsn = item.hsn_code or 'UNKNOWN'
-        hsn_summary[hsn]['taxable_amount'] += taxable
-        hsn_summary[hsn]['igst'] += igst
-        hsn_summary[hsn]['cgst'] += cgst
-        hsn_summary[hsn]['sgst'] += sgst
-        hsn_summary[hsn]['cess'] += cess_amt
-        hsn_summary[hsn]['qty'] += Decimal(item.qty)
+        composite_key = f"{hsn}_{rate_str}"
+        hsn_summary[composite_key]['hsn_code'] = hsn
+        hsn_summary[composite_key]['rate'] = float(rate_str)
+        hsn_summary[composite_key]['taxable_amount'] += taxable
+        hsn_summary[composite_key]['igst'] += igst
+        hsn_summary[composite_key]['cgst'] += cgst
+        hsn_summary[composite_key]['sgst'] += sgst
+        hsn_summary[composite_key]['cess'] += cess_amt
+        hsn_summary[composite_key]['qty'] += Decimal(item.qty)
 
     def _jsonify_dict(d: dict) -> dict:
         return {k: {sk: float(sv) if isinstance(sv, Decimal) else sv for sk, sv in v.items()} for k, v in d.items()}
@@ -378,7 +393,9 @@ def create_purchase_return_snapshots(debit_note) -> GSTTransactionSnapshot:
         'sgst': Decimal('0'),
         'cess': Decimal('0'),
         'qty': Decimal('0'),
-        'uqc': 'PAC'
+        'uqc': 'PAC',
+        'rate': 0.0,
+        'hsn_code': '0000'
     })
 
     for item in debit_note.items.all():
@@ -401,12 +418,15 @@ def create_purchase_return_snapshots(debit_note) -> GSTTransactionSnapshot:
         
         hsn = item.batch.product.hsn_code if hasattr(item, 'batch') and item.batch and hasattr(item.batch, 'product') and item.batch.product.hsn_code else 'UNKNOWN'
         
-        hsn_summary[hsn]['taxable_amount'] += taxable
-        hsn_summary[hsn]['igst'] += igst
-        hsn_summary[hsn]['cgst'] += cgst
-        hsn_summary[hsn]['sgst'] += sgst
-        hsn_summary[hsn]['cess'] += cess_amt
-        hsn_summary[hsn]['qty'] += Decimal(item.qty)
+        composite_key = f"{hsn}_{rate_str}"
+        hsn_summary[composite_key]['hsn_code'] = hsn
+        hsn_summary[composite_key]['rate'] = float(rate_str)
+        hsn_summary[composite_key]['taxable_amount'] += taxable
+        hsn_summary[composite_key]['igst'] += igst
+        hsn_summary[composite_key]['cgst'] += cgst
+        hsn_summary[composite_key]['sgst'] += sgst
+        hsn_summary[composite_key]['cess'] += cess_amt
+        hsn_summary[composite_key]['qty'] += Decimal(item.qty)
 
     def _jsonify_dict(d: dict) -> dict:
         return {k: {sk: float(sv) if isinstance(sv, Decimal) else sv for sk, sv in v.items()} for k, v in d.items()}

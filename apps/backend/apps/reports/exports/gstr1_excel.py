@@ -290,12 +290,12 @@ class GSTR1ExcelExportView(APIView):
             
             sheet_key = 'hsn(b2b)' if bucket == 'B2B' else 'hsn(b2c)'
             
-            for hsn_code, item in snap_json.get('hsn_summary', {}).items():
-                hsn_sc = hsn_code if hsn_code else '0000'
+            for composite_key, item in snap_json.get('hsn_summary', {}).items():
+                hsn_sc = item.get('hsn_code', composite_key.split('_')[0]) if item.get('hsn_code', composite_key.split('_')[0]) else '0000'
                 if not hsn_sc:
                     hsn_sc = "0000"
                     
-                rt = float(item.get('rt') or 0.0)
+                rt = float(item.get('rate', 0.0))
                 uqc = item.get('uqc', 'PAC')
                 
                 # Group by Sheet, HSN, UQC, and Rate
@@ -317,12 +317,12 @@ class GSTR1ExcelExportView(APIView):
                     }
                 
                 # Extract and multiply values
-                qty = Decimal(str(item.get('qty', 0))) * multiplier
-                txval = Decimal(str(item.get('taxable_amount', 0))) * multiplier
-                iamt = Decimal(str(item.get('igst', 0))) * multiplier
-                camt = Decimal(str(item.get('cgst', 0))) * multiplier
-                samt = Decimal(str(item.get('sgst', 0))) * multiplier
-                csamt = Decimal(str(item.get('cess', 0))) * multiplier
+                qty = round(Decimal(str(item.get('qty', 0))) * multiplier, 2)
+                txval = round(Decimal(str(item.get('taxable_amount', 0))) * multiplier, 2)
+                iamt = round(Decimal(str(item.get('igst', 0))) * multiplier, 2)
+                camt = round(Decimal(str(item.get('cgst', 0))) * multiplier, 2)
+                samt = round(Decimal(str(item.get('sgst', 0))) * multiplier, 2)
+                csamt = round(Decimal(str(item.get('cess', 0))) * multiplier, 2)
                 
                 hsn_agg[agg_key]['qty'] += qty
                 hsn_agg[agg_key]['txval'] += txval
@@ -370,8 +370,8 @@ class GSTR1ExcelExportView(APIView):
                         
                 if rows:
                     data_map[sheet_name] = [
-                        # Inject summary headers (Row 3)
-                        {"start_row": 3, "rows": [{
+                        # Inject summary headers (Row 1)
+                        {"start_row": 1, "rows": [{
                             1: total_hsn_count, 5: total_val, 7: total_txval, 
                             8: total_iamt, 9: total_camt, 10: total_samt, 11: total_csamt
                         }]},
