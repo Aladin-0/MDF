@@ -219,7 +219,7 @@ class GSTExportView(APIView):
         if not outlet:
             return Response({"error": "No outlet found"}, status=404)
             
-        if export_type == 'gstr1':
+        if export_type in ['gstr1', 'gstr1_json']:
             b = GSTR1Builder(outlet.gstin, fp)
             payload = b.generate_json()
             response = HttpResponse(json.dumps(payload, indent=2), content_type='application/json')

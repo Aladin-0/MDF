@@ -290,13 +290,13 @@ class GSTR1ExcelExportView(APIView):
             
             sheet_key = 'hsn(b2b)' if bucket == 'B2B' else 'hsn(b2c)'
             
-            for item in snap_json.get('items', []):
-                hsn_sc = item.get('hsn_sc', '0000')
+            for hsn_code, item in snap_json.get('hsn_summary', {}).items():
+                hsn_sc = hsn_code if hsn_code else '0000'
                 if not hsn_sc:
                     hsn_sc = "0000"
                     
                 rt = float(item.get('rt') or 0.0)
-                uqc = item.get('uqc', 'NOS')
+                uqc = item.get('uqc', 'PAC')
                 
                 # Group by Sheet, HSN, UQC, and Rate
                 agg_key = (sheet_key, hsn_sc, uqc, rt)
@@ -318,11 +318,11 @@ class GSTR1ExcelExportView(APIView):
                 
                 # Extract and multiply values
                 qty = Decimal(str(item.get('qty', 0))) * multiplier
-                txval = Decimal(str(item.get('txval', 0))) * multiplier
-                iamt = Decimal(str(item.get('iamt', 0))) * multiplier
-                camt = Decimal(str(item.get('camt', 0))) * multiplier
-                samt = Decimal(str(item.get('samt', 0))) * multiplier
-                csamt = Decimal(str(item.get('csamt', 0))) * multiplier
+                txval = Decimal(str(item.get('taxable_amount', 0))) * multiplier
+                iamt = Decimal(str(item.get('igst', 0))) * multiplier
+                camt = Decimal(str(item.get('cgst', 0))) * multiplier
+                samt = Decimal(str(item.get('sgst', 0))) * multiplier
+                csamt = Decimal(str(item.get('cess', 0))) * multiplier
                 
                 hsn_agg[agg_key]['qty'] += qty
                 hsn_agg[agg_key]['txval'] += txval
