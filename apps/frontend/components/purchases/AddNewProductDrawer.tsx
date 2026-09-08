@@ -54,8 +54,8 @@ const emptyForm = (name = ''): FormState => ({
     manufacturer: '',
     hsnCode: '',
     gstRate: '',
-    packSize: '1',
-    packUnit: '',
+    packSize: '10',
+    packUnit: 'Tablet',
     packType: 'strip',
     scheduleType: '',
     mrp: '',
@@ -66,14 +66,12 @@ export function AddNewProductDrawer({ open, onOpenChange, initialName, onSuccess
     const [errors, setErrors] = useState<FieldErrors>({});
     const [serverError, setServerError] = useState('');
     const [saving, setSaving] = useState(false);
-    const [isEditingUnit, setIsEditingUnit] = useState(false);
 
     useEffect(() => {
         if (open) {
             setForm(emptyForm(initialName));
             setErrors({});
             setServerError('');
-            setIsEditingUnit(false);
         }
     }, [open, initialName]);
 
@@ -252,15 +250,18 @@ export function AddNewProductDrawer({ open, onOpenChange, initialName, onSuccess
                                     <Label className="text-xs font-medium">Pack Type <span className="text-red-500">*</span></Label>
                                     <Select value={form.packType} onValueChange={(val) => {
                                         set('packType', val);
-                                        set('packUnit', inferPackUnit(form.name, val));
-                                        setIsEditingUnit(false);
-                                        if (val === 'strip' || val === 'blister') { 
+                                        if (val === 'strip') { 
                                             set('packSize', '10'); 
+                                            set('packUnit', 'Tablet'); 
+                                        } else if (val === 'box') {
+                                            set('packSize', ''); // Clear it so they can type 12, etc.
+                                            set('packUnit', 'Strip'); // Sensible default for boxes
                                         } else { 
                                             set('packSize', '1'); 
+                                            set('packUnit', 'Piece'); 
                                         }
                                     }}>
-                                        <SelectTrigger className={`h-9 text-sm ${errors.packType ? 'border-red-400' : ''}`}>
+                                        <SelectTrigger data-testid="pack-type-trigger" className={`h-9 text-sm ${errors.packType ? 'border-red-400' : ''}`}>
                                             <SelectValue placeholder="Select Pack Type" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -285,6 +286,7 @@ export function AddNewProductDrawer({ open, onOpenChange, initialName, onSuccess
                                             <span className="text-sm font-medium">1 {form.packType ? (PACK_TYPE_OPTIONS.find(o => o.value === form.packType)?.label || form.packType) : 'Pack'} contains</span>
                                             <div className="w-24">
                                                 <Input
+                                                    data-testid="pack-size-input"
                                                     type="number"
                                                     min={1}
                                                     className={fieldCls(errors.packSize)}
@@ -294,36 +296,16 @@ export function AddNewProductDrawer({ open, onOpenChange, initialName, onSuccess
                                                 />
                                             </div>
                                             <div className="flex-1 min-w-[150px]">
-                                                {!isEditingUnit ? (
-                                                    <div className="flex items-center gap-2 h-10 px-3 bg-gray-50 border border-gray-200 rounded-md text-sm">
-                                                        <span className="font-medium text-gray-700">{form.packUnit || 'Unit'}</span>
-                                                        <button type="button" onClick={() => setIsEditingUnit(true)} className="ml-auto p-1 text-gray-400 hover:text-blue-600 transition-colors" title="Edit Dispensing Unit">
-                                                            <Pencil className="h-3 w-3" />
-                                                        </button>
-                                                    </div>
-                                                ) : (
-                                                    <div className="flex gap-2">
-                                                        <Select value={DISPENSING_UNIT_OPTIONS.some(o => o.value === form.packUnit) ? form.packUnit : 'Other'} onValueChange={(v) => set('packUnit', v === 'Other' ? '' : v)}>
-                                                            <SelectTrigger className={fieldCls(errors.packUnit)}>
-                                                                <SelectValue placeholder="Select Unit" />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                {DISPENSING_UNIT_OPTIONS.map(opt => (
-                                                                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                                                                ))}
-                                                                <SelectItem value="Other">Other...</SelectItem>
-                                                            </SelectContent>
-                                                        </Select>
-                                                        {!DISPENSING_UNIT_OPTIONS.some(o => o.value === form.packUnit) && form.packUnit !== '' && (
-                                                            <Input
-                                                                className={fieldCls(errors.packUnit)}
-                                                                value={form.packUnit}
-                                                                onChange={(e) => set('packUnit', e.target.value)}
-                                                                placeholder="Type unit"
-                                                            />
-                                                        )}
-                                                    </div>
-                                                )}
+                                                <Select value={form.packUnit} onValueChange={(v) => set('packUnit', v)}>
+                                                    <SelectTrigger data-testid="pack-unit-trigger" className={fieldCls(errors.packUnit)}>
+                                                        <SelectValue placeholder="Select Unit" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {DISPENSING_UNIT_OPTIONS.map(opt => (
+                                                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
                                             </div>
                                         </div>
                                         <div className="flex gap-4">
@@ -338,6 +320,7 @@ export function AddNewProductDrawer({ open, onOpenChange, initialName, onSuccess
                                             <span className="text-sm font-medium">Package Size & Name</span>
                                             <div className="w-24">
                                                 <Input
+                                                    data-testid="pack-size-input"
                                                     type="number"
                                                     min={1}
                                                     className={fieldCls(errors.packSize)}
@@ -347,36 +330,16 @@ export function AddNewProductDrawer({ open, onOpenChange, initialName, onSuccess
                                                 />
                                             </div>
                                             <div className="flex-1 min-w-[150px]">
-                                                {!isEditingUnit ? (
-                                                    <div className="flex items-center gap-2 h-10 px-3 bg-gray-50 border border-gray-200 rounded-md text-sm">
-                                                        <span className="font-medium text-gray-700">{form.packUnit || 'Unit'}</span>
-                                                        <button type="button" onClick={() => setIsEditingUnit(true)} className="ml-auto p-1 text-gray-400 hover:text-blue-600 transition-colors" title="Edit Dispensing Unit">
-                                                            <Pencil className="h-3 w-3" />
-                                                        </button>
-                                                    </div>
-                                                ) : (
-                                                    <div className="flex gap-2">
-                                                        <Select value={DISPENSING_UNIT_OPTIONS.some(o => o.value === form.packUnit) ? form.packUnit : 'Other'} onValueChange={(v) => set('packUnit', v === 'Other' ? '' : v)}>
-                                                            <SelectTrigger className={fieldCls(errors.packUnit)}>
-                                                                <SelectValue placeholder="Select Unit" />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                {DISPENSING_UNIT_OPTIONS.map(opt => (
-                                                                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                                                                ))}
-                                                                <SelectItem value="Other">Other...</SelectItem>
-                                                            </SelectContent>
-                                                        </Select>
-                                                        {!DISPENSING_UNIT_OPTIONS.some(o => o.value === form.packUnit) && form.packUnit !== '' && (
-                                                            <Input
-                                                                className={fieldCls(errors.packUnit)}
-                                                                value={form.packUnit}
-                                                                onChange={(e) => set('packUnit', e.target.value)}
-                                                                placeholder="Type unit"
-                                                            />
-                                                        )}
-                                                    </div>
-                                                )}
+                                                <Select value={form.packUnit} onValueChange={(v) => set('packUnit', v)}>
+                                                    <SelectTrigger data-testid="pack-unit-trigger" className={fieldCls(errors.packUnit)}>
+                                                        <SelectValue placeholder="Select Unit" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {DISPENSING_UNIT_OPTIONS.map(opt => (
+                                                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
                                             </div>
                                         </div>
                                         <div className="flex gap-4">

@@ -124,7 +124,9 @@ export function StockTable({ onProductClick, onAdjustClick, onEditClick }: any) 
                     displayText = formatQty(
                         Math.floor(Math.round((p.totalStock || 0) * (p.packSize || 1)) / (p.packSize || 1)), 
                         Math.round((p.totalStock || 0) * (p.packSize || 1)) % (p.packSize || 1), 
-                        p.packSize || 1
+                        p.packSize || 1,
+                        p.packType || 'strip',
+                        p.packUnit || 'tablet'
                     );
                 }
 

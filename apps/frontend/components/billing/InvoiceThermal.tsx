@@ -53,7 +53,7 @@ export const InvoiceThermal = forwardRef<HTMLDivElement, InvoiceThermalProps>(({
                 </thead>
                 <tbody>
                     {(invoice.items ?? []).map((item, index) => {
-                        const qtyDisplay = formatQty(item.qtyStrips ?? 0, item.qtyLoose ?? 0, item.packSize ?? 1);
+                        const qtyDisplay = formatQty(item.qtyStrips ?? 0, item.qtyLoose ?? 0, item.packSize ?? 1, item.packType, item.packUnit);
                         const amt = item.totalAmount ?? ((item.totalQty ?? 0) * (item.rate ?? 0) * (1 - (item.discountPct ?? 0) / 100));
                         return (
                             <React.Fragment key={index}>

@@ -52,3 +52,4 @@ agent_*.md
 failures.json
 test_output.txt
 test_results.txt
+.next-test/

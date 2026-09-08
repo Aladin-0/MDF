@@ -116,6 +116,7 @@ class ProductListView(APIView):
         name = (data.get('name') or '').strip()
         hsn_code = (data.get('hsnCode') or '').strip()
         pack_unit = (data.get('packUnit') or '').strip()
+        pack_type = (data.get('packType') or 'strip').strip()
         schedule_type = (data.get('scheduleType') or 'OTC').strip()
 
         errors = {}
@@ -176,7 +177,7 @@ class ProductListView(APIView):
                     gst_rate=gst_rate,
                     pack_size=pack_size,
                     pack_unit=pack_unit,
-                    pack_type='strip',
+                    pack_type=pack_type,
                     mrp=mrp,
                 )
         except IntegrityError as e:

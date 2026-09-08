@@ -771,27 +771,27 @@ class CustomerListView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # Create customer
-        from django.db import IntegrityError
-        try:
-            customer = Customer.objects.create(
-                outlet=outlet,
-                name=name,
-                phone=phone,
-                address=address,
-                state=state,
-                dob=dob,
-                gstin=gstin,
-                is_chronic=is_chronic,
-                fixed_discount=fixed_discount,
-                credit_limit=credit_limit,
-                is_active=True,
-            )
-        except IntegrityError:
+        # Soft uniqueness check to prevent exact clones
+        if Customer.objects.filter(outlet=outlet, phone=phone, name__iexact=name).exists():
             return Response(
-                {'detail': 'A customer with this phone number already exists in your outlet.'},
+                {'detail': 'A customer with this exact name and phone number already exists.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+        # Create customer
+        customer = Customer.objects.create(
+            outlet=outlet,
+            name=name,
+            phone=phone,
+            address=address,
+            state=state,
+            dob=dob,
+            gstin=gstin,
+            is_chronic=is_chronic,
+            fixed_discount=fixed_discount,
+            credit_limit=credit_limit,
+            is_active=True,
+        )
 
         # Automatically create a Ledger for the new customer in the Sundry Debtors group
         from apps.accounts.models import Ledger, LedgerGroup

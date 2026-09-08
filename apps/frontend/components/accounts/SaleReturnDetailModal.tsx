@@ -205,7 +205,9 @@ export function SaleReturnDetailModal({ open, onOpenChange, returnId }: SaleRetu
                                                         {formatQty(
                                                             Math.floor(item.qtyReturned / (item.packSize || 1)),
                                                             item.qtyReturned % (item.packSize || 1),
-                                                            item.packSize || 1
+                                                            item.packSize || 1,
+                                                            item.packType,
+                                                            item.packUnit
                                                         )}
                                                     </span>
                                                 </td>
@@ -292,7 +294,9 @@ export function SaleReturnDetailModal({ open, onOpenChange, returnId }: SaleRetu
                                                             {formatQty(
                                                                 Math.floor(item.qtyReturned / (item.packSize || 1)),
                                                                 item.qtyReturned % (item.packSize || 1),
-                                                                item.packSize || 1
+                                                                item.packSize || 1,
+                                                                item.packType,
+                                                                item.packUnit
                                                             )}
                                                         </td>
                                                         <td className="py-1 px-1 border-r border-black text-right">{formatINR(item.returnRate)}</td>

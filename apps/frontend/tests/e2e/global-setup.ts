@@ -48,13 +48,28 @@ setup('reset database and login', async ({ page, baseURL }) => {
   // 2. Perform authentication and save storage state
   console.log('🔐 Authenticating admin user...');
   
-  await page.goto(baseURL + '/login');
-  await page.fill('input[name="phone"]', '9876543210');
-  await page.fill('input[name="password"]', 'password123');
-  await page.click('button[type="submit"]');
+  page.on('console', msg => console.log('BROWSER CONSOLE:', msg.text()));
+  page.on('pageerror', err => console.log('BROWSER ERROR:', err.message));
 
-  // Wait for navigation to dashboard (assumes success redirects to / or /dashboard)
-  await page.waitForURL('**/dashboard', { timeout: 120000 });
+  await page.goto(baseURL + '/login');
+  try {
+    await page.fill('input[name="phone"]', '9876543210', { timeout: 5000 });
+    await page.fill('input[name="password"]', 'password123', { timeout: 5000 });
+    await page.click('button[type="submit"]', { timeout: 5000 });
+  } catch (e) {
+    console.error("Login form interaction failed. Taking screenshot of login page...");
+    await page.screenshot({ path: 'login_fail.png' });
+    throw e;
+  }
+
+  // Wait for navigation to dashboard
+  try {
+    await page.waitForURL('**/dashboard', { timeout: 5000 });
+  } catch (e) {
+    console.error("Navigation failed. Taking screenshot of login page...");
+    await page.screenshot({ path: 'login_fail.png' });
+    throw e;
+  }
 
   // Ensure auth directory exists
   const authDir = path.join(__dirname, '.auth');

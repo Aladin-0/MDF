@@ -119,6 +119,20 @@ export function EditProductModal({
     const watchPackUnit = watch('packUnit');
     const watchName = watch('name');
 
+    // Smart Packaging Logic: Enforce Two-Unit rules
+    useEffect(() => {
+        if (watchPackType) {
+            if (watchPackType === 'strip') {
+                setValue('packUnit', 'Tablet', { shouldValidate: true, shouldDirty: true });
+            } else if (watchPackType !== 'box') {
+                // For Bottle, Tube, Jar, etc.
+                setValue('packSize', 1, { shouldValidate: true, shouldDirty: true });
+                setValue('packUnit', 'Piece', { shouldValidate: true, shouldDirty: true });
+            }
+            // If it is 'box', we do nothing automatically so the user can manually enter "12 Strips" or "1 Piece".
+        }
+    }, [watchPackType, setValue]);
+
     // Watch batches for margin calc
     const watchedBatches = watch('batches');
 
@@ -266,6 +280,43 @@ export function EditProductModal({
                                             </Field>
                                             <Field label="Barcode" error={fieldErr('barcode')} hint="Leave blank to clear">
                                                 <Input {...register('barcode')} placeholder="Scan or enter barcode" />
+                                            </Field>
+                                        </div>
+                                    </Section>
+                                    <Separator />
+                                    {/* ── Section: Packaging Information ── */}
+                                    <Section icon={<Package className="h-4 w-4 text-emerald-500" />} title="Packaging Information">
+                                        <div className="grid grid-cols-3 gap-4">
+                                            <Field label="Pack Type" error={fieldErr('packType')}>
+                                                <Controller
+                                                    name="packType"
+                                                    control={control}
+                                                    render={({ field }) => (
+                                                        <Select value={field.value} onValueChange={field.onChange}>
+                                                            <SelectTrigger><SelectValue placeholder="e.g. Strip" /></SelectTrigger>
+                                                            <SelectContent>
+                                                                {PACK_TYPE_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    )}
+                                                />
+                                            </Field>
+                                            <Field label="Pack Size" error={fieldErr('packSize')}>
+                                                <Input type="number" min={1} {...register('packSize', { valueAsNumber: true, min: 1 })} placeholder="e.g. 10" />
+                                            </Field>
+                                            <Field label="Unit Name" error={fieldErr('packUnit')}>
+                                                <Controller
+                                                    name="packUnit"
+                                                    control={control}
+                                                    render={({ field }) => (
+                                                        <Select value={field.value} onValueChange={field.onChange}>
+                                                            <SelectTrigger><SelectValue placeholder="Select Unit" /></SelectTrigger>
+                                                            <SelectContent>
+                                                                {DISPENSING_UNIT_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    )}
+                                                />
                                             </Field>
                                         </div>
                                     </Section>

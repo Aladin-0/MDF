@@ -126,7 +126,7 @@ function InvoiceItemsExpanded({ invoiceId }: { invoiceId: string }) {
                             <td className="py-2.5 text-slate-500 font-mono text-xs">{item.batchNo || '—'}</td>
                             <td className="py-2.5 text-slate-500 text-xs">{item.expiryDate ? format(new Date(item.expiryDate), 'MM/yy') : '—'}</td>
                             <td className="py-2.5 text-right text-slate-600">{formatINR(item.rate)}</td>
-                            <td className="py-2.5 text-right text-slate-700">{formatQty(item.qtyStrips, item.qtyLoose, item.packSize ?? null)}</td>
+                            <td className="py-2.5 text-right text-slate-700">{formatQty(item.qtyStrips, item.qtyLoose, item.packSize ?? null, item.packType, item.packUnit)}</td>
                             <td className="py-2.5 text-right font-semibold text-slate-900">{formatINR(item.totalAmount)}</td>
                         </tr>
                     ))}

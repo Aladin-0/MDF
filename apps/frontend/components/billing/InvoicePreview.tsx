@@ -197,7 +197,7 @@ export const InvoicePreview = forwardRef<HTMLDivElement, InvoicePreviewProps>(({
                     {items.map((item, i) => {
                         const scheduleMarker = SCHEDULE_MARKERS[item.scheduleType ?? ''] ?? '';
                         const isScheduled = !!scheduleMarker;
-                        const qtyDisplay = formatQty(item.qtyStrips, item.qtyLoose, item.packSize);
+                        const qtyDisplay = formatQty(item.qtyStrips, item.qtyLoose, item.packSize, item.packType, item.packUnit);
                         const lineTotal = item.totalAmount ?? (item.rate * item.totalQty * (1 - item.discountPct / 100));
 
                         return (

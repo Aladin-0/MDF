@@ -51,7 +51,7 @@ export function StockAdjustmentModal({ isOpen, batch, onClose, onSubmit }: any) 
                  ...data,
                  qtyChange: isReducing ? -data.qtyStrips : data.qtyStrips
             });
-            toast({ title: "Stock adjusted successfully", description: `${batch.batchNo} — ${data.qtyStrips} strips ${isReducing ? 'removed' : 'added'}` });
+            toast({ title: "Stock adjusted successfully", description: `${batch.batchNo} — ${data.qtyStrips} ${batch?.product?.packType ? batch.product.packType + 's' : 'strips'} ${isReducing ? 'removed' : 'added'}` });
             queryClient.invalidateQueries({ queryKey: ['inventory'] });
             onClose();
         } catch (e: any) {
@@ -77,7 +77,7 @@ export function StockAdjustmentModal({ isOpen, batch, onClose, onSubmit }: any) 
                 <div className="bg-slate-50 rounded-xl p-4 mb-4 text-sm flex justify-between">
                      <div>
                           <div className="text-muted-foreground">Current Stock</div>
-                          <div className="font-semibold">{batch.qtyStrips} strips + {batch.qtyLoose} loose</div>
+                          <div className="font-semibold">{batch.qtyStrips} {batch?.product?.packType ? batch.product.packType + 's' : 'strips'} + {batch.qtyLoose} {batch?.product?.packUnit ? batch.product.packUnit + 's' : 'loose'}</div>
                      </div>
                      <div className="text-right">
                           <div className="text-muted-foreground">Rack Location</div>
@@ -128,7 +128,7 @@ export function StockAdjustmentModal({ isOpen, batch, onClose, onSubmit }: any) 
 
                      <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-2">
-                               <Label>Strips</Label>
+                               <Label>{batch?.product?.packType ? batch.product.packType.charAt(0).toUpperCase() + batch.product.packType.slice(1) + 's' : 'Strips'}</Label>
                                <Controller
                                    name="qtyStrips"
                                    control={control}
@@ -136,7 +136,7 @@ export function StockAdjustmentModal({ isOpen, batch, onClose, onSubmit }: any) 
                                />
                           </div>
                           <div className="space-y-2">
-                               <Label>Loose units</Label>
+                               <Label>{batch?.product?.packUnit ? batch.product.packUnit.charAt(0).toUpperCase() + batch.product.packUnit.slice(1) + 's' : 'Loose units'}</Label>
                                <Controller
                                    name="qtyLoose"
                                    control={control}
@@ -146,10 +146,10 @@ export function StockAdjustmentModal({ isOpen, batch, onClose, onSubmit }: any) 
                      </div>
 
                      <div className={`text-sm font-medium ${isReducing ? 'text-red-600' : 'text-green-600'} flex items-center gap-2`}>
-                          <span>{isReducing ? `Reducing stock by ${inputStrips}` : `Adding stock by ${inputStrips}`} strips</span>
+                          <span>{isReducing ? `Reducing stock by ${inputStrips}` : `Adding stock by ${inputStrips}`} {batch?.product?.packType ? batch.product.packType + 's' : 'strips'}</span>
                      </div>
                      <div className="text-sm font-medium">
-                          New stock will be: <span className={finalStrips < 0 ? 'text-red-500' : ''}>{finalStrips} strips</span>
+                          New stock will be: <span className={finalStrips < 0 ? 'text-red-500' : ''}>{finalStrips} {batch?.product?.packType ? batch.product.packType + 's' : 'strips'}</span>
                      </div>
 
                      <div className="space-y-2">

@@ -26,23 +26,30 @@ export function toIST(date: Date | string | number | null | undefined): Date {
 export function formatQty(
     qty_strips: number,
     qty_loose: number,
-    pack_size: number | null
+    pack_size: number | null,
+    packType: string = 'strip',
+    packUnit: string = 'tablet'
 ): string {
-    const s = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+    const s = (n: number, word: string) => {
+        if (!word) return `${n}`;
+        // naive pluralization
+        const plural = word.toLowerCase().endsWith('s') ? '' : 's';
+        return `${n} ${word}${n === 1 ? '' : plural}`;
+    };
 
     if (!pack_size || pack_size <= 1) {
         if (qty_strips > 0 && qty_loose > 0)
-            return s(qty_strips, 'strip') + ' + ' + s(qty_loose, 'tablet')
-        if (qty_strips > 0) return s(qty_strips, 'strip')
-        return s(qty_loose, 'tablet')
+            return s(qty_strips, packType) + ' + ' + s(qty_loose, packUnit)
+        if (qty_strips > 0) return s(qty_strips, packType)
+        return s(qty_loose, packUnit)
     }
     const extra = Math.floor(qty_loose / pack_size)
     const rem = qty_loose % pack_size
     const total_strips = qty_strips + extra
     if (total_strips > 0 && rem > 0)
-        return s(total_strips, 'strip') + ' + ' + s(rem, 'tablet')
-    if (total_strips > 0) return s(total_strips, 'strip')
-    return s(rem, 'tablet')
+        return s(total_strips, packType) + ' + ' + s(rem, packUnit)
+    if (total_strips > 0) return s(total_strips, packType)
+    return s(rem, packUnit)
 }
 
 export function formatDecimalQty(

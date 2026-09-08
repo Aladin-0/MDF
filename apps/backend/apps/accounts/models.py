@@ -157,7 +157,6 @@ class Customer(models.Model):
     class Meta:
         db_table = 'accounts_customer'
         ordering = ['-created_at']
-        unique_together = [('outlet', 'phone')]
         indexes = [
             models.Index(fields=['outlet', 'is_active']),
             models.Index(fields=['phone', 'outlet']),

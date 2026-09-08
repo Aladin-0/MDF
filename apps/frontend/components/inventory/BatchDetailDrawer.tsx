@@ -8,6 +8,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { SlidersHorizontal, Plus, X, Package, AlertTriangle, TrendingUp, Layers } from 'lucide-react';
 import { formatCurrency } from '@/lib/gst';
+import { formatQty } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PermissionGate } from '@/components/shared/PermissionGate';
 import { useRouter } from 'next/navigation';
@@ -92,7 +93,7 @@ export function BatchDetailDrawer({ productId, product, isOpen, onClose, onAdjus
                             <div className="bg-white border border-slate-200 rounded-3xl p-8 flex flex-col items-center justify-center text-center shadow-sm hover:shadow-md transition-shadow">
                                 <Package className="w-10 h-10 text-indigo-500 mb-4" />
                                 <span className="text-6xl font-black text-slate-900 tracking-tight">{totalStrips}</span>
-                                <span className="text-base text-slate-500 font-bold mt-3 uppercase tracking-widest">Total Strips Left</span>
+                                <span className="text-base text-slate-500 font-bold mt-3 uppercase tracking-widest">Total {(productInfo?.packType || 'Strips').toLowerCase().endsWith('s') ? productInfo?.packType : productInfo?.packType + 's' || 'Strips'} Left</span>
                             </div>
                             <div className={`bg-white border rounded-3xl p-8 flex flex-col items-center justify-center text-center shadow-sm hover:shadow-md transition-shadow ${totalStrips < (productInfo?.minQty || 10) ? 'border-red-300 bg-red-50/50' : 'border-slate-200'}`}>
                                 <AlertTriangle className={`w-10 h-10 mb-4 ${totalStrips < (productInfo?.minQty || 10) ? 'text-red-500' : 'text-slate-400'}`} />
@@ -171,8 +172,7 @@ export function BatchDetailDrawer({ productId, product, isOpen, onClose, onAdjus
                                                     <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200">
                                                         <div className="text-xs uppercase text-slate-500 font-black tracking-widest mb-2">Stock Left</div>
                                                         <div className="font-black text-slate-900 text-3xl">
-                                                            {batch.qtyStrips} <span className="text-base font-bold text-slate-500">strips</span>
-                                                            {batch.qtyLoose > 0 && <span className="text-base font-bold text-slate-500 ml-1">+ {batch.qtyLoose} loose</span>}
+                                                            {formatQty(batch.qtyStrips, batch.qtyLoose, productInfo?.packSize, productInfo?.packType, productInfo?.packUnit)}
                                                         </div>
                                                     </div>
 

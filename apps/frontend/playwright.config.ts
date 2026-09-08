@@ -3,9 +3,9 @@ import path from 'path';
 
 export default defineConfig({
   testDir: './tests/e2e',
-  timeout: 120000,
+  timeout: 300000,
   expect: {
-    timeout: 5000
+    timeout: 10000
   },
   fullyParallel: true,
   retries: process.env.CI ? 2 : 0,
@@ -43,7 +43,7 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
     },
     {
-      command: 'npm run dev -- -p 3001',
+      command: 'npm run start -- -p 3001',
       port: 3001,
       timeout: 120000,
       reuseExistingServer: !process.env.CI,

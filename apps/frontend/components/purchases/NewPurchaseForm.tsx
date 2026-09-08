@@ -432,7 +432,16 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
 
     return (
         <>
-        <form onSubmit={handleSubmit(onSubmit, (errors) => {
+        <form 
+            onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                    const target = e.target as HTMLElement;
+                    if (target.tagName.toLowerCase() !== 'textarea') {
+                        e.preventDefault();
+                    }
+                }
+            }}
+            onSubmit={handleSubmit(onSubmit, (errors) => {
             console.error("FORM VALIDATION ERRORS:", errors);
             let errMsg = "Validation failed";
             if (errors.items && Array.isArray(errors.items) && errors.items.length > 0) {

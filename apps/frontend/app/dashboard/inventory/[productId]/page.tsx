@@ -182,7 +182,7 @@ export default function ProductInventoryPage() {
                     icon={Package}
                     value={
                         <span className="text-3xl font-black tracking-tight">
-                            {formatQty(metrics?.totalStrips ?? 0, metrics?.totalLoose ?? 0, product.packSize || 1)}
+                            {formatQty(metrics?.totalStrips ?? 0, metrics?.totalLoose ?? 0, product.packSize || 1, product.packType, product.packUnit)}
                         </span>
                     }
                     label="Total Stock In Hand"
@@ -303,7 +303,7 @@ export default function ProductInventoryPage() {
                                             </td>
                                             <td className="py-4 px-6 text-right">
                                                 <span className="text-base font-black text-slate-900">
-                                                    {formatQty(Number(batch.qtyStrips) || 0, Number(batch.qtyLoose) || 0, product.packSize || 1)}
+                                                    {formatQty(Number(batch.qtyStrips) || 0, Number(batch.qtyLoose) || 0, product.packSize || 1, product.packType, product.packUnit)}
                                                 </span>
                                             </td>
                                             <td className="py-4 px-6 text-right font-bold text-slate-700">{formatCurrency(batch.mrp)}</td>
@@ -350,7 +350,7 @@ export default function ProductInventoryPage() {
                                 <tr className="bg-slate-100 border-t-2 border-slate-200">
                                     <td colSpan={3} className="py-4 px-6 font-black text-sm uppercase tracking-widest text-slate-600">Totals</td>
                                     <td className="py-4 px-6 text-right font-black text-slate-900 text-base">
-                                        {formatQty(metrics?.totalStrips ?? 0, metrics?.totalLoose ?? 0, product.packSize || 1)}
+                                        {formatQty(metrics?.totalStrips ?? 0, metrics?.totalLoose ?? 0, product.packSize || 1, product.packType, product.packUnit)}
                                     </td>
                                     <td colSpan={2} className="py-4 px-6"></td>
                                     <PermissionGate permission="view_purchase_rates">
