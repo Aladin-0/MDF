@@ -370,8 +370,8 @@ class GSTR1ExcelExportView(APIView):
                         
                 if rows:
                     data_map[sheet_name] = [
-                        # Inject summary headers (Row 1)
-                        {"start_row": 1, "rows": [{
+                        # Inject summary headers (Row 3)
+                        {"start_row": 3, "rows": [{
                             1: total_hsn_count, 5: total_val, 7: total_txval, 
                             8: total_iamt, 9: total_camt, 10: total_samt, 11: total_csamt
                         }]},
