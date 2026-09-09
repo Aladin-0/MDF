@@ -144,7 +144,7 @@ class GSTR1ExcelExportView(APIView):
                 })
             if rows:
                 data_map['b2cs'] = [
-                    {"start_row": 3, "rows": [{5: round(total_taxable, 2), 6: round(total_cess, 2)}]},
+                    {"start_row": 3, "rows": [{4: round(total_taxable, 2), 5: round(total_cess, 2)}]},
                     {"start_row": 5, "rows": rows}
                 ]
                 
@@ -379,12 +379,12 @@ class GSTR1ExcelExportView(APIView):
                         # Inject summary headers (Row 3)
                         {"start_row": 3, "rows": [{
                             1: total_hsn_count, 
-                            5: round(total_val, 2), 
-                            7: round(total_txval, 2), 
-                            8: round(total_iamt, 2), 
-                            9: round(total_camt, 2), 
-                            10: round(total_samt, 2), 
-                            11: round(total_csamt, 2)
+                            4: round(total_val, 2), 
+                            6: round(total_txval, 2), 
+                            7: round(total_iamt, 2), 
+                            8: round(total_camt, 2), 
+                            9: round(total_samt, 2), 
+                            10: round(total_csamt, 2)
                         }]},
                         # Inject data rows
                         {"start_row": 5, "rows": rows}
