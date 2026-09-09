@@ -87,7 +87,10 @@ def create_sale_snapshots(sale_invoice) -> GSTTransactionSnapshot:
         items_by_rate[rate_str]['sgst'] += sgst
         
         hsn = item.hsn_code.strip() if item.hsn_code and item.hsn_code.strip() else '0000'
-        composite_key = f"{hsn}_{rate_str}"
+        uqc = 'PAC'
+        rate_val = float(rate_str)
+        formatted_rate = f"{int(rate_val)}" if rate_val.is_integer() else f"{rate_val:.2f}"
+        composite_key = f"{hsn}_{formatted_rate}_{uqc}"
         hsn_summary[composite_key]['hsn_code'] = hsn
         hsn_summary[composite_key]['rate'] = float(rate_str)
         hsn_summary[composite_key]['taxable_amount'] += taxable
@@ -209,7 +212,10 @@ def create_sales_return_snapshots(sales_return) -> GSTTransactionSnapshot:
         items_by_rate[rate_str]['cgst'] += cgst
         items_by_rate[rate_str]['sgst'] += sgst
 
-        composite_key = f"{hsn}_{rate_str}"
+        uqc = 'PAC'
+        rate_val = float(rate_str)
+        formatted_rate = f"{int(rate_val)}" if rate_val.is_integer() else f"{rate_val:.2f}"
+        composite_key = f"{hsn}_{formatted_rate}_{uqc}"
         hsn_summary[composite_key]['hsn_code'] = hsn
         hsn_summary[composite_key]['rate'] = float(rate_str)
         hsn_summary[composite_key]['taxable_amount'] += taxable
@@ -314,7 +320,10 @@ def create_purchase_snapshots(purchase_invoice) -> GSTTransactionSnapshot:
         items_by_rate[rate_str]['cess'] += cess_amt
         
         hsn = item.hsn_code or 'UNKNOWN'
-        composite_key = f"{hsn}_{rate_str}"
+        uqc = 'PAC'
+        rate_val = float(rate_str)
+        formatted_rate = f"{int(rate_val)}" if rate_val.is_integer() else f"{rate_val:.2f}"
+        composite_key = f"{hsn}_{formatted_rate}_{uqc}"
         hsn_summary[composite_key]['hsn_code'] = hsn
         hsn_summary[composite_key]['rate'] = float(rate_str)
         hsn_summary[composite_key]['taxable_amount'] += taxable
@@ -418,7 +427,10 @@ def create_purchase_return_snapshots(debit_note) -> GSTTransactionSnapshot:
         
         hsn = item.batch.product.hsn_code if hasattr(item, 'batch') and item.batch and hasattr(item.batch, 'product') and item.batch.product.hsn_code else 'UNKNOWN'
         
-        composite_key = f"{hsn}_{rate_str}"
+        uqc = 'PAC'
+        rate_val = float(rate_str)
+        formatted_rate = f"{int(rate_val)}" if rate_val.is_integer() else f"{rate_val:.2f}"
+        composite_key = f"{hsn}_{formatted_rate}_{uqc}"
         hsn_summary[composite_key]['hsn_code'] = hsn
         hsn_summary[composite_key]['rate'] = float(rate_str)
         hsn_summary[composite_key]['taxable_amount'] += taxable

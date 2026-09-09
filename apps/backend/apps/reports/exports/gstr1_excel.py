@@ -9,7 +9,13 @@ from django.conf import settings
 from django.http import HttpResponse, JsonResponse
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.exceptions import PermissionDenied, NotFound
+import re
+
+def safe_pos(pos_val, gstin=None):
+    fallback = str(gstin)[:2] if gstin else "27"
+    if not pos_val: return fallback
+    m = re.search(r'\d{2}', str(pos_val))
+    return m.group(0) if m else fallback
 
 from apps.core.models import Outlet
 from apps.reports.models import GSTExportAudit
@@ -96,19 +102,19 @@ class GSTR1ExcelExportView(APIView):
                             2: "", # Receiver Name
                             3: inum,
                             4: idt,
-                            5: Decimal(str(val)) if val is not None else Decimal('0.00'),
-                            6: pos if pos else "27-Maharashtra",
+                            5: round(Decimal(str(val)), 2) if val is not None else Decimal('0.00'),
+                            6: safe_pos(pos, gstin),
                             7: "N", # Reverse Charge
                             8: "", # Applicable % of Tax Rate
                             9: inv_typ,
                             10: "", # E-Commerce
-                            11: Decimal(str(rt)) if rt is not None else Decimal('0.00'),
-                            12: txval,
-                            13: cess if cess else "" # Cess
+                            11: round(Decimal(str(rt)), 2) if rt is not None else Decimal('0.00'),
+                            12: round(txval, 2),
+                            13: round(cess, 2) if cess else "" # Cess
                         })
             if rows:
                 data_map['b2b,sez,de'] = [
-                    {"start_row": 2, "rows": [{12: total_taxable, 13: total_cess}]},
+                    {"start_row": 3, "rows": [{12: round(total_taxable, 2), 13: round(total_cess, 2)}]},
                     {"start_row": 5, "rows": rows}
                 ]
                         
@@ -129,16 +135,16 @@ class GSTR1ExcelExportView(APIView):
                 
                 rows.append({
                     1: typ,
-                    2: pos if pos else "27-Maharashtra",
+                    2: safe_pos(pos, outlet.gstin),
                     3: "", # Applicable % of Tax Rate
-                    4: Decimal(str(rt)) if rt is not None else Decimal('0.00'),
-                    5: txval,
-                    6: cess if cess else "", # Cess
+                    4: round(Decimal(str(rt)), 2) if rt is not None else Decimal('0.00'),
+                    5: round(txval, 2),
+                    6: round(cess, 2) if cess else "", # Cess
                     7: "" # E-Commerce
                 })
             if rows:
                 data_map['b2cs'] = [
-                    {"start_row": 2, "rows": [{5: total_taxable, 6: total_cess}]},
+                    {"start_row": 3, "rows": [{5: round(total_taxable, 2), 6: round(total_cess, 2)}]},
                     {"start_row": 5, "rows": rows}
                 ]
                 
@@ -164,17 +170,17 @@ class GSTR1ExcelExportView(APIView):
                         rows.append({
                             1: inum,
                             2: idt,
-                            3: Decimal(str(val)) if val is not None else Decimal('0.00'),
-                            4: pos if pos else "27-Maharashtra",
+                            3: round(Decimal(str(val)), 2) if val is not None else Decimal('0.00'),
+                            4: safe_pos(pos, outlet.gstin),
                             5: "", # Applicable % of Tax Rate
-                            6: Decimal(str(rt)) if rt is not None else Decimal('0.00'),
-                            7: txval,
-                            8: cess if cess else "", # Cess
+                            6: round(Decimal(str(rt)), 2) if rt is not None else Decimal('0.00'),
+                            7: round(txval, 2),
+                            8: round(cess, 2) if cess else "", # Cess
                             9: "" # E-Commerce
                         })
             if rows:
                 data_map['b2cl'] = [
-                    {"start_row": 2, "rows": [{7: total_taxable, 8: total_cess}]},
+                    {"start_row": 3, "rows": [{7: round(total_taxable, 2), 8: round(total_cess, 2)}]},
                     {"start_row": 5, "rows": rows}
                 ]
                         
@@ -206,18 +212,18 @@ class GSTR1ExcelExportView(APIView):
                             3: nt_num,
                             4: nt_dt,
                             5: nt_ty,
-                            6: pos if pos else "27-Maharashtra", # POS
+                            6: safe_pos(pos, gstin), # POS
                             7: "N", # Reverse Charge
                             8: "Regular", # Note Supply Type
-                            9: Decimal(str(val)) if val is not None else Decimal('0.00'),
+                            9: round(Decimal(str(val)), 2) if val is not None else Decimal('0.00'),
                             10: "", # Applicable % of Tax Rate
-                            11: Decimal(str(rt)) if rt is not None else Decimal('0.00'),
-                            12: txval,
-                            13: cess if cess else "" # Cess
+                            11: round(Decimal(str(rt)), 2) if rt is not None else Decimal('0.00'),
+                            12: round(txval, 2),
+                            13: round(cess, 2) if cess else "" # Cess
                         })
             if rows:
                 data_map['cdnr'] = [
-                    {"start_row": 2, "rows": [{12: total_taxable, 13: total_cess}]},
+                    {"start_row": 3, "rows": [{12: round(total_taxable, 2), 13: round(total_cess, 2)}]},
                     {"start_row": 5, "rows": rows}
                 ]
                         
@@ -246,16 +252,16 @@ class GSTR1ExcelExportView(APIView):
                         2: nt_num,
                         3: nt_dt,
                         4: nt_ty,
-                        5: pos if pos else "27-Maharashtra",
-                        6: Decimal(str(val)) if val is not None else Decimal('0.00'),
+                        5: safe_pos(pos, outlet.gstin),
+                        6: round(Decimal(str(val)), 2) if val is not None else Decimal('0.00'),
                         7: "", # Applicable % of Tax Rate
-                        8: Decimal(str(rt)) if rt is not None else Decimal('0.00'),
-                        9: txval,
-                        10: cess if cess else "" # Cess
+                        8: round(Decimal(str(rt)), 2) if rt is not None else Decimal('0.00'),
+                        9: round(txval, 2),
+                        10: round(cess, 2) if cess else "" # Cess
                     })
             if rows:
                 data_map['cdnur'] = [
-                    {"start_row": 2, "rows": [{9: total_taxable, 10: total_cess}]},
+                    {"start_row": 3, "rows": [{9: round(total_taxable, 2), 10: round(total_cess, 2)}]},
                     {"start_row": 5, "rows": rows}
                 ]
 
@@ -316,13 +322,13 @@ class GSTR1ExcelExportView(APIView):
                         'csamt': Decimal("0.00")
                     }
                 
-                # Extract and multiply values
-                qty = round(Decimal(str(item.get('qty', 0))) * multiplier, 2)
-                txval = round(Decimal(str(item.get('taxable_amount', 0))) * multiplier, 2)
-                iamt = round(Decimal(str(item.get('igst', 0))) * multiplier, 2)
-                camt = round(Decimal(str(item.get('cgst', 0))) * multiplier, 2)
-                samt = round(Decimal(str(item.get('sgst', 0))) * multiplier, 2)
-                csamt = round(Decimal(str(item.get('cess', 0))) * multiplier, 2)
+                # Extract and multiply values without rounding to avoid penny mismatch
+                qty = Decimal(str(item.get('qty', 0))) * multiplier
+                txval = Decimal(str(item.get('taxable_amount', 0))) * multiplier
+                iamt = Decimal(str(item.get('igst', 0))) * multiplier
+                camt = Decimal(str(item.get('cgst', 0))) * multiplier
+                samt = Decimal(str(item.get('sgst', 0))) * multiplier
+                csamt = Decimal(str(item.get('cess', 0))) * multiplier
                 
                 hsn_agg[agg_key]['qty'] += qty
                 hsn_agg[agg_key]['txval'] += txval
@@ -358,22 +364,27 @@ class GSTR1ExcelExportView(APIView):
                             1: data['hsn_sc'],
                             2: data['desc'],
                             3: data['uqc'],
-                            4: data['qty'],
-                            5: data['val'],
-                            6: data['rt'],
-                            7: data['txval'],
-                            8: data['iamt'],
-                            9: data['camt'],
-                            10: data['samt'],
-                            11: data['csamt']
+                            4: round(data['qty'], 2),
+                            5: round(data['val'], 2),
+                            6: round(data['rt'], 2),
+                            7: round(data['txval'], 2),
+                            8: round(data['iamt'], 2),
+                            9: round(data['camt'], 2),
+                            10: round(data['samt'], 2),
+                            11: round(data['csamt'], 2)
                         })
                         
                 if rows:
                     data_map[sheet_name] = [
                         # Inject summary headers (Row 3)
                         {"start_row": 3, "rows": [{
-                            1: total_hsn_count, 5: total_val, 7: total_txval, 
-                            8: total_iamt, 9: total_camt, 10: total_samt, 11: total_csamt
+                            1: total_hsn_count, 
+                            5: round(total_val, 2), 
+                            7: round(total_txval, 2), 
+                            8: round(total_iamt, 2), 
+                            9: round(total_camt, 2), 
+                            10: round(total_samt, 2), 
+                            11: round(total_csamt, 2)
                         }]},
                         # Inject data rows
                         {"start_row": 5, "rows": rows}
