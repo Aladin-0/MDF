@@ -1,8 +1,8 @@
 'use client'
 import { formatQty } from '@/lib/utils';
 
-import React, { useState, useEffect } from 'react';
-import { useStockList } from '@/hooks/useInventory';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useStockPage } from '@/hooks/useInventory';
 import { useInventoryFilters } from '@/hooks/useInventoryFilters';
 import { 
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow 
@@ -15,59 +15,125 @@ import { ProductSearchResult, Batch } from '@/types';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, PackageSearch, Eye, SlidersHorizontal, ChevronUp, ChevronDown, ChevronRight, Pencil } from 'lucide-react';
+import { Search, PackageSearch, Eye, SlidersHorizontal, ChevronUp, ChevronDown, ChevronRight, Pencil, Loader2, Check } from 'lucide-react';
 import { formatCurrency } from '@/lib/gst';
 import { useInventoryStore } from '@/store/inventoryStore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PermissionGate } from '@/components/shared/PermissionGate';
 import { useDebounce } from '@/hooks/useDebounce';
+import { productsApi } from '@/lib/apiClient';
+import { useToast } from '@/hooks/use-toast';
+import { useQueryClient } from '@tanstack/react-query';
 import { SCHEDULE_TYPE_OPTIONS } from '@/constants/scheduleTypes';
+import { MasterProduct } from '@/types';
 
 export function StockTable({ onProductClick, onAdjustClick, onEditClick }: any) {
     const { filters, setFilter, clearFilters } = useInventoryFilters();
-    
-    // For debounce
+    const { toast } = useToast();
+    const queryClient = useQueryClient();
+    const [quickEditCol, setQuickEditCol] = useState<string | null>('none');
+
+    // ── Search ─────────────────────────────────────────────────────────────────
+    // Keep local search state to avoid writing to the URL on every keystroke.
     const [searchTerm, setSearchTerm] = useState(filters.search || '');
-    const debouncedSearch = useDebounce(searchTerm, 200);
+    const debouncedSearch = useDebounce(searchTerm, 400);
+    const prevDebounced = useRef(debouncedSearch);
 
     useEffect(() => {
-        setFilter('q', debouncedSearch);
-    }, [debouncedSearch]);
+        // Only call setFilter when the debounced value actually changed.
+        if (prevDebounced.current !== debouncedSearch) {
+            prevDebounced.current = debouncedSearch;
+            setFilter('q', debouncedSearch);
+        }
+    }, [debouncedSearch, setFilter]);
 
-    const { data: stockData, isLoading } = useStockList(filters);
-    const data = stockData?.data || [];
+    // ── Pagination via local state (Traditional) ───────────────
+    const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(50);
+
+    const filtersKey = `${filters.search}|${filters.scheduleType}|${filters.lowStock}|${filters.expiringSoon}|${filters.sortBy}|${filters.sortOrder}`;
+    const prevFiltersKey = useRef(filtersKey);
+    
+    if (prevFiltersKey.current !== filtersKey) {
+        prevFiltersKey.current = filtersKey;
+        if (page !== 1) setPage(1);
+    }
+
+    const { data: pageData, isLoading, isFetching } = useStockPage(filters, page, pageSize);
+
+    const tableData = pageData?.data || [];
+    const totalPages = pageData?.pagination?.totalPages || 1;
+    const totalRecords = pageData?.pagination?.totalRecords || 0;
+
+    const topRef = useRef<HTMLDivElement>(null);
+
+    // Scroll to top of table when page changes
+    useEffect(() => {
+        if (topRef.current) {
+            const y = topRef.current.getBoundingClientRect().top + window.scrollY - 100;
+            window.scrollTo({ top: y, behavior: 'smooth' });
+        }
+    }, [page]);
+
     const { valuationMode } = useInventoryStore();
 
+    // ── Sort ───────────────────────────────────────────────────────────────────
+    // Store sort in local state; push to URL in ONE combined call to avoid double re-render.
     const [sorting, setSorting] = useState<SortingState>([{ 
          id: filters.sortBy || 'name', 
          desc: filters.sortOrder === 'desc' 
     }]);
     const [expanded, setExpanded] = useState<ExpandedState>({});
 
-    useEffect(() => {
-        if (sorting.length > 0) {
-             setFilter('sort', sorting[0].id);
-             setFilter('order', sorting[0].desc ? 'desc' : 'asc');
-        }
-    }, [sorting]);
+    const onSortingChange = useCallback((updater: any) => {
+        setSorting(prev => {
+            const next = typeof updater === 'function' ? updater(prev) : updater;
+            if (next.length > 0) {
+                // Single router.replace call combining both sort params.
+                const params = new URLSearchParams(window.location.search);
+                params.set('sort', next[0].id);
+                params.set('order', next[0].desc ? 'desc' : 'asc');
+                window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
+            }
+            return next;
+        });
+    }, []);
 
+    // ── Quick Edit optimistic update ───────────────────────────────────────────
+    const colMap: Record<string, string> = {
+        gstRate: 'GST Rate (%)',
+        hsnCode: 'HSN Code',
+        packType: 'Pack Type',
+        packSize: 'Pack Size',
+        packUnit: 'Unit Name'
+    };
+
+    const handleQuickSave = useCallback(async (productId: string, field: string, val: any) => {
+        await productsApi.update(productId, { [field]: val });
+        // Optimistically update the current page cache in React Query
+        queryClient.setQueriesData(
+            { queryKey: ['inventory', 'stock'] },
+            (oldData: any) => {
+                if (!oldData?.data) return oldData;
+                return { ...oldData, data: oldData.data.map((p: any) => p.id === productId ? { ...p, [field]: val } : p) };
+            }
+        );
+    }, [queryClient]);
+
+    // ── Columns ────────────────────────────────────────────────────────────────
     const columns: ColumnDef<ProductSearchResult>[] = [
         {
             id: 'expander',
             header: () => null,
-            cell: ({ row }) => {
-                return row.getCanExpand() ? (
-                    <button
-                        {...{
-                            onClick: row.getToggleExpandedHandler(),
-                            style: { cursor: 'pointer' },
-                        }}
-                        className="p-1 rounded hover:bg-slate-200 text-slate-500"
-                    >
-                        {row.getIsExpanded() ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                    </button>
-                ) : null
-            },
+            cell: ({ row }) => row.getCanExpand() ? (
+                <button
+                    onClick={row.getToggleExpandedHandler()}
+                    style={{ cursor: 'pointer' }}
+                    className="p-1 rounded hover:bg-slate-200 text-slate-500"
+                >
+                    {row.getIsExpanded() ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                </button>
+            ) : null,
         },
         {
             accessorKey: 'name',
@@ -118,7 +184,6 @@ export function StockTable({ onProductClick, onAdjustClick, onEditClick }: any) 
                 const p = row.original;
                 const isEmpty = (p.totalStock || 0) === 0;
                 const color = isEmpty || p.isLowStock ? "text-red-600 font-bold" : "text-slate-900";
-
                 let displayText = p.stockDisplayText;
                 if (!displayText) {
                     displayText = formatQty(
@@ -129,18 +194,15 @@ export function StockTable({ onProductClick, onAdjustClick, onEditClick }: any) 
                         p.packUnit || 'tablet'
                     );
                 }
-
                 return (
                     <div className="w-40 text-right">
                         {isEmpty ? (
                             <div className={`text-sm ${color}`}>Out of stock</div>
                         ) : (
-                            <div className={`text-sm font-medium ${color}`}>
-                                {displayText}
-                            </div>
+                            <div className={`text-sm font-medium ${color}`}>{displayText}</div>
                         )}
                     </div>
-                )
+                );
             }
         },
         {
@@ -167,11 +229,9 @@ export function StockTable({ onProductClick, onAdjustClick, onEditClick }: any) 
                  const exDate = new Date(exStr);
                  const now = new Date();
                  const diffDays = Math.ceil((exDate.getTime() - now.getTime()) / (1000 * 3600 * 24));
-                 
                  let style = "text-slate-600";
                  if (diffDays < 30) style = "bg-red-100 text-red-700 rounded px-2 py-0.5";
                  else if (diffDays <= 90) style = "bg-amber-100 text-amber-700 rounded px-2 py-0.5";
-
                  return (
                      <div className="w-32">
                          <span className={style}>{exDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric'})}</span>
@@ -186,20 +246,18 @@ export function StockTable({ onProductClick, onAdjustClick, onEditClick }: any) 
                 const batches = row.original.batches || [];
                 const packSize = row.original.packSize || 1;
                 let totalVal = 0;
-                
-                batches.forEach(b => {
+                batches.forEach((b: any) => {
                     const effectiveQty = b.qtyStrips + (b.qtyLoose / packSize);
                     let rate = b.purchaseRate;
                     if (valuationMode === 'LANDING') rate = b.landingRate || b.purchaseRate;
                     else if (valuationMode === 'MRP') rate = b.mrp;
                     totalVal += (effectiveQty * rate);
                 });
-
                 return (
                     <div className="w-24 text-right text-sm font-semibold text-slate-700">
                         {formatCurrency(totalVal)}
                     </div>
-                )
+                );
             }
         },
         {
@@ -234,11 +292,34 @@ export function StockTable({ onProductClick, onAdjustClick, onEditClick }: any) 
         }
     ];
 
+    if (quickEditCol && quickEditCol !== 'none') {
+        columns.splice(2, 0, {
+            id: 'quickEdit',
+            accessorFn: (row: any) => row[quickEditCol],
+            header: colMap[quickEditCol] || quickEditCol,
+            cell: ({ row }) => (
+                <InlineEditCell 
+                    product={row.original} 
+                    field={quickEditCol as keyof MasterProduct} 
+                    onSave={async (val) => {
+                        try {
+                            await handleQuickSave(row.original.id, quickEditCol, val);
+                            toast({ title: "Updated", description: `${colMap[quickEditCol]} updated successfully.` });
+                        } catch (e: any) {
+                            toast({ variant: 'destructive', title: "Error", description: e.detail || "Failed to update" });
+                            throw e;
+                        }
+                    }} 
+                />
+            )
+        });
+    }
+
     const table = useReactTable({
-        data,
+        data: tableData,
         columns,
         getCoreRowModel: getCoreRowModel(),
-        onSortingChange: setSorting,
+        onSortingChange,
         getSortedRowModel: getSortedRowModel(),
         getExpandedRowModel: getExpandedRowModel(),
         onExpandedChange: setExpanded,
@@ -249,7 +330,7 @@ export function StockTable({ onProductClick, onAdjustClick, onEditClick }: any) 
     const hasFilters = filters.search || (filters.scheduleType && filters.scheduleType !== 'all');
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-4" ref={topRef}>
              <div className="flex gap-3 flex-wrap items-center">
                  <div className="relative w-full md:w-64">
                      <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
@@ -270,6 +351,20 @@ export function StockTable({ onProductClick, onAdjustClick, onEditClick }: any) 
                            {SCHEDULE_TYPE_OPTIONS.map((opt) => (
                                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                            ))}
+                      </SelectContent>
+                 </Select>
+
+                 <Select value={quickEditCol || 'none'} onValueChange={setQuickEditCol}>
+                      <SelectTrigger className="w-40 bg-indigo-50 border-indigo-200 text-indigo-700 font-medium">
+                          <SelectValue placeholder="Quick Edit" />
+                      </SelectTrigger>
+                      <SelectContent>
+                           <SelectItem value="none">Quick Edit: Off</SelectItem>
+                           <SelectItem value="gstRate">GST Rate (%)</SelectItem>
+                           <SelectItem value="hsnCode">HSN Code</SelectItem>
+                           <SelectItem value="packType">Pack Type</SelectItem>
+                           <SelectItem value="packSize">Pack Size</SelectItem>
+                           <SelectItem value="packUnit">Unit Name</SelectItem>
                       </SelectContent>
                  </Select>
 
@@ -294,7 +389,7 @@ export function StockTable({ onProductClick, onAdjustClick, onEditClick }: any) 
                            ))}
                       </TableHeader>
                       <TableBody>
-                           {isLoading ? (
+                           {isLoading && page === 1 ? (
                                 Array(8).fill(null).map((_, i) => (
                                     <TableRow key={i}>
                                          <TableCell colSpan={7}>
@@ -360,7 +455,58 @@ export function StockTable({ onProductClick, onAdjustClick, onEditClick }: any) 
                            )}
                       </TableBody>
                   </Table>
-             </div>
+              </div>
+             
+             {/* Pagination Footer */}
+             {tableData.length > 0 && (
+                 <div className="flex items-center justify-between px-4 py-4 border-t border-slate-200">
+                     <div className="flex items-center text-sm text-slate-500">
+                         Showing {((page - 1) * pageSize) + 1} to {Math.min(page * pageSize, totalRecords)} of {totalRecords} entries
+                     </div>
+                     <div className="flex items-center space-x-4">
+                         <div className="flex items-center space-x-2">
+                             <span className="text-sm text-slate-500">Rows per page</span>
+                             <Select 
+                                 value={pageSize.toString()} 
+                                 onValueChange={(val) => {
+                                     setPageSize(Number(val));
+                                     setPage(1);
+                                 }}
+                             >
+                                 <SelectTrigger className="h-8 w-[70px]">
+                                     <SelectValue placeholder="50" />
+                                 </SelectTrigger>
+                                 <SelectContent>
+                                     <SelectItem value="50">50</SelectItem>
+                                     <SelectItem value="100">100</SelectItem>
+                                     <SelectItem value="250">250</SelectItem>
+                                 </SelectContent>
+                             </Select>
+                         </div>
+                         <div className="flex space-x-2">
+                             <Button 
+                                 variant="outline" 
+                                 size="sm" 
+                                 onClick={() => setPage(p => Math.max(1, p - 1))}
+                                 disabled={page === 1 || isFetching}
+                             >
+                                 Previous
+                             </Button>
+                             <div className="flex items-center justify-center px-2 text-sm font-medium">
+                                 Page {page} of {totalPages}
+                             </div>
+                             <Button 
+                                 variant="outline" 
+                                 size="sm" 
+                                 onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                 disabled={page >= totalPages || isFetching}
+                             >
+                                 Next
+                             </Button>
+                         </div>
+                     </div>
+                 </div>
+             )}
         </div>
     );
 }
@@ -372,4 +518,68 @@ function SortableHeader({ column, title }: any) {
                {column.getIsSorted() === 'asc' ? <ChevronUp className="w-3 h-3 ml-2" /> : column.getIsSorted() === 'desc' ? <ChevronDown className="w-3 h-3 ml-2" /> : null}
           </Button>
      );
+}
+
+function InlineEditCell({ product, field, onSave }: { product: any, field: keyof MasterProduct, onSave: (val: any) => Promise<void> }) {
+    const [value, setValue] = useState<any>(product[field] ?? '');
+    const [isSaving, setIsSaving] = useState(false);
+    
+    useEffect(() => {
+        setValue(product[field] ?? '');
+    }, [product, field]);
+
+    const handleSave = async () => {
+        if (value === product[field]) return;
+        let finalVal = value;
+        if (field === 'gstRate' || field === 'packSize') {
+            finalVal = Number(value);
+            if (isNaN(finalVal)) return;
+        }
+        setIsSaving(true);
+        try {
+            await onSave(finalVal);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const isSelect = field === 'packType';
+    
+    return (
+        <div className="flex items-center gap-1 w-32 relative group">
+            {isSelect ? (
+                <Select value={value as string} onValueChange={setValue}>
+                    <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="strip">Strip</SelectItem>
+                        <SelectItem value="bottle">Bottle</SelectItem>
+                        <SelectItem value="tube">Tube</SelectItem>
+                        <SelectItem value="box">Box</SelectItem>
+                        <SelectItem value="piece">Piece</SelectItem>
+                        <SelectItem value="pack">Pack</SelectItem>
+                        <SelectItem value="vial">Vial</SelectItem>
+                        <SelectItem value="ampoule">Ampoule</SelectItem>
+                    </SelectContent>
+                </Select>
+            ) : (
+                <Input 
+                    type={field === 'gstRate' || field === 'packSize' ? 'number' : 'text'}
+                    className="h-8 text-xs px-2"
+                    value={value}
+                    onChange={e => setValue(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') handleSave(); }}
+                />
+            )}
+            <Button 
+                size="sm" 
+                variant="ghost" 
+                className={`h-8 w-8 p-0 shrink-0 ${value !== product[field] ? 'text-indigo-600 bg-indigo-50' : 'text-slate-300'} transition-opacity opacity-0 group-hover:opacity-100 focus-within:opacity-100 ${value !== product[field] ? 'opacity-100' : ''}`}
+                onClick={handleSave}
+                disabled={isSaving || value === product[field]}
+                title="Save changes"
+            >
+                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+            </Button>
+        </div>
+    );
 }

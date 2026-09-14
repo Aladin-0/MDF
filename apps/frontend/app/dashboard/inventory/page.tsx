@@ -44,12 +44,12 @@ export default function InventoryPage() {
     const [editProduct, setEditProduct] = useState<MasterProduct | null>(null);
     const [showEditModal, setShowEditModal] = useState(false);
 
-    // Queries to just get sizes for the badges
-    const { data: stockData } = useStockList({});
+    // Queries to just get sizes for the badges (simple single fetch — no infinite query needed here)
+    const { data: stockData } = useStockList({ pageSize: 1 } as any);
     const { data: expiringData } = useExpiryReport(90);
     const { data: lowStockData } = useLowStockReport();
 
-    const totalProducts = stockData?.pagination?.totalRecords ?? stockData?.data?.length ?? 0;
+    const totalProducts = stockData?.pagination?.totalRecords ?? 0;
     const expiringCount = expiringData?.pagination?.totalRecords ?? expiringData?.data?.length ?? 0;
     const lowStockCount = lowStockData?.pagination?.totalRecords ?? lowStockData?.data?.length ?? 0;
 
@@ -69,7 +69,7 @@ export default function InventoryPage() {
                 const token = getStoredToken();
                 const queryParams = new URLSearchParams({ 
                     outletId: outlet.id,
-                    export_format: 'csv',
+                    export_format: 'excel',
                     ...(filters.search ? { search: filters.search } : {}),
                     ...(filters.scheduleType && filters.scheduleType !== 'all' ? { scheduleType: filters.scheduleType } : {}),
                     ...(filters.lowStock ? { lowStock: 'true' } : {}),
@@ -90,7 +90,7 @@ export default function InventoryPage() {
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `Product-Summary-Report-${new Date().toISOString().split('T')[0]}.csv`;
+                a.download = `Product-Summary-Report-${new Date().toISOString().split('T')[0]}.xlsx`;
                 a.click();
                 URL.revokeObjectURL(url);
             } catch (error) {
@@ -138,7 +138,7 @@ export default function InventoryPage() {
             const token = getStoredToken();
             const queryParams = new URLSearchParams({ 
                 outletId: outlet.id,
-                export_format: 'csv',
+                export_format: 'xlsx',
                 report_type: 'current_stock',
                 ...(filters.search ? { search: filters.search } : {})
             });
@@ -155,7 +155,7 @@ export default function InventoryPage() {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `Batch-Detail-Report-${new Date().toISOString().split('T')[0]}.csv`;
+            a.download = `Batch-Detail-Report-${new Date().toISOString().split('T')[0]}.xlsx`;
             a.click();
             URL.revokeObjectURL(url);
         } catch (error) {
@@ -199,10 +199,10 @@ export default function InventoryPage() {
                          </DropdownMenuTrigger>
                          <DropdownMenuContent align="end">
                              <DropdownMenuItem onClick={handleExport}>
-                                 Export Product Summary (CSV)
+                                 Export Product Summary (Excel)
                              </DropdownMenuItem>
                              <DropdownMenuItem onClick={handleBatchDetailExport}>
-                                 Export Batch Detail (CSV)
+                                 Export Batch Detail (Excel)
                              </DropdownMenuItem>
                          </DropdownMenuContent>
                      </DropdownMenu>

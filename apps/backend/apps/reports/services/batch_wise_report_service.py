@@ -259,6 +259,8 @@ class BatchWiseReportService:
                 'pack_unit': b.pack_unit,
                 'pack_type': b.pack_type,
                 'rack_location': b.rack_location,
+                'hsn_code': b.product.hsn_code if b.product else '',
+                'gst_rate': float(b.product.gst_rate) if b.product else 0.0,
                 
                 'opening_qty_raw': float(b.opening_qty_raw),
                 'purchased_qty_raw': float(b.purchased_qty_raw),
@@ -368,7 +370,8 @@ class BatchWiseReportService:
             ws.append([""])
         
         headers = [
-            'Supplier', 'Medicine', 'Batch No', 'MFG Date', 'Expiry Date', 'Days to Expiry', 'Status',
+            'Supplier', 'Medicine', 'HSN Code', 'GST Rate', 'Batch No', 'MFG Date', 'Expiry Date', 'Days to Expiry', 'Status',
+            'Pack Size', 'Pack Unit', 'Rack Location',
             'MRP', 'Purchase Rate', 'Sale Rate', 'Margin %', 'Stock Value',
             'Opening Strips', 'Opening Loose', 'Purchased Strips', 'Purchased Loose',
             'Sold Strips', 'Sold Loose', 'Sales Return Strips', 'Sales Return Loose',
@@ -414,11 +417,16 @@ class BatchWiseReportService:
             ws.append([
                 row.get('supplier_name', ''),
                 row['medicine_name'],
+                row.get('hsn_code', ''),
+                row.get('gst_rate', 0),
                 row['batch_no'],
                 row['mfg_date'] or '',
                 row['expiry_date'] or '',
                 row.get('days_to_expiry', ''),
                 row['expiry_status'],
+                row.get('pack_size', 1),
+                row.get('pack_unit', ''),
+                row.get('rack_location', ''),
                 row['mrp'],
                 row['purchase_rate'],
                 row['sale_rate'],

@@ -317,6 +317,8 @@ class ProductDetailView(APIView):
 
         try:
             product.save()
+            from django.core.cache import cache
+            cache.clear()
         except IntegrityError:
             return Response(
                 {'errors': {'barcode': 'This barcode is already used by another product.'}},
@@ -351,15 +353,14 @@ class ProductBatchesView(APIView):
         return Response([serialize_batch(b) for b in batches], status=status.HTTP_200_OK)
 
 
-class InventoryExportCSVView(APIView):
+class InventoryExportExcelView(APIView):
     permission_classes = [IsManagerOrAbove]
 
     def get(self, request, *args, **kwargs):
-        import csv
-        from django.http import StreamingHttpResponse
-        
-        class Echo:
-            def write(self, value): return value
+        import openpyxl
+        from openpyxl.styles import Font
+        from io import BytesIO
+        from django.http import HttpResponse
             
         outlet_id = request.query_params.get('outletId')
         try:
@@ -367,24 +368,46 @@ class InventoryExportCSVView(APIView):
         except Outlet.DoesNotExist:
             return Response({'detail': 'Outlet not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        batches = Batch.objects.filter(outlet=outlet, qty_strips__gt=0).select_related('product')
+        batches = Batch.objects.filter(outlet=outlet).exclude(qty_strips=0, qty_loose=0).select_related('product')
         
-        def iter_items():
-            yield ['product_name', 'batch_no', 'expiry_date', 'qty_strips', 'mrp', 'purchase_rate', 'rack_location']
-            for b in batches:
-                yield [
-                    b.product.name,
-                    b.batch_no,
-                    b.expiry_date.isoformat() if b.expiry_date else '',
-                    str(b.qty_strips),
-                    str(b.mrp),
-                    str(b.purchase_rate),
-                    b.rack_location or ''
-                ]
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Batch Details"
 
-        writer = csv.writer(Echo())
-        response = StreamingHttpResponse((writer.write(r) for r in iter_items()), content_type="text/csv")
-        response['Content-Disposition'] = 'attachment; filename="stock_export.csv"'
+        headers = [
+            'Product Name', 'Batch Number', 'Expiry Date', 
+            'Qty Strips', 'Qty Loose', 'Pack Size', 'Pack Unit', 
+            'MRP', 'Purchase Rate', 'Landing Rate', 'Rack Location',
+            'HSN Code', 'GST Rate'
+        ]
+        ws.append(headers)
+        for cell in ws[1]:
+            cell.font = Font(bold=True)
+
+        for b in batches.iterator():
+            ws.append([
+                b.product.name if b.product else '',
+                b.batch_no,
+                b.expiry_date.isoformat() if b.expiry_date else '',
+                b.qty_strips,
+                b.qty_loose,
+                b.pack_size,
+                b.pack_unit,
+                float(b.mrp),
+                float(b.purchase_rate),
+                float(b.landing_rate) if b.landing_rate else '',
+                b.rack_location or '',
+                b.product.hsn_code if b.product else '',
+                float(b.product.gst_rate) if b.product else 0,
+            ])
+
+        virtual_workbook = BytesIO()
+        wb.save(virtual_workbook)
+        response = HttpResponse(
+            virtual_workbook.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = 'attachment; filename="Batch-Details.xlsx"'
         return response
 
 
@@ -734,29 +757,48 @@ class InventoryListView(APIView):
         products = products.order_by(db_sort)
 
         export_format = request.query_params.get('export_format')
-        if export_format == 'csv':
-            import csv
-            from django.http import StreamingHttpResponse
-            class Echo:
-                def write(self, value): return value
-            
-            def iter_items():
-                yield ['Product Name', 'Composition', 'Manufacturer', 'Schedule', 'Total Strips', 'Total Loose', 'Nearest Expiry', 'Min Qty']
-                for p in products.iterator():
-                    yield [
-                        p.name,
-                        p.composition or '',
-                        p.manufacturer or '',
-                        p.schedule_type or '',
-                        str(p.total_strips),
-                        str(p.total_loose),
-                        p.nearest_expiry.isoformat() if p.nearest_expiry else '',
-                        str(p.min_qty or 0)
-                    ]
-            
-            writer = csv.writer(Echo())
-            response = StreamingHttpResponse((writer.write(r) for r in iter_items()), content_type="text/csv")
-            response['Content-Disposition'] = 'attachment; filename="inventory_export.csv"'
+        if export_format in ['excel', 'xlsx', 'csv']:
+            import openpyxl
+            from openpyxl.styles import Font
+            from io import BytesIO
+            from django.http import HttpResponse
+
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = "Product Summary"
+
+            headers = [
+                'Product Name', 'Composition', 'Manufacturer', 'Schedule', 
+                'Total Strips', 'Total Loose', 'Nearest Expiry', 'Min Qty',
+                'HSN Code', 'GST Rate', 'Pack Size', 'Pack Type'
+            ]
+            ws.append(headers)
+            for cell in ws[1]:
+                cell.font = Font(bold=True)
+
+            for p in products.iterator():
+                ws.append([
+                    p.name,
+                    p.composition or '',
+                    p.manufacturer or '',
+                    p.schedule_type or '',
+                    p.total_strips,
+                    p.total_loose,
+                    p.nearest_expiry.isoformat() if p.nearest_expiry else '',
+                    p.min_qty or 0,
+                    p.hsn_code or '',
+                    float(p.gst_rate),
+                    p.pack_size,
+                    p.pack_type or ''
+                ])
+
+            virtual_workbook = BytesIO()
+            wb.save(virtual_workbook)
+            response = HttpResponse(
+                virtual_workbook.getvalue(),
+                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+            response['Content-Disposition'] = 'attachment; filename="Product-Summary.xlsx"'
             return response
 
         # ── DB-level pagination: LIMIT/OFFSET — the critical fix ──────────────
