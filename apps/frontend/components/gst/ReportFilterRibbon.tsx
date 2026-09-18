@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { useGSTStore } from '@/store/gstStore';
+import { GSTPeriodSelector } from './GSTPeriodSelector';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Search, Printer, Download, ChevronDown } from 'lucide-react';
@@ -14,7 +16,7 @@ interface ReportFilterRibbonProps {
   setReportType: (val: string) => void;
   taxFilter: string;
   setTaxFilter: (val: string) => void;
-  onSearch?: (start: string, end: string) => void;
+  onSearch?: (period: string) => void;
   onPrint?: () => void;
   onDownloadExcel?: (period: string) => void;
   onDownloadJson?: (period: string) => void;
@@ -41,47 +43,30 @@ export function ReportFilterRibbon({
   excelDownloadIcon = <Download className="mr-2 h-4 w-4" />
 }: ReportFilterRibbonProps) {
   const { toast } = useToast();
-  const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
-
-  const deriveGstPeriod = (start: string, end: string) => {
-    if (!start || !end) throw new Error("Please select both start and end dates.");
-    const startDate = new Date(start);
-    const endDate = new Date(end);
-    
-    if (startDate.getMonth() !== endDate.getMonth() || startDate.getFullYear() !== endDate.getFullYear()) {
-        throw new Error("GST exports require a single calendar month selection.");
-    }
-    
-    const month = String(startDate.getMonth() + 1).padStart(2, '0');
-    const year = startDate.getFullYear();
-    return `${month}${year}`;
-  };
+  const { selectedPeriod } = useGSTStore();
 
   const handleSearch = () => {
-    if (!fromDate || !toDate) {
-      toast({ variant: 'destructive', title: 'Search Failed', description: 'Please select both start and end dates.' });
+    if (!selectedPeriod) {
+      toast({ variant: 'destructive', title: 'Search Failed', description: 'Please select a GST period.' });
       return;
     }
-    if (onSearch) onSearch(fromDate, toDate);
+    if (onSearch) onSearch(selectedPeriod);
   };
 
   const handleDownloadExcel = () => {
-    try {
-      const period = deriveGstPeriod(fromDate, toDate);
-      if (onDownloadExcel) onDownloadExcel(period);
-    } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Export Failed', description: e.message });
+    if (!selectedPeriod) {
+      toast({ variant: 'destructive', title: 'Export Failed', description: 'Please select a GST period.' });
+      return;
     }
+    if (onDownloadExcel) onDownloadExcel(selectedPeriod);
   };
 
   const handleDownloadJson = () => {
-    try {
-      const period = deriveGstPeriod(fromDate, toDate);
-      if (onDownloadJson) onDownloadJson(period);
-    } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Export Failed', description: e.message });
+    if (!selectedPeriod) {
+      toast({ variant: 'destructive', title: 'Export Failed', description: 'Please select a GST period.' });
+      return;
     }
+    if (onDownloadJson) onDownloadJson(selectedPeriod);
   };
 
   return (
@@ -89,19 +74,7 @@ export function ReportFilterRibbon({
       {/* Left Group: Filters */}
       <div className="flex items-center gap-3 w-full sm:w-auto overflow-x-auto">
         <div className="flex items-center gap-2">
-            <input 
-                type="date" 
-                value={fromDate}
-                onChange={(e) => setFromDate(e.target.value)}
-                className="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-purple-500"
-            />
-            <span className="text-slate-500 text-sm">to</span>
-            <input 
-                type="date" 
-                value={toDate}
-                onChange={(e) => setToDate(e.target.value)}
-                className="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-purple-500"
-            />
+            <GSTPeriodSelector />
         </div>
         
         <select 

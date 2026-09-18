@@ -146,14 +146,12 @@ class OOXMLInjector:
                         self._insert_cell_in_order(row_elem, c_elem, col_letter)
                         cell_map[cell_ref] = c_elem
                     
-                    # Skip if the cell contains a formula and we are trying to inject into it
-                    if c_elem.find(f'{NS_MAIN}f') is not None:
-                        continue
+                    f_elem = c_elem.find(f'{NS_MAIN}f')
                         
                     if val is not None and val != '':
-                        # Clear existing value/type/formula
+                        # Clear existing value/type/formula except <f>
                         for child in list(c_elem):
-                            if child.tag in [f'{NS_MAIN}v', f'{NS_MAIN}f', f'{NS_MAIN}is']:
+                            if child.tag in [f'{NS_MAIN}v', f'{NS_MAIN}is']:
                                 c_elem.remove(child)
 
                         # Inject new value
@@ -174,11 +172,11 @@ class OOXMLInjector:
                             if val_str.startswith(' ') or val_str.endswith(' ') or '\n' in val_str:
                                 t_elem.attrib['{http://www.w3.org/XML/1998/namespace}space'] = 'preserve'
                     else:
-                        # Value is empty, clear the cell entirely
+                        # Value is empty, clear the cell entirely except <f>
                         for child in list(c_elem):
-                            if child.tag in [f'{NS_MAIN}v', f'{NS_MAIN}f', f'{NS_MAIN}is']:
+                            if child.tag in [f'{NS_MAIN}v', f'{NS_MAIN}is']:
                                 c_elem.remove(child)
-                        if 't' in c_elem.attrib:
+                        if 't' in c_elem.attrib and f_elem is None:
                             del c_elem.attrib['t']
                         
         # Extract original header to perfectly preserve xml declaration and root tag namespaces

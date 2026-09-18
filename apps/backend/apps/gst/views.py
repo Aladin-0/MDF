@@ -518,9 +518,16 @@ class GSTR2BReconciliationDataView(APIView):
             g2b_taxable = 0.0
             g2b_itc = 0.0
 
+            itc_status = None
+            ims_status = None
             if g2b:
                 g2b_taxable = float(g2b.taxable_value)
                 g2b_itc = float(g2b.igst) + float(g2b.cgst) + float(g2b.sgst) + float(g2b.cess)
+                itc_status = g2b.itc_availability_status
+                ims_status = g2b.ims_status
+                
+                if itc_status == 'N':
+                    g2b_itc = 0.0
 
             supplier_name = ""
             supplier_gstin = ""
@@ -556,7 +563,9 @@ class GSTR2BReconciliationDataView(APIView):
                 "gstr2b_taxable": g2b_taxable,
                 "pr_itc": pr_itc,
                 "gstr2b_itc": g2b_itc,
-                "status": status
+                "status": status,
+                "itc_availability_status": itc_status,
+                "ims_status": ims_status
             })
 
         return Response(results)
@@ -584,16 +593,21 @@ class GSTR2AWarningView(APIView):
             invoice_date__year=year
         ).select_related('distributor')
         
-        # 2. Simulate fetching live GSTR-2A data
-        live_gstr2a_inums = []
-        for i, inv in enumerate(local_invoices):
-            if i % 2 == 0:
-                live_gstr2a_inums.append(inv.invoice_no)
+        # 2. Fetch live GSTR-2B data for portal match
+        from apps.reports.models import GSTR2BData
+        from apps.gst.services.reconciliation import normalize_invoice_number
+        
+        live_2b = GSTR2BData.objects.filter(
+            outlet=outlet,
+            period=fp
+        ).values_list('invoice_number', flat=True)
+        live_inums = set([normalize_invoice_number(num) for num in live_2b])
                 
         # 3. Perform on-the-fly comparison
         results = []
         for inv in local_invoices:
-            portal_status = "UPLOADED" if inv.invoice_no in live_gstr2a_inums else "PENDING_SUPPLIER_UPLOAD"
+            norm_inv = normalize_invoice_number(inv.invoice_no)
+            portal_status = "UPLOADED" if norm_inv in live_inums else "PENDING_SUPPLIER_UPLOAD"
             
             pr_taxable = float(inv.taxable_amount or 0)
             pr_itc = float(inv.gst_amount or 0) + float(inv.cess_amount or 0)

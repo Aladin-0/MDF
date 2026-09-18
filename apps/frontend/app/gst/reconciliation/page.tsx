@@ -21,6 +21,8 @@ type ReconciliationRow = {
   pr_itc: number;
   gstr2b_itc: number;
   status: 'MATCHED' | 'MISMATCHED' | 'MISSING_IN_2B' | 'MISSING_IN_PR';
+  itc_availability_status?: string;
+  ims_status?: string;
 };
 
 const colHelper = createColumnHelper<ReconciliationRow>();
@@ -33,7 +35,7 @@ export default function ReconciliationPage() {
   const [reportType, setReportType] = useState('all');
   const [taxFilter, setTaxFilter] = useState('all');
 
-  const { selectedPeriod: period } = useGSTStore();
+  const { selectedPeriod: period, setSelectedPeriod } = useGSTStore();
 
   const loadData = useCallback(async () => {
     if (!period) return;
@@ -122,6 +124,21 @@ export default function ReconciliationPage() {
       ),
       meta: { align: 'right' }
     }),
+    colHelper.accessor('itc_availability_status', {
+      header: 'ITC Status',
+      cell: info => (
+        <div className="flex justify-center">
+          {info.getValue() === 'N' ? (
+            <Badge className="bg-rose-100 text-rose-800 hover:bg-rose-100 border-none">Not Available</Badge>
+          ) : info.getValue() === 'Y' ? (
+            <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100 border-none">Available</Badge>
+          ) : (
+            <span className="text-slate-400 text-xs">-</span>
+          )}
+        </div>
+      ),
+      meta: { align: 'center' }
+    }),
     colHelper.accessor('status', {
       header: 'Recon Status',
       cell: info => (
@@ -178,7 +195,7 @@ export default function ReconciliationPage() {
         customActionRight={SyncButton}
         excelDownloadLabel="Download Reconciliation Audit Report (.xlsx)"
         excelDownloadIcon={<FileSpreadsheet className="mr-2 h-4 w-4" />}
-        onSearch={(start, end) => toast('Filters applied')}
+        onSearch={(p) => { toast.success(`Filters applied for period ${p}`); }}
         onPrint={() => window.print()}
         onDownloadExcel={async () => {
           if (!period) return;
@@ -230,11 +247,12 @@ export default function ReconciliationPage() {
                     <td className="py-3 px-3"><div className="h-4 bg-slate-200 rounded w-full mb-2"></div><div className="h-3 bg-slate-200 rounded w-full"></div></td>
                     <td className="py-3 px-3"><div className="h-4 bg-slate-200 rounded w-full mb-2"></div><div className="h-3 bg-slate-200 rounded w-full"></div></td>
                     <td className="py-3 px-3"><div className="h-6 bg-slate-200 rounded-full w-24 mx-auto"></div></td>
+                    <td className="py-3 px-3"><div className="h-6 bg-slate-200 rounded-full w-24 mx-auto"></div></td>
                   </tr>
                 ))
               ) : reconData.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-16 text-center text-slate-500">
+                  <td colSpan={6} className="py-16 text-center text-slate-500">
                     <div className="flex flex-col items-center justify-center">
                       <FileSpreadsheet className="h-12 w-12 text-slate-300 mb-3" />
                       <p className="text-lg font-medium text-slate-900">No reconciliation records found for this period</p>
@@ -276,6 +294,7 @@ export default function ReconciliationPage() {
                     <span className="text-xs text-slate-500">₹{totals.gstr2b_itc.toFixed(2)}</span>
                   </div>
                 </td>
+                <td className="py-2 px-3"></td>
                 <td className="py-2 px-3"></td>
               </tr>
             </tfoot>

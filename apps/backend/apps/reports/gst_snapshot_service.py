@@ -4,6 +4,7 @@ from decimal import Decimal
 from typing import Dict, Any
 from django.utils.timezone import localtime, is_aware
 from apps.reports.models import GSTTransactionSnapshot
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -20,10 +21,11 @@ def _get_state_code(gstin: str, state: str, default: str) -> str:
     """Extracts 2-digit state code from GSTIN or falls back to state map/default."""
     if gstin and len(gstin) >= 2:
         return gstin[:2]
-    if state and len(state) == 2 and state.isdigit():
-        return state
-    # Simple fallback; real app would map state string to code.
-    return state if state else default
+    if state:
+        m = re.search(r'\d{2}', str(state))
+        if m:
+            return m.group(0)
+    return default
 
 def _determine_interstate(outlet_state_code: str, party_state_code: str) -> bool:
     if not party_state_code:
@@ -188,14 +190,14 @@ def create_sales_return_snapshots(sales_return) -> GSTTransactionSnapshot:
         # Here we'll try to find a GST rate.
         if orig_item:
             gst_rate = orig_item.gst_rate
-            hsn = orig_item.hsn_code or 'UNKNOWN'
+            hsn = orig_item.hsn_code or '0000'
         else:
             gst_rate = Decimal('0') # For manual override without orig_item, might need to rely on batch or pass 0.
             if hasattr(ret_item, 'batch') and ret_item.batch and hasattr(ret_item.batch, 'product'):
                 gst_rate = ret_item.batch.product.gst_rate or Decimal('0')
-                hsn = ret_item.batch.product.hsn_code or 'UNKNOWN'
+                hsn = ret_item.batch.product.hsn_code or '0000'
             else:
-                hsn = 'UNKNOWN'
+                hsn = '0000'
 
         rate_str = str(gst_rate)
 
@@ -319,7 +321,7 @@ def create_purchase_snapshots(purchase_invoice) -> GSTTransactionSnapshot:
         items_by_rate[rate_str]['sgst'] += sgst
         items_by_rate[rate_str]['cess'] += cess_amt
         
-        hsn = item.hsn_code or 'UNKNOWN'
+        hsn = item.hsn_code or '0000'
         uqc = 'PAC'
         rate_val = float(rate_str)
         formatted_rate = f"{int(rate_val)}" if rate_val.is_integer() else f"{rate_val:.2f}"
@@ -425,7 +427,7 @@ def create_purchase_return_snapshots(debit_note) -> GSTTransactionSnapshot:
         items_by_rate[rate_str]['sgst'] += sgst
         items_by_rate[rate_str]['cess'] += cess_amt
         
-        hsn = item.batch.product.hsn_code if hasattr(item, 'batch') and item.batch and hasattr(item.batch, 'product') and item.batch.product.hsn_code else 'UNKNOWN'
+        hsn = item.batch.product.hsn_code if hasattr(item, 'batch') and item.batch and hasattr(item.batch, 'product') and item.batch.product.hsn_code else '0000'
         
         uqc = 'PAC'
         rate_val = float(rate_str)

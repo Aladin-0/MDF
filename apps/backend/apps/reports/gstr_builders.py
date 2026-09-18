@@ -92,7 +92,7 @@ class GSTR1Builder:
                     
             if items:
                 # Calculate total invoice value (simplified)
-                val = sum(i["itm_det"]["txval"] + i["itm_det"]["iamt"] + i["itm_det"]["camt"] + i["itm_det"]["samt"] + i["itm_det"]["csamt"] for i in items)
+                val = float(sum(Decimal(str(i["itm_det"]["txval"])) + Decimal(str(i["itm_det"]["iamt"])) + Decimal(str(i["itm_det"]["camt"])) + Decimal(str(i["itm_det"]["samt"])) + Decimal(str(i["itm_det"]["csamt"])) for i in items))
                 b2b_data[cust_gstin]["inv"].append({
                     "inum": snap.document_number,
                     "idt": format_gst_date(snap.document_date),
@@ -108,11 +108,11 @@ class GSTR1Builder:
     def build_b2cs(self) -> List[Dict]:
         """B2C Small (B2CS)"""
         b2cs_agg = defaultdict(lambda: {
-            "txval": 0.0,
-            "iamt": 0.0,
-            "camt": 0.0,
-            "samt": 0.0,
-            "csamt": 0.0
+            "txval": Decimal('0.0'),
+            "iamt": Decimal('0.0'),
+            "camt": Decimal('0.0'),
+            "samt": Decimal('0.0'),
+            "csamt": Decimal('0.0')
         })
         
         for snap in self.snapshots:
@@ -129,30 +129,30 @@ class GSTR1Builder:
             supplier_state = json_data.get('supplier_state_code') or self.default_pos
             sply_ty = "INTRA" if pos == supplier_state else "INTER"
             
-            multiplier = BUSINESS_DIRECTION_SIGN.get(snap.transaction_type, 1)
+            multiplier = Decimal(str(BUSINESS_DIRECTION_SIGN.get(snap.transaction_type, 1)))
             
             for rate, values in json_data.get('items_by_rate', {}).items():
                 if float(values['taxable_amount']) > 0:
                     key = (pos, sply_ty, float(rate), "OE")
-                    b2cs_agg[key]["txval"] += (float(values['taxable_amount']) * float(multiplier))
-                    b2cs_agg[key]["iamt"] += (float(values['igst']) * float(multiplier))
-                    b2cs_agg[key]["camt"] += (float(values['cgst']) * float(multiplier))
-                    b2cs_agg[key]["samt"] += (float(values['sgst']) * float(multiplier))
-                    b2cs_agg[key]["csamt"] += (float(values['cess']) * float(multiplier))
+                    b2cs_agg[key]["txval"] += (Decimal(str(values['taxable_amount'])) * multiplier)
+                    b2cs_agg[key]["iamt"] += (Decimal(str(values['igst'])) * multiplier)
+                    b2cs_agg[key]["camt"] += (Decimal(str(values['cgst'])) * multiplier)
+                    b2cs_agg[key]["samt"] += (Decimal(str(values['sgst'])) * multiplier)
+                    b2cs_agg[key]["csamt"] += (Decimal(str(values['cess'])) * multiplier)
                     
         result = []
         for (pos, sply_ty, rate, typ), vals in b2cs_agg.items():
-            if vals["txval"] != 0:
+            if vals["txval"] != Decimal('0.0'):
                 result.append({
                     "sply_ty": sply_ty,
                     "rt": rate,
                     "typ": typ,
                     "pos": pos,
-                    "txval": vals["txval"],
-                    "iamt": vals["iamt"],
-                    "camt": vals["camt"],
-                    "samt": vals["samt"],
-                    "csamt": vals["csamt"]
+                    "txval": float(round(vals["txval"], 2)),
+                    "iamt": float(round(vals["iamt"], 2)),
+                    "camt": float(round(vals["camt"], 2)),
+                    "samt": float(round(vals["samt"], 2)),
+                    "csamt": float(round(vals["csamt"], 2))
                 })
         return result
 
@@ -188,7 +188,7 @@ class GSTR1Builder:
                     })
                     
             if items:
-                val = sum(i["itm_det"]["txval"] + i["itm_det"]["iamt"] + i["itm_det"]["csamt"] for i in items)
+                val = float(sum(Decimal(str(i["itm_det"]["txval"])) + Decimal(str(i["itm_det"]["iamt"])) + Decimal(str(i["itm_det"]["csamt"])) for i in items))
                 b2cl_data[pos]["inv"].append({
                     "inum": snap.document_number,
                     "idt": format_gst_date(snap.document_date),
@@ -202,12 +202,12 @@ class GSTR1Builder:
         """HSN Summary"""
         def new_agg():
             return {
-                "qty": 0.0,
-                "txval": 0.0,
-                "iamt": 0.0,
-                "camt": 0.0,
-                "samt": 0.0,
-                "csamt": 0.0
+                "qty": Decimal('0.0'),
+                "txval": Decimal('0.0'),
+                "iamt": Decimal('0.0'),
+                "camt": Decimal('0.0'),
+                "samt": Decimal('0.0'),
+                "csamt": Decimal('0.0')
             }
         
         b2b_agg = defaultdict(new_agg)
@@ -216,7 +216,7 @@ class GSTR1Builder:
         
         for snap in self.snapshots:
             json_data = snap.snapshot_json
-            multiplier = BUSINESS_DIRECTION_SIGN.get(snap.transaction_type, 1)
+            multiplier = Decimal(str(BUSINESS_DIRECTION_SIGN.get(snap.transaction_type, 1)))
             
             is_b2b = json_data.get('is_b2b')
             bucket = None
@@ -258,32 +258,32 @@ class GSTR1Builder:
                     target_agg = b2b_agg if bucket == 'B2B' else b2c_agg
                     
                     for agg in [target_agg, combined_agg]:
-                        agg[key]["qty"] += (values.get('qty', 0) * multiplier)
+                        agg[key]["qty"] += (Decimal(str(values.get('qty', 0))) * multiplier)
                         if "desc" in values: agg[key]["desc"] = values["desc"]
-                        agg[key]["txval"] += (txval * multiplier)
-                        agg[key]["iamt"] += (float(values['igst']) * float(multiplier))
-                        agg[key]["camt"] += (float(values['cgst']) * float(multiplier))
-                        agg[key]["samt"] += (float(values['sgst']) * float(multiplier))
-                        agg[key]["csamt"] += (float(float(values.get('cess', 0))) * float(multiplier))
+                        agg[key]["txval"] += (Decimal(str(txval)) * multiplier)
+                        agg[key]["iamt"] += (Decimal(str(values['igst'])) * multiplier)
+                        agg[key]["camt"] += (Decimal(str(values['cgst'])) * multiplier)
+                        agg[key]["samt"] += (Decimal(str(values['sgst'])) * multiplier)
+                        agg[key]["csamt"] += (Decimal(str(values.get('cess', 0))) * multiplier)
                     
         def format_result(agg_dict):
             res = []
             for num, ((hsn, uqc, rate), vals) in enumerate(agg_dict.items(), 1):
-                if vals["txval"] != 0 or vals["qty"] != 0:
+                if vals["txval"] != Decimal('0.0') or vals["qty"] != Decimal('0.0'):
                     val = vals["txval"] + vals["iamt"] + vals["camt"] + vals["samt"] + vals["csamt"]
                     res.append({
                         "num": num,
                         "hsn_sc": hsn,
                         "desc": vals.get("desc", "Personal computers"),
                         "uqc": uqc,
-                        "qty": vals["qty"],
-                        "val": val,
-                        "txval": vals["txval"],
+                        "qty": float(round(vals["qty"], 2)),
+                        "val": float(round(val, 2)),
+                        "txval": float(round(vals["txval"], 2)),
                         "rt": rate,
-                        "iamt": vals["iamt"],
-                        "camt": vals["camt"],
-                        "samt": vals["samt"],
-                        "csamt": vals["csamt"]
+                        "iamt": float(round(vals["iamt"], 2)),
+                        "camt": float(round(vals["camt"], 2)),
+                        "samt": float(round(vals["samt"], 2)),
+                        "csamt": float(round(vals["csamt"], 2))
                     })
             return res
             
@@ -319,7 +319,7 @@ class GSTR1Builder:
                         }
                     })
             if items:
-                val = sum(i["itm_det"]["txval"] + i["itm_det"]["iamt"] + i["itm_det"]["camt"] + i["itm_det"]["samt"] + i["itm_det"]["csamt"] for i in items)
+                val = float(sum(Decimal(str(i["itm_det"]["txval"])) + Decimal(str(i["itm_det"]["iamt"])) + Decimal(str(i["itm_det"]["camt"])) + Decimal(str(i["itm_det"]["samt"])) + Decimal(str(i["itm_det"]["csamt"])) for i in items))
                 cdnr_data[cust_gstin]["nt"].append({
                     "nt_num": json_data.get("note_number", snap.document_number),
                     "nt_dt": format_gst_date(json_data.get("note_date") or snap.document_date),
@@ -358,7 +358,7 @@ class GSTR1Builder:
                         }
                     })
             if items:
-                val = sum(i["itm_det"]["txval"] + i["itm_det"]["iamt"] + i["itm_det"]["camt"] + i["itm_det"]["samt"] + i["itm_det"]["csamt"] for i in items)
+                val = float(sum(Decimal(str(i["itm_det"]["txval"])) + Decimal(str(i["itm_det"]["iamt"])) + Decimal(str(i["itm_det"]["camt"])) + Decimal(str(i["itm_det"]["samt"])) + Decimal(str(i["itm_det"]["csamt"])) for i in items))
                 cdnur_list.append({
                     "typ": note_typ,
                     "nt_num": json_data.get("note_number", snap.document_number),

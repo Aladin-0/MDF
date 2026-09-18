@@ -43,8 +43,15 @@ export default function GSTR2APage() {
   }, [period]);
 
   const handleFetchLive2A = async () => {
-    await loadData();
-    toast.success('Live GSTR-2A data fetched successfully.');
+    try {
+      setLoading(true);
+      await loadData();
+      toast.success('Live GSTR-2A data fetched successfully.');
+    } catch (e) {
+      toast.error('Failed to fetch Live 2A data.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -133,7 +140,7 @@ export default function GSTR2APage() {
         taxFilter={taxFilter}
         setTaxFilter={setTaxFilter}
         customActionRight={FetchButton}
-        onSearch={(start, end) => toast('Filters applied')}
+        onSearch={(p) => { setPeriod(p); toast.success(`Filters applied for period ${p}`); }}
         onPrint={() => window.print()}
         exportDisabled={true}
       />

@@ -119,8 +119,24 @@ export default function GSTR1Page() {
     }, [reportType, taxFilter, toast]);
 
     
-    const handleSearch = (start: string, end: string) => {
-        loadDashboardData(start, end);
+    const handleSearch = (period: string) => {
+        if (!period) return;
+        // Convert period MMYYYY to start/end dates for the backend if getSummary expects dates
+        // Actually, let's see what loadDashboardData expects.
+        // It expects start and end strings. But GST backend now uses period.
+        // Let's pass the first and last day of the month as strings just in case,
+        // or just pass the period if backend supports it.
+        // Wait, gstApi.getSummary(start, end)
+        // I will reconstruct start/end dates from MMYYYY for now to not break the API if it expects dates.
+        const month = parseInt(period.substring(0, 2), 10) - 1;
+        const year = parseInt(period.substring(2, 6), 10);
+        const startDate = new Date(year, month, 1);
+        const endDate = new Date(year, month + 1, 0);
+        
+        const startStr = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-01`;
+        const endStr = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
+        
+        loadDashboardData(startStr, endStr);
     };
 
     const handleExportExcel = async (period: string) => {

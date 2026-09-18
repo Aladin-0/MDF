@@ -11,8 +11,8 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 import re
 
-def safe_pos(pos_val, gstin=None):
-    fallback = str(gstin)[:2] if gstin else "27"
+def safe_pos(pos_val, outlet_gstin):
+    fallback = str(outlet_gstin)[:2] if outlet_gstin and len(str(outlet_gstin)) >= 2 else ""
     if not pos_val: return fallback
     m = re.search(r'\d{2}', str(pos_val))
     return m.group(0) if m else fallback
@@ -97,7 +97,7 @@ class GSTR1ExcelExportView(APIView):
                             3: inum,
                             4: idt,
                             5: round(Decimal(str(val)), 2) if val is not None else Decimal('0.00'),
-                            6: safe_pos(pos, gstin),
+                            6: safe_pos(pos, outlet.gstin),
                             7: "N", # Reverse Charge
                             8: "", # Applicable % of Tax Rate
                             9: inv_typ,
@@ -113,12 +113,17 @@ class GSTR1ExcelExportView(APIView):
                         
         if 'b2cs' in sheet_meta and payload.get('b2cs'):
             rows = []
+            total_txval = Decimal('0.00')
+            total_cess = Decimal('0.00')
             for b in payload['b2cs']:
                 typ = b.get('typ')
                 pos = b.get('pos')
                 rt = b.get('rt')
                 txval = Decimal(str(b.get('txval', 0) or 0))
                 cess = Decimal(str(b.get('csamt', 0) or 0))
+                
+                total_txval += txval
+                total_cess += cess
                 
                 rows.append({
                     1: typ,
@@ -131,6 +136,7 @@ class GSTR1ExcelExportView(APIView):
                 })
             if rows:
                 data_map['b2cs'] = [
+                    {"start_row": 3, "rows": [{5: round(total_txval, 2), 6: round(total_cess, 2)}]},
                     {"start_row": 5, "rows": rows}
                 ]
                 
@@ -185,7 +191,7 @@ class GSTR1ExcelExportView(APIView):
                             3: nt_num,
                             4: nt_dt,
                             5: nt_ty,
-                            6: safe_pos(pos, gstin), # POS
+                            6: safe_pos(pos, outlet.gstin), # POS
                             7: "N", # Reverse Charge
                             8: "Regular", # Note Supply Type
                             9: round(Decimal(str(val)), 2) if val is not None else Decimal('0.00'),
@@ -307,6 +313,13 @@ class GSTR1ExcelExportView(APIView):
         for sheet_name in ['hsn(b2b)', 'hsn(b2c)']:
             if sheet_name in sheet_meta:
                 rows = []
+                unique_hsn = set()
+                tot_val = Decimal("0.00")
+                tot_txval = Decimal("0.00")
+                tot_iamt = Decimal("0.00")
+                tot_camt = Decimal("0.00")
+                tot_samt = Decimal("0.00")
+                tot_csamt = Decimal("0.00")
             
                 for (s_key, hsn_sc, uqc, rt), data in hsn_agg.items():
                     if s_key != sheet_name:
@@ -314,6 +327,14 @@ class GSTR1ExcelExportView(APIView):
                         
                     # Only output rows with non-zero quantity or value to avoid empty lines from perfectly cancelled returns
                     if data['qty'] != 0 or data['val'] != 0:
+                        unique_hsn.add(data['hsn_sc'])
+                        tot_val += data['val']
+                        tot_txval += data['txval']
+                        tot_iamt += data['iamt']
+                        tot_camt += data['camt']
+                        tot_samt += data['samt']
+                        tot_csamt += data['csamt']
+                        
                         rows.append({
                             1: data['hsn_sc'],
                             2: data['desc'],
@@ -330,7 +351,15 @@ class GSTR1ExcelExportView(APIView):
                         
                 if rows:
                     data_map[sheet_name] = [
-                        # Inject data rows
+                        {"start_row": 3, "rows": [{
+                            1: len(unique_hsn),
+                            5: round(tot_val, 2),
+                            7: round(tot_txval, 2),
+                            8: round(tot_iamt, 2),
+                            9: round(tot_camt, 2),
+                            10: round(tot_samt, 2),
+                            11: round(tot_csamt, 2)
+                        }]},
                         {"start_row": 5, "rows": rows}
                     ]
                 
