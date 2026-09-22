@@ -22,6 +22,7 @@ urlpatterns = [
     path("api/v1/health/", health_check),
     path("api/v1/auth/", include("apps.accounts.auth_urls")),
     path("api/v1/customers/", include("apps.accounts.customer_urls")),
+    path("api/v1/partners/", include("apps.accounts.partner_urls")),
     path("api/v1/staff/", include("apps.accounts.staff_urls")),
     path("api/v1/doctors/", include("apps.accounts.doctor_urls")),
     path("api/v1/notifications/low-stock/", LowStockAlertView.as_view(), name='low-stock-alert'),

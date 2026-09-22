@@ -158,6 +158,7 @@ class LoginView(APIView):
             'canModifyPaidBill': staff.can_modify_paid_bill,
             'canCancelAndReissueBill': staff.can_cancel_and_reissue_bill,
             'canViewBillRevisionHistory': staff.can_view_bill_revision_history,
+            'canManagePartners': getattr(staff, 'can_manage_partners', False),
         }
 
         response_data = {
@@ -256,6 +257,7 @@ class SwitchOutletView(APIView):
             'canModifyPaidBill': staff.can_modify_paid_bill,
             'canCancelAndReissueBill': staff.can_cancel_and_reissue_bill,
             'canViewBillRevisionHistory': staff.can_view_bill_revision_history,
+            'canManagePartners': getattr(staff, 'can_manage_partners', False),
         }
 
         response_data = {
@@ -329,6 +331,7 @@ class StaffMeView(APIView):
             'canModifyPaidBill': staff.can_modify_paid_bill,
             'canCancelAndReissueBill': staff.can_cancel_and_reissue_bill,
             'canViewBillRevisionHistory': staff.can_view_bill_revision_history,
+            'canManagePartners': getattr(staff, 'can_manage_partners', False),
         }
 
         return Response(user_data, status=status.HTTP_200_OK)
@@ -985,6 +988,7 @@ class StaffListView(APIView):
                 'canModifyPaidBill': s.can_modify_paid_bill,
                 'canCancelAndReissueBill': s.can_cancel_and_reissue_bill,
                 'canViewBillRevisionHistory': s.can_view_bill_revision_history,
+                'canManagePartners': getattr(s, 'can_manage_partners', False),
                 'isActive': s.is_active,
                 'joiningDate': s.joining_date.isoformat() if s.joining_date else None,
                 'lastLogin': s.last_login.isoformat() if s.last_login else None,
@@ -1212,6 +1216,7 @@ def _serialize_staff(s):
         'canModifyPaidBill': s.can_modify_paid_bill,
         'canCancelAndReissueBill': s.can_cancel_and_reissue_bill,
         'canViewBillRevisionHistory': s.can_view_bill_revision_history,
+                'canManagePartners': getattr(s, 'can_manage_partners', False),
         'isActive': s.is_active,
         'joiningDate': s.joining_date.isoformat() if s.joining_date else None,
         'lastLogin': s.last_login.isoformat() if s.last_login else None,
@@ -1294,6 +1299,7 @@ class StaffCreateView(APIView):
             can_modify_paid_bill=request.data.get('canModifyPaidBill', False),
             can_cancel_and_reissue_bill=request.data.get('canCancelAndReissueBill', False),
             can_view_bill_revision_history=request.data.get('canViewBillRevisionHistory', False),
+            can_manage_partners=request.data.get('canManagePartners', False),
             is_active=True,
         )
 

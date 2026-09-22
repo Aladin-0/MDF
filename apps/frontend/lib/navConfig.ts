@@ -140,6 +140,7 @@ export const NAV_ITEMS: NavItem[] = [
         sequence: 'g r',
         subItems: [
             { label: 'Reports Dashboard', href: '/dashboard/reports', icon: LayoutDashboard },
+            { label: 'Daily Report', href: '/dashboard/reports/daily', icon: ClipboardList },
             { label: 'Trial Balance', href: '/dashboard/reports/trial-balance', icon: Scale },
             { label: 'Balance Sheet', href: '/dashboard/reports/balance-sheet', icon: PieChart },
             { label: 'Profit & Loss', href: '/dashboard/reports/profit-loss', icon: TrendingUp },

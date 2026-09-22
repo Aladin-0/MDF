@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { BarChart3, FileText, Package, AlertTriangle, Users, ShoppingCart, Lock, AlertCircle } from 'lucide-react';
+import Link from 'next/link';
+import { BarChart3, FileText, Package, AlertTriangle, Users, ShoppingCart, Lock, AlertCircle, ClipboardList } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { PermissionGate } from '@/components/shared/PermissionGate';
 import { DateRangePicker } from '@/components/reports/DateRangePicker';
 import { ExportButton } from '@/components/reports/ExportButton';
@@ -82,9 +84,17 @@ export default function ReportsPage() {
                         Sales, GST, inventory, and staff performance reports
                     </p>
                 </div>
-                <PermissionGate permission="export_reports">
-                    <ExportButton activeTab={activeTab} dateRange={dateRange} batchFilters={batchFilters} />
-                </PermissionGate>
+                <div className="flex gap-2">
+                    <Link href="/dashboard/reports/daily">
+                        <Button variant="outline" className="gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50">
+                            <ClipboardList className="w-4 h-4" />
+                            Daily Snapshot
+                        </Button>
+                    </Link>
+                    <PermissionGate permission="export_reports">
+                        <ExportButton activeTab={activeTab} dateRange={dateRange} batchFilters={batchFilters} />
+                    </PermissionGate>
+                </div>
             </div>
 
             {/* Date range picker */}

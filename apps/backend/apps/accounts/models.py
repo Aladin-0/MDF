@@ -61,6 +61,7 @@ class Staff(AbstractBaseUser, PermissionsMixin):
     can_export_gst = models.BooleanField(default=False)
     
     # Granular modification permissions (Priority 2)
+    can_manage_partners = models.BooleanField(default=False, help_text="Can manage profit split partners")
     can_edit_sale_returns = models.BooleanField(default=False)
     can_edit_purchase_returns = models.BooleanField(default=False)
     can_edit_vouchers = models.BooleanField(default=False)
@@ -631,3 +632,43 @@ class JournalLine(models.Model):
             return f"Dr {self.ledger.name} ₹{self.debit_amount}"
         else:
             return f"Cr {self.ledger.name} ₹{self.credit_amount}"
+
+
+class Partner(models.Model):
+    """Business partner/stakeholder for profit splitting."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    outlet = models.ForeignKey('core.Outlet', on_delete=models.CASCADE, related_name='partners')
+    name = models.CharField(max_length=255)
+    profit_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Percentage of net profit (e.g., 35.00)")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    objects = OutletFilteredManager()
+
+    class Meta:
+        db_table = 'accounts_partner'
+        ordering = ['name']
+        unique_together = [['outlet', 'name']]
+
+    def __str__(self):
+        return f"{self.name} - {self.profit_percentage}%"
+
+class PartnerShareHistory(models.Model):
+    """Historical ledger for partner profit splits to ensure past reports remain accurate."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    partner = models.ForeignKey(Partner, on_delete=models.CASCADE, related_name='share_history')
+    profit_percentage = models.DecimalField(max_digits=5, decimal_places=2)
+    start_date = models.DateField()
+    end_date = models.DateField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'accounts_partnersharehistory'
+        ordering = ['-start_date']
+
+    def __str__(self):
+        return f"{self.partner.name} - {self.profit_percentage}% ({self.start_date} to {self.end_date or 'Present'})"

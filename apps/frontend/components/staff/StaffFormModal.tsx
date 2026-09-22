@@ -39,28 +39,28 @@ const ROLE_PERMISSIONS: Record<string, any> = {
         canOverridePricing: true, canCorrectCustomer: true,
         canCreatePurchases: true, canViewPurchaseRates: true, canEditPurchases: true, canModifyPaidPurchases: true,
         canEditVouchers: true, canModifySettledVouchers: true, canEditReturns: true, canModifySettledReturns: true,
-        canAccessReports: true, canVoidRecords: true, canViewAuditHistory: true, canExportGst: true,
+        canAccessReports: true, canVoidRecords: true, canViewAuditHistory: true, canExportGst: true, canManagePartners: true,
     },
     manager: {
         canEditSales: true, canModifyPaidBill: true, canModifyDraftUnpaidBill: true, canCorrectHeaderFields: true, canCorrectQuantities: true,
         canOverridePricing: true, canCorrectCustomer: true,
         canCreatePurchases: true, canViewPurchaseRates: true, canEditPurchases: true, canModifyPaidPurchases: true,
         canEditVouchers: true, canModifySettledVouchers: true, canEditReturns: true, canModifySettledReturns: true,
-        canAccessReports: true, canVoidRecords: false, canViewAuditHistory: true, canExportGst: true,
+        canAccessReports: true, canVoidRecords: false, canViewAuditHistory: true, canExportGst: true, canManagePartners: false,
     },
     billing_staff: {
         canEditSales: true, canModifyPaidBill: false, canModifyDraftUnpaidBill: true, canCorrectHeaderFields: false, canCorrectQuantities: false,
         canOverridePricing: false, canCorrectCustomer: false,
         canCreatePurchases: false, canViewPurchaseRates: false, canEditPurchases: false, canModifyPaidPurchases: false,
         canEditVouchers: false, canModifySettledVouchers: false, canEditReturns: false, canModifySettledReturns: false,
-        canAccessReports: false, canVoidRecords: false, canViewAuditHistory: false, canExportGst: false,
+        canAccessReports: false, canVoidRecords: false, canViewAuditHistory: false, canExportGst: false, canManagePartners: false,
     },
     view_only: {
         canEditSales: false, canModifyPaidBill: false, canModifyDraftUnpaidBill: false, canCorrectHeaderFields: false, canCorrectQuantities: false,
         canOverridePricing: false, canCorrectCustomer: false,
         canCreatePurchases: false, canViewPurchaseRates: false, canEditPurchases: false, canModifyPaidPurchases: false,
         canEditVouchers: false, canModifySettledVouchers: false, canEditReturns: false, canModifySettledReturns: false,
-        canAccessReports: true, canVoidRecords: false, canViewAuditHistory: false, canExportGst: false,
+        canAccessReports: true, canVoidRecords: false, canViewAuditHistory: false, canExportGst: false, canManagePartners: false,
     }
 };
 
@@ -112,6 +112,7 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                 canVoidRecords: false,
                 canViewAuditHistory: false,
                 canExportGst: false,
+                canManagePartners: false,
             }
         });
 
@@ -153,6 +154,7 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                 canVoidRecords: editingStaff.canVoidRecords ?? false,
                 canViewAuditHistory: editingStaff.canViewAuditHistory ?? false,
                 canExportGst: editingStaff.canExportGst ?? false,
+                canManagePartners: editingStaff.canManagePartners ?? false,
             });
         } else {
             reset();
@@ -721,6 +723,13 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                                             <p className="text-xs text-muted-foreground mt-1">See full revision logs</p>
                                         </div>
                                         <Switch checked={watch('canViewAuditHistory')} onCheckedChange={(v) => handleChildChange('canViewAuditHistory', v)} />
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm font-medium leading-none">Manage Partners</p>
+                                            <p className="text-xs text-muted-foreground mt-1">Edit profit splits & equity</p>
+                                        </div>
+                                        <Switch checked={watch('canManagePartners')} onCheckedChange={(v) => handleChildChange('canManagePartners', v)} />
                                     </div>
                                 </div>
                             </div>

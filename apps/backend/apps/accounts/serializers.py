@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from apps.accounts.models import Customer, Doctor
+from apps.accounts.models import Customer, Doctor, Partner
 
 
 class DoctorSerializer(serializers.ModelSerializer):
@@ -83,3 +83,25 @@ class CustomerCreateUpdateSerializer(serializers.ModelSerializer):
             setattr(instance, attr, value)
         instance.save()
         return instance
+
+
+class PartnerSerializer(serializers.ModelSerializer):
+    """Serializer for Partner."""
+
+    class Meta:
+        model = Partner
+        fields = ['id', 'name', 'profit_percentage', 'is_active', 'created_at']
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        return {
+            'id': data.get('id'),
+            'name': data.get('name'),
+            'profitPercentage': float(instance.profit_percentage),
+            'isActive': instance.is_active,
+            'createdAt': instance.created_at.isoformat(),
+        }
+
+    def create(self, validated_data):
+        outlet = self.context['outlet']
+        return Partner.objects.create(outlet=outlet, **validated_data)

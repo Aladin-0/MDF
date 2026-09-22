@@ -206,3 +206,83 @@ class GSTExportAudit(models.Model):
     class Meta:
         db_table = 'reports_gstexportaudit'
         ordering = ['-timestamp']
+
+class FixedMonthlyExpense(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    outlet = models.ForeignKey(Outlet, on_delete=models.CASCADE, related_name='fixed_monthly_expenses')
+    
+    salary = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    rent = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    transport = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    petrol = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    light = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    water = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    internet = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    stationery = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    int_on_cc = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    income_tax = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    ca_fees = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    godown = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    other = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    
+    days_in_month = models.IntegerField(default=30)
+    
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+
+    class Meta:
+        db_table = 'reports_fixedmonthlyexpense'
+        unique_together = ('outlet',)
+
+    @property
+    def total_monthly(self):
+        return sum([
+            self.salary, self.rent, self.transport, self.petrol,
+            self.light, self.water, self.internet, self.stationery,
+            self.int_on_cc, self.income_tax, self.ca_fees, self.godown, self.other
+        ])
+        
+    @property
+    def per_day(self):
+        if self.days_in_month > 0:
+            return round(self.total_monthly / self.days_in_month, 2)
+        return 0.0
+
+
+class DailyCashReport(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    outlet = models.ForeignKey(Outlet, on_delete=models.CASCADE, related_name='daily_cash_reports')
+    date = models.DateField()
+    
+    notes_2000 = models.IntegerField(default=0)
+    notes_500 = models.IntegerField(default=0)
+    notes_200 = models.IntegerField(default=0)
+    notes_100 = models.IntegerField(default=0)
+    notes_50 = models.IntegerField(default=0)
+    notes_20 = models.IntegerField(default=0)
+    notes_10 = models.IntegerField(default=0)
+    
+    carton_sale = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    petty_cash_exp = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    side_cash = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    next_day_opening = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+
+    class Meta:
+        db_table = 'reports_dailycashreport'
+        unique_together = ('outlet', 'date')
+        ordering = ['-date']
+
+    @property
+    def actual_cash(self):
+        return sum([
+            self.notes_2000 * 2000,
+            self.notes_500 * 500,
+            self.notes_200 * 200,
+            self.notes_100 * 100,
+            self.notes_50 * 50,
+            self.notes_20 * 20,
+            self.notes_10 * 10,
+        ])
