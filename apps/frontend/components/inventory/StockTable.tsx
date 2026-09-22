@@ -105,7 +105,8 @@ export function StockTable({ onProductClick, onAdjustClick, onEditClick }: any) 
         hsnCode: 'HSN Code',
         packType: 'Pack Type',
         packSize: 'Pack Size',
-        packUnit: 'Unit Name'
+        packUnit: 'Unit Name',
+        scheduleType: 'Schedule Type',
     };
 
     const handleQuickSave = useCallback(async (productId: string, field: string, val: any) => {
@@ -362,6 +363,7 @@ export function StockTable({ onProductClick, onAdjustClick, onEditClick }: any) 
                            <SelectItem value="none">Quick Edit: Off</SelectItem>
                            <SelectItem value="gstRate">GST Rate (%)</SelectItem>
                            <SelectItem value="hsnCode">HSN Code</SelectItem>
+                           <SelectItem value="scheduleType">Schedule Type</SelectItem>
                            <SelectItem value="packType">Pack Type</SelectItem>
                            <SelectItem value="packSize">Pack Size</SelectItem>
                            <SelectItem value="packUnit">Unit Name</SelectItem>
@@ -521,18 +523,19 @@ function SortableHeader({ column, title }: any) {
 }
 
 function InlineEditCell({ product, field, onSave }: { product: any, field: keyof MasterProduct, onSave: (val: any) => Promise<void> }) {
-    const [value, setValue] = useState<any>(product[field] ?? '');
+    const propValue = product[field];
+    const [value, setValue] = useState<any>(propValue ?? '');
     const [isSaving, setIsSaving] = useState(false);
     
     useEffect(() => {
-        setValue(product[field] ?? '');
-    }, [product, field]);
+        setValue(propValue ?? '');
+    }, [propValue, field]);
 
-    const handleSave = async () => {
-        if (value === product[field]) return;
-        let finalVal = value;
+    // saveValue receives the value directly — bypasses stale closure bug with setState
+    const saveValue = async (val: any) => {
+        let finalVal = val;
         if (field === 'gstRate' || field === 'packSize') {
-            finalVal = Number(value);
+            finalVal = Number(val);
             if (isNaN(finalVal)) return;
         }
         setIsSaving(true);
@@ -543,43 +546,84 @@ function InlineEditCell({ product, field, onSave }: { product: any, field: keyof
         }
     };
 
-    const isSelect = field === 'packType';
+    const handleSave = () => saveValue(value);
+
+    const isSelect = field === 'packType' || field === 'scheduleType' || field === 'packUnit';
     
     return (
-        <div className="flex items-center gap-1 w-32 relative group">
+        <div className="flex items-center gap-1 w-40 relative group">
             {isSelect ? (
-                <Select value={value as string} onValueChange={setValue}>
-                    <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="strip">Strip</SelectItem>
-                        <SelectItem value="bottle">Bottle</SelectItem>
-                        <SelectItem value="tube">Tube</SelectItem>
-                        <SelectItem value="box">Box</SelectItem>
-                        <SelectItem value="piece">Piece</SelectItem>
-                        <SelectItem value="pack">Pack</SelectItem>
-                        <SelectItem value="vial">Vial</SelectItem>
-                        <SelectItem value="ampoule">Ampoule</SelectItem>
-                    </SelectContent>
-                </Select>
+                field === 'packType' ? (
+                    <Select value={value as string} onValueChange={(v) => { setValue(v); saveValue(v); }}>
+                        <SelectTrigger className="h-8 text-xs bg-white"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="strip">Strip</SelectItem>
+                            <SelectItem value="bottle">Bottle</SelectItem>
+                            <SelectItem value="tube">Tube</SelectItem>
+                            <SelectItem value="box">Box</SelectItem>
+                            <SelectItem value="piece">Piece</SelectItem>
+                            <SelectItem value="pack">Pack</SelectItem>
+                            <SelectItem value="vial">Vial</SelectItem>
+                            <SelectItem value="ampoule">Ampoule</SelectItem>
+                        </SelectContent>
+                    </Select>
+                ) : field === 'packUnit' ? (
+                    <Select value={value as string} onValueChange={(v) => { setValue(v); saveValue(v); }}>
+                        <SelectTrigger className="h-8 text-xs font-bold bg-white"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="tablet">Tablet</SelectItem>
+                            <SelectItem value="capsule">Capsule</SelectItem>
+                            <SelectItem value="piece">Piece</SelectItem>
+                            <SelectItem value="ml">ml</SelectItem>
+                            <SelectItem value="gm">gm</SelectItem>
+                            <SelectItem value="mg">mg</SelectItem>
+                            <SelectItem value="drop">Drop</SelectItem>
+                            <SelectItem value="suppository">Suppository</SelectItem>
+                            <SelectItem value="injection">Injection</SelectItem>
+                            <SelectItem value="patch">Patch</SelectItem>
+                            <SelectItem value="inhaler">Inhaler</SelectItem>
+                            <SelectItem value="spray">Spray</SelectItem>
+                        </SelectContent>
+                    </Select>
+                ) : (
+                    <Select value={value as string} onValueChange={(v) => { setValue(v); saveValue(v); }}>
+                        <SelectTrigger className="h-8 text-xs font-bold bg-white"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="OTC">OTC</SelectItem>
+                            <SelectItem value="G">Schedule G</SelectItem>
+                            <SelectItem value="H">Schedule H</SelectItem>
+                            <SelectItem value="H1">Schedule H1</SelectItem>
+                            <SelectItem value="X">Schedule X</SelectItem>
+                            <SelectItem value="C">Schedule C</SelectItem>
+                            <SelectItem value="Narcotic">Narcotic</SelectItem>
+                            <SelectItem value="Ayurvedic">Ayurvedic</SelectItem>
+                            <SelectItem value="Surgical">Surgical</SelectItem>
+                            <SelectItem value="Cosmetic">Cosmetic</SelectItem>
+                            <SelectItem value="Veterinary">Veterinary</SelectItem>
+                        </SelectContent>
+                    </Select>
+                )
             ) : (
                 <Input 
                     type={field === 'gstRate' || field === 'packSize' ? 'number' : 'text'}
-                    className="h-8 text-xs px-2"
+                    className="h-8 text-xs px-2 bg-white font-bold"
                     value={value}
                     onChange={e => setValue(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') handleSave(); }}
                 />
             )}
-            <Button 
-                size="sm" 
-                variant="ghost" 
-                className={`h-8 w-8 p-0 shrink-0 ${value !== product[field] ? 'text-indigo-600 bg-indigo-50' : 'text-slate-300'} transition-opacity opacity-0 group-hover:opacity-100 focus-within:opacity-100 ${value !== product[field] ? 'opacity-100' : ''}`}
-                onClick={handleSave}
-                disabled={isSaving || value === product[field]}
-                title="Save changes"
-            >
-                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-            </Button>
+            {!isSelect && (
+                <Button 
+                    size="sm" 
+                    variant="ghost" 
+                    className={`h-8 w-8 p-0 shrink-0 ${String(value) !== String(product[field]) ? 'text-indigo-600 bg-indigo-50 opacity-100' : 'text-slate-300 opacity-0'} transition-opacity group-hover:opacity-100 focus-within:opacity-100`}
+                    onClick={handleSave}
+                    disabled={isSaving || String(value) === String(product[field])}
+                    title="Save (or press Enter)"
+                >
+                    {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                </Button>
+            )}
         </div>
     );
 }

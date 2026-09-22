@@ -433,6 +433,15 @@ const realInventoryApi = {
         });
         await assertOk(response);
         return response.json();
+    },
+    updateBatch: async (batchId: string, payload: any) => {
+        const response = await fetch(`${API_URL}/batches/${batchId}/`, {
+            method: 'PUT',
+            headers: getHeaders(),
+            body: JSON.stringify(payload),
+        });
+        await assertOk(response);
+        return response.json();
     }
 };
 

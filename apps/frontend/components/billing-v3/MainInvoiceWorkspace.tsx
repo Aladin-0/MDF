@@ -196,7 +196,7 @@ export function MainInvoiceWorkspace() {
             return; // Needs qty
         }
 
-        const canonicalPackType = quickAddProduct?.packType || '';
+        const canonicalPackType = quickAddBatch?.packType || quickAddProduct?.packType || '';
         const isStripBased = canonicalPackType.toLowerCase() === 'strip' || canonicalPackType.toLowerCase() === 'blister';
         const effectiveLoose = isStripBased ? l : 0;
 
@@ -220,8 +220,8 @@ export function MainInvoiceWorkspace() {
             composition: quickAddProduct.composition,
             manufacturer: quickAddProduct.manufacturer,
             packSize: quickAddBatch.packSize,
-            packUnit: quickAddBatch.packUnit,
-            packType: quickAddProduct.packType || '',
+            packUnit: quickAddBatch.packUnit || quickAddProduct.packUnit,
+            packType: quickAddBatch.packType || quickAddProduct.packType || '',
             requiresPrescription: ['H', 'H1', 'X', 'Narcotic'].includes(quickAddProduct.scheduleType),
             batchNo: quickAddBatch.batchNo,
             expiryDate: quickAddBatch.expiryDate,
@@ -314,7 +314,7 @@ export function MainInvoiceWorkspace() {
 
                         <div>
                             <label className="text-[10px] font-bold text-blue-600 uppercase tracking-wider block mb-1 flex items-center justify-between">
-                                Qty ({quickAddProduct?.packType?.toLowerCase() === 'strip' || quickAddProduct?.packType?.toLowerCase() === 'blister' ? 'Strips' : (quickAddProduct?.packType || 'Unit')}) <span className="text-[9px] font-normal text-slate-400 ml-2">max {quickAddBatch.qtyStrips}</span>
+                                Qty ({(quickAddBatch?.packType || quickAddProduct?.packType)?.toLowerCase() === 'strip' || (quickAddBatch?.packType || quickAddProduct?.packType)?.toLowerCase() === 'blister' ? 'Strips' : ((quickAddBatch?.packType || quickAddProduct?.packType) || 'Unit')}) <span className="text-[9px] font-normal text-slate-400 ml-2">max {quickAddBatch.qtyStrips}</span>
                             </label>
                             <Input 
                                 ref={qtyInputRef}
@@ -328,7 +328,7 @@ export function MainInvoiceWorkspace() {
                             />
                         </div>
 
-                        {(quickAddProduct?.packType?.toLowerCase() === 'strip' || quickAddProduct?.packType?.toLowerCase() === 'blister') && (
+                        {((quickAddBatch?.packType || quickAddProduct?.packType)?.toLowerCase() === 'strip' || (quickAddBatch?.packType || quickAddProduct?.packType)?.toLowerCase() === 'blister') && (
                             <div>
                                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1 flex items-center justify-between">
                                     Loose <span className="text-[9px] font-normal text-slate-400 ml-2">of {quickAddBatch.packSize}</span>
@@ -365,7 +365,8 @@ export function MainInvoiceWorkspace() {
                                     const s = parseInt(qtyStrips) || 0;
                                     const l = parseInt(qtyLoose) || 0;
                                     const d = parseFloat(discountPct) || 0;
-                                    const isStrip = quickAddProduct?.packType?.toLowerCase() === 'strip' || quickAddProduct?.packType?.toLowerCase() === 'blister';
+                                    const activePackType = quickAddBatch?.packType || quickAddProduct?.packType;
+                                    const isStrip = activePackType?.toLowerCase() === 'strip' || activePackType?.toLowerCase() === 'blister';
                                     const effectiveL = isStrip ? l : 0;
                                     const tQtyFractional = s + (effectiveL / quickAddBatch.packSize);
                                     const rate = quickAddBatch.mrp;

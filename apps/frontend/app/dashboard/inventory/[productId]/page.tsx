@@ -4,13 +4,17 @@ import React, { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useOutletId } from '@/hooks/useOutletId';
-import { inventoryApi } from '@/lib/apiClient';
 import { formatCurrency } from '@/lib/gst';
 import { formatQty } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useToast } from '@/hooks/use-toast';
 import { PermissionGate } from '@/components/shared/PermissionGate';
 import { StockAdjustmentModal } from '@/components/inventory/StockAdjustmentModal';
+import { inventoryApi, productsApi } from '@/lib/apiClient';
+import { Save } from 'lucide-react';
 import {
     ArrowLeft,
     Package,
@@ -52,12 +56,162 @@ function StatCard({ icon: Icon, value, label, color, highlight }: { icon: any; v
     );
 }
 
+function BatchInlineEditCell({ batch, product, field, onSave }: { batch: any, product: any, field: string, onSave: (val: any) => Promise<void> }) {
+    const isMasterField = ['gstRate', 'hsnCode', 'scheduleType'].includes(field);
+    const propValue = isMasterField ? product[field] : batch[field];
+    const [value, setValue] = useState<any>(propValue ?? '');
+    const [isSaving, setIsSaving] = useState(false);
+    
+    React.useEffect(() => {
+        setValue(propValue ?? '');
+    }, [propValue, field]);
+
+    const saveValue = async (val: any) => {
+        let finalVal = val;
+        if (['gstRate', 'packSize', 'mrp', 'purchaseRate'].includes(field)) {
+            finalVal = Number(val);
+            if (isNaN(finalVal)) return;
+        }
+        setIsSaving(true);
+        try {
+            await onSave(finalVal);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleSave = () => saveValue(value);
+
+    if (field === 'packType') {
+        return (
+            <div className="flex items-center gap-1 w-40 relative group">
+                <Select value={value as string} onValueChange={(v) => { setValue(v); saveValue(v); }}>
+                    <SelectTrigger className="h-8 text-xs font-bold bg-white"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="strip">Strip</SelectItem>
+                        <SelectItem value="bottle">Bottle</SelectItem>
+                        <SelectItem value="tube">Tube</SelectItem>
+                        <SelectItem value="box">Box</SelectItem>
+                        <SelectItem value="piece">Piece</SelectItem>
+                        <SelectItem value="pack">Pack</SelectItem>
+                        <SelectItem value="vial">Vial</SelectItem>
+                        <SelectItem value="ampoule">Ampoule</SelectItem>
+                    </SelectContent>
+                </Select>
+            </div>
+        );
+    }
+
+    if (field === 'scheduleType') {
+        return (
+            <div className="flex items-center gap-1 w-40 relative group">
+                <Select value={value as string} onValueChange={(v) => { setValue(v); saveValue(v); }}>
+                    <SelectTrigger className="h-8 text-xs font-bold bg-white"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="OTC">OTC</SelectItem>
+                        <SelectItem value="G">Schedule G</SelectItem>
+                        <SelectItem value="H">Schedule H</SelectItem>
+                        <SelectItem value="H1">Schedule H1</SelectItem>
+                        <SelectItem value="X">Schedule X</SelectItem>
+                        <SelectItem value="C">Schedule C</SelectItem>
+                        <SelectItem value="Narcotic">Narcotic</SelectItem>
+                        <SelectItem value="Ayurvedic">Ayurvedic</SelectItem>
+                        <SelectItem value="Surgical">Surgical</SelectItem>
+                        <SelectItem value="Cosmetic">Cosmetic</SelectItem>
+                        <SelectItem value="Veterinary">Veterinary</SelectItem>
+                    </SelectContent>
+                </Select>
+            </div>
+        );
+    }
+
+    if (field === 'packUnit') {
+        return (
+            <div className="flex items-center gap-1 w-40 relative group">
+                <Select value={value as string} onValueChange={(v) => { setValue(v); saveValue(v); }}>
+                    <SelectTrigger className="h-8 text-xs font-bold bg-white"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="tablet">Tablet</SelectItem>
+                        <SelectItem value="capsule">Capsule</SelectItem>
+                        <SelectItem value="piece">Piece</SelectItem>
+                        <SelectItem value="ml">ml</SelectItem>
+                        <SelectItem value="gm">gm</SelectItem>
+                        <SelectItem value="mg">mg</SelectItem>
+                        <SelectItem value="drop">Drop</SelectItem>
+                        <SelectItem value="suppository">Suppository</SelectItem>
+                        <SelectItem value="injection">Injection</SelectItem>
+                        <SelectItem value="patch">Patch</SelectItem>
+                        <SelectItem value="inhaler">Inhaler</SelectItem>
+                        <SelectItem value="spray">Spray</SelectItem>
+                    </SelectContent>
+                </Select>
+            </div>
+        );
+    }
+    
+    return (
+        <div className="flex items-center gap-1 w-40 relative group">
+            <Input 
+                type={['gstRate', 'packSize', 'mrp', 'purchaseRate'].includes(field) ? 'number' : 'text'}
+                className="h-8 text-xs font-bold bg-white"
+                value={value}
+                onChange={e => setValue(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleSave(); }}
+            />
+            <Button 
+                size="icon" 
+                variant="ghost" 
+                className={`h-8 w-8 shrink-0 rounded ${String(value) !== String(propValue) ? 'text-indigo-600 bg-indigo-50 opacity-100' : 'text-slate-300 opacity-0'} transition-opacity group-hover:opacity-100 focus-within:opacity-100`}
+                onClick={handleSave}
+                disabled={isSaving || String(value) === String(propValue)}
+                title="Save (or press Enter)"
+            >
+                <Save className="w-4 h-4" />
+            </Button>
+        </div>
+    );
+}
+
 export default function ProductInventoryPage() {
     const { productId } = useParams<{ productId: string }>();
     const router = useRouter();
     const outletId = useOutletId();
     const queryClient = useQueryClient();
+    const { toast } = useToast();
     const [adjustBatch, setAdjustBatch] = useState<Batch | null>(null);
+    const [quickEditCol, setQuickEditCol] = useState<string | null>('none');
+    
+    const colMap: Record<string, string> = {
+        batchNo: 'Batch Number',
+        expiryDate: 'Expiry (YYYY-MM-DD)',
+        mfgDate: 'Mfg Date (YYYY-MM-DD)',
+        mrp: 'MRP',
+        purchaseRate: 'Purchase Rate',
+        rackLocation: 'Rack Location',
+        packSize: 'Pack Size',
+        packType: 'Pack Type',
+        packUnit: 'Unit Name',
+        gstRate: 'GST Rate (%)',
+        hsnCode: 'HSN Code',
+        scheduleType: 'Schedule Type'
+    };
+
+    const handleQuickSave = async (batch: any, field: string, val: any) => {
+        try {
+            const isMasterField = ['gstRate', 'hsnCode', 'scheduleType'].includes(field);
+            if (isMasterField) {
+                await productsApi.update(productId, { [field]: val });
+                queryClient.invalidateQueries({ queryKey: ['inventory', 'product', outletId, productId] });
+                toast({ title: "Updated", description: `Product ${colMap[field]} updated successfully.` });
+            } else {
+                await inventoryApi.updateBatch(batch.id, { [field]: val });
+                queryClient.invalidateQueries({ queryKey: ['inventory', 'product', outletId, productId] });
+                toast({ title: "Updated", description: `Batch ${colMap[field]} updated successfully.` });
+            }
+        } catch (err: any) {
+            toast({ title: "Error", description: err.detail || 'Failed to update', variant: "destructive" });
+        }
+    };
 
     // Fetch this specific product + its batches directly (avoids pagination limits)
     const { data: product, isLoading } = useQuery({
@@ -235,9 +389,36 @@ export default function ProductInventoryPage() {
                         <Layers className="w-6 h-6 text-primary" />
                         Batch-Wise Inventory
                     </h2>
-                    <span className="text-sm font-bold bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg border border-slate-200">
-                        FEFO — First Expiry, First Out
-                    </span>
+                    <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-xl border-2 border-slate-100">
+                            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider pl-2">Quick Edit</span>
+                            <Select value={quickEditCol || 'none'} onValueChange={setQuickEditCol}>
+                                <SelectTrigger className="w-[180px] h-8 text-xs font-bold border-0 bg-white shadow-sm">
+                                    <SelectValue placeholder="Select column" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="none" className="font-bold">None</SelectItem>
+                                    <div className="px-2 py-1.5 text-[10px] font-black uppercase text-slate-400">Batch Properties</div>
+                                    <SelectItem value="batchNo">Batch No</SelectItem>
+                                    <SelectItem value="expiryDate">Expiry Date</SelectItem>
+                                    <SelectItem value="mfgDate">Mfg Date</SelectItem>
+                                    <SelectItem value="mrp">MRP</SelectItem>
+                                    <SelectItem value="purchaseRate">Purchase Rate</SelectItem>
+                                    <SelectItem value="packSize">Pack Size</SelectItem>
+                                    <SelectItem value="packType">Pack Type</SelectItem>
+                                    <SelectItem value="packUnit">Unit Name</SelectItem>
+                                    <SelectItem value="rackLocation">Rack Location</SelectItem>
+                                    <div className="px-2 py-1.5 text-[10px] font-black uppercase text-slate-400 border-t mt-1">Product Properties</div>
+                                    <SelectItem value="gstRate">GST Rate</SelectItem>
+                                    <SelectItem value="hsnCode">HSN Code</SelectItem>
+                                    <SelectItem value="scheduleType">Schedule Type</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <span className="text-sm font-bold bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg border border-slate-200">
+                            FEFO — First Expiry, First Out
+                        </span>
+                    </div>
                 </div>
 
                 {batches.length === 0 ? (
@@ -267,6 +448,11 @@ export default function ProductInventoryPage() {
                                     </PermissionGate>
                                     <th className="text-center py-4 px-6 font-black text-xs uppercase tracking-widest text-slate-400">Rack</th>
                                     <th className="text-center py-4 px-6 font-black text-xs uppercase tracking-widest text-slate-400">Status</th>
+                                    {quickEditCol && quickEditCol !== 'none' && (
+                                        <th className="text-left py-4 px-6 font-black text-xs uppercase tracking-widest text-primary bg-indigo-50/50">
+                                            {colMap[quickEditCol]}
+                                        </th>
+                                    )}
                                     <th className="py-4 px-6"></th>
                                 </tr>
                             </thead>
@@ -331,6 +517,16 @@ export default function ProductInventoryPage() {
                                                     </span>
                                                 )}
                                             </td>
+                                            {quickEditCol && quickEditCol !== 'none' && (
+                                                <td className="py-2 px-4 bg-indigo-50/20">
+                                                    <BatchInlineEditCell 
+                                                        batch={batch}
+                                                        product={product}
+                                                        field={quickEditCol}
+                                                        onSave={async (val) => await handleQuickSave(batch, quickEditCol, val)}
+                                                    />
+                                                </td>
+                                            )}
                                             <td className="py-4 px-6">
                                                 <Button
                                                     variant="outline"
@@ -357,7 +553,9 @@ export default function ProductInventoryPage() {
                                         <td className="py-4 px-6"></td>
                                         <td className="py-4 px-6 text-right font-black text-emerald-700">{formatCurrency(metrics?.totalCostValue ?? 0)}</td>
                                     </PermissionGate>
-                                    <td colSpan={3} className="py-4 px-6"></td>
+                                    <td colSpan={2} className="py-4 px-6"></td>
+                                    {quickEditCol && quickEditCol !== 'none' && <td className="py-4 px-6"></td>}
+                                    <td className="py-4 px-6"></td>
                                 </tr>
                             </tfoot>
                         </table>

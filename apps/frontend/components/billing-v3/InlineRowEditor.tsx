@@ -81,7 +81,7 @@ export function InlineRowEditor({ item, onSave, onCancel, onRemove }: InlineRowE
     const isSameBatch = selectedBatchId === item.batchId;
     const historicalBaseRate = isSameBatch ? (item.saleRate || item.mrp) : undefined;
     
-    const canonicalPackType = productInfo?.packType || item.packType || '';
+    const canonicalPackType = currentBatch?.packType || productInfo?.packType || item.packType || '';
     const isStripBased = canonicalPackType.toLowerCase() === 'strip' || canonicalPackType.toLowerCase() === 'blister';
     // If not strip-based, force loose to 0 in calculations
     const effectiveQtyLoose = isStripBased ? qtyLoose : '0';

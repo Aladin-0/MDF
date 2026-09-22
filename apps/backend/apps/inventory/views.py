@@ -46,6 +46,91 @@ class BatchLandingCostView(APIView):
             'freight_per_unit': str(freight_per_unit)
         }, status=status.HTTP_200_OK)
 
+class BatchDetailUpdateView(APIView):
+    """PUT /api/v1/inventory/batches/{batch_id}/ - Update batch properties directly"""
+    permission_classes = [IsManagerOrAbove]
+
+    def put(self, request, batch_id, *args, **kwargs):
+        try:
+            batch = Batch.objects.get(id=batch_id)
+        except Batch.DoesNotExist:
+            return Response({'detail': 'Batch not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        data = request.data
+        errors = {}
+
+        if 'batchNo' in data:
+            bn = (data['batchNo'] or '').strip()
+            if not bn:
+                errors['batchNo'] = 'Batch number is required'
+            else:
+                batch.batch_no = bn
+                
+        if 'expiryDate' in data:
+            try:
+                batch.expiry_date = datetime.strptime(data['expiryDate'], '%Y-%m-%d').date()
+            except ValueError:
+                errors['expiryDate'] = 'Invalid expiry date format (YYYY-MM-DD)'
+                
+        if 'mfgDate' in data:
+            if not data['mfgDate']:
+                batch.mfg_date = None
+            else:
+                try:
+                    batch.mfg_date = datetime.strptime(data['mfgDate'], '%Y-%m-%d').date()
+                except ValueError:
+                    errors['mfgDate'] = 'Invalid mfg date format (YYYY-MM-DD)'
+
+        if 'mrp' in data:
+            try:
+                mrp = Decimal(str(data['mrp']))
+                if mrp < 0:
+                    errors['mrp'] = 'MRP cannot be negative'
+                else:
+                    batch.mrp = mrp
+            except (InvalidOperation, TypeError):
+                errors['mrp'] = 'Invalid MRP'
+
+        if 'purchaseRate' in data:
+            try:
+                pr = Decimal(str(data['purchaseRate']))
+                if pr < 0:
+                    errors['purchaseRate'] = 'Purchase rate cannot be negative'
+                else:
+                    batch.purchase_rate = pr
+            except (InvalidOperation, TypeError):
+                errors['purchaseRate'] = 'Invalid purchase rate'
+
+        if 'packSize' in data:
+            try:
+                ps = int(data['packSize'])
+                if ps < 1:
+                    errors['packSize'] = 'Pack size must be ≥ 1'
+                else:
+                    batch.pack_size = ps
+            except (ValueError, TypeError):
+                errors['packSize'] = 'Invalid pack size'
+
+        if 'packUnit' in data:
+            pu = (data['packUnit'] or '').strip()
+            if not pu:
+                errors['packUnit'] = 'Pack unit is required'
+            else:
+                batch.pack_unit = pu
+
+        if 'packType' in data and data['packType']:
+            batch.pack_type = data['packType']
+
+        if 'rackLocation' in data:
+            batch.rack_location = (data['rackLocation'] or '').strip()
+
+        if errors:
+            return Response({'errors': errors}, status=status.HTTP_400_BAD_REQUEST)
+
+        batch.save()
+        return Response(serialize_batch(batch), status=status.HTTP_200_OK)
+
+
 def serialize_product(product, total_stock=0, nearest_expiry="2099-12-31", is_low_stock=False, batches=None):
     return {
         'id': str(product.id),
@@ -844,8 +929,9 @@ class InventoryListView(APIView):
             pbs       = batches_map.get(product.id, [])
             tot_stock = product.total_strips
             tot_loose = product.total_loose
+            total_stock_fractional = tot_stock + (tot_loose / (product.pack_size or 1))
             near_exp  = product.nearest_expiry.isoformat() if product.nearest_expiry else "2099-12-31"
-            is_low    = tot_stock < (product.min_qty or 10)
+            is_low    = total_stock_fractional < (product.min_qty or 10)
 
             results.append({
                 'id':              str(product.id),
@@ -869,10 +955,11 @@ class InventoryListView(APIView):
                 'mrp':             float(pbs[0].mrp) if pbs else float(product.mrp),
                 'saleRate':        float(pbs[0].mrp) if pbs else float(product.mrp),
                 'outletProductId': str(product.id),
-                'totalStock':      tot_stock,
+                'totalStock':      total_stock_fractional,
+                'total_qty_strips': tot_stock,
                 'totalLoose':      tot_loose,
                 'nearestExpiry':   near_exp,
-                'isLowStock':      is_low or (tot_loose > 0 and tot_stock == 0),
+                'isLowStock':      is_low,
                 'batches':         [serialize_batch(b) for b in pbs],
             })
 
