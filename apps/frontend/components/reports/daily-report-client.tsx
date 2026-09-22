@@ -308,15 +308,7 @@ export function DailyReportClient() {
                   </div>
 
                   <div className="pt-4 space-y-3">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="font-medium text-gray-600">Petty Cash Exp</span>
-                      <Input 
-                        type="number" 
-                        className="w-32 text-right bg-white" 
-                        value={cashState.pettyCashExp || ''} 
-                        onChange={(e) => handleCashChange('pettyCashExp', e.target.value)}
-                      />
-                    </div>
+
                     <div className="flex items-center justify-between text-sm">
                       <span className="font-medium text-gray-600">Side Cash</span>
                       <Input 
@@ -335,15 +327,7 @@ export function DailyReportClient() {
                         onChange={(e) => handleCashChange('nextDayOpening', e.target.value)}
                       />
                     </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="font-medium text-gray-600">Carton Sale</span>
-                      <Input 
-                        type="number" 
-                        className="w-32 text-right bg-white" 
-                        value={cashState.cartonSale || ''} 
-                        onChange={(e) => handleCashChange('cartonSale', e.target.value)}
-                      />
-                    </div>
+
                   </div>
 
                   <Button onClick={saveCashState} disabled={savingCash} className="w-full mt-4 bg-yellow-600 hover:bg-yellow-700 text-white font-bold">

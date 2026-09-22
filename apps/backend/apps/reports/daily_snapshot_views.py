@@ -46,7 +46,7 @@ def get_daily_snapshot_data(outlet_id, start_date_str, end_date_str=None):
     net_sales = total_sales - total_returns
 
     # Customer Jama (Receipts in Cash)
-    jama = float(ReceiptEntry.objects.filter(outlet_id=outlet_id, date__range=(start_date, end_date), payment_mode='cash').aggregate(total=Sum('total_amount'))['total'] or 0.0)
+    jama_manual = float(ReceiptEntry.objects.filter(outlet_id=outlet_id, date__range=(start_date, end_date), payment_mode='cash').aggregate(total=Sum('total_amount'))['total'] or 0.0)
 
     # COGS
     sale_items = SaleItem.objects.filter(invoice__in=sales)
@@ -90,13 +90,55 @@ def get_daily_snapshot_data(outlet_id, start_date_str, end_date_str=None):
     cash_state = None
     if is_single_day:
         cash_state, _ = DailyCashReport.objects.get_or_create(outlet_id=outlet_id, date=start_date)
-        petty_cash_exp = float(cash_state.petty_cash_exp)
-        carton_sale = float(cash_state.carton_sale)
+        petty_cash_exp_manual = float(cash_state.petty_cash_exp)
+        carton_sale_manual = float(cash_state.carton_sale)
     else:
         # Sum petty cash and carton sale over the period for math
         cash_reports = DailyCashReport.objects.filter(outlet_id=outlet_id, date__range=(start_date, end_date))
-        petty_cash_exp = float(cash_reports.aggregate(total=Sum('petty_cash_exp'))['total'] or 0.0)
-        carton_sale = float(cash_reports.aggregate(total=Sum('carton_sale'))['total'] or 0.0)
+        petty_cash_exp_manual = float(cash_reports.aggregate(total=Sum('petty_cash_exp'))['total'] or 0.0)
+        carton_sale_manual = float(cash_reports.aggregate(total=Sum('carton_sale'))['total'] or 0.0)
+        
+    # --- Ledger Entries (Vouchers) ---
+    from apps.accounts.models import Voucher, VoucherLine
+    
+    # 1. Ledger Expenses (All Cash Payments)
+    cash_payments = Voucher.objects.filter(
+        outlet_id=outlet_id, 
+        date__range=(start_date, end_date), 
+        voucher_type='payment', 
+        payment_mode='cash',
+        status='posted'
+    )
+    ledger_expenses = float(cash_payments.aggregate(total=Sum('total_amount'))['total'] or 0.0)
+
+    # 2. Ledger Customer Jama (Cash Receipts crediting a Sundry Debtors ledger)
+    jama_qs = VoucherLine.objects.filter(
+        voucher__outlet_id=outlet_id,
+        voucher__date__range=(start_date, end_date),
+        voucher__voucher_type='receipt',
+        voucher__payment_mode='cash',
+        voucher__status='posted',
+        ledger__group__name='Sundry Debtors',
+        credit__gt=0
+    )
+    ledger_jama = float(jama_qs.aggregate(total=Sum('credit'))['total'] or 0.0)
+
+    # 3. Ledger Carton Sale (Cash Receipts crediting an Income ledger)
+    carton_qs = VoucherLine.objects.filter(
+        voucher__outlet_id=outlet_id,
+        voucher__date__range=(start_date, end_date),
+        voucher__voucher_type='receipt',
+        voucher__payment_mode='cash',
+        voucher__status='posted',
+        ledger__group__nature='income',
+        credit__gt=0
+    )
+    ledger_carton_sale = float(carton_qs.aggregate(total=Sum('credit'))['total'] or 0.0)
+    
+    # Combine Manual + Ledger
+    petty_cash_exp = petty_cash_exp_manual + ledger_expenses
+    carton_sale = carton_sale_manual + ledger_carton_sale
+    jama = jama_manual + ledger_jama
     
     # --- Fixed Monthly Expense ---
     fixed_exp, _ = FixedMonthlyExpense.objects.get_or_create(outlet_id=outlet_id)
@@ -274,8 +316,6 @@ class DailyCashReportView(APIView):
         cash_state.notes_50 = request.data.get('notes50', cash_state.notes_50)
         cash_state.notes_20 = request.data.get('notes20', cash_state.notes_20)
         cash_state.notes_10 = request.data.get('notes10', cash_state.notes_10)
-        cash_state.carton_sale = request.data.get('cartonSale', cash_state.carton_sale)
-        cash_state.petty_cash_exp = request.data.get('pettyCashExp', cash_state.petty_cash_exp)
         cash_state.side_cash = request.data.get('sideCash', cash_state.side_cash)
         cash_state.next_day_opening = request.data.get('nextDayOpening', cash_state.next_day_opening)
         cash_state.updated_by = request.user
@@ -467,5 +507,6 @@ class DailySnapshotExportView(APIView):
         buffer.seek(0)
         
         response = HttpResponse(buffer.getvalue(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-        response['Content-Disposition'] = f'attachment; filename=Daily_Report_{date_str}.xlsx'
+        filename = f'Daily_Report_{start_date_str}.xlsx' if start_date_str == end_date_str else f'Daily_Report_{start_date_str}_to_{end_date_str}.xlsx'
+        response['Content-Disposition'] = f'attachment; filename={filename}'
         return response
