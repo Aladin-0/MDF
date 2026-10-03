@@ -64,6 +64,10 @@ const DEFAULT_ATTENDANCE: AttendanceSettings = {
     kioskAutoResetSeconds: 5,
     enableAttendance: true,
     workingHoursPerDay: 8,
+    allowedAttendanceIps: '',
+    attendanceLatitude: '',
+    attendanceLongitude: '',
+    attendanceRadiusMeters: 100,
 };
 
 const DEFAULT_NOTIFICATIONS: NotificationSettings = {

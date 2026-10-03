@@ -2,18 +2,20 @@
 
 import { useState, useMemo } from 'react';
 import {
-    useReactTable, getCoreRowModel, getSortedRowModel,
+    useReactTable, getCoreRowModel, getSortedRowModel, getPaginationRowModel,
     flexRender, createColumnHelper, SortingState,
 } from '@tanstack/react-table';
+import { Button } from '@/components/ui/button';
 import { ArrowUpDown } from 'lucide-react';
 import { useExpiryReportData } from '@/hooks/useReports';
 import { ExpiryReportRow } from '@/types';
 import { formatCurrency } from '@/lib/gst';
 import { cn } from '@/lib/utils';
 
-type ExpiryFilter = 30 | 60 | 90 | 180 | 9999;
+type ExpiryFilter = -1 | 30 | 60 | 90 | 180 | 9999;
 
 const FILTER_OPTIONS: { value: ExpiryFilter; label: string }[] = [
+    { value: -1,   label: 'Expired' },
     { value: 30,   label: '30 days' },
     { value: 60,   label: '60 days' },
     { value: 90,   label: '90 days' },
@@ -55,7 +57,11 @@ export function ExpiryReportTab() {
 
     const filteredRows = useMemo(() => {
         if (!data) return [];
-        return data.filter((r: any) => r.daysRemaining <= filter);
+        return data.filter((r: any) => {
+            if (filter === 9999) return true;
+            if (filter === -1) return r.daysRemaining < 0;
+            return r.daysRemaining >= 0 && r.daysRemaining <= filter;
+        });
     }, [data, filter]);
 
     const counts = useMemo(() => {
@@ -105,6 +111,8 @@ export function ExpiryReportTab() {
         onSortingChange: setSorting,
         getCoreRowModel: getCoreRowModel(),
         getSortedRowModel: getSortedRowModel(),
+        getPaginationRowModel: getPaginationRowModel(),
+        initialState: { pagination: { pageSize: 50 } },
     });
 
     if (isLoading) {
@@ -207,6 +215,31 @@ export function ExpiryReportTab() {
                         </div>
                     )}
                 </div>
+                {filteredRows.length > 0 && (
+                    <div className="flex items-center justify-between px-4 py-3 border-t bg-slate-50 text-sm">
+                        <div className="text-slate-500">
+                            Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount() || 1}
+                        </div>
+                        <div className="flex gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => table.previousPage()}
+                                disabled={!table.getCanPreviousPage()}
+                            >
+                                Previous
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => table.nextPage()}
+                                disabled={!table.getCanNextPage()}
+                            >
+                                Next
+                            </Button>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

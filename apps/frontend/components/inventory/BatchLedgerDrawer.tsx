@@ -3,8 +3,8 @@
 import React from 'react';
 import { useStockLedger } from '@/hooks/useInventory';
 import { 
-    Drawer, DrawerContent, DrawerClose 
-} from '@/components/ui/drawer';
+    Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose 
+} from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { X, Calendar, ArrowUpRight, ArrowDownRight, Package, Tag, FileText } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -15,47 +15,34 @@ export function BatchLedgerDrawer({ batchId, batchNo, medicineName, isOpen, onCl
     const { data, isLoading } = useStockLedger(batchId);
     
     // API returns PaginatedResponse or list depending on how we structured it.
-    // Based on StockLedgerBatchesView it might be a list or paginated object. 
-    // Wait, StockLedgerView in apps/backend/apps/inventory/views.py returns a PaginatedResponse.
     const entries = data?.data || data || [];
 
-    // Reverse entries to show chronological order if backend returns descending
-    // Wait, we probably want to see newest first, but running balance is easier if chronological.
-    // Let's just render them as they come.
-
     return (
-        <Drawer open={isOpen} onOpenChange={(open: boolean) => !open && onClose()} direction="right">
-            <DrawerContent className="h-full w-full sm:w-[95vw] lg:w-[900px] border-l rounded-none p-0 overflow-y-auto bg-slate-50/30">
-                
-                <div className="sticky top-0 z-20 bg-white border-b px-10 py-6 flex justify-between items-start shadow-sm">
+        <Sheet open={isOpen} onOpenChange={(open: boolean) => !open && onClose()}>
+            <SheetContent side="right" className="w-full sm:max-w-xl lg:max-w-2xl p-0 flex flex-col bg-slate-50 overflow-hidden">
+                <SheetHeader className="px-6 py-4 border-b bg-white shrink-0 shadow-sm flex flex-row items-center justify-between space-y-0">
                     {isLoading ? (
-                        <div className="space-y-3 w-full">
-                            <Skeleton className="h-8 w-1/2" />
-                            <Skeleton className="h-4 w-1/3" />
+                        <div className="space-y-2 w-full">
+                            <Skeleton className="h-6 w-1/3" />
+                            <Skeleton className="h-4 w-1/4" />
                         </div>
                     ) : (
-                        <div>
+                        <div className="text-left">
                             <div className="flex items-center gap-3">
-                                <h2 className="text-2xl font-bold text-slate-900">Batch Ledger</h2>
-                                <span className="px-3 py-1 bg-primary/10 text-primary font-semibold rounded-full text-sm">
+                                <SheetTitle className="text-xl font-bold text-slate-900">Batch Ledger</SheetTitle>
+                                <span className="px-2.5 py-0.5 bg-primary/10 text-primary font-semibold rounded text-sm">
                                     {batchNo}
                                 </span>
                             </div>
-                            <p className="text-slate-500 mt-2 flex items-center gap-2">
+                            <p className="text-slate-500 mt-1 flex items-center gap-2 text-sm font-medium">
                                 <Package className="w-4 h-4" /> {medicineName || 'N/A'}
                             </p>
                         </div>
                     )}
-                    
-                    <DrawerClose asChild>
-                        <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0">
-                            <X className="w-5 h-5" />
-                        </Button>
-                    </DrawerClose>
-                </div>
+                </SheetHeader>
 
-                <div className="p-10">
-                    <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
+                <div className="flex-1 overflow-y-auto p-6">
+                    <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
                         <table className="w-full text-sm">
                             <thead>
                                 <tr className="border-b bg-slate-50">
@@ -128,7 +115,7 @@ export function BatchLedgerDrawer({ batchId, batchNo, medicineName, isOpen, onCl
                         </table>
                     </div>
                 </div>
-            </DrawerContent>
-        </Drawer>
+            </SheetContent>
+        </Sheet>
     );
 }

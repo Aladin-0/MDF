@@ -29,33 +29,47 @@ interface ExportButtonProps {
     batchFilters?: any;
 }
 
+import { useQueryClient } from '@tanstack/react-query';
+
 export function ExportButton({ activeTab, dateRange, batchFilters }: ExportButtonProps) {
     const [pdfLoading, setPdfLoading] = useState(false);
     const { outlet } = useAuthStore();
     const { data: gstData } = useGSTReport(dateRange);
+    const queryClient = useQueryClient();
 
     const handleCSV = () => {
-        const allSales: any[] = []; // Phase 2: getSalesReport API not yet wired to this component
+        const outletId = outlet?.id;
+        if (!outletId) return;
 
         switch (activeTab) {
-            case 'sales':
-                exportSalesReportCSV(allSales, dateRange);
+            case 'sales': {
+                const salesData: any = queryClient.getQueryData(['reports', 'sales', outletId, dateRange]);
+                exportSalesReportCSV(salesData?.rows || [], dateRange);
                 break;
+            }
             case 'gst':
                 if (gstData) exportGSTReportCSV(gstData);
                 break;
-            case 'stock':
-                exportStockValuationCSV([]); // Phase 2: NOT_IMPLEMENTED
+            case 'stock': {
+                const stockData: any = queryClient.getQueryData(['reports', 'stock-valuation', outletId]);
+                exportStockValuationCSV(stockData?.rows || []);
                 break;
-            case 'expiry':
-                exportExpiryReportCSV([]); // Phase 2: NOT_IMPLEMENTED
+            }
+            case 'expiry': {
+                const expiryData: any = queryClient.getQueryData(['reports', 'expiry', outletId]);
+                exportExpiryReportCSV(expiryData || []);
                 break;
-            case 'staff':
-                exportStaffReportCSV([], dateRange); // Phase 2: NOT_IMPLEMENTED
+            }
+            case 'staff': {
+                const staffData: any = queryClient.getQueryData(['reports', 'staff', outletId, dateRange]);
+                exportStaffReportCSV(staffData || [], dateRange);
                 break;
-            case 'purchases':
-                exportPurchaseReportCSV([], dateRange); // Phase 2: NOT_IMPLEMENTED
+            }
+            case 'purchases': {
+                const purchaseData: any = queryClient.getQueryData(['reports', 'purchases', outletId, dateRange]);
+                exportPurchaseReportCSV(purchaseData?.rows || [], dateRange);
                 break;
+            }
             case 'batch':
                 handleBackendExport('csv', 'batch-wise');
                 break;

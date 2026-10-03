@@ -190,6 +190,10 @@ export interface StaffMember {
     canModifyPaidBill?: boolean;
     canCancelAndReissueBill?: boolean;
     canViewBillRevisionHistory?: boolean;
+    canManagePartners?: boolean;
+    shiftStartTime?: string | null;
+    shiftEndTime?: string | null;
+    weeklyOffDay?: number | null;
     isActive: boolean;
     joiningDate: string;
     lastLogin?: string;
@@ -1275,6 +1279,10 @@ export interface AttendanceSettings {
     kioskAutoResetSeconds: number;
     enableAttendance: boolean;
     workingHoursPerDay: number;
+    allowedAttendanceIps?: string;
+    attendanceLatitude?: string;
+    attendanceLongitude?: string;
+    attendanceRadiusMeters?: number;
 }
 
 export interface NotificationSettings {

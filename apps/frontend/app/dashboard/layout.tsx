@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { OfflineBanner } from '@/components/shared/OfflineBanner';
 import { DashboardSkeleton } from '@/components/shared/DashboardSkeleton';
 import { GlobalNavigation } from '@/components/layout/GlobalNavigation';
+import { SmartCheckInBanner } from '@/components/attendance/SmartCheckInBanner';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useAuthStore } from '@/store/authStore';
@@ -45,6 +46,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             {/* Global Top Navigation */}
             <div className="sticky top-0 z-50 w-full flex flex-col">
                 <GlobalNavigation />
+                <SmartCheckInBanner />
             </div>
 
             {/* Main content area */}

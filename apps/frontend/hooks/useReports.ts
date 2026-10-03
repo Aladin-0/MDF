@@ -54,8 +54,20 @@ export function useSalesReport(dateRange: DateRangeFilter) {
     const outletId = useOutletId();
     return useQuery({
         queryKey: ['reports', 'sales', outletId, dateRange],
-        queryFn: () => reportsApi.getSalesReport(outletId, dateRange),
-        staleTime: 1000 * 60 * 5,
+        queryFn: async () => {
+            const res = await reportsApi.getSalesReport(outletId, dateRange);
+            const rows = (res?.rows || []).map((r: any) => ({
+                ...r,
+                netSales: r.netSales ?? r.totalSales ?? 0,
+                cashSales: r.cashSales ?? r.paymentBreakdown?.cash ?? 0,
+                upiSales: r.upiSales ?? r.paymentBreakdown?.upi ?? 0,
+                cardSales: r.cardSales ?? r.paymentBreakdown?.card ?? 0,
+                creditSales: r.creditSales ?? r.paymentBreakdown?.credit ?? 0,
+            }));
+            return { ...res, rows };
+        },
+        staleTime: 1000 * 60 * 2,      // 2 min — sales change frequently
+        refetchOnWindowFocus: false,    // Don't refetch on tab switch
         enabled: !!outletId,
     });
 }
@@ -74,8 +86,32 @@ export function useStockValuation() {
     const outletId = useOutletId();
     return useQuery({
         queryKey: ['reports', 'stock-valuation', outletId],
-        queryFn: () => reportsApi.getStockValuation(outletId),
-        staleTime: 1000 * 60 * 10,
+        queryFn: async () => {
+            const res = await reportsApi.getStockValuation(outletId);
+            const beData = res?.data || {};
+            const rows: any[] = [];
+            for (const p of beData.products || []) {
+                for (const b of p.batches || []) {
+                    rows.push({
+                        productName: p.productName,
+                        composition: p.genericName || p.composition || '',
+                        batchNo: b.batchNo,
+                        expiryDate: b.expiryDate,
+                        qtyStrips: b.qty,
+                        purchaseRate: b.purchaseRate,
+                        mrp: b.mrp,
+                        stockValue: b.valuation_purchase,
+                        mrpValue: b.valuation_mrp
+                    });
+                }
+            }
+            const totalStockValue = beData.total_value_purchase || 0;
+            const totalMrpValue = beData.total_value_mrp || 0;
+            const potentialMarginPct = totalStockValue > 0 ? (((totalMrpValue - totalStockValue) / totalStockValue) * 100).toFixed(1) : 0;
+            return { rows, totalStockValue, totalMrpValue, potentialMarginPct };
+        },
+        staleTime: 1000 * 60 * 15,     // 15 min — stock changes slowly
+        refetchOnWindowFocus: false,    // Don't refetch on tab switch
         enabled: !!outletId,
     });
 }
@@ -84,8 +120,26 @@ export function useExpiryReportData() {
     const outletId = useOutletId();
     return useQuery({
         queryKey: ['reports', 'expiry', outletId],
-        queryFn: () => reportsApi.getExpiryReport(outletId),
-        staleTime: 1000 * 60 * 10,
+        queryFn: async () => {
+            const res = await reportsApi.getExpiryReport(outletId);
+            const beData = res?.data || {};
+            const flatBatches: any[] = [];
+            for (const p of beData.products || []) {
+                for (const b of p.batches || []) {
+                    flatBatches.push({
+                        ...b,
+                        productName: p.productName,
+                        composition: p.genericName || p.composition || '',
+                        daysRemaining: b.daysToExpiry,
+                        stockValue: b.valuationAtRisk,
+                        qtyStrips: b.qtyStrips,
+                    });
+                }
+            }
+            return flatBatches;
+        },
+        staleTime: 1000 * 60 * 15,     // 15 min — expiry dates never change
+        refetchOnWindowFocus: false,    // Don't refetch on tab switch
         enabled: !!outletId,
     });
 }
@@ -94,8 +148,25 @@ export function useStaffReport(dateRange: DateRangeFilter) {
     const outletId = useOutletId();
     return useQuery({
         queryKey: ['reports', 'staff', outletId, dateRange],
-        queryFn: () => reportsApi.getStaffReport(outletId, dateRange),
-        staleTime: 1000 * 60 * 5,
+        queryFn: async () => {
+            const res = await reportsApi.getStaffReport(outletId, dateRange);
+            const dataArr = res?.data || [];
+            return dataArr.map((s: any) => ({
+                staffId: s.staffId,
+                staffName: s.staffName,
+                role: s.role,
+                billsCount: s.totalInvoices ?? s.billsCount ?? 0,
+                totalSales: s.totalSalesAmount ?? s.totalSales ?? 0,
+                totalDiscount: s.totalDiscountGiven ?? s.totalDiscount ?? 0,
+                avgBillValue: s.avgInvoiceValue ?? s.avgBillValue ?? 0,
+                avgDiscountPct: s.avgDiscountPct ?? 0,
+                cashBills: s.cashBills ?? 0,
+                creditBills: s.creditBills ?? 0,
+                salesByDay: s.salesByDay ?? [],
+            }));
+        },
+        staleTime: 1000 * 60 * 2,      // 2 min — staff activity is real-time
+        refetchOnWindowFocus: false,
         enabled: !!outletId,
     });
 }
@@ -104,8 +175,25 @@ export function usePurchaseReport(dateRange: DateRangeFilter) {
     const outletId = useOutletId();
     return useQuery({
         queryKey: ['reports', 'purchases', outletId, dateRange],
-        queryFn: () => reportsApi.getPurchaseReport(outletId, dateRange),
-        staleTime: 1000 * 60 * 5,
+        queryFn: async () => {
+            const res = await reportsApi.getPurchaseReport(outletId, dateRange);
+            const rawItems = res?.data || res?.results || [];
+            const rows = rawItems.map((inv: any) => ({
+                date: inv.invoiceDate ?? inv.invoice_date ?? inv.date ?? '',
+                invoiceNo: inv.invoiceNo ?? inv.invoice_no ?? '',
+                distributorName: inv.distributor?.name ?? inv.distributorName ?? 'Unknown',
+                itemCount: inv.items?.length ?? inv.itemCount ?? inv.total_items ?? 0,
+                grandTotal: parseFloat(inv.grandTotal ?? inv.grand_total ?? 0),
+                amountPaid: parseFloat(inv.amountPaid ?? inv.amount_paid ?? 0),
+                outstanding: parseFloat(inv.outstanding ?? ((inv.grandTotal ?? inv.grand_total ?? 0) - (inv.amountPaid ?? inv.amount_paid ?? 0))),
+            }));
+            const totalPurchased = rows.reduce((s: number, r: any) => s + (r.grandTotal || 0), 0);
+            const totalPaid = rows.reduce((s: number, r: any) => s + (r.amountPaid || 0), 0);
+            const totalOutstanding = rows.reduce((s: number, r: any) => s + (r.outstanding || 0), 0);
+            return { rows, totalPurchased, totalPaid, totalOutstanding };
+        },
+        staleTime: 1000 * 60 * 3,      // 3 min — purchases happen a few times a day
+        refetchOnWindowFocus: false,
         enabled: !!outletId,
     });
 }
@@ -115,7 +203,8 @@ export function useBatchReport(filters: any) {
     return useQuery({
         queryKey: ['reports', 'batch-wise', outletId, filters],
         queryFn: () => reportsApi.getBatchReport(outletId, filters),
-        staleTime: 1000 * 60 * 5,
+        staleTime: 1000 * 60 * 10,     // 10 min — batch data changes slowly
+        refetchOnWindowFocus: false,    // Don't refetch on tab switch
         enabled: !!outletId,
     });
 }

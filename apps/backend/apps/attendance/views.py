@@ -8,12 +8,75 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 from datetime import datetime
 from django.db import transaction
+import math
 
 from apps.attendance.models import AttendanceRecord
 from apps.accounts.models import Staff
-from apps.core.models import Outlet
+from apps.core.models import Outlet, OutletSettings
+from apps.core.permissions import IsAdminStaff, ADMIN_ROLES
 
 logger = logging.getLogger(__name__)
+
+def haversine_distance(lat1, lon1, lat2, lon2):
+    if None in (lat1, lon1, lat2, lon2):
+        return float('inf')
+    R = 6371000  # Earth radius in meters
+    phi1, phi2 = math.radians(float(lat1)), math.radians(float(lat2))
+    dphi = math.radians(float(lat2) - float(lat1))
+    dlambda = math.radians(float(lon2) - float(lon1))
+    a = math.sin(dphi/2)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda/2)**2
+    return R * (2 * math.atan2(math.sqrt(a), math.sqrt(1 - a)))
+
+def get_client_ip(request):
+    """
+    Always use REMOTE_ADDR which is set by the server/reverse proxy and
+    CANNOT be forged by the client. Never trust X-Forwarded-For directly
+    since a client can set any value for that header.
+    """
+    # REMOTE_ADDR is the only trustworthy IP — set by the TCP connection itself.
+    return request.META.get('REMOTE_ADDR', '')
+
+def validate_attendance_security(request, outlet):
+    """Validates if the user is authorized to mark attendance via IP or GPS."""
+    # Use get_or_create so missing settings never silently bypasses security
+    settings, _ = OutletSettings.objects.get_or_create(outlet=outlet)
+    
+    allowed_ips = [ip.strip() for ip in settings.allowed_attendance_ips.split(',') if ip.strip()] if settings.allowed_attendance_ips else []
+    has_gps = bool(settings.attendance_latitude and settings.attendance_longitude)
+    
+    # If nothing is configured at all, allow by default
+    if not allowed_ips and not has_gps:
+        return True, "No security configured"
+
+    # 1. IP Check (fast — always try first)
+    client_ip = get_client_ip(request)
+    
+    # In local development, ::1 and 127.0.0.1 are the same device. Treat them as equivalent.
+    loopback_ips = ['127.0.0.1', '::1']
+    if client_ip in loopback_ips and any(ip in loopback_ips for ip in allowed_ips):
+        return True, "IP Validated (Localhost)"
+
+    if allowed_ips and client_ip in allowed_ips:
+        return True, "IP Validated"
+
+    # 2. GPS Check (fallback — only if GPS is configured)
+    if has_gps:
+        lat = request.data.get('latitude')
+        lng = request.data.get('longitude')
+        if lat is not None and lng is not None:
+            distance = haversine_distance(lat, lng, settings.attendance_latitude, settings.attendance_longitude)
+            if distance <= settings.attendance_radius_meters:
+                return True, "GPS Validated"
+            else:
+                return False, f"You are {int(distance)} meters away from the outlet. Must be within {settings.attendance_radius_meters}m."
+        else:
+            # GPS configured but coordinates not sent by frontend
+            if allowed_ips:
+                return False, "Not connected to the outlet Wi-Fi. Please enable Location Services or connect to Wi-Fi to mark attendance."
+            return False, "Please enable Location Services in your browser to mark attendance."
+
+    # IP was configured but check failed, GPS is not configured
+    return False, "Please connect to the outlet Wi-Fi to mark attendance."
 
 # Default shift timings (can be moved to AttendanceSettings model later)
 DEFAULT_SHIFT_START = time(9, 0)  # 9:00 AM
@@ -57,9 +120,13 @@ class AttendanceCheckInView(APIView):
         try:
             payload = request.data
             outlet_id = payload.get('outletId')
-            staff_id = payload.get('staffId')
             check_type = payload.get('type', 'check_in')
             photo = payload.get('photoBase64') or payload.get('selfieUrl')
+
+            # SECURITY: Staff can ONLY mark their own attendance.
+            # The staffId is taken from the authenticated user, not the request body.
+            # This prevents anyone from faking attendance for another person.
+            staff_id = str(request.user.id)
 
             try:
                 outlet = Outlet.objects.get(id=outlet_id)
@@ -76,9 +143,22 @@ class AttendanceCheckInView(APIView):
                     {'error': {'code': 'STAFF_NOT_FOUND', 'message': 'Staff not found'}},
                     status=status.HTTP_404_NOT_FOUND
                 )
+                
+            # Security Validation
+            is_valid, reason = validate_attendance_security(request, outlet)
+            if not is_valid:
+                return Response(
+                    {'error': {'code': 'SECURITY_REJECTED', 'message': reason}},
+                    status=status.HTTP_403_FORBIDDEN
+                )
 
             today = datetime.now().date()
             current_time = datetime.now().time()
+            
+            client_ip = get_client_ip(request)
+            user_agent = request.META.get('HTTP_USER_AGENT', '')[:250]
+            lat = request.data.get('latitude')
+            lng = request.data.get('longitude')
 
             with transaction.atomic():
                 record, created = AttendanceRecord.objects.get_or_create(
@@ -97,6 +177,11 @@ class AttendanceCheckInView(APIView):
 
                     record.check_in_time = current_time
                     record.check_in_photo = photo
+                    record.check_in_ip = client_ip
+                    record.check_in_device = user_agent
+                    if lat and lng:
+                        record.check_in_lat = lat
+                        record.check_in_lng = lng
 
                     grace_end = datetime.combine(today, DEFAULT_SHIFT_START) + timedelta(minutes=LATE_GRACE_PERIOD_MINUTES)
                     current_datetime = datetime.combine(today, current_time)
@@ -124,6 +209,11 @@ class AttendanceCheckInView(APIView):
 
                     record.check_out_time = current_time
                     record.check_out_photo = photo
+                    record.check_out_ip = client_ip
+                    record.check_out_device = user_agent
+                    if lat and lng:
+                        record.check_out_lat = lat
+                        record.check_out_lng = lng
 
                     check_in_datetime = datetime.combine(today, record.check_in_time)
                     check_out_datetime = datetime.combine(today, current_time)
@@ -163,10 +253,29 @@ class AttendanceCheckOutView(APIView):
                 record = AttendanceRecord.objects.get(staff=staff, date=today, check_out_time__isnull=True)
             except AttendanceRecord.DoesNotExist:
                 return Response({'error': {'code': 'NOT_FOUND', 'message': 'No active check-in found'}}, status=400)
+                
+            # Security Validation
+            is_valid, reason = validate_attendance_security(request, staff.outlet)
+            if not is_valid:
+                return Response(
+                    {'error': {'code': 'SECURITY_REJECTED', 'message': reason}},
+                    status=status.HTTP_403_FORBIDDEN
+                )
 
             record.check_out_time = current_time
             if photo:
                 record.check_out_photo = photo
+                
+            client_ip = get_client_ip(request)
+            user_agent = request.META.get('HTTP_USER_AGENT', '')[:250]
+            lat = request.data.get('latitude')
+            lng = request.data.get('longitude')
+            
+            record.check_out_ip = client_ip
+            record.check_out_device = user_agent
+            if lat and lng:
+                record.check_out_lat = lat
+                record.check_out_lng = lng
                 
             check_in_dt = datetime.combine(today, record.check_in_time)
             check_out_dt = datetime.combine(today, current_time)
@@ -199,6 +308,10 @@ class AttendanceTodayView(APIView):
         today = datetime.now().date()
         records = AttendanceRecord.objects.filter(outlet=outlet, date=today).select_related('staff')
         
+        # Data isolation: Non-admins can only see their own attendance
+        if request.user.role not in ADMIN_ROLES:
+            records = records.filter(staff_id=request.user.id)
+        
         results = [serialize_attendance_record(r) for r in records]
         return Response(results, status=status.HTTP_200_OK)
 
@@ -228,7 +341,10 @@ class AttendanceMonthlyView(APIView):
             except ValueError:
                 pass
                 
-        if staff_id:
+        # Data isolation: Non-admins can only see their own attendance
+        if request.user.role not in ADMIN_ROLES:
+            qs = qs.filter(staff_id=request.user.id)
+        elif staff_id:
             qs = qs.filter(staff_id=staff_id)
             
         results = [serialize_attendance_record(r) for r in qs.order_by('date', 'staff__name')]
@@ -264,6 +380,11 @@ class AttendanceSummaryView(APIView):
             date__year=year, 
             date__month=month
         )
+        
+        # Data isolation: Non-admins can only see their own attendance
+        if request.user.role not in ADMIN_ROLES:
+            staff_list = staff_list.filter(id=request.user.id)
+            records = records.filter(staff_id=request.user.id)
         
         _, num_days = calendar.monthrange(year, month)
         
@@ -309,8 +430,9 @@ class AttendanceSummaryView(APIView):
 class AttendanceManualView(APIView):
     """
     POST /api/v1/attendance/manual/
+    SECURITY: Requires Admin or Super Admin. Regular staff CANNOT call this.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminStaff]  # Only admin & super_admin can manually mark attendance
 
     def post(self, request, *args, **kwargs):
         outlet_id = request.data.get('outletId')
@@ -355,3 +477,14 @@ class AttendanceManualView(APIView):
         record.save()
         
         return Response(serialize_attendance_record(record), status=status.HTTP_200_OK)
+
+
+class AttendanceMyIpView(APIView):
+    """
+    GET /api/v1/attendance/my-ip/
+    Returns the client IP address as seen by the backend server.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        return Response({'ip': get_client_ip(request)})

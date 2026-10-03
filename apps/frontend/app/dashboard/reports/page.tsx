@@ -10,7 +10,6 @@ import { PermissionGate } from '@/components/shared/PermissionGate';
 import { DateRangePicker } from '@/components/reports/DateRangePicker';
 import { ExportButton } from '@/components/reports/ExportButton';
 import { SalesReportTab } from '@/components/reports/SalesReportTab';
-import { GSTReportTab } from '@/components/reports/GSTReportTab';
 import { StockValuationTab } from '@/components/reports/StockValuationTab';
 import { ExpiryReportTab } from '@/components/reports/ExpiryReportTab';
 import { StaffReportTab } from '@/components/reports/StaffReportTab';
@@ -22,7 +21,7 @@ import { getDefaultDateRange, getDateRangeForPeriod } from '@/hooks/useReports';
 import { DateRangeFilter } from '@/types';
 import { usePermissions } from '@/hooks/usePermissions';
 
-type ReportTab = 'sales' | 'gst' | 'stock' | 'expiry' | 'staff' | 'purchases' | 'schedule' | 'batch';
+type ReportTab = 'sales' | 'stock' | 'expiry' | 'staff' | 'purchases' | 'schedule' | 'batch';
 
 export default function ReportsPage() {
     const [activeTab, setActiveTab] = useState<ReportTab>('sales');
@@ -40,12 +39,12 @@ export default function ReportsPage() {
 
     useKeyboardShortcuts({
         '1': () => setActiveTab('sales'),
-        '2': () => setActiveTab('gst'),
-        '3': () => setActiveTab('stock'),
-        '4': () => setActiveTab('expiry'),
-        '5': () => setActiveTab('staff'),
-        '6': () => setActiveTab('purchases'),
-        '7': () => setActiveTab('schedule'),
+        '2': () => setActiveTab('stock'),
+        '3': () => setActiveTab('expiry'),
+        '4': () => setActiveTab('staff'),
+        '5': () => setActiveTab('purchases'),
+        '6': () => setActiveTab('schedule'),
+        '7': () => setActiveTab('batch'),
         'm': () => setDateRange(getDateRangeForPeriod('this_month')),
         'w': () => setDateRange(getDateRangeForPeriod('this_week')),
     });
@@ -117,10 +116,6 @@ export default function ReportsPage() {
                         <BarChart3 className="w-3 h-3 mr-1" />
                         Sales Report
                     </TabsTrigger>
-                    <TabsTrigger value="gst">
-                        <FileText className="w-3 h-3 mr-1" />
-                        GST Report
-                    </TabsTrigger>
                     <TabsTrigger value="stock">
                         <Package className="w-3 h-3 mr-1" />
                         Stock Valuation
@@ -150,9 +145,6 @@ export default function ReportsPage() {
                 <div className="mt-6">
                     <TabsContent value="sales" className="mt-0 outline-none">
                         <SalesReportTab dateRange={dateRange} />
-                    </TabsContent>
-                    <TabsContent value="gst" className="mt-0 outline-none">
-                        <GSTReportTab dateRange={dateRange} />
                     </TabsContent>
                     <TabsContent value="stock" className="mt-0 outline-none">
                         <StockValuationTab />

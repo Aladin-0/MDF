@@ -6,6 +6,7 @@ from apps.attendance.views import (
     AttendanceMonthlyView,
     AttendanceSummaryView,
     AttendanceManualView,
+    AttendanceMyIpView,
 )
 
 urlpatterns = [
@@ -14,5 +15,6 @@ urlpatterns = [
     path('today/', AttendanceTodayView.as_view(), name='attendance-today'),
     path('summary/', AttendanceSummaryView.as_view(), name='attendance-summary'),
     path('manual/', AttendanceManualView.as_view(), name='attendance-manual'),
+    path('my-ip/', AttendanceMyIpView.as_view(), name='attendance-my-ip'),
     path('', AttendanceMonthlyView.as_view(), name='attendance-list'),
 ]

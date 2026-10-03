@@ -36,6 +36,10 @@ class OutletSettingsView(APIView):
             'landingCostIncludeGst': settings.landing_cost_include_gst,
             'landingCostIncludeFreight': settings.landing_cost_include_freight,
             'minMarginWarningPct': str(settings.min_margin_warning_pct) if settings.min_margin_warning_pct is not None else "0.00",
+            'allowedAttendanceIps': settings.allowed_attendance_ips,
+            'attendanceLatitude': str(settings.attendance_latitude) if settings.attendance_latitude else None,
+            'attendanceLongitude': str(settings.attendance_longitude) if settings.attendance_longitude else None,
+            'attendanceRadiusMeters': settings.attendance_radius_meters,
             'updatedAt': settings.updated_at.isoformat(),
         }
 
@@ -76,6 +80,10 @@ class OutletSettingsView(APIView):
             'landingCostIncludeGst': 'landing_cost_include_gst',
             'landingCostIncludeFreight': 'landing_cost_include_freight',
             'minMarginWarningPct': 'min_margin_warning_pct',
+            'allowedAttendanceIps': 'allowed_attendance_ips',
+            'attendanceLatitude': 'attendance_latitude',
+            'attendanceLongitude': 'attendance_longitude',
+            'attendanceRadiusMeters': 'attendance_radius_meters',
         }
 
         updated_fields = []

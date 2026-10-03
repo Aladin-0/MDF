@@ -155,6 +155,31 @@ class OutletSettings(models.Model):
         help_text="Optional: Show a soft warning if margin falls below this percentage. Set 0 to disable."
     )
     
+    # Attendance Security
+    allowed_attendance_ips = models.TextField(
+        blank=True, 
+        default='', 
+        help_text="Comma-separated list of allowed public IP addresses for Wi-Fi attendance check-in."
+    )
+    attendance_latitude = models.DecimalField(
+        max_digits=10, 
+        decimal_places=7, 
+        null=True, 
+        blank=True,
+        help_text="GPS Latitude for geofenced attendance."
+    )
+    attendance_longitude = models.DecimalField(
+        max_digits=10, 
+        decimal_places=7, 
+        null=True, 
+        blank=True,
+        help_text="GPS Longitude for geofenced attendance."
+    )
+    attendance_radius_meters = models.IntegerField(
+        default=100,
+        help_text="Allowed radius in meters around the GPS coordinates."
+    )
+    
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
