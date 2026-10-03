@@ -1,4 +1,5 @@
 import { Batch } from '@/types';
+import { bankersRound } from '@/utils/mathUtils';
 
 export interface RowTotals {
     tQtyFractional: number;
@@ -67,18 +68,18 @@ export function calculateRowTotals(
 
     const isValid = !isDiscountInvalid && !isQtyZero && !isNegativeMargin;
 
-    const taxableAmount = (rate * tQtyFractional) / (1 + gstRate / 100);
-    const gstAmount = (rate * tQtyFractional) - taxableAmount;
+    const taxableAmount = bankersRound((rate * tQtyFractional) / (1 + gstRate / 100));
+    const gstAmount = bankersRound((rate * tQtyFractional) - taxableAmount);
 
     return {
         tQtyFractional,
         tQtyLoose,
-        rate,
-        sellAmount,
+        rate: bankersRound(rate),
+        sellAmount: bankersRound(sellAmount),
         dPct,
-        dAmount,
-        totalCost,
-        marginAmount,
+        dAmount: bankersRound(dAmount),
+        totalCost: bankersRound(totalCost),
+        marginAmount: bankersRound(marginAmount),
         marginPct,
         isLowMargin,
         isNegativeMargin,

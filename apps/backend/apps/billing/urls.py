@@ -22,6 +22,9 @@ from apps.billing.views import (
     SaleRevisionReportView,
     DraftInvoiceListCreateView,
     DraftInvoiceDetailView,
+    EwayBillPdfDownloadView,
+    PatchEwbView,
+    RetryEinvoiceView,
 )
 from .quotation_views import QuotationListCreateView, QuotationDetailView, QuotationConvertView
 
@@ -45,6 +48,9 @@ urlpatterns = [
     path('sales/<uuid:sale_id>/print/', SalePrintView.as_view(), name='sale-print'),
     path('sales/<uuid:sale_id>/items/', SaleItemsView.as_view(), name='sale-items'),
     path('sales/<uuid:sale_id>/', SaleDetailView.as_view(), name='sale-detail'),
+    path('sales/<uuid:sale_id>/eway-bill-pdf/', EwayBillPdfDownloadView.as_view(), name='sale-eway-bill-pdf'),
+    path('sales/<uuid:sale_id>/patch-ewb/', PatchEwbView.as_view(), name='sale-patch-ewb'),
+    path('sales/<uuid:sale_id>/retry-einvoice/', RetryEinvoiceView.as_view(), name='sale-retry-einvoice'),
     path('sales/<uuid:sale_id>/modification-options/', SaleModificationOptionsView.as_view(), name='sale-modification-options'),
     path('sales/<uuid:sale_id>/revise/', SaleReviseView.as_view(), name='sale-revise'),
     path('sales/revisions/report/', SaleRevisionReportView.as_view(), name='sale-revisions-report'),

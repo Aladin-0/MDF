@@ -4,7 +4,7 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from apps.core.permissions import IsAdminStaff
 
-from apps.core.models import Outlet, OutletSettings
+from apps.core.models import Outlet, OutletSettings, default_print_settings_retail, default_print_settings_wholesale
 
 
 class OutletSettingsView(APIView):
@@ -36,6 +36,8 @@ class OutletSettingsView(APIView):
             'landingCostIncludeGst': settings.landing_cost_include_gst,
             'landingCostIncludeFreight': settings.landing_cost_include_freight,
             'minMarginWarningPct': str(settings.min_margin_warning_pct) if settings.min_margin_warning_pct is not None else "0.00",
+            'printSettingsRetail': settings.print_settings_retail or default_print_settings_retail(),
+            'printSettingsWholesale': settings.print_settings_wholesale or default_print_settings_wholesale(),
             'updatedAt': settings.updated_at.isoformat(),
         }
 
@@ -76,6 +78,8 @@ class OutletSettingsView(APIView):
             'landingCostIncludeGst': 'landing_cost_include_gst',
             'landingCostIncludeFreight': 'landing_cost_include_freight',
             'minMarginWarningPct': 'min_margin_warning_pct',
+            'printSettingsRetail': 'print_settings_retail',
+            'printSettingsWholesale': 'print_settings_wholesale',
         }
 
         updated_fields = []

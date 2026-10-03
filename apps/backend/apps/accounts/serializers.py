@@ -44,8 +44,16 @@ class CustomerSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         """Convert snake_case fields to camelCase."""
         data = super().to_representation(instance)
+        
+        ledger_id = None
+        if hasattr(instance, 'ledgers'):
+            ledger = instance.ledgers.first()
+            if ledger:
+                ledger_id = str(ledger.id)
+                
         return {
             'id': data.get('id'),
+            'ledgerId': ledger_id,
             'name': data.get('name'),
             'phone': data.get('phone'),
             'address': instance.address,

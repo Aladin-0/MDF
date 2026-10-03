@@ -55,7 +55,7 @@ def test_credit_sale_partial_payment(default_outlet, registered_customer, batch_
     call_command('seed_ledgers', outlet_id=str(default_outlet.id))
     staff = make_test_staff(default_outlet)
     request_data = {'grandTotal': 100.0, 'cashPaid': 40.0, 'creditGiven': 60.0, 'paymentMode': 'split'}
-    items_data = [{'productId': str(batch_b.product_id), 'batchId': str(batch_b.id), 'qtyStrips': 0, 'qtyLoose': 1, 'rate': 100, 'totalAmount': 100}]
+    items_data = [{'productId': str(batch_b.product_id), 'batchId': str(batch_b.id), 'qtyStrips': 0, 'qtyLoose': 10, 'rate': 100, 'totalAmount': 100}]
     invoice = atomic_sale_save(request_data=request_data, outlet=default_outlet, customer=registered_customer, billed_by=staff, items_data=items_data, schedule_h_data={}, hospital_name='', doctor_id='')
     assert invoice.amount_due == Decimal('60.00')
     sale_ledger = LedgerEntry.objects.get(reference_no=invoice.invoice_no, entry_type='sale')

@@ -31,6 +31,9 @@ type FormState = {
     isChronic: boolean;
     creditLimit: string;
     fixedDiscount: string;
+    dlNo20b: string;
+    dlNo21b: string;
+    dlExpiry: string;
 };
 
 type FieldErrors = Partial<Record<keyof FormState, string>>;
@@ -47,6 +50,9 @@ const defaultForm = (): FormState => ({
     isChronic: false,
     creditLimit: '0',
     fixedDiscount: '0',
+    dlNo20b: '',
+    dlNo21b: '',
+    dlExpiry: '',
 });
 
 // ─── Validation ───────────────────────────────────────────────────────────────
@@ -169,6 +175,34 @@ function CustomerFormFields({
                             maxLength={15}
                         />
                         {errors.gstin && <p className="text-xs text-red-500">{errors.gstin}</p>}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                            <Label className="text-sm">DL No. 20B</Label>
+                            <Input
+                                value={form.dlNo20b}
+                                onChange={(e) => onChange('dlNo20b', e.target.value)}
+                                placeholder="MH-MZ3-12345"
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label className="text-sm">DL No. 21B</Label>
+                            <Input
+                                value={form.dlNo21b}
+                                onChange={(e) => onChange('dlNo21b', e.target.value)}
+                                placeholder="MH-MZ3-67890"
+                            />
+                        </div>
+                    </div>
+                    
+                    <div className="space-y-1.5">
+                        <Label className="text-sm">DL Expiry Date</Label>
+                        <Input
+                            type="date"
+                            value={form.dlExpiry}
+                            onChange={(e) => onChange('dlExpiry', e.target.value)}
+                        />
                     </div>
 
                     <div className="flex items-center justify-between rounded-lg border px-4 py-3">
@@ -335,6 +369,9 @@ export default function CustomerForm({ open, onClose, customer }: CustomerFormPr
                     isChronic: customer.isChronic,
                     creditLimit: String(customer.creditLimit),
                     fixedDiscount: String(customer.fixedDiscount),
+                    dlNo20b: customer.dlNo20b ?? '',
+                    dlNo21b: customer.dlNo21b ?? '',
+                    dlExpiry: (customer as any).dlExpiry ?? '',
                 });
             } else {
                 setForm(defaultForm());

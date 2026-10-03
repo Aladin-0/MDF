@@ -1,0 +1,353 @@
+'use client';
+
+import { useState, useMemo, useEffect } from 'react';
+import { useBillingStore } from '@/store/billingStore';
+import { cn, isChromium } from '@/lib/utils';
+import { calculateTotalMargin } from '@/lib/billingMarginUtils';
+import { useCheckout } from '@/hooks/useCheckout';
+import { useToast } from '@/hooks/use-toast';
+import { RevisionReasonModal } from './RevisionReasonModal';
+
+export function RightBillingRail() {
+    const { drafts, activeDraftId, getDraftTotals, setDraftDocumentMode, setRevisionContext, showMarginInfo, activeStaff } = useBillingStore();
+    
+    const draft = activeDraftId ? drafts[activeDraftId] : null;
+    const isQuotation = draft?.documentMode === 'quotation';
+    const paymentMethod = draft?.payment?.method || 'cash';
+    const cashReceived = draft?.payment?.cashTendered ? String(draft.payment.cashTendered) : '';
+
+    const setPaymentMethod = (mode: any) => {
+        useBillingStore.getState().setPayment({ method: mode });
+    };
+
+    const setCashReceived = (val: string) => {
+        useBillingStore.getState().setPayment({ cashTendered: val === '' ? 0 : Number(val) });
+    };
+
+    useEffect(() => {
+        if (draft?.saleType === 'WHOLESALE' && draft?.payment?.method !== 'credit') {
+            setPaymentMethod('credit');
+        }
+    }, [draft?.saleType]);
+    
+    
+
+    if (!activeDraftId) return null;
+    const activeDraft = drafts[activeDraftId];
+    if (!activeDraft) return null;
+
+    const cart = activeDraft.cart;
+    const totals = getDraftTotals(activeDraftId);
+    const extraDiscountPct = activeDraft.extraDiscountPct || 0;
+    const { updateDraftHeader } = useBillingStore.getState();
+
+    const outletState = activeStaff?.outlet?.state || activeStaff?.outlet?.stateCode || '';
+    const customerState = activeDraft?.customerLedger?.state || activeDraft?.customerLedger?.stateCode || activeDraft?.customer?.state || activeDraft?.customer?.stateCode || '';
+    const isInterstate = customerState ? customerState.toLowerCase() !== outletState.toLowerCase() : false;
+
+    const isCreditBlocked = activeDraft?.saleType === 'WHOLESALE' && activeDraft?.customer && ((activeDraft.customer.outstanding || 0) + totals.grandTotal > (activeDraft.customer.creditLimit || 0));
+
+    const [pctDraft, setPctDraft] = useState<string>('');
+    const [amtDraft, setAmtDraft] = useState<string>('');
+    const [pctFocused, setPctFocused] = useState(false);
+    const [amtFocused, setAmtFocused] = useState(false);
+
+    const marginData = useMemo(() => {
+        if (!activeDraft) return null;
+        return calculateTotalMargin(activeDraft.cart, totals.subtotal);
+    }, [activeDraft, totals.subtotal]);
+
+    const base = totals.subtotal - totals.discountAmount;
+
+    const commitPct = (raw: string) => {
+        const v = Number(Math.min(100, Math.max(0, parseFloat(raw) || 0)).toFixed(2));
+        updateDraftHeader(activeDraftId, { extraDiscountPct: v });
+    };
+
+    const commitAmt = (raw: string) => {
+        const v = Math.max(0, parseFloat(raw) || 0);
+        const pct = base > 0 ? Number(Math.min(100, (v / base) * 100).toFixed(2)) : 0;
+        updateDraftHeader(activeDraftId, { extraDiscountPct: pct });
+    };
+
+    const totalStrips = cart.reduce((sum, item) => sum + item.qtyStrips, 0);
+    const totalLoose = cart.reduce((sum, item) => sum + item.qtyLoose, 0);
+    const qtyCountStr = totalStrips > 0 ? `${totalStrips} Strips${totalLoose > 0 ? ` ${totalLoose} Loose` : ''}` : `${totalLoose} Quantities`;
+
+    const {
+        handleCheckout,
+        executeCheckout,
+        canCheckout,
+        checkoutError,
+        reasonModalOpen,
+        setReasonModalOpen,
+        isLoading,
+        balance,
+        isScheduleHValid,
+        isTenderInvalid,
+        isCreditInvalid
+    } = useCheckout();
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'F8' || (e.key === 'Enter' && e.ctrlKey)) {
+                e.preventDefault();
+                if (canCheckout && !(paymentMethod === 'credit' && isCreditBlocked)) {
+                    handleCheckout();
+                }
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [canCheckout, paymentMethod, isCreditBlocked, handleCheckout]);
+
+    return (
+        <div className="flex flex-col h-full bg-white relative overflow-hidden border-l border-slate-200">
+            {/* Bill Summary Header */}
+            <div className="px-5 py-4 border-b border-slate-200 shrink-0">
+                <h3 className="font-bold text-slate-800 text-lg">Bill Summary</h3>
+                {activeDraft?.saleType === 'WHOLESALE' && !isChromium() && (
+                    <div className="mt-2 text-[10px] text-amber-700 bg-amber-50 p-2 rounded border border-amber-200">
+                        <strong>Note:</strong> For accurate A4 wholesale printing, Google Chrome or Microsoft Edge is highly recommended.
+                    </div>
+                )}
+            </div>
+
+            {/* Quick Stats */}
+            <div className="px-5 py-3 border-b border-slate-200 flex justify-between items-center bg-slate-50/50 shrink-0">
+                <div className="text-sm font-medium text-slate-600" data-testid="cart-summary-items">
+                    {totals.itemCount} Items | {cart.reduce((s, i) => s + (i.qtyStrips * i.packSize + i.qtyLoose), 0)} Quantities
+                </div>
+                <div className="text-sm font-bold text-blue-600">
+                    Bill Disc: -₹{totals.extraDiscountAmount.toFixed(2)}
+                </div>
+            </div>
+
+            {/* Breakdown */}
+            <div className="flex-1 p-5 overflow-y-auto">
+                <div className="space-y-4 text-sm font-medium text-slate-600">
+                    <div className="flex justify-between text-green-600">
+                        <span>Item Discount Total</span>
+                        <span>- ₹ {totals.discountAmount.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-blue-600 items-center">
+                        <div className="flex items-center gap-2">
+                            <span>Bill Discount</span>
+                            <div className="flex items-center gap-1 opacity-90 transition-opacity focus-within:opacity-100 hover:opacity-100">
+                                <div className="relative flex items-center">
+                                    <input
+                                        inputMode="decimal"
+                                        placeholder="0"
+                                        value={pctFocused ? pctDraft : (extraDiscountPct === 0 ? '' : String(extraDiscountPct))}
+                                        className="w-10 h-6 text-center text-xs border border-blue-200 rounded px-1 text-blue-700 bg-blue-50 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-300 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none pr-3"
+                                        onFocus={(e) => {
+                                            setPctFocused(true);
+                                            setPctDraft(extraDiscountPct === 0 ? '' : String(extraDiscountPct));
+                                            e.target.select();
+                                        }}
+                                        onChange={(e) => {
+                                            setPctDraft(e.target.value);
+                                            commitPct(e.target.value);
+                                        }}
+                                        onBlur={() => {
+                                            setPctFocused(false);
+                                            commitPct(pctDraft);
+                                        }}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') { commitPct(pctDraft); (e.target as HTMLInputElement).blur(); }
+                                            if (e.key === 'Escape') { setPctDraft(''); setPctFocused(false); }
+                                        }}
+                                    />
+                                    <span className="absolute right-1 text-[9px] text-blue-400 pointer-events-none select-none">%</span>
+                                </div>
+                                <span className="text-[10px] text-blue-300">|</span>
+                                <div className="relative flex items-center">
+                                    <span className="absolute left-1 text-[9px] text-blue-400 pointer-events-none select-none">₹</span>
+                                    <input
+                                        inputMode="decimal"
+                                        placeholder="0.00"
+                                        value={amtFocused ? amtDraft : (totals.extraDiscountAmount === 0 ? '' : totals.extraDiscountAmount.toFixed(2))}
+                                        className="w-14 h-6 text-center text-xs border border-blue-200 rounded px-1 text-blue-700 bg-blue-50 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-300 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none pl-3"
+                                        onFocus={(e) => {
+                                            setAmtFocused(true);
+                                            setAmtDraft(totals.extraDiscountAmount === 0 ? '' : totals.extraDiscountAmount.toFixed(2));
+                                            e.target.select();
+                                        }}
+                                        onChange={(e) => {
+                                            setAmtDraft(e.target.value);
+                                            commitAmt(e.target.value);
+                                        }}
+                                        onBlur={() => {
+                                            setAmtFocused(false);
+                                            commitAmt(amtDraft);
+                                        }}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') { commitAmt(amtDraft); (e.target as HTMLInputElement).blur(); }
+                                            if (e.key === 'Escape') { setAmtDraft(''); setAmtFocused(false); }
+                                        }}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                        <span>- ₹ {totals.extraDiscountAmount.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-800">
+                        <span>Gross Amount</span>
+                        <span>₹ {(totals.subtotal + totals.discountAmount).toFixed(2)}</span>
+                    </div>
+                    {isInterstate ? (
+                        <div className="flex justify-between">
+                            <span>IGST</span>
+                            <span>₹ {(totals.cgst + totals.sgst).toFixed(2)}</span>
+                        </div>
+                    ) : (
+                        <>
+                            <div className="flex justify-between">
+                                <span>CGST</span>
+                                <span>₹ {totals.cgst.toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span>SGST</span>
+                                <span>₹ {totals.sgst.toFixed(2)}</span>
+                            </div>
+                        </>
+                    )}
+                    <div className="flex justify-between">
+                        <span>Round Off</span>
+                        <span>- ₹ {Math.abs(totals.roundOff).toFixed(2)}</span>
+                    </div>
+                </div>
+            </div>
+
+            {/* Sticky Payment Dock (Dark Theme) */}
+            <div className="bg-[#2A303C] text-white p-5 shrink-0 border-t-4 border-slate-800">
+                {/* Net Payable */}
+                <div className="flex justify-between items-end mb-6">
+                    <span className="text-[13px] font-black tracking-widest text-slate-300">NET PAYABLE</span>
+                    <span className="font-black text-5xl tracking-tight text-white" data-testid="grand-total-amount">₹ {totals.grandTotal.toFixed(2)}</span>
+                </div>
+                
+                {(showMarginInfo && (activeStaff?.role === 'owner' || activeStaff?.role === 'admin') && marginData) && (
+                    <div className="flex flex-col mb-4 bg-emerald-900/40 p-3 rounded-md border border-emerald-800/50">
+                        <div className="flex justify-between text-sm">
+                            <span className="text-emerald-400/80">Total Margin</span>
+                            <span className="font-semibold text-emerald-400">₹ {marginData.totalMargin.toFixed(2)} ({marginData.totalMarginPct.toFixed(2)}%)</span>
+                        </div>
+                        <div className="flex justify-between text-sm mt-1">
+                            <span className="text-emerald-400/80">Gross Profit</span>
+                            <span className="font-semibold text-emerald-400">₹ {marginData.totalGrossProfit.toFixed(2)}</span>
+                        </div>
+                    </div>
+                )}
+
+                {/* Payment Options (Hide if Quotation) */}
+                {!isQuotation && (
+                    <>
+                        <div className="mb-4">
+                            <span className="text-xs font-semibold text-slate-400 block mb-2">Payment Mode</span>
+                            <div className="flex gap-2">
+                                {['cash', 'upi', 'card', 'credit'].map((mode) => (
+                                    <button
+                                        key={mode}
+                                        onClick={() => setPaymentMethod(mode as any)}
+                                        className={cn(
+                                            "flex-1 py-1.5 border rounded text-sm font-bold capitalize transition-colors",
+                                            paymentMethod === mode 
+                                                ? "bg-[#0EA5E9] border-[#0EA5E9] text-white" 
+                                                : "bg-transparent border-slate-600 text-slate-300 hover:border-slate-400"
+                                        )}
+                                    >
+                                        {mode}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Cash Received & Balance */}
+                        {paymentMethod === 'cash' && (
+                            <div className="grid grid-cols-2 gap-4 mb-6">
+                                <div>
+                                    <span className="text-xs font-semibold text-slate-400 block mb-1">Received</span>
+                                    <input 
+                                        type="number"
+                                        value={cashReceived}
+                                        onChange={(e) => setCashReceived(e.target.value)}
+                                        placeholder={totals.grandTotal.toString()}
+                                        className="w-full bg-[#1C2029] border border-slate-600 rounded px-3 py-2 text-white font-bold outline-none focus:border-[#0EA5E9]"
+                                    />
+                                </div>
+                                <div>
+                                    <span className="text-xs font-semibold text-slate-400 block mb-1">Balance</span>
+                                    <div className="w-full bg-[#1C2029] border border-slate-600 rounded px-3 py-2 flex items-center">
+                                        <span className="text-emerald-400 font-bold">₹ {balance.toFixed(2)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </>
+                )}
+
+                {/* Convert to Invoice Button (If loaded quotation) */}
+                {isQuotation && draft?.quotationId && (
+                    <button
+                        onClick={() => setDraftDocumentMode(activeDraftId, 'invoice')}
+                        className="w-full mb-3 py-2 border-2 border-[#0EA5E9] text-[#0EA5E9] hover:bg-[#0EA5E9]/10 font-bold text-sm rounded transition-colors flex justify-center items-center gap-2"
+                    >
+                        CONVERT TO INVOICE
+                    </button>
+                )}
+
+                {/* Submit Button */}
+                <button 
+                    onClick={handleCheckout}
+                    disabled={!canCheckout || (paymentMethod === 'credit' && isCreditBlocked)}
+                    className="w-full py-3.5 bg-[#0EA5E9] hover:bg-[#0284C7] disabled:bg-slate-700 disabled:text-slate-400 text-white font-black text-lg rounded shadow-sm transition-colors flex justify-center items-center gap-2 tracking-wide"
+                >
+                    <span className="bg-transparent border-none p-0 flex items-center gap-2">
+                        {isLoading ? 'Processing...' : (
+                            isQuotation ? (
+                                <>SAVE QUOTATION</>
+                            ) : paymentMethod === 'credit' ? (
+                                <>SAVE ON CREDIT <span className="text-blue-200 text-xs font-normal ml-1 border border-blue-400/30 px-1 rounded bg-blue-500/20">[F8]</span></>
+                            ) : (
+                                <>COLLECT PAYMENT <span className="text-blue-200 text-xs font-normal ml-1 border border-blue-400/30 px-1 rounded bg-blue-500/20">[F8]</span></>
+                            )
+                        )}
+                    </span>
+                </button>
+                
+                {/* Validation Warnings & Errors */}
+                <div className="mt-3 text-center min-h-[20px]">
+                    {checkoutError && (
+                        <span className="text-sm font-bold text-red-400 block mb-1">{checkoutError}</span>
+                    )}
+                    {cart.length === 0 && !checkoutError && (
+                        <span className="text-xs font-semibold text-slate-400">Add items to enable checkout</span>
+                    )}
+                    {cart.length > 0 && !isScheduleHValid && !checkoutError && (
+                        <span className="text-xs font-bold text-red-400">Missing Schedule H details</span>
+                    )}
+                    {cart.length > 0 && isScheduleHValid && isTenderInvalid && !checkoutError && (
+                        <span className="text-xs font-bold text-red-400">Tender amount cannot be less than total</span>
+                    )}
+                    {cart.length > 0 && isCreditInvalid && !checkoutError && (
+                        <span className="text-xs font-bold text-red-400">Customer is required for credit bills</span>
+                    )}
+                    {paymentMethod === 'credit' && isCreditBlocked && !checkoutError && (
+                        <span className="text-xs font-bold text-red-400">Credit limit exceeded for this customer</span>
+                    )}
+                </div>
+            </div>
+            <RevisionReasonModal 
+                open={reasonModalOpen} 
+                onOpenChange={setReasonModalOpen} 
+                onSubmit={async (code, text) => {
+                    setRevisionContext(activeDraft?.revisionAction || null, code, text);
+                    setReasonModalOpen(false);
+                    // Zustand updates are synchronous, so we can immediately execute checkout
+                    executeCheckout();
+                }}
+            />
+        </div>
+    );
+}

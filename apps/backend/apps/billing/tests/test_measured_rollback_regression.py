@@ -24,6 +24,8 @@ def test_data():
     call_command('seed_ledgers')
     user = User.objects.create_user(phone='1234567890', name='Test User', password='password', outlet=outlet, role='admin')
     customer = Customer.objects.create(outlet=outlet, name='Test Customer', phone='9999999999')
+    from apps.accounts.services import LedgerService
+    LedgerService.sync_customer_ledgers(outlet)
     group = LedgerGroup.objects.get_or_create(name='Sundry Creditors', nature='liability', outlet=outlet)[0]
     supplier_ledger = Ledger.objects.create(name='Supplier X', group=group, outlet=outlet)
     product = MasterProduct.objects.create(name='Syrup XYZ', pack_size=1, pack_unit='bottle', pack_type='bottle', mrp=Decimal('150.00'), gst_rate=Decimal('12.00'))

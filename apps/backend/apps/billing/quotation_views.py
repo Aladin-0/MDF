@@ -71,6 +71,12 @@ class QuotationListCreateView(generics.ListCreateAPIView):
             'sgstAmount': 'sgst_amount',
             'igstAmount': 'igst_amount',
             'grandTotal': 'grand_total',
+            'saleType': 'sale_type',
+            'billingBasis': 'billing_basis',
+            'placeOfSupply': 'place_of_supply',
+            'isInterstate': 'is_interstate',
+            'transporterId': 'transporter_id',
+            'vehicleNo': 'vehicle_no',
         }
         for camel, snake in field_mapping.items():
             if camel in data:
@@ -114,11 +120,14 @@ class QuotationListCreateView(generics.ListCreateAPIView):
             item_mapping = {
                 'qtyStrips': 'qty_strips',
                 'qtyLoose': 'qty_loose',
+                'freeQtyStrips': 'free_qty_strips',
+                'freeQtyLoose': 'free_qty_loose',
                 'discountPct': 'discount_pct',
                 'gstRate': 'gst_rate',
                 'taxableAmount': 'taxable_amount',
                 'gstAmount': 'gst_amount',
                 'totalAmount': 'total_amount',
+                'hsnCode': 'hsn_code',
             }
             for camel, snake in item_mapping.items():
                 if camel in item:
@@ -134,14 +143,34 @@ class QuotationListCreateView(generics.ListCreateAPIView):
                     item['expiry_date'] = batch.expiry_date  # snapshot for display
                     item['pack_size'] = batch.pack_size or 1
                     item['mrp'] = float(batch.mrp) if batch.mrp else 0
-                    item['sale_rate'] = float(batch.mrp or batch.mrp or 0)
+                    
+                    sale_type = data.get('sale_type', 'RETAIL')
+                    if sale_type == 'WHOLESALE':
+                        item['rate'] = float(item.get('rate', 0) or item.get('ptr', 0) or batch.mrp or 0)
+                        item['ptr'] = float(item.get('ptr', 0) or getattr(batch, 'ptr', batch.mrp or 0))
+                        item['pts'] = float(item.get('pts', 0) or getattr(batch, 'pts', batch.mrp or 0))
+                        item['sale_rate'] = float(item.get('rate', 0) or batch.mrp or 0)
+                    else:
+                        item['rate'] = float(batch.mrp) if batch.mrp else 0
+                        item['sale_rate'] = float(batch.mrp) if batch.mrp else 0
+
                     item['batch'] = batch.id
                 except (Batch.DoesNotExist, ValidationError):
                     # If batch doesn't exist or is invalid UUID (like 'mock'), populate defaults
                     item['medicine_name'] = item.get('name') or 'Custom Item'
                     item['batch_no'] = item.get('batchNo') or 'N/A'
                     item['mrp'] = float(item.get('mrp', 0))
-                    item['sale_rate'] = float(item.get('saleRate', 0))
+                    
+                    sale_type = data.get('sale_type', 'RETAIL')
+                    if sale_type == 'WHOLESALE':
+                        item['rate'] = float(item.get('rate', 0) or item.get('ptr', 0) or item.get('mrp', 0))
+                        item['ptr'] = float(item.get('ptr', 0) or item.get('mrp', 0))
+                        item['pts'] = float(item.get('pts', 0) or item.get('mrp', 0))
+                        item['sale_rate'] = float(item.get('rate', 0) or item.get('mrp', 0))
+                    else:
+                        item['rate'] = float(item.get('mrp', 0))
+                        item['sale_rate'] = float(item.get('saleRate', 0))
+
                     item['batch'] = None
 
         serializer = self.get_serializer(data=data)
@@ -207,6 +236,12 @@ class QuotationDetailView(generics.RetrieveUpdateDestroyAPIView):
             'sgstAmount': 'sgst_amount',
             'igstAmount': 'igst_amount',
             'grandTotal': 'grand_total',
+            'saleType': 'sale_type',
+            'billingBasis': 'billing_basis',
+            'placeOfSupply': 'place_of_supply',
+            'isInterstate': 'is_interstate',
+            'transporterId': 'transporter_id',
+            'vehicleNo': 'vehicle_no',
         }
         for camel, snake in field_mapping.items():
             if camel in data:
@@ -218,11 +253,14 @@ class QuotationDetailView(generics.RetrieveUpdateDestroyAPIView):
             item_mapping = {
                 'qtyStrips': 'qty_strips',
                 'qtyLoose': 'qty_loose',
+                'freeQtyStrips': 'free_qty_strips',
+                'freeQtyLoose': 'free_qty_loose',
                 'discountPct': 'discount_pct',
                 'gstRate': 'gst_rate',
                 'taxableAmount': 'taxable_amount',
                 'gstAmount': 'gst_amount',
                 'totalAmount': 'total_amount',
+                'hsnCode': 'hsn_code',
             }
             for camel, snake in item_mapping.items():
                 if camel in item:
@@ -237,7 +275,17 @@ class QuotationDetailView(generics.RetrieveUpdateDestroyAPIView):
                     item['expiry_date'] = batch.expiry_date  # snapshot for display
                     item['pack_size'] = batch.pack_size or 1
                     item['mrp'] = float(batch.mrp) if batch.mrp else 0
-                    item['sale_rate'] = float(batch.mrp or batch.mrp or 0)
+                    
+                    sale_type = data.get('sale_type', getattr(instance, 'sale_type', 'RETAIL'))
+                    if sale_type == 'WHOLESALE':
+                        item['rate'] = float(item.get('rate', 0) or item.get('ptr', 0) or batch.mrp or 0)
+                        item['ptr'] = float(item.get('ptr', 0) or getattr(batch, 'ptr', batch.mrp or 0))
+                        item['pts'] = float(item.get('pts', 0) or getattr(batch, 'pts', batch.mrp or 0))
+                        item['sale_rate'] = float(item.get('rate', 0) or batch.mrp or 0)
+                    else:
+                        item['rate'] = float(batch.mrp) if batch.mrp else 0
+                        item['sale_rate'] = float(batch.mrp) if batch.mrp else 0
+
                     item['batch'] = batch.id
                 except Batch.DoesNotExist:
                     pass

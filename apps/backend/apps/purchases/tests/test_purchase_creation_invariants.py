@@ -31,13 +31,18 @@ class PurchaseCreationInvariantsTest(TestCase):
         self.product = MasterProduct.objects.create(name='Test Medicine', mrp=Decimal('100.00'), pack_size=10, pack_unit='tablet', pack_type='strip')
 
     def _create_payload(self, purchase_type='credit', fail_deliberately=False):
-        return {'outletId': str(self.outlet.id), 'partyLedgerId': str(self.ledger.id), 'invoiceNo': 'TEST-INV-001', 'invoiceDate': date.today().isoformat() + 'T00:00:00Z', 'purchaseType': purchase_type, 'subtotal': 1000.0, 'discountAmount': 100.0, 'taxableAmount': 900.0, 'gstAmount': 108.0, 'cessAmount': 20.0, 'freight': 50.0, 'grandTotal': 1078.0, 'items': [{'masterProductId': str(self.product.id), 'batchNo': 'BATCH-TEST', 'expiryDate': '2026-12-01T00:00:00Z', 'qty': 10, 'actualQty': 100, 'purchaseRate': 100.0, 'mrp': 150.0, 'saleRate': 120.0, 'discountPct': 10.0, 'taxableAmount': 900.0, 'gstRate': 12.0, 'gstAmount': 108.0, 'cess': 2.0, 'cessAmount': 20.0, 'totalAmount': 1028.0, 'ptr': 100.0, 'pts': 90.0} if not fail_deliberately else {'masterProductId': str(self.product.id), 'batchNo': 'X' * 101, 'expiryDate': '2026-12-01T00:00:00Z', 'qty': 10, 'actualQty': 100, 'purchaseRate': 100.0, 'mrp': 150.0, 'saleRate': 120.0, 'taxableAmount': 900.0, 'gstAmount': 108.0, 'totalAmount': 1028.0, 'ptr': 100.0, 'pts': 90.0}]}
+        return {'outletId': str(self.outlet.id), 'partyLedgerId': str(self.ledger.id), 'invoiceNo': 'TEST-INV-001', 'invoiceDate': date.today().isoformat() + 'T00:00:00Z', 'purchaseType': purchase_type, 'subtotal': 1000.0, 'discountAmount': 100.0, 'taxableAmount': 900.0, 'gstAmount': 108.0, 'cessAmount': 20.0, 'freight': 50.0, 'grandTotal': 1078.0, 'items': [{'masterProductId': str(self.product.id), 'batchNo': 'BATCH-TEST', 'expiryDate': '2026-12-01T00:00:00Z', 'qty': 10, 'actualQty': 100, 'purchaseRate': 100.0, 'mrp': 150.0, 'saleRate': 120.0, 'discountPct': 10.0, 'taxableAmount': 900.0, 'gstRate': 12.0, 'gstAmount': 108.0, 'cess': 2.0, 'cessAmount': 20.0, 'totalAmount': 1028.0, 'ptr': 100.0, 'pts': 90.0} if not fail_deliberately else {'masterProductId': str(self.product.id), 'batchNo': 'BATCH-TEST', 'expiryDate': 'INVALID-DATE', 'qty': 10, 'actualQty': 100, 'purchaseRate': 100.0, 'mrp': 150.0, 'saleRate': 120.0, 'taxableAmount': 900.0, 'gstAmount': 108.0, 'totalAmount': 1028.0, 'ptr': 100.0, 'pts': 90.0}]}
 
     def test_landing_price_computation(self):
         payload = self._create_payload()
         invoice = atomic_purchase_save(payload, str(self.outlet.id), str(self.user.id))
         item = invoice.items.first()
-        expected_landing_rate = (item.purchase_rate - item.purchase_rate * (item.discount_pct / Decimal('100')) + item.freight_per_unit + item.cess).quantize(Decimal('0.0001'))
+        base_cost = item.purchase_rate * Decimal(item.qty)
+        after_trade = base_cost * (Decimal('1') - item.discount_pct / Decimal('100'))
+        after_cash = after_trade * (Decimal('1') - item.cash_discount_pct / Decimal('100'))
+        total_eff_qty = Decimal(item.qty + item.free_qty)
+        base_rate = (after_cash / total_eff_qty).quantize(Decimal('0.0001')) if total_eff_qty > 0 else item.purchase_rate
+        expected_landing_rate = (base_rate + item.freight_per_unit + item.other_cost_per_unit).quantize(Decimal('0.0001'))
         self.assertEqual(item.landing_rate.quantize(Decimal('0.0001')), expected_landing_rate)
 
     def test_freight_cess_discounts_ledgers(self):

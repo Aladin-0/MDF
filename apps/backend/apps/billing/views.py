@@ -9,6 +9,7 @@ from apps.core.permissions import IsAuthenticated, IsManagerOrAbove, CanEditSale
 from rest_framework import status
 from decimal import Decimal, ROUND_FLOOR
 from datetime import datetime, timedelta, date
+from rest_framework.exceptions import ValidationError
 
 from apps.billing.models import (
     SaleInvoice, SaleItem, ScheduleHRegister, CreditTransaction, CreditAccount, LedgerEntry,
@@ -57,6 +58,80 @@ class NextInvoiceNumberView(APIView):
         return Response({'invoiceNo': invoice_no, 'isPreview': True}, status=status.HTTP_200_OK)
 
 logger = logging.getLogger(__name__)
+
+from django.http import FileResponse, JsonResponse
+from apps.integrations.sandbox.ewaybill import fetch_eway_bill_pdf
+import io
+
+class EwayBillPdfDownloadView(APIView):
+    """
+    GET /api/v1/billing/sales/{id}/eway-bill-pdf/
+    Downloads the E-Way bill PDF from the Sandbox API.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, sale_id, *args, **kwargs):
+        try:
+            invoice = SaleInvoice.objects.get(id=sale_id, outlet=request.user.outlet)
+        except SaleInvoice.DoesNotExist:
+            return Response({'detail': 'Invoice not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not invoice.eway_bill_no:
+            return JsonResponse({'detail': 'This invoice does not have an E-Way Bill Number.'}, status=400)
+
+        try:
+            pdf_bytes = fetch_eway_bill_pdf(invoice.eway_bill_no)
+            buffer = io.BytesIO(pdf_bytes)
+            return FileResponse(buffer, as_attachment=True, filename=f"EwayBill_{invoice.eway_bill_no}.pdf", content_type='application/pdf')
+        except Exception as e:
+            logger.error(str(e))
+            return JsonResponse({'detail': f'Sandbox API failed: {str(e)}'}, status=400)
+
+
+class PatchEwbView(APIView):
+    """Dev/test endpoint: directly set eway_bill_no on a SaleInvoice to simulate EWB generation."""
+    permission_classes = []
+
+    def post(self, request, sale_id, *args, **kwargs):
+        try:
+            invoice = SaleInvoice.objects.get(id=sale_id)
+        except SaleInvoice.DoesNotExist:
+            return Response({'detail': 'Invoice not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        eway_bill_no = request.data.get('eway_bill_no')
+        if not eway_bill_no:
+            return Response({'detail': 'eway_bill_no is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        invoice.eway_bill_no = eway_bill_no
+        invoice.irn_status = 'GENERATED'
+        invoice.save(update_fields=['eway_bill_no', 'irn_status'])
+        return Response({'detail': 'EWB patched', 'eway_bill_no': invoice.eway_bill_no})
+
+class RetryEinvoiceView(APIView):
+    def post(self, request, sale_id):
+        from apps.billing.sale_services import process_pending_irn
+        from apps.billing.models import SaleInvoice
+        from .serializers import SaleInvoiceSerializer
+        
+        try:
+            invoice = SaleInvoice.objects.get(id=sale_id)
+        except SaleInvoice.DoesNotExist:
+            return Response({'detail': 'Invoice not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        if invoice.irn_status not in ['FAILED', 'PENDING'] or invoice.irn:
+            return Response({'detail': 'Invoice already has an IRN or is not in a failed state.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            process_pending_irn(str(invoice.id))
+            invoice.refresh_from_db()
+            if invoice.irn_status == 'FAILED':
+                # Assuming process_pending_irn logged the actual error
+                return Response({'detail': 'Sandbox API failed again. Please check the credentials.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            serializer = SaleInvoiceSerializer(invoice)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({'detail': f'Sandbox API failed: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 def build_sale_response_payload(sale_invoice, message=None, revision_id=None):
@@ -131,6 +206,8 @@ def build_sale_response_payload(sale_invoice, message=None, revision_id=None):
         'roundOff': float(sale_invoice.round_off),
         'grandTotal': float(sale_invoice.grand_total),
         'paymentMode': sale_invoice.payment_mode,
+        'sale_type': getattr(sale_invoice, 'sale_type', 'RETAIL'),
+        'billing_basis': getattr(sale_invoice, 'billing_basis', 'MRP'),
         'cashPaid': float(sale_invoice.cash_paid),
         'upiPaid': float(sale_invoice.upi_paid),
         'cardPaid': float(sale_invoice.card_paid),
@@ -138,6 +215,7 @@ def build_sale_response_payload(sale_invoice, message=None, revision_id=None):
         'amountPaid': float(sale_invoice.amount_paid),
         'amountDue': float(sale_invoice.amount_due),
         'isReturn': sale_invoice.is_return,
+        'ewayBillNo': getattr(sale_invoice, 'eway_bill_no', None),
         'billedBy': str(sale_invoice.billed_by.id) if sale_invoice.billed_by else None,
         'billedByName': sale_invoice.billed_by.name if getattr(sale_invoice.billed_by, 'name', None) else None,
         'createdAt': sale_invoice.created_at.isoformat() if sale_invoice.created_at else None,
@@ -278,9 +356,14 @@ class SaleCreateView(APIView):
 
                 if party_ledger.linked_customer:
                     customer = party_ledger.linked_customer
+                    # Sync GSTIN if missing on customer but present on ledger
+                    if party_ledger.gstin and not customer.gstin:
+                        customer.gstin = party_ledger.gstin
+                        customer.save(update_fields=['gstin'])
                 else:
                     # Safely get or create the Customer to avoid duplicate phone crashes
-                    phone_number = party_ledger.phone or '0000000000'
+                    # If phone is missing, generate a unique one for this B2B ledger so we don't map to the generic walk-in customer.
+                    phone_number = party_ledger.phone or f"L-{party_ledger.id}"[:20]
                     customer, created = Customer.objects.get_or_create(
                         outlet=outlet,
                         phone=phone_number,
@@ -290,6 +373,11 @@ class SaleCreateView(APIView):
                             'gstin': party_ledger.gstin or None,
                         }
                     )
+                    
+                    if not created and party_ledger.gstin and not customer.gstin:
+                        customer.gstin = party_ledger.gstin
+                        customer.save(update_fields=['gstin'])
+
                     party_ledger.linked_customer = customer
                     party_ledger.save(update_fields=['linked_customer'])
             elif customer_id:
@@ -408,6 +496,11 @@ class SaleCreateView(APIView):
                         status=status.HTTP_400_BAD_REQUEST
                     )
 
+                sale_type = request.data.get('saleType', 'RETAIL')
+                irn_status = 'NOT_REQUIRED'
+                if sale_type == 'WHOLESALE' and customer and customer.gstin and len(customer.gstin) == 15:
+                    irn_status = 'PENDING'
+
                 sale_invoice = SaleInvoice.objects.create(
                     outlet=outlet,
                     invoice_no=invoice_no,
@@ -437,6 +530,15 @@ class SaleCreateView(APIView):
                     amount_paid=cash_paid_val + upi_paid_val + card_paid_val,
                     amount_due=max(Decimal('0'), client_grand_total - (cash_paid_val + upi_paid_val + card_paid_val)),
                     billed_by=billed_by,
+                    sale_type=sale_type,
+                    irn_status=irn_status,
+                    billing_basis=request.data.get('billingBasis', 'MRP'),
+                    transporter_id=request.data.get('transporterId'),
+                    vehicle_no=request.data.get('vehicleNo'),
+                    trans_distance=int(request.data.get('transDistance') or 0),
+                    trans_mode=int(request.data.get('transMode') or 1),
+                    vehicle_type=request.data.get('vehicleType', 'R'),
+                    eway_bill_status='PENDING' if (request.data.get('transporterId') or request.data.get('vehicleNo')) else None,
                 )
 
                 logger.info(f"Created SaleInvoice {invoice_no}")
@@ -600,6 +702,10 @@ class SaleCreateView(APIView):
                 server_sgst = Decimal('0')
                 server_igst = Decimal('0')
                 max_gst_rate = Decimal('0')
+                
+                is_interstate = False
+                if customer and hasattr(customer, 'state') and customer.state and hasattr(outlet, 'state') and outlet.state:
+                    is_interstate = str(customer.state).strip().lower() != str(outlet.state).strip().lower()
 
                 for si in sale_items:
                     # Account for loose tablets by adding fractional strip equivalents
@@ -622,10 +728,28 @@ class SaleCreateView(APIView):
 
                     # H8 fix: floor-based CGST/SGST split — guarantees cgst + sgst = item_gst exactly
                     # TODO: use outlet state vs customer state to determine IGST (C9)
+                    
+                    item_igst = Decimal('0')
                     item_cgst = (item_gst / 2).quantize(Decimal('0.01'), rounding=ROUND_FLOOR)
                     item_sgst = item_gst - item_cgst
+                    
+                    if is_interstate:
+                        item_igst = item_gst
+                        item_cgst = Decimal('0')
+                        item_sgst = Decimal('0')
+                    
                     server_cgst += item_cgst
                     server_sgst += item_sgst
+                    server_igst += item_igst
+                    
+                    # C3 fix part 2: Save the re-derived item-level GST back to the database!
+                    # Sandbox E-Invoice needs accurate item-level cgst/sgst values to pass validation.
+                    si.taxable_amount = item_taxable
+                    si.gst_amount = item_gst
+                    si.cgst_amount = item_cgst
+                    si.sgst_amount = item_sgst
+                    si.igst_amount = item_igst
+                    si.save(update_fields=['taxable_amount', 'gst_amount', 'cgst_amount', 'sgst_amount', 'igst_amount'])
 
                     if gst_rate > max_gst_rate:
                         max_gst_rate = gst_rate
@@ -743,6 +867,7 @@ class SaleCreateView(APIView):
                     logger.error(f"Journal posting failed for sale {sale_invoice.id}: {e}")
                     raise  # Re-raise to rollback entire transaction
 
+
             # Serialize response
             response_data = build_sale_response_payload(sale_invoice)
 
@@ -763,6 +888,25 @@ class SaleCreateView(APIView):
                 except Exception as e:
                     logger.error(f"Failed to link quotation {quotation_id} to sale {sale_invoice.id}: {e}")
 
+            # Trigger external API call OUTSIDE the database transaction lock!
+            if sale_invoice.irn_status == 'PENDING':
+                try:
+                    from apps.billing.sale_services import process_pending_irn
+                    process_pending_irn(str(sale_invoice.id))
+                    # Refresh response data if IRN was generated successfully
+                    sale_invoice.refresh_from_db()
+                    response_data = build_sale_response_payload(sale_invoice)
+                except Exception as e:
+                    logger.warning(f"Background IRN processing failed gracefully: {e}")
+
+            if sale_invoice.eway_bill_status == 'PENDING':
+                try:
+                    from apps.billing.sale_services import threaded_process_pending_ewaybill
+                    import threading
+                    threading.Thread(target=threaded_process_pending_ewaybill, args=(str(sale_invoice.id),)).start()
+                except Exception as e:
+                    logger.warning(f"Background EWB processing failed gracefully: {e}")
+
             return Response(response_data, status=status.HTTP_201_CREATED)
 
         except InsufficientStockError as e:
@@ -781,6 +925,15 @@ class SaleCreateView(APIView):
             logger.warning(f"Value error: {str(e)}")
             return Response(
                 {'detail': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except ValidationError as e:
+            # Handle DRF/Django Validation Errors (including our explicit Sandbox API exceptions)
+            # The exception usually contains the detail string or dictionary
+            error_msg = str(e.detail[0]) if hasattr(e, 'detail') and isinstance(e.detail, list) else str(e)
+            logger.warning(f"Validation error: {error_msg}")
+            return Response(
+                {'detail': error_msg},
                 status=status.HTTP_400_BAD_REQUEST
             )
         except Exception as e:
@@ -993,6 +1146,8 @@ class SaleListView(APIView):
                     'id': str(invoice.customer.id),
                     'name': invoice.customer.name,
                     'phone': getattr(invoice.customer, 'phone', ''),
+                    'gstin': getattr(invoice.customer, 'gstin', ''),
+                    'address': getattr(invoice.customer, 'address', ''),
                 } if invoice.customer else None,
                 'doctorName': invoice.doctor.name if invoice.doctor else None,
                 'hospitalName': invoice.hospital_name,
@@ -1016,6 +1171,10 @@ class SaleListView(APIView):
                 'amountPaid': float(invoice.amount_paid),
                 'amountDue': float(invoice.amount_due),
                 'isReturn': invoice.is_return,
+                'eway_bill_no': invoice.eway_bill_no,
+                'irn': invoice.irn,
+                'qr_code': invoice.qr_code,
+                'irn_status': invoice.irn_status,
                 'billedBy': str(invoice.billed_by.id) if invoice.billed_by else None,
                 'billedByName': invoice.billed_by.name if invoice.billed_by else None,
                 'itemsCount': getattr(invoice, 'items_count', 0),

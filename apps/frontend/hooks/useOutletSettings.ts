@@ -34,6 +34,8 @@ export function useOutletSettings() {
                 currencySymbol: string;
                 landingCostIncludeGst: boolean;
                 landingCostIncludeFreight: boolean;
+                printSettingsRetail?: any;
+                printSettingsWholesale?: any;
                 updatedAt: string;
             };
         },
@@ -47,9 +49,19 @@ export function useOutletSettings() {
         await queryClient.invalidateQueries({ queryKey: ['outlet', 'settings', outletId] });
     };
 
+    const updatePrintSettings = async (mode: 'retail' | 'wholesale', newJson: any) => {
+        if (!outletId) return;
+        const patch = mode === 'retail' 
+            ? { printSettingsRetail: newJson } 
+            : { printSettingsWholesale: newJson };
+        await settingsApi.updateSettings(outletId, patch);
+        await queryClient.invalidateQueries({ queryKey: ['outlet', 'settings', outletId] });
+    };
+
     return {
         ...query,
         settings: query.data,
         updateSettings,
+        updatePrintSettings,
     };
 }

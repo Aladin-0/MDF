@@ -175,6 +175,8 @@ def serialize_batch(batch):
         'mfgDate': batch.mfg_date.isoformat() if batch.mfg_date else None,
         'expiryDate': batch.expiry_date.isoformat() if batch.expiry_date else None,
         'mrp': float(batch.mrp),
+        'ptr': float(batch.ptr) if batch.ptr else 0.0,
+        'pts': float(batch.pts) if batch.pts else 0.0,
         'purchaseRate': float(batch.purchase_rate),
         'landingRate': float(batch.landing_rate) if batch.landing_rate else None,
         'saleRate': float(batch.mrp),

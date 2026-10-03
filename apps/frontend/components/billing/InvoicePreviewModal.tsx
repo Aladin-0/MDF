@@ -10,6 +10,9 @@ import { SaleInvoice } from '@/types';
 import { useSettingsStore } from '@/store/settingsStore';
 import { InvoicePreview } from './InvoicePreview';
 import { InvoiceThermal } from './InvoiceThermal';
+import { ManavataA4Invoice } from '@/components/print/ManavataA4Invoice';
+import { cn } from '@/lib/utils';
+import { useOutletSettings } from '@/hooks/useOutletSettings';
 
 interface InvoicePreviewModalProps {
     isOpen: boolean;
@@ -22,6 +25,7 @@ interface InvoicePreviewModalProps {
 
 export function InvoicePreviewModal({ isOpen, onClose, invoice, onNewBill, onEdit, onViewHistory }: InvoicePreviewModalProps) {
     const { printerType } = useSettingsStore();
+    const { settings } = useOutletSettings();
     const printRef = useRef<HTMLDivElement>(null);
     const router = useRouter();
 
@@ -34,45 +38,73 @@ export function InvoicePreviewModal({ isOpen, onClose, invoice, onNewBill, onEdi
     if (!invoice) return null;
 
     const isThermal = printerType?.startsWith('thermal');
-    const isQuotation = invoice.invoiceNo?.startsWith('QT-');
+    const isQuotation = invoice.invoiceNo?.startsWith('QT-') || !!(invoice as any).quotationNo;
+    const isWholesale = invoice?.saleType?.toUpperCase() === 'WHOLESALE';
+    const documentNumber = invoice.invoiceNo || (invoice as any).quotationNo;
+    const activeConfig = isWholesale 
+        ? (settings?.printSettingsWholesale || { columns: [], header: {}, footer: {} }) 
+        : (settings?.printSettingsRetail || { columns: [], header: {}, footer: {} });
+    console.log("ACTUAL_MODAL_INVOICE_DATA:", invoice);
 
     return (
         <Dialog open={isOpen} onOpenChange={(v) => !v && onClose()}>
-            <DialogContent className="invoice-print-container max-w-4xl max-h-[95vh] flex flex-col p-0 overflow-hidden print:max-h-none print:overflow-visible print:border-none bg-slate-100/50 print:bg-white text-black">
-                <style dangerouslySetInnerHTML={{ __html: `
-                    @media print {
-                        @page {
-                            size: ${!isThermal ? 'auto' : printerType === 'thermal_80mm' ? '80mm auto' : '57mm auto'};
-                            margin: 0mm;
+            <DialogContent className={cn(
+                "invoice-print-container flex flex-col p-0 overflow-hidden print:max-h-none print:overflow-visible print:border-none bg-slate-100/50 print:bg-white text-black",
+                isWholesale ? "max-w-5xl w-[95vw] h-[90vh] overflow-y-auto" : "max-w-md max-h-[95vh]"
+            )}>
+                {isWholesale ? (
+                    <style>{`
+                        @media print {
+                            body * { visibility: hidden; }
+                            #print-section, #print-section * { visibility: visible; }
+                            #print-section {
+                                position: relative !important;
+                                left: 0;
+                                top: 0;
+                                width: 100%;
+                            }
+                            @page { size: A4 portrait; margin: 10mm; }
+                            
+                            .print\\:hidden, .print\\:hidden * { 
+                                display: none !important; 
+                            }
                         }
-                        body {
-                            -webkit-print-color-adjust: exact;
+                    `}</style>
+                ) : (
+                    <style dangerouslySetInnerHTML={{ __html: `
+                        @media print {
+                            @page {
+                                size: ${!isThermal ? 'auto' : printerType === 'thermal_80mm' ? '80mm auto' : '57mm auto'};
+                                margin: 0mm;
+                            }
+                            body {
+                                -webkit-print-color-adjust: exact;
+                            }
+                            body * { visibility: hidden; }
+                            .invoice-print-container, .invoice-print-container * { visibility: visible; }
+                            .invoice-print-container {
+                                position: absolute !important;
+                                left: 0 !important;
+                                top: 0 !important;
+                                margin: 0 !important;
+                                width: 100% !important;
+                                max-width: none !important;
+                                transform: none !important;
+                                box-shadow: none !important;
+                            }
+                            .invoice-print-container .print\\:hidden, .invoice-print-container .print\\:hidden * { 
+                                display: none !important; 
+                            }
                         }
-                        body * { visibility: hidden; }
-                        .invoice-print-container, .invoice-print-container * { visibility: visible; }
-                        .invoice-print-container {
-                            position: absolute !important;
-                            left: 0 !important;
-                            top: 0 !important;
-                            margin: 0 !important;
-                            width: 100% !important;
-                            max-width: none !important;
-                            transform: none !important;
-                            box-shadow: none !important;
-                        }
-                        .invoice-print-container .print\\:hidden, .invoice-print-container .print\\:hidden * { 
-                            display: none !important; 
-                        }
-                    }
-                `}} />
-                
+                    `}} />
+                )}
                 <DialogHeader className="px-6 py-4 bg-white border-b border-slate-200 flex flex-row items-center justify-between shrink-0 print:hidden">
                     <div className="flex items-center gap-2">
                         <div className="p-2 bg-primary/10 rounded-lg">
                             <FileText className="w-5 h-5 text-primary" />
                         </div>
                         <div>
-                            <DialogTitle>{isQuotation ? 'Estimate / Quotation' : 'Invoice'} {invoice.invoiceNo}</DialogTitle>
+                            <DialogTitle>{isQuotation ? 'Estimate / Quotation' : 'Invoice'} {documentNumber}</DialogTitle>
                             <p className="text-xs text-slate-500 mt-0.5">Preview generated for {isThermal ? 'Thermal Receipt' : 'A4 Paper'}</p>
                         </div>
                     </div>
@@ -103,12 +135,14 @@ export function InvoicePreviewModal({ isOpen, onClose, invoice, onNewBill, onEdi
                 </DialogHeader>
 
                 <ScrollArea className="flex-1 p-6 flex flex-col overflow-y-auto print:overflow-visible print:p-0 bg-slate-100/50 print:bg-white text-black">
-                    <div className="mx-auto bg-white shadow-xl min-h-[500px] print:shadow-none print:m-0">
-                        {isThermal ? (
-                            <InvoiceThermal ref={printRef} invoice={invoice} />
-                        ) : (
-                            <InvoicePreview ref={printRef} invoice={invoice} />
-                        )}
+                    <div className="mx-auto bg-white shadow-xl min-h-[500px] print:shadow-none print:m-0 w-full">
+                        <div id="print-section" className="w-full bg-white text-black">
+                            {!isThermal ? (
+                                <ManavataA4Invoice ref={printRef as any} invoice={invoice} config={activeConfig} />
+                            ) : (
+                                <InvoiceThermal ref={printRef} invoice={invoice} config={activeConfig} />
+                            )}
+                        </div>
                     </div>
                 </ScrollArea>
 

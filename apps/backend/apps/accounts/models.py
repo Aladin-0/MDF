@@ -2,6 +2,8 @@ from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.utils.translation import gettext_lazy as _
 import uuid
+from django.utils import timezone
+from django.core.exceptions import ValidationError
 
 
 class OutletFilteredManager(models.Manager):
@@ -120,10 +122,23 @@ class Customer(models.Model):
     dob = models.DateField(null=True, blank=True)
     gstin = models.CharField(max_length=15, null=True, blank=True, help_text='For B2B customers')
 
+    CUSTOMER_TYPE_CHOICES = [
+        ('RETAIL', 'Retail'),
+        ('WHOLESALE', 'Wholesale'),
+    ]
+    customer_type = models.CharField(max_length=20, choices=CUSTOMER_TYPE_CHOICES, default='RETAIL')
+    dl_no_20b = models.CharField(max_length=50, blank=True, null=True)
+    dl_no_21b = models.CharField(max_length=50, blank=True, null=True)
+    dl_expiry = models.DateField(blank=True, null=True)
+    pan = models.CharField(max_length=10, blank=True, null=True)
+    state_code = models.CharField(max_length=2, default='27')
+
     # Credit terms
     fixed_discount = models.DecimalField(max_digits=5, decimal_places=2, default=0,
                                          help_text='Fixed discount % for this customer')
     credit_limit = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    credit_days = models.IntegerField(default=0)
+    is_credit_blocked = models.BooleanField(default=False)
     outstanding = models.DecimalField(max_digits=12, decimal_places=2, default=0,
                                       help_text='Current outstanding balance')
 
@@ -168,6 +183,25 @@ class Customer(models.Model):
         from apps.accounts.models import Ledger
         ledger = Ledger.objects.filter(linked_customer=self, group__name='Sundry Debtors').first()
         return ledger.current_balance if ledger else self.outstanding
+
+    def clean(self):
+        if self.customer_type == 'WHOLESALE':
+            if self.gstin and len(self.gstin) != 15:
+                raise ValidationError({'gstin': 'GSTIN must be exactly 15 characters for wholesale customers.'})
+            if not self.dl_no_20b and not self.dl_no_21b:
+                raise ValidationError('Wholesale customers must have at least one Drug License number (20B or 21B).')
+
+    def is_dl_valid(self) -> bool:
+        if not self.dl_expiry:
+            return False
+        return self.dl_expiry >= timezone.now().date()
+
+    def get_available_credit(self):
+        return self.credit_limit - self.outstanding_balance
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.name
@@ -672,3 +706,34 @@ class PartnerShareHistory(models.Model):
 
     def __str__(self):
         return f"{self.partner.name} - {self.profit_percentage}% ({self.start_date} to {self.end_date or 'Present'})"
+
+
+class PostDatedCheque(models.Model):
+    """Tracks PDCs tied to wholesale customers."""
+    STATUS_CHOICES = [
+        ('PENDING', 'Pending'),
+        ('DEPOSITED', 'Deposited'),
+        ('CLEARED', 'Cleared'),
+        ('BOUNCED', 'Bounced'),
+        ('RETURNED', 'Returned'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name='post_dated_cheques')
+    cheque_number = models.CharField(max_length=50)
+    bank_name = models.CharField(max_length=100)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    cheque_date = models.DateField()
+    deposit_date = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    linked_invoice = models.ForeignKey('billing.SaleInvoice', on_delete=models.SET_NULL, null=True, blank=True, related_name='linked_pdcs')
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'accounts_postdatedcheque'
+        ordering = ['cheque_date']
+
+    def __str__(self):
+        return f"PDC {self.cheque_number} - {self.bank_name} (₹{self.amount})"

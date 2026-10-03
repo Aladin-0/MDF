@@ -58,6 +58,7 @@ export function formatDecimalQty(
 ): string {
     if (fractionalStrips === 0) return '0';
 
+
     const s = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
     // Handle floating-point imprecision (e.g. 11.9999999)
@@ -73,4 +74,14 @@ export function formatDecimalQty(
     if (strips > 0 && tablets > 0) return s(strips, 'strip') + ' + ' + s(tablets, 'tablet');
     if (strips > 0)                return s(strips, 'strip');
     return s(tablets, 'tablet');
+}
+
+export function isChromium(): boolean {
+  if (typeof window === 'undefined') return true;
+  const userAgent = navigator.userAgent.toLowerCase();
+  const isChrome = /chrome|chromium|crios/.test(userAgent);
+  const isEdge = /edg/.test(userAgent);
+  const isFirefox = /firefox|fxios/.test(userAgent);
+  const isSafari = /safari/.test(userAgent) && !isChrome;
+  return (isChrome || isEdge) && !isFirefox && !isSafari;
 }

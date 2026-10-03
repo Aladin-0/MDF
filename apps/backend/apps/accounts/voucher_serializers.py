@@ -42,6 +42,15 @@ class LedgerSerializer(serializers.ModelSerializer):
             'address': instance.address,
             'linkedCustomerId': str(instance.linked_customer_id) if instance.linked_customer_id else None,
             'linkedDistributorId': str(instance.linked_distributor_id) if instance.linked_distributor_id else None,
+            
+            # Wholesale / Customer overrides
+            'dlNo20b': instance.linked_customer.dl_no_20b if instance.linked_customer else None,
+            'dlNo21b': instance.linked_customer.dl_no_21b if instance.linked_customer else None,
+            'dlExpiry': instance.linked_customer.dl_expiry.isoformat() if (instance.linked_customer and instance.linked_customer.dl_expiry) else None,
+            'customerType': instance.linked_customer.customer_type if instance.linked_customer else None,
+            'creditLimit': float(instance.linked_customer.credit_limit) if instance.linked_customer else 0.0,
+            'stateCode': instance.linked_customer.state_code if instance.linked_customer else None,
+            
             'isSystem': instance.is_system,
             'createdAt': instance.created_at.isoformat(),
             # Contact

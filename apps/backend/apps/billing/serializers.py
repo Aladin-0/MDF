@@ -136,11 +136,25 @@ class QuotationSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         repr = super().to_representation(instance)
         if instance.customer:
+            ledger_id = None
+            if hasattr(instance.customer, 'ledgers'):
+                ledger = instance.customer.ledgers.first()
+                if ledger:
+                    ledger_id = str(ledger.id)
+            
             repr['customer'] = {
                 'id': str(instance.customer.id),
+                'ledgerId': ledger_id,
                 'name': instance.customer.name,
                 'phone': getattr(instance.customer, 'phone', ''),
-                'gstin': getattr(instance.customer, 'gstin', '')
+                'gstin': getattr(instance.customer, 'gstin', ''),
+                'address': getattr(instance.customer, 'address', ''),
+                'state': getattr(instance.customer, 'state', ''),
+                'stateCode': getattr(instance.customer, 'state_code', ''),
+                'dlNo20b': getattr(instance.customer, 'dl_no_20b', ''),
+                'dlNo21b': getattr(instance.customer, 'dl_no_21b', ''),
+                'creditLimit': getattr(instance.customer, 'credit_limit', 0),
+                'outstanding': getattr(instance.customer, 'outstanding', 0),
             }
         return repr
 

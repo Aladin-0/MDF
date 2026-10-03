@@ -20,6 +20,10 @@ def test_sale_creation_concurrency():
     outlet = OutletFactory()
     call_command('seed_ledgers', outlet_id=str(outlet.id))
     customer = CustomerFactory(outlet=outlet)
+    from apps.accounts.services import LedgerService
+    LedgerService.sync_customer_ledgers(outlet)
+    from apps.accounts.services import LedgerService
+    LedgerService.sync_customer_ledgers(outlet)
     product = MasterProductFactory()
     batch = BatchFactory(outlet=outlet, product=product, pack_size=10, qty_strips=5, qty_loose=0, mrp=Decimal('100.00'))
     from apps.inventory.services import post_stock_ledger_entry

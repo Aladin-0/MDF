@@ -1,19 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { Printer, FileText, ReceiptText } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Printer, ArrowUp, ArrowDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { useSettingsStore } from '@/store/settingsStore';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { printerSettingsSchema, type PrinterSettingsFormValues } from '@/lib/validations/settings';
 import { SettingsSectionHeader } from './SettingsSectionHeader';
 import { SettingsToggleRow } from './SettingsToggleRow';
-import { cn } from '@/lib/utils';
-
-const COPY_OPTIONS = [1, 2, 3] as const;
+import { useOutletSettings } from '@/hooks/useOutletSettings';
+import { PrintSettingsConfig } from '@/types';
 
 interface PrinterSettingsSectionProps {
     onDirty: () => void;
@@ -21,290 +18,248 @@ interface PrinterSettingsSectionProps {
     discardKey?: number;
 }
 
+const DEFAULT_RETAIL: PrintSettingsConfig = {
+    template: 'Thermal_80mm',
+    columns: [
+        { id: "sn", label: "Sn.", isVisible: true, order: 1, width: "10%" },
+        { id: "productName", label: "Item", isVisible: true, order: 2, width: "40%" },
+        { id: "qty", label: "Qty", isVisible: true, order: 3, width: "15%" },
+        { id: "mrp", label: "M.R.P", isVisible: true, order: 4, width: "15%" },
+        { id: "amount", label: "Amt", isVisible: true, order: 5, width: "20%" },
+    ],
+    header: { showLogo: true, showDrugLicense: false, showGstin: true, customText: "" },
+    footer: { bankDetails: "", terms: "1. Goods once sold will not be taken back." }
+};
+
+const DEFAULT_WHOLESALE: PrintSettingsConfig = {
+    template: 'A4',
+    columns: [
+        { id: "sn", label: "Sn.", isVisible: true, order: 1, width: "5%" },
+        { id: "productName", label: "Product Name", isVisible: true, order: 2, width: "25%" },
+        { id: "batch", label: "Batch", isVisible: true, order: 3, width: "10%" },
+        { id: "ptr", label: "PTR", isVisible: true, order: 4, width: "10%" },
+        { id: "pts", label: "PTS", isVisible: true, order: 5, width: "10%" },
+        { id: "qty", label: "QTY", isVisible: true, order: 6, width: "10%" },
+        { id: "hsn", label: "HSN", "isVisible": true, order: 7, width: "10%" },
+        { id: "amount", label: "AMOUNT", isVisible: true, order: 8, width: "10%" }
+    ],
+    header: { showLogo: true, showDrugLicense: true, showGstin: true, customText: "S.P.S MANAVATA PHARMA" },
+    footer: { bankDetails: "Bank: HDFC, A/C: 1234...", terms: "1. Goods once sold will not be taken back." }
+};
+
 export function PrinterSettingsSection({ onDirty, onSaved, discardKey }: PrinterSettingsSectionProps) {
-    const store = useSettingsStore();
     const { toast } = useToast();
-    const [previewMode, setPreviewMode] = useState<'a4' | 'thermal'>('a4');
-
-    const getDefaults = (): PrinterSettingsFormValues => ({
-        printerType: store.printerType,
-        thermalWidth: store.thermalWidth,
-        autoPrintAfterBill: store.autoPrintAfterBill,
-        printCopies: store.printCopies,
-        showMRPOnInvoice: store.showMRPOnInvoice,
-        showBatchOnInvoice: store.showBatchOnInvoice,
-        showDoctorOnInvoice: store.showDoctorOnInvoice,
-    });
-
-    const { handleSubmit, watch, setValue, reset, formState: { isDirty } } =
-        useForm<PrinterSettingsFormValues>({
-            resolver: zodResolver(printerSettingsSchema),
-            defaultValues: getDefaults(),
-        });
+    const { settings, updatePrintSettings } = useOutletSettings();
+    const [mode, setMode] = useState<'retail' | 'wholesale'>('retail');
+    
+    // Local state for edits
+    const [retailConfig, setRetailConfig] = useState<PrintSettingsConfig>(DEFAULT_RETAIL);
+    const [wholesaleConfig, setWholesaleConfig] = useState<PrintSettingsConfig>(DEFAULT_WHOLESALE);
+    const [isDirty, setIsDirty] = useState(false);
 
     useEffect(() => {
-        if (discardKey !== undefined) reset(getDefaults());
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [discardKey]);
+        if (settings) {
+            if (settings.printSettingsRetail?.columns) {
+                setRetailConfig(settings.printSettingsRetail);
+            }
+            if (settings.printSettingsWholesale?.columns) {
+                setWholesaleConfig(settings.printSettingsWholesale);
+            }
+        }
+        setIsDirty(false);
+    }, [settings, discardKey]);
 
     useEffect(() => {
         if (isDirty) onDirty();
     }, [isDirty, onDirty]);
 
-    const printerType = watch('printerType');
-    const thermalWidth = watch('thermalWidth');
-    const showMRP = watch('showMRPOnInvoice');
-    const showBatch = watch('showBatchOnInvoice');
-    const showDoctor = watch('showDoctorOnInvoice');
-    const autoPrint = watch('autoPrintAfterBill');
-    const printCopies = watch('printCopies');
+    const activeConfig = mode === 'retail' ? retailConfig : wholesaleConfig;
 
-    function onSubmit(data: PrinterSettingsFormValues) {
-        store.updatePrinterSettings(data);
-        toast({ title: 'Printer settings saved' });
-        onSaved();
-        reset(data);
-    }
+    const setConfig = (newConfig: PrintSettingsConfig) => {
+        if (mode === 'retail') {
+            setRetailConfig(newConfig);
+        } else {
+            setWholesaleConfig(newConfig);
+        }
+        setIsDirty(true);
+    };
+
+    const handleColumnToggle = (id: string, isVisible: boolean) => {
+        setConfig({
+            ...activeConfig,
+            columns: activeConfig.columns.map(c => c.id === id ? { ...c, isVisible } : c)
+        });
+    };
+
+    const handleColumnMove = (index: number, direction: 'up' | 'down') => {
+        if (direction === 'up' && index === 0) return;
+        if (direction === 'down' && index === activeConfig.columns.length - 1) return;
+        
+        const newColumns = [...activeConfig.columns];
+        const swapIndex = direction === 'up' ? index - 1 : index + 1;
+        const temp = newColumns[index];
+        newColumns[index] = newColumns[swapIndex];
+        newColumns[swapIndex] = temp;
+        
+        // Reassign orders
+        newColumns.forEach((c, i) => c.order = i + 1);
+        setConfig({ ...activeConfig, columns: newColumns });
+    };
+
+    const handleSave = async (e?: React.FormEvent) => {
+        e?.preventDefault();
+        try {
+            await updatePrintSettings(mode, activeConfig);
+            toast({ title: 'Printer settings saved' });
+            setIsDirty(false);
+            onSaved();
+        } catch (error) {
+            toast({ title: 'Error saving settings', variant: 'destructive' });
+        }
+    };
 
     return (
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        <form onSubmit={handleSave} className="space-y-6 pb-24">
             <SettingsSectionHeader
                 icon={<Printer />}
-                title="Printing Settings"
-                description="Configure invoice printing for your printer type."
+                title="Dynamic Print Engine"
+                description="Configure customizable layouts for Retail and Wholesale invoices independently."
             />
 
-            {/* Printer Type */}
-            <div className="space-y-3">
-                <Label>Printer Type</Label>
-                <div className="grid grid-cols-2 gap-3">
-                    <button
-                        type="button"
-                        onClick={() => {
-                            setValue('printerType', 'a4', { shouldDirty: true });
-                            setPreviewMode('a4');
-                        }}
-                        className={cn(
-                            'border-2 rounded-xl p-5 text-left transition-colors',
-                            printerType === 'a4'
-                                ? 'border-primary bg-primary/5'
-                                : 'border-slate-200 bg-white hover:border-slate-300'
-                        )}
-                    >
-                        <FileText className="w-8 h-8 text-blue-500 mb-2" />
-                        <p className="text-sm font-semibold text-slate-900">A4 / Letter</p>
-                        <p className="text-xs text-muted-foreground mt-1">Standard inkjet or laser printer</p>
-                        <p className="text-xs text-muted-foreground">210mm × 297mm</p>
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => {
-                            setValue('printerType', 'thermal', { shouldDirty: true });
-                            setPreviewMode('thermal');
-                        }}
-                        className={cn(
-                            'border-2 rounded-xl p-5 text-left transition-colors',
-                            printerType === 'thermal'
-                                ? 'border-primary bg-primary/5'
-                                : 'border-slate-200 bg-white hover:border-slate-300'
-                        )}
-                    >
-                        <ReceiptText className="w-8 h-8 text-green-500 mb-2" />
-                        <p className="text-sm font-semibold text-slate-900">Thermal / POS</p>
-                        <p className="text-xs text-muted-foreground mt-1">58mm or 80mm roll paper</p>
-                        <p className="text-xs text-muted-foreground">Commonly used in pharmacies</p>
-                    </button>
-                </div>
+            {/* Mode Switcher */}
+            <div className="flex gap-4 border-b pb-2">
+                <Button 
+                    type="button" 
+                    variant={mode === 'retail' ? 'default' : 'outline'}
+                    onClick={() => setMode('retail')}
+                >
+                    Retail Settings (Thermal)
+                </Button>
+                <Button 
+                    type="button" 
+                    variant={mode === 'wholesale' ? 'default' : 'outline'}
+                    onClick={() => setMode('wholesale')}
+                >
+                    Wholesale Settings (A4)
+                </Button>
+            </div>
 
-                {printerType === 'thermal' && (
-                    <div className="flex gap-3 ml-1">
-                        {(['58mm', '80mm'] as const).map((w) => (
-                            <label key={w} className="flex items-center gap-2 cursor-pointer">
-                                <input
-                                    type="radio"
-                                    checked={thermalWidth === w}
-                                    onChange={() => setValue('thermalWidth', w, { shouldDirty: true })}
-                                    className="accent-primary"
-                                />
-                                <span className="text-sm text-slate-700">{w}</span>
-                            </label>
+            <div className="space-y-6">
+                {/* Column Manager */}
+                <div className="border rounded-xl p-4 bg-white shadow-sm">
+                    <h3 className="font-semibold text-lg mb-4 text-slate-800">Column Manager</h3>
+                    <p className="text-sm text-slate-500 mb-4">Toggle visibility and drag to reorder columns.</p>
+                    <div className="space-y-2">
+                        {activeConfig.columns.map((col, idx) => (
+                            <div key={col.id} className="flex items-center justify-between p-3 border rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors">
+                                <div className="flex items-center gap-3">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={col.isVisible} 
+                                        onChange={(e) => handleColumnToggle(col.id, e.target.checked)}
+                                        className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary accent-primary"
+                                    />
+                                    <span className="font-medium text-slate-700">{col.label}</span>
+                                    <span className="text-xs text-slate-400">({col.width})</span>
+                                </div>
+                                <div className="flex gap-2">
+                                    <Button 
+                                        type="button" 
+                                        variant="outline" 
+                                        size="icon" 
+                                        className="h-8 w-8"
+                                        onClick={() => handleColumnMove(idx, 'up')}
+                                        disabled={idx === 0}
+                                    >
+                                        <ArrowUp className="h-4 w-4" />
+                                    </Button>
+                                    <Button 
+                                        type="button" 
+                                        variant="outline" 
+                                        size="icon" 
+                                        className="h-8 w-8"
+                                        onClick={() => handleColumnMove(idx, 'down')}
+                                        disabled={idx === activeConfig.columns.length - 1}
+                                    >
+                                        <ArrowDown className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            </div>
                         ))}
                     </div>
-                )}
-            </div>
-
-            {/* Print Options */}
-            <div className="rounded-xl border bg-white divide-y px-4">
-                <SettingsToggleRow
-                    label="Auto-print after saving bill"
-                    description="Automatically opens print dialog after each bill is saved"
-                    checked={autoPrint}
-                    onCheckedChange={(v) => setValue('autoPrintAfterBill', v, { shouldDirty: true })}
-                    className="border-b-0"
-                />
-                <SettingsToggleRow
-                    label="Show MRP on invoice"
-                    description="Prints MRP column in invoice items"
-                    checked={showMRP}
-                    onCheckedChange={(v) => setValue('showMRPOnInvoice', v, { shouldDirty: true })}
-                    className="border-b-0"
-                />
-                <SettingsToggleRow
-                    label="Show batch number on invoice"
-                    checked={showBatch}
-                    onCheckedChange={(v) => setValue('showBatchOnInvoice', v, { shouldDirty: true })}
-                    className="border-b-0"
-                />
-                <SettingsToggleRow
-                    label="Show doctor details on invoice"
-                    description="When Schedule H drugs are billed"
-                    checked={showDoctor}
-                    onCheckedChange={(v) => setValue('showDoctorOnInvoice', v, { shouldDirty: true })}
-                    className="border-b-0"
-                />
-            </div>
-
-            {/* Print Copies */}
-            <div className="space-y-2">
-                <Label>Number of copies to print</Label>
-                <div className="flex gap-2">
-                    {COPY_OPTIONS.map((n) => (
-                        <button
-                            key={n}
-                            type="button"
-                            onClick={() => setValue('printCopies', n, { shouldDirty: true })}
-                            className={cn(
-                                'w-10 h-10 rounded-lg border text-sm font-medium transition-colors',
-                                printCopies === n
-                                    ? 'border-primary bg-primary text-white'
-                                    : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
-                            )}
-                        >
-                            {n}
-                        </button>
-                    ))}
                 </div>
-            </div>
 
-            {/* Live Invoice Preview */}
-            <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                    <p className="text-xs text-slate-500 uppercase tracking-wider font-medium">Preview</p>
-                    <div className="flex gap-1 ml-2">
-                        <button
-                            type="button"
-                            onClick={() => setPreviewMode('a4')}
-                            className={cn(
-                                'text-xs px-2 py-1 rounded border transition-colors',
-                                previewMode === 'a4'
-                                    ? 'bg-primary text-white border-primary'
-                                    : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                            )}
-                        >
-                            Preview A4
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setPreviewMode('thermal')}
-                            className={cn(
-                                'text-xs px-2 py-1 rounded border transition-colors',
-                                previewMode === 'thermal'
-                                    ? 'bg-primary text-white border-primary'
-                                    : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                            )}
-                        >
-                            Preview Thermal
-                        </button>
+                {/* Header Config */}
+                <div className="border rounded-xl p-4 bg-white shadow-sm space-y-4">
+                    <h3 className="font-semibold text-lg text-slate-800">Header Details</h3>
+                    <div className="space-y-2 divide-y">
+                        <SettingsToggleRow
+                            label="Show Logo"
+                            description="Display the pharmacy logo at the top."
+                            checked={activeConfig.header.showLogo}
+                            onCheckedChange={(v) => setConfig({ ...activeConfig, header: { ...activeConfig.header, showLogo: v } })}
+                            className="pt-2 pb-2 border-b-0"
+                        />
+                        <SettingsToggleRow
+                            label="Show Drug License"
+                            description="Display DL numbers in the header."
+                            checked={activeConfig.header.showDrugLicense}
+                            onCheckedChange={(v) => setConfig({ ...activeConfig, header: { ...activeConfig.header, showDrugLicense: v } })}
+                            className="pt-4 pb-2 border-b-0"
+                        />
+                        <SettingsToggleRow
+                            label="Show GSTIN"
+                            description="Display GST Number in the header."
+                            checked={activeConfig.header.showGstin}
+                            onCheckedChange={(v) => setConfig({ ...activeConfig, header: { ...activeConfig.header, showGstin: v } })}
+                            className="pt-4 pb-2 border-b-0"
+                        />
+                        <div className="pt-4 pb-2">
+                            <Label className="text-slate-700">Custom Header Text (e.g. Shop Name override)</Label>
+                            <Input 
+                                className="mt-2"
+                                value={activeConfig.header.customText} 
+                                onChange={(e) => setConfig({ ...activeConfig, header: { ...activeConfig.header, customText: e.target.value } })}
+                                placeholder="Enter custom text..."
+                            />
+                        </div>
                     </div>
                 </div>
 
-                {previewMode === 'a4' ? (
-                    <div className="border rounded-xl overflow-hidden bg-white max-w-sm">
-                        <div className="transform scale-[0.55] origin-top-left w-[182%]">
-                            <div className="p-8 font-mono text-xs">
-                                <div className="text-center border-b pb-3 mb-3">
-                                    <p className="text-lg font-bold">Your Pharmacy Name</p>
-                                    <p className="text-xs text-slate-500">Your Address, City — PINCODE</p>
-                                    <p className="text-xs text-slate-500">GSTIN: — | Ph: —</p>
-                                </div>
-                                <table className="w-full text-xs">
-                                    <thead>
-                                        <tr className="border-b">
-                                            <th className="text-left py-1">Product</th>
-                                            <th className="text-right py-1">Qty</th>
-                                            {showMRP && <th className="text-right py-1">MRP</th>}
-                                            <th className="text-right py-1">Rate</th>
-                                            <th className="text-right py-1">Amount</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr className="border-b">
-                                            <td className="py-1">
-                                                <p>Metformin 500mg</p>
-                                                {showBatch && <p className="text-slate-400">Batch: B2401</p>}
-                                            </td>
-                                            <td className="text-right py-1">2</td>
-                                            {showMRP && <td className="text-right py-1">38.00</td>}
-                                            <td className="text-right py-1">32.00</td>
-                                            <td className="text-right py-1">64.00</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                                {showDoctor && (
-                                    <div className="mt-2 text-xs text-slate-500 border-t pt-2">
-                                        <p>Dr. Ramesh Patil | Reg. MH-12345</p>
-                                    </div>
-                                )}
-                                <div className="border-t mt-3 pt-2 text-right text-xs">
-                                    <p className="font-bold">Grand Total: ₹64.00</p>
-                                </div>
-                                <p className="text-center text-xs text-slate-400 mt-4">Thank you for your purchase!</p>
-                            </div>
+                {/* Footer Config */}
+                <div className="border rounded-xl p-4 bg-white shadow-sm space-y-4">
+                    <h3 className="font-semibold text-lg text-slate-800">Footer Details</h3>
+                    <div className="space-y-4">
+                        <div>
+                            <Label className="text-slate-700">Bank Details</Label>
+                            <Textarea 
+                                className="mt-2"
+                                value={activeConfig.footer.bankDetails}
+                                onChange={(e) => setConfig({ ...activeConfig, footer: { ...activeConfig.footer, bankDetails: e.target.value } })}
+                                placeholder="Enter bank details here..."
+                                rows={3}
+                            />
+                        </div>
+                        <div>
+                            <Label className="text-slate-700">Terms & Conditions</Label>
+                            <Textarea 
+                                className="mt-2"
+                                value={activeConfig.footer.terms}
+                                onChange={(e) => setConfig({ ...activeConfig, footer: { ...activeConfig.footer, terms: e.target.value } })}
+                                placeholder="Enter T&C here..."
+                                rows={4}
+                            />
                         </div>
                     </div>
-                ) : (
-                    <div className="border rounded-xl overflow-hidden bg-white max-w-[200px]">
-                        <div className="transform scale-[0.7] origin-top-left w-[143%]">
-                            <div className="p-4 font-mono text-xs text-center">
-                                <p className="font-bold text-sm">MediFlow</p>
-                                <p className="text-[10px] text-slate-500">Mumbai 400001</p>
-                                <div className="border-t border-dashed my-2" />
-                                <div className="text-left space-y-1">
-                                    <div className="flex justify-between">
-                                        <span>Metformin 500mg</span>
-                                    </div>
-                                    <div className="flex justify-between text-[10px] text-slate-500">
-                                        <span>2 × 32.00</span>
-                                        {showMRP && <span>MRP:38</span>}
-                                    </div>
-                                    {showBatch && <p className="text-[10px] text-slate-400">Batch: B2401</p>}
-                                </div>
-                                <div className="border-t border-dashed my-2" />
-                                <div className="flex justify-between font-bold text-[11px]">
-                                    <span>TOTAL</span>
-                                    <span>₹64.00</span>
-                                </div>
-                                <p className="text-[9px] text-slate-400 mt-2">Thank you!</p>
-                            </div>
-                        </div>
-                    </div>
-                )}
+                </div>
+                
+                <div className="flex justify-end pt-4">
+                    <Button type="submit">Save {mode === 'retail' ? 'Retail' : 'Wholesale'} Settings</Button>
+                </div>
             </div>
-
-            {/* Test Print */}
-            <div className="flex items-center gap-3">
-                <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => window.print()}
-                >
-                    <Printer className="w-4 h-4 mr-2" />
-                    Print Test Invoice
-                </Button>
-                <Button type="submit">
-                    Save Printer Settings
-                </Button>
-            </div>
+            
+            {/* Hidden submit for page wrapper trigger */}
+            <button type="submit" id="settings-submit-btn" className="hidden">Save</button>
         </form>
     );
 }

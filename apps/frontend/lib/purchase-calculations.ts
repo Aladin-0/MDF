@@ -113,6 +113,7 @@ export function calculateLandingRate(
   discountPct: number,
   cashDiscountPct: number,
   gstRate: number,         // e.g. 12 for 12%
+  cessRate: number,        // e.g. 5 for 5% cess
   freight: number,         // per-unit freight amount
   includeGst: boolean,     // from outlet settings
   includeFreight: boolean, // from outlet settings
@@ -122,7 +123,8 @@ export function calculateLandingRate(
   
   let landingRate = baseRate;
   if (includeGst) {
-    landingRate += (baseRate * (gstRate || 0)) / 100;
+    // Both GST and CESS are taxes that should be added to the landing cost if input tax credit is not being claimed
+    landingRate += (baseRate * ((gstRate || 0) + (cessRate || 0))) / 100;
   }
   if (includeFreight) {
     landingRate += (freight || 0);

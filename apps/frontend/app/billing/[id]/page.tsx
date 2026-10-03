@@ -6,9 +6,10 @@ import { useRef, useState } from 'react'
 import { ArrowLeft, Printer, MessageCircle, AlertCircle, Copy, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { salesApi } from '@/lib/apiClient'
-import { InvoicePreview } from '@/components/billing/InvoicePreview'
+import { ManavataA4Invoice } from '@/components/print/ManavataA4Invoice'
 import { InvoiceThermal } from '@/components/billing/InvoiceThermal'
 import { useSettingsStore } from '@/store/settingsStore'
+import { useOutletSettings } from '@/hooks/useOutletSettings'
 
 // Loading Skeleton
 function InvoiceSkeleton() {
@@ -47,6 +48,7 @@ export default function PastInvoicePage() {
     const params = useParams()
     const router = useRouter()
     const { printerType } = useSettingsStore()
+    const { settings } = useOutletSettings()
     const invoiceId = params.id as string
     const [copied, setCopied] = useState(false)
 
@@ -64,6 +66,9 @@ export default function PastInvoicePage() {
         staleTime: 1000 * 60 * 10, // invoices don't change
         retry: 1,
     })
+    
+    const isWholesale = invoice?.saleType?.toUpperCase() === 'WHOLESALE'
+    const activeConfig = isWholesale ? settings?.printSettingsWholesale : settings?.printSettingsRetail
 
     const handleWhatsApp = () => {
         const text = encodeURIComponent(`Your invoice ${invoice?.invoiceNo} from MediFlow Pharmacy. Thank you!`)
@@ -171,9 +176,9 @@ export default function PastInvoicePage() {
                 ` }} />
 
                 {isThermal ? (
-                    <InvoiceThermal ref={printRef} invoice={invoice} />
+                    <InvoiceThermal ref={printRef} invoice={invoice} config={activeConfig} />
                 ) : (
-                    <InvoicePreview ref={printRef} invoice={invoice} />
+                    <ManavataA4Invoice ref={printRef as any} invoice={invoice} config={activeConfig} />
                 )}
             </div>
         </div>
