@@ -41,9 +41,6 @@ const DEFAULT_PRINTER: PrinterSettings = {
     thermalWidth: '80mm',
     autoPrintAfterBill: false,
     printCopies: 1,
-    showMRPOnInvoice: true,
-    showBatchOnInvoice: true,
-    showDoctorOnInvoice: true,
 };
 
 const DEFAULT_BILLING: BillingSettings = {

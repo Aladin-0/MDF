@@ -12,24 +12,34 @@ def test_gst_tax_calculation_matrix(outlet_state, customer_state, gst_rate, expe
     Parameterized GST tax calculation matrix suite using factory boy builders.
     Verifies tax breakdown amounts match mathematical expectations down to exact decimal precision.
     """
-    outlet = OutletFactory(state=outlet_state)
+    state_to_code = {
+        'Maharashtra': '27',
+        'Delhi': '07',
+        'Gujarat': '24',
+        'Haryana': '06'
+    }
+    outlet_state_code = state_to_code.get(outlet_state, '27')
+    customer_state_code = state_to_code.get(customer_state, '27')
+
+    outlet = OutletFactory(state=outlet_state, state_code=outlet_state_code)
     from django.core.management import call_command
     call_command('seed_ledgers', outlet_id=str(outlet.id))
-    customer = CustomerFactory(outlet=outlet, state=customer_state)
+    customer = CustomerFactory(outlet=outlet, state=customer_state, state_code=customer_state_code)
     staff = StaffFactory(outlet=outlet)
     product = MasterProductFactory()
     batch = BatchFactory(outlet=outlet, product=product, mrp=Decimal('100.00'), pack_size=10, qty_strips=10, qty_loose=0)
     if gst_rate > 0:
         expected_taxable = (Decimal('100.00') * Decimal('100') / (Decimal('100') + gst_rate)).quantize(Decimal('0.01'))
-        expected_total_gst = Decimal('100.00') - expected_taxable
         if expected_igst > 0:
             exp_cgst_amt = Decimal('0.00')
             exp_sgst_amt = Decimal('0.00')
-            exp_igst_amt = expected_total_gst
+            exp_igst_amt = (expected_taxable * (gst_rate / Decimal('100'))).quantize(Decimal('0.01'))
         else:
-            exp_cgst_amt = (expected_total_gst / 2).quantize(Decimal('0.01'), rounding='ROUND_FLOOR')
-            exp_sgst_amt = expected_total_gst - exp_cgst_amt
+            half_tax = (expected_taxable * (gst_rate / Decimal('200'))).quantize(Decimal('0.01'))
+            exp_cgst_amt = half_tax
+            exp_sgst_amt = half_tax
             exp_igst_amt = Decimal('0.00')
+        expected_total_gst = exp_cgst_amt + exp_sgst_amt + exp_igst_amt
     else:
         expected_taxable = Decimal('100.00')
         expected_total_gst = Decimal('0.00')

@@ -90,6 +90,13 @@ def cancel_invoice(sale_id: str, updated_by_id: str, reason: str):
     if sale_invoice.is_cancelled:
         raise SaleServiceError("Invoice is already cancelled.")
 
+    if sale_invoice.irn_status == 'GENERATED':
+        if not sale_invoice.is_irn_cancelable:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError("Cannot cancel an e-Invoice after 24 hours of generation. You must issue a Sales Return / Credit Note.")
+        from apps.integrations.sandbox.einvoice import cancel_einvoice
+        cancel_einvoice(sale_invoice, reason="2", remark="Cancelled by user")
+
     # Revert stock
     StockLedger.objects.filter(
         outlet=outlet,
@@ -226,7 +233,9 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
             sale_invoice.doctor = new_doctor
             sale_invoice.invoice_date = new_invoice_date
             sale_invoice.billed_by = billed_by
-            sale_invoice.save(update_fields=['customer', 'doctor', 'invoice_date', 'billed_by'])
+            sale_invoice.sale_type = payload.get('saleType', sale_invoice.sale_type)
+            sale_invoice.billing_basis = payload.get('billingBasis', sale_invoice.billing_basis)
+            sale_invoice.save(update_fields=['customer', 'doctor', 'invoice_date', 'billed_by', 'sale_type', 'billing_basis'])
 
             return sale_invoice
 
@@ -509,6 +518,8 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
         sale_invoice.amount_due = max(Decimal('0'), client_grand_total - sale_invoice.amount_paid)
         sale_invoice.grand_total = client_grand_total
         sale_invoice.billed_by = billed_by
+        sale_invoice.sale_type = payload.get('saleType', sale_invoice.sale_type)
+        sale_invoice.billing_basis = payload.get('billingBasis', sale_invoice.billing_basis)
 
         # Step 8: Re-derive GST
         discount_factor = Decimal('1') - extra_discount_pct / Decimal('100')

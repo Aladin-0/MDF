@@ -273,7 +273,17 @@ const realProductsApi = {
             stockDisplayText: item.stockDisplayText,
             nearestExpiry: item.nearestExpiry,
             isLowStock: item.isLowStock,
-            batches: item.batches || [],
+            batches: (item.batches || []).map((b: any) => {
+                const mrp = Number(b.mrp ?? 0);
+                const rawPtr = Number(b.ptr ?? b.ptr_rate ?? 0);
+                const rawPts = Number(b.pts ?? b.pts_rate ?? 0);
+                return {
+                    ...b,
+                    mrp,
+                    ptr: rawPtr > 0 ? rawPtr : (mrp > 0 ? mrp * 0.80 : 0),
+                    pts: rawPts > 0 ? rawPts : (rawPtr > 0 ? rawPtr * 0.90 : (mrp > 0 ? mrp * 0.72 : 0)),
+                };
+            }),
         }));
     },
     create: async (payload: import('@/types').CreateProductPayload): Promise<ProductSearchResult> => {
@@ -456,6 +466,7 @@ const realSalesApi = {
         const data = await response.json();
         return {
             ...data,
+            saleType: data.saleType || data.sale_type,
             items: data.items ?? data.sale_items ?? data.saleItems ?? [],
         };
     },
@@ -469,6 +480,7 @@ const realSalesApi = {
         const data = await response.json();
         return {
             ...data,
+            saleType: data.saleType || data.sale_type,
             items: data.items ?? data.sale_items ?? data.saleItems ?? [],
         };
     },
@@ -487,8 +499,12 @@ const realSalesApi = {
     getById: async (id: string, outletId?: string): Promise<SaleInvoice> => {
         const url = outletId ? `${API_URL}/sales/${id}/?outletId=${outletId}` : `${API_URL}/sales/${id}/`;
         const response = await fetch(url, { headers: getHeaders() });
-        await assertOk(response);
-        return response.json();
+        const data = await response.json();
+        return {
+            ...data,
+            saleType: data.saleType || data.sale_type,
+            items: data.items ?? data.sale_items ?? data.saleItems ?? [],
+        };
     },
     getPdf: async (id: string, outletId?: string): Promise<any> => {
         let url = `${API_URL}/sales/${id}/print/`;

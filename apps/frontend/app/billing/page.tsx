@@ -1,11 +1,11 @@
 'use client';
 
-import { BillingHeaderStrip } from '@/components/billing-v3/BillingHeaderStrip';
-import { MainInvoiceWorkspace } from '@/components/billing-v3/MainInvoiceWorkspace';
-import { RightBillingRail } from '@/components/billing-v3/RightBillingRail';
-import { ActiveBillsTabs } from '@/components/billing-v3/ActiveBillsTabs';
+import { BillingHeaderStrip } from '@/components/billing/BillingHeaderStrip';
+import { MainInvoiceWorkspace } from '@/components/billing/MainInvoiceWorkspace';
+import { RightBillingRail } from '@/components/billing/RightBillingRail';
+import { ActiveBillsTabs } from '@/components/billing/ActiveBillsTabs';
 import { GlobalNavigation } from '@/components/layout/GlobalNavigation';
-import { TransactionStrip } from '@/components/billing-v3/TransactionStrip';
+import { TransactionStrip } from '@/components/billing/TransactionStrip';
 import { useBillingStore } from '@/store/billingStore';
 import { StaffPinEntry } from '@/components/billing/StaffPinEntry';
 import { useAutosaveDraft } from '@/hooks/useAutosaveDraft';
@@ -14,7 +14,7 @@ import { BillSuccessScreen } from '@/components/billing/BillSuccessScreen';
 import { InvoicePreviewModal } from '@/components/billing/InvoicePreviewModal';
 import { useState, useEffect, Suspense } from 'react';
 import { shortcutRegistry } from '@/lib/shortcuts';
-import { EditSaleHydrator } from '@/components/billing-v3/EditSaleHydrator';
+import { EditSaleHydrator } from '@/components/billing/EditSaleHydrator';
 
 export default function FullScreenBillingPage() {
     const { isPinVerified, activeDraftId, lastInvoice, setLastInvoice } = useBillingStore();
@@ -57,8 +57,12 @@ export default function FullScreenBillingPage() {
                 <BillSuccessScreen
                     invoice={lastInvoice}
                     onNewBill={() => setLastInvoice(null)}
-                    onPrint={() => setShowInvoicePreview(true)}
-                    onViewInvoice={() => setShowInvoicePreview(true)}
+                    onPrint={() => {
+                        setShowInvoicePreview(true);
+                    }}
+                    onViewInvoice={() => {
+                        setShowInvoicePreview(true);
+                    }}
                 />
             </div>
         );

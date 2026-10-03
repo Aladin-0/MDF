@@ -52,6 +52,53 @@ class SaleInvoice(models.Model):
     round_off = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text='Penny rounding adjustment')
     grand_total = models.DecimalField(max_digits=12, decimal_places=2)
 
+    # Sale type & Wholesale
+    SALE_TYPE_CHOICES = [
+        ('RETAIL', 'Retail'),
+        ('WHOLESALE', 'Wholesale'),
+    ]
+    BILLING_BASIS_CHOICES = [
+        ('MRP', 'MRP'),
+        ('PTR', 'PTR'),
+        ('PTS', 'PTS'),
+    ]
+    sale_type = models.CharField(max_length=20, choices=SALE_TYPE_CHOICES, default='RETAIL')
+    billing_basis = models.CharField(max_length=20, choices=BILLING_BASIS_CHOICES, default='MRP')
+    place_of_supply = models.CharField(max_length=100, blank=True, null=True)
+    is_interstate = models.BooleanField(default=False)
+    
+    total_free_strips = models.IntegerField(default=0)
+    total_free_loose = models.IntegerField(default=0)
+    cash_discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    cash_discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    irn = models.CharField(max_length=100, blank=True, null=True)
+    IRN_STATUS_CHOICES = [
+        ('NOT_REQUIRED', 'Not Required'),
+        ('PENDING', 'Pending'),
+        ('GENERATED', 'Generated'),
+        ('FAILED', 'Failed'),
+    ]
+    irn_status = models.CharField(max_length=20, choices=IRN_STATUS_CHOICES, default='NOT_REQUIRED')
+    qr_code = models.TextField(blank=True, null=True)
+    ack_no = models.CharField(max_length=50, blank=True, null=True)
+    ack_date = models.DateTimeField(blank=True, null=True)
+    
+    eway_bill_no = models.CharField(max_length=100, blank=True, null=True)
+    EWAY_BILL_STATUS_CHOICES = [
+        ('PENDING', 'Pending'),
+        ('GENERATED', 'Generated'),
+        ('FAILED', 'Failed'),
+        ('CANCELLED', 'Cancelled'),
+    ]
+    eway_bill_status = models.CharField(max_length=20, choices=EWAY_BILL_STATUS_CHOICES, blank=True, null=True)
+    eway_bill_date = models.DateTimeField(blank=True, null=True)
+    valid_until = models.DateTimeField(blank=True, null=True)
+    transporter_id = models.CharField(max_length=50, blank=True, null=True)
+    vehicle_no = models.CharField(max_length=50, blank=True, null=True)
+    trans_distance = models.IntegerField(default=0, help_text="Distance in KM")
+    trans_mode = models.IntegerField(default=1, help_text="1-Road, 2-Rail, 3-Air, 4-Ship")
+    vehicle_type = models.CharField(max_length=1, default='R', help_text="R-Regular, O-ODC")
+
     # Payment tracking (supports multi-split: cash + upi + card + credit)
     payment_mode = models.CharField(max_length=20, choices=PAYMENT_MODE_CHOICES)
     cash_paid = models.DecimalField(max_digits=12, decimal_places=2, default=0)
@@ -101,6 +148,9 @@ class SaleInvoice(models.Model):
 
     def clean(self):
         """Validate invoice amounts and payment splits."""
+        if self.customer and getattr(self.customer, 'state_code', None) and self.outlet and getattr(self.outlet, 'state_code', None):
+            self.is_interstate = (self.customer.state_code != self.outlet.state_code)
+
         # Validate payment split sums to amount_paid
         split_total = self.cash_paid + self.upi_paid + self.card_paid
         if abs(float(split_total) - float(self.amount_paid)) > 0.01:
@@ -111,6 +161,15 @@ class SaleInvoice(models.Model):
     def save(self, *args, **kwargs):
         self.clean()
         super().save(*args, **kwargs)
+
+    @property
+    def is_irn_cancelable(self):
+        """Returns False if IRN is generated and >24 hours old, True otherwise."""
+        if self.irn_status == 'GENERATED' and self.ack_date:
+            from django.utils import timezone
+            from datetime import timedelta
+            return timezone.now() <= self.ack_date + timedelta(hours=24)
+        return True
 
 
 class SaleItem(models.Model):
@@ -148,16 +207,27 @@ class SaleItem(models.Model):
     qty_returned = models.PositiveIntegerField(default=0, help_text='Total units (tablets/capsules) returned so far across all return transactions')
     qty_returned_strips = models.IntegerField(default=0)
     qty_returned_loose = models.IntegerField(default=0)
+    free_qty_strips = models.IntegerField(default=0)
+    free_qty_loose = models.IntegerField(default=0)
     hsn_code = models.CharField(max_length=20, null=True, blank=True)
     sale_mode = models.CharField(max_length=20, choices=SALE_MODE_CHOICES, default='strip')
 
     # Discount and tax
+    unit_rate = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    trade_discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    trade_discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     discount_pct = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     gst_rate = models.DecimalField(max_digits=5, decimal_places=2, help_text='GST rate %')
+    cgst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    sgst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    igst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
 
     # Computed amounts
     taxable_amount = models.DecimalField(max_digits=12, decimal_places=2)
     gst_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    cgst_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    sgst_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    igst_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     total_amount = models.DecimalField(max_digits=12, decimal_places=2)
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -804,6 +874,13 @@ class Quotation(models.Model):
     valid_until = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='saved')
     
+    sale_type = models.CharField(max_length=20, default='RETAIL')
+    billing_basis = models.CharField(max_length=20, null=True, blank=True)
+    place_of_supply = models.CharField(max_length=100, null=True, blank=True)
+    is_interstate = models.BooleanField(default=False)
+    transporter_id = models.CharField(max_length=100, null=True, blank=True)
+    vehicle_no = models.CharField(max_length=50, null=True, blank=True)
+    
     customer = models.ForeignKey('accounts.Customer', on_delete=models.SET_NULL, null=True, blank=True)
     customer_name_override = models.CharField(max_length=255, null=True, blank=True)
     customer_phone_override = models.CharField(max_length=20, null=True, blank=True)
@@ -862,10 +939,15 @@ class QuotationItem(models.Model):
     # Qty and pricing
     qty_strips = models.IntegerField(default=0)
     qty_loose = models.IntegerField(default=0)
+    free_qty_strips = models.IntegerField(default=0)
+    free_qty_loose = models.IntegerField(default=0)
     
     mrp = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     sale_rate = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     rate = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    ptr = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    pts = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    hsn_code = models.CharField(max_length=50, null=True, blank=True)
     
     discount_pct = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     gst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)

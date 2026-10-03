@@ -1,7 +1,9 @@
 import logging
+import threading
+from django.db import transaction, connections
 from decimal import Decimal, ROUND_FLOOR
 from datetime import datetime
-from django.db import transaction
+from django.db import transaction, connections
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -24,10 +26,98 @@ from apps.inventory.services import post_stock_ledger_entry
 from apps.billing.services import generate_invoice_number, schedule_h_validate, fefo_batch_select
 from apps.billing.utils.pricing import validate_sale_price
 from apps.billing.services import InsufficientStockError, ScheduleHViolationError, UnitIntegrityError
-from apps.accounts.journal_service import post_sale_invoice
+from apps.billing.pricing_engine import calculate_line_item, TaxCalculatorService
+from apps.billing.credit_controls import (
+    validate_statutory_compliance,
+    validate_credit_exposure,
+    validate_invoice_aging,
+)
 from apps.reports.gst_snapshot_service import create_sale_snapshots
+from apps.reports.gst_snapshot_service import create_sale_snapshots
+from apps.integrations.sandbox.einvoice import request_einvoice, get_irn_by_document_details
+from apps.integrations.sandbox.ewaybill import request_ewaybill
+from apps.integrations.sandbox.client import SandboxIntegrationError
 
 logger = logging.getLogger(__name__)
+
+def threaded_process_pending_irn(invoice_id: str):
+    """Wrapper to safely execute IRN processing in a background thread."""
+    try:
+        process_pending_irn(invoice_id)
+    finally:
+        connections.close_all()
+
+def process_pending_irn(invoice_id: str):
+    try:
+        invoice = SaleInvoice.objects.get(id=invoice_id)
+        if invoice.irn_status != 'PENDING':
+            return
+
+        # Ensure valid B2B GSTIN before attempting e-invoice generation
+        if not invoice.customer or not invoice.customer.gstin or len(invoice.customer.gstin) != 15:
+            invoice.irn_status = 'NOT_APPLICABLE'
+            invoice.save(update_fields=['irn_status'])
+            return
+            
+        try:
+            irn_data = request_einvoice(invoice)
+        except SandboxIntegrationError as e:
+            if "2150" in str(e):
+                logger.warning(f"Duplicate IRN error for {invoice_id}. Attempting recovery.")
+                irn_data = get_irn_by_document_details(invoice)
+            else:
+                raise e
+
+        invoice.irn = irn_data.get('Irn')
+        invoice.ack_no = irn_data.get('AckNo')
+        invoice.ack_date = irn_data.get('AckDt')
+        invoice.qr_code = irn_data.get('SignedQRCode')
+        invoice.eway_bill_no = irn_data.get('EwbNo')
+        invoice.irn_status = 'GENERATED'
+        invoice.save(update_fields=['irn', 'ack_no', 'ack_date', 'qr_code', 'eway_bill_no', 'irn_status'])
+        logger.info(f"Successfully generated IRN for {invoice.invoice_no}")
+        
+    except SandboxIntegrationError as e:
+        logger.error(f"Failed to generate IRN for {invoice_id}: {str(e)}")
+        SaleInvoice.objects.filter(id=invoice_id).update(irn_status='FAILED')
+        # Do not raise ValidationError to prevent rolling back the checkout.
+        # The user can retry generating the E-Invoice later from the UI.
+    except Exception as e:
+        logger.error(f"Unexpected error in process_pending_irn: {str(e)}")
+        SaleInvoice.objects.filter(id=invoice_id).update(irn_status='FAILED')
+        raise ValidationError(f"Unexpected E-Invoice Error: {str(e)}")
+
+def threaded_process_pending_ewaybill(invoice_id: str):
+    """Wrapper to safely execute EWB processing in a background thread."""
+    try:
+        process_pending_ewaybill(invoice_id)
+    finally:
+        connections.close_all()
+
+def process_pending_ewaybill(invoice_id: str):
+    from django.utils.timezone import now
+    try:
+        invoice = SaleInvoice.objects.get(id=invoice_id)
+        if invoice.eway_bill_status != 'PENDING':
+            return
+            
+        ewb_data = request_ewaybill(invoice)
+        
+        invoice.eway_bill_no = ewb_data.get('ewayBillNo')
+        # Parse the custom dates string format if needed, Sandbox returns them as strings
+        # e.g., '14/05/2021 11:22:00 PM'
+        # For this prototype we will just set eway_bill_date to now()
+        invoice.eway_bill_date = now()
+        invoice.eway_bill_status = 'GENERATED'
+        invoice.save(update_fields=['eway_bill_no', 'eway_bill_date', 'eway_bill_status'])
+        logger.info(f"Successfully generated E-Way Bill for {invoice.invoice_no}")
+        
+    except SandboxIntegrationError as e:
+        logger.error(f"Failed to generate E-Way Bill for {invoice_id}: {str(e)}")
+        SaleInvoice.objects.filter(id=invoice_id).update(eway_bill_status='FAILED')
+    except Exception as e:
+        logger.error(f"Unexpected error in process_pending_ewaybill: {str(e)}")
+        SaleInvoice.objects.filter(id=invoice_id).update(eway_bill_status='FAILED')
 
 def validate_unit_integrity(product, qty_loose_needed):
     """
@@ -53,6 +143,16 @@ def atomic_sale_save(
     record ledgers, create snapshots, etc.
     """
     with transaction.atomic():
+        sale_type = request_data.get('saleType', 'RETAIL').upper()
+        payment_mode = request_data.get('paymentMode', 'cash')
+        client_grand_total = Decimal(str(request_data.get('grandTotal', 0)))
+        
+        # Step 0: Statutory and Credit Controls (Phase 3)
+        validate_statutory_compliance(customer, sale_type)
+        if payment_mode in ['credit', 'split']:
+            validate_credit_exposure(customer, client_grand_total, payment_mode)
+            validate_invoice_aging(customer)
+
         # Step 1: Validate Schedule H requirements BEFORE any stock deduction
         cart_items = []
         for item in items_data:
@@ -99,6 +199,8 @@ def atomic_sale_save(
             doctor_id=doctor_id,
             hospital_name=hospital_name,
             prescription_no=request_data.get('prescriptionNo'),
+            sale_type=request_data.get('saleType', 'RETAIL'),
+            billing_basis=request_data.get('billingBasis', 'MRP'),
             subtotal=Decimal(str(request_data.get('subtotal', 0))),
             discount_amount=Decimal(str(request_data.get('discountAmount', 0))),
             extra_discount_pct=extra_discount_pct,
@@ -119,6 +221,12 @@ def atomic_sale_save(
             amount_paid=cash_paid_val + upi_paid_val + card_paid_val,
             amount_due=max(Decimal('0'), client_grand_total - (cash_paid_val + upi_paid_val + card_paid_val)),
             billed_by=billed_by,
+            transporter_id=request_data.get('transporterId'),
+            vehicle_no=request_data.get('vehicleNo'),
+            trans_distance=int(request_data.get('transDistance') or 0),
+            trans_mode=int(request_data.get('transMode') or 1),
+            vehicle_type=request_data.get('vehicleType', 'R'),
+            eway_bill_status='PENDING' if (request_data.get('transporterId') or request_data.get('vehicleNo')) else None,
         )
 
         logger.info(f"Created SaleInvoice {invoice_no}")
@@ -150,10 +258,27 @@ def atomic_sale_save(
 
         # Create SaleItems and deduct stock
         sale_items = []
+        
+        # Phase 2 Aggregators
+        inv_total_free_strips = 0
+        inv_taxable_amount = Decimal('0')
+        inv_cgst_amount = Decimal('0')
+        inv_sgst_amount = Decimal('0')
+        inv_igst_amount = Decimal('0')
+        inv_subtotal = Decimal('0')
+        inv_grand_total = Decimal('0')
+        max_gst_rate = Decimal('0')
+
+        # We must call sale_invoice.save() once first to trigger .clean() and set is_interstate
+        sale_invoice.save()
+
         for item_data in items_data:
             batch_id = item_data.get('batchId')
             product_id = item_data.get('productId')
             qty_strips_needed = item_data.get('qtyStrips', 0)
+            free_qty_strips = item_data.get('freeQtyStrips', 0)
+            trade_discount_pct = Decimal(str(item_data.get('tradeDiscountPercent', 0)))
+            total_qty_strips_needed = qty_strips_needed + free_qty_strips
 
             product = MasterProduct.objects.get(id=product_id)
             qty_loose_needed = item_data.get('qtyLoose', 0)
@@ -163,7 +288,7 @@ def atomic_sale_save(
                 batch = locked_batches_map[str(batch_id)]
 
                 batch_pack_size = batch.pack_size or 1
-                total_loose_needed = (qty_strips_needed * batch_pack_size) + qty_loose_needed
+                total_loose_needed = (total_qty_strips_needed * batch_pack_size) + qty_loose_needed
                 total_loose_available = (batch.qty_strips * batch_pack_size) + batch.qty_loose
                 
                 if total_loose_available < total_loose_needed:
@@ -171,18 +296,27 @@ def atomic_sale_save(
 
                 batch_allocations = [{
                     'batch': batch, 
-                    'qty_to_deduct': qty_strips_needed,
+                    'qty_to_deduct': total_qty_strips_needed,
                     'loose_to_deduct': qty_loose_needed
                 }]
             else:
                 batch_allocations = fefo_batch_select(
-                    outlet_id=str(outlet.id), product_id=str(product_id), qty_strips_needed=qty_strips_needed
+                    outlet_id=str(outlet.id), product_id=str(product_id), qty_strips_needed=total_qty_strips_needed
                 )
+
+            free_qty_remaining = free_qty_strips
+            billed_qty_remaining = qty_strips_needed
 
             for batch_alloc in batch_allocations:
                 batch = batch_alloc['batch']
                 qty_to_deduct = batch_alloc.get('qty_to_deduct', 0)
                 loose_to_deduct = batch_alloc.get('loose_to_deduct', 0)
+
+                alloc_billed = min(qty_to_deduct, billed_qty_remaining)
+                billed_qty_remaining -= alloc_billed
+                
+                alloc_free = qty_to_deduct - alloc_billed
+                free_qty_remaining -= alloc_free
 
                 batch.qty_strips -= qty_to_deduct
                 batch.qty_loose -= loose_to_deduct
@@ -192,13 +326,31 @@ def atomic_sale_save(
                     batch.qty_loose += (batch.pack_size or 1)
 
                 batch.save()
-
-                proposed_rate = Decimal(str(item_data.get('rate', batch.mrp)))
+                
+                # Phase 2: Compute logic via Pricing Engine
+                pricing_result = calculate_line_item(
+                    batch=batch,
+                    qty_strips=alloc_billed,
+                    qty_loose=loose_to_deduct,
+                    free_qty_strips=alloc_free,
+                    trade_discount_percent=trade_discount_pct,
+                    billing_basis=sale_invoice.billing_basis,
+                    sale_type=sale_invoice.sale_type,
+                    is_interstate=sale_invoice.is_interstate,
+                    gst_rate=Decimal(str(item_data.get('gstRate', 0)))
+                )
+                
+                proposed_rate = pricing_result['unit_rate']
                 pricing_check = validate_sale_price(proposed_rate, batch, outlet.id)
-                validate_unit_integrity(product, qty_loose_needed)
+                validate_unit_integrity(product, loose_to_deduct)
                 if pricing_check.get('block'):
                     transaction.set_rollback(True)
                     raise ValidationError(f"Pricing Block on {batch.batch_no}: {pricing_check['message']}")
+
+                tax_info = pricing_result['tax_info']
+                gst_rate_val = Decimal(str(item_data.get('gstRate', 0)))
+                if gst_rate_val > max_gst_rate:
+                    max_gst_rate = gst_rate_val
 
                 sale_item = SaleItem.objects.create(
                     invoice=sale_invoice,
@@ -214,16 +366,34 @@ def atomic_sale_save(
                     mrp=batch.mrp,
                     sale_rate=batch.mrp,
                     rate=proposed_rate,
-                    qty_strips=qty_to_deduct,
-                    qty_loose=item_data.get('qtyLoose', 0),
+                    qty_strips=alloc_billed,
+                    free_qty_strips=alloc_free,
+                    qty_loose=loose_to_deduct,
                     sale_mode=item_data.get('saleMode', 'strip'),
                     discount_pct=Decimal(str(item_data.get('discountPct', 0))),
-                    gst_rate=Decimal(str(item_data.get('gstRate', 0))),
-                    taxable_amount=Decimal(str(item_data.get('taxableAmount', 0))),
-                    gst_amount=Decimal(str(item_data.get('gstAmount', 0))),
-                    total_amount=Decimal(str(item_data.get('totalAmount', 0))),
+                    gst_rate=gst_rate_val,
+                    gst_amount=tax_info['cgst_amount'] + tax_info['sgst_amount'] + tax_info['igst_amount'],
+                    unit_rate=pricing_result['unit_rate'],
+                    trade_discount_percent=pricing_result['trade_discount_percent'],
+                    trade_discount_amount=pricing_result['trade_discount_amount'],
+                    taxable_amount=pricing_result['taxable_value'],
+                    cgst_rate=tax_info['cgst_rate'],
+                    cgst_amount=tax_info['cgst_amount'],
+                    sgst_rate=tax_info['sgst_rate'],
+                    sgst_amount=tax_info['sgst_amount'],
+                    igst_rate=tax_info['igst_rate'],
+                    igst_amount=tax_info['igst_amount'],
+                    total_amount=pricing_result['line_total'],
                 )
                 sale_items.append(sale_item)
+                
+                inv_total_free_strips += alloc_free
+                inv_taxable_amount += pricing_result['taxable_value']
+                inv_cgst_amount += tax_info['cgst_amount']
+                inv_sgst_amount += tax_info['sgst_amount']
+                inv_igst_amount += tax_info['igst_amount']
+                inv_subtotal += pricing_result['gross_amount']
+                inv_grand_total += pricing_result['line_total']
 
                 deducted_qty = (Decimal(str(qty_to_deduct)) + (
                     Decimal(str(loose_to_deduct)) / Decimal(str(batch.pack_size or 1))
@@ -244,72 +414,54 @@ def atomic_sale_save(
                     source_object  = sale_item,
                 )
 
+
                 if product.schedule_type in ['G', 'H', 'H1', 'X', 'C', 'Narcotic']:
+                    schedule_h_data_map = schedule_h_data or {}
                     ScheduleHRegister.objects.create(
                         sale_item=sale_item,
-                        patient_name=schedule_h_data.get('patientName') if schedule_h_data else '',
-                        patient_age=schedule_h_data.get('patientAge') if schedule_h_data else 0,
-                        patient_address=schedule_h_data.get('patientAddress') if schedule_h_data else '',
-                        doctor_name=schedule_h_data.get('doctorName') if schedule_h_data else '',
-                        doctor_reg_no=schedule_h_data.get('doctorRegNo') if schedule_h_data else '',
-                        prescription_no=(schedule_h_data.get('prescriptionNo') or '') if schedule_h_data else '',
+                        patient_name=schedule_h_data_map.get('patientName', ''),
+                        patient_age=schedule_h_data_map.get('patientAge', 0),
+                        patient_address=schedule_h_data_map.get('patientAddress', ''),
+                        doctor_name=schedule_h_data_map.get('doctorName', ''),
+                        doctor_reg_no=schedule_h_data_map.get('doctorRegNo', ''),
+                        prescription_no=schedule_h_data_map.get('prescriptionNo', ''),
                     )
 
-        is_interstate = False
-        if customer and customer.state and outlet.state:
-            is_interstate = customer.state.strip().lower() != outlet.state.strip().lower()
-
-        discount_factor = Decimal('1') - extra_discount_pct / Decimal('100')
-        server_taxable = Decimal('0')
-        server_cgst = Decimal('0')
-        server_sgst = Decimal('0')
-        server_igst = Decimal('0')
-        max_gst_rate = Decimal('0')
-
-        for si in sale_items:
-            pack_size = Decimal(str(si.pack_size)) if si.pack_size else Decimal('1')
-            total_fractional_strips = Decimal(str(si.qty_strips)) + (Decimal(str(si.qty_loose)) / pack_size)
-            raw_total = si.rate * total_fractional_strips
-            
-            discounted_total = (raw_total * discount_factor).quantize(Decimal('0.01'))
-            gst_rate = si.gst_rate
-
-            if gst_rate > 0:
-                item_taxable = (discounted_total * Decimal('100') / (Decimal('100') + gst_rate)).quantize(Decimal('0.01'))
-                item_gst = discounted_total - item_taxable
-            else:
-                item_taxable = discounted_total
-                item_gst = Decimal('0')
-
-            server_taxable += item_taxable
-
-            if is_interstate:
-                item_cgst = Decimal('0')
-                item_sgst = Decimal('0')
-                item_igst = item_gst
-            else:
-                item_cgst = (item_gst / 2).quantize(Decimal('0.01'), rounding=ROUND_FLOOR)
-                item_sgst = item_gst - item_cgst
-                item_igst = Decimal('0')
-
-            server_cgst += item_cgst
-            server_sgst += item_sgst
-            server_igst += item_igst
-
-            if gst_rate > max_gst_rate:
-                max_gst_rate = gst_rate
-
-        raw_exact = server_taxable + server_cgst + server_sgst + server_igst
-        server_round_off = client_grand_total - raw_exact
-
-        sale_invoice.taxable_amount = server_taxable
-        sale_invoice.cgst_amount = server_cgst
-        sale_invoice.sgst_amount = server_sgst
-        sale_invoice.igst_amount = server_igst
-        sale_invoice.cgst = Decimal('0') if is_interstate else (max_gst_rate / 2 if max_gst_rate > 0 else Decimal('0'))
-        sale_invoice.sgst = Decimal('0') if is_interstate else (max_gst_rate / 2 if max_gst_rate > 0 else Decimal('0'))
-        sale_invoice.igst = max_gst_rate if (is_interstate and max_gst_rate > 0) else Decimal('0')
+        # Phase 2: Save backend-computed totals to Invoice
+        raw_exact = inv_taxable_amount + inv_cgst_amount + inv_sgst_amount + inv_igst_amount
+        server_round_off = inv_grand_total - raw_exact
+        
+        # Apply invoice-level extra discount if necessary
+        invoice_level_discount = Decimal(str(request_data.get('discountAmount', 0)))
+        inv_grand_total -= invoice_level_discount
+        total_discount_amount = sum(item.trade_discount_amount for item in sale_items) + invoice_level_discount
+        
+        sale_invoice.total_free_strips = inv_total_free_strips
+        sale_invoice.subtotal = inv_subtotal
+        sale_invoice.discount_amount = total_discount_amount
+        sale_invoice.taxable_amount = inv_taxable_amount
+        sale_invoice.cgst_amount = inv_cgst_amount
+        sale_invoice.sgst_amount = inv_sgst_amount
+        sale_invoice.igst_amount = inv_igst_amount
+        sale_invoice.grand_total = inv_grand_total
+        
+        sale_invoice.cgst = Decimal('0') if sale_invoice.is_interstate else (max_gst_rate / 2 if max_gst_rate > 0 else Decimal('0'))
+        sale_invoice.sgst = Decimal('0') if sale_invoice.is_interstate else (max_gst_rate / 2 if max_gst_rate > 0 else Decimal('0'))
+        sale_invoice.igst = max_gst_rate if (sale_invoice.is_interstate and max_gst_rate > 0) else Decimal('0')
         sale_invoice.round_off = server_round_off
+        
+        # Let's ensure payment mismatch check uses our computed grand_total
+        # The user specifically requested overriding request_data. 
+        # But wait, payment amounts were validated at the start against `client_grand_total`.
+        # If the computed `inv_grand_total` differs, this means the client calculation was wrong.
+        # But we accept the client payments as cash/upi splits. Let's adjust amount_due.
+        payment_sum = sale_invoice.amount_paid
+        sale_invoice.amount_due = max(Decimal('0'), inv_grand_total - payment_sum)
+        
+        # Check if IRN is required
+        if sale_invoice.sale_type == 'WHOLESALE' and sale_invoice.grand_total > Decimal('0'):
+            sale_invoice.irn_status = 'PENDING'
+            
         sale_invoice.save()
 
         if credit_given_val > 0 and customer:
@@ -379,10 +531,14 @@ def atomic_sale_save(
                     running_balance=running_balance,
                 )
 
-        post_sale_invoice(sale_invoice)
-
         # ====== PHASE 2 GST SNAPSHOT CREATION ======
         create_sale_snapshots(sale_invoice)
         # ============================================
+
+        if sale_invoice.irn_status == 'PENDING':
+            process_pending_irn(str(sale_invoice.id))
+
+        if sale_invoice.eway_bill_status == 'PENDING':
+            threading.Thread(target=threaded_process_pending_ewaybill, args=(str(sale_invoice.id),)).start()
 
         return sale_invoice

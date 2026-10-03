@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { useCreatePurchase, useUpdatePurchase, useCheckDuplicateInvoice } from '@/hooks/usePurchases';
 import { LedgerPicker } from '@/components/accounts/LedgerPicker';
@@ -490,175 +491,159 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                 </div>
             )}
 
-            {/* ── Section A: Invoice Details ───────────────────────────── */}
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                {/* Section header */}
-                <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50 px-5 py-3">
-                    <FileText className="h-4 w-4 text-slate-500" />
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                        Invoice Details
-                    </h3>
-                </div>
-
-                <div className="grid grid-cols-1 gap-4 p-5 md:grid-cols-3">
-
-                    {/* Party (Sundry Creditor ledger) */}
-                    <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-slate-600">
-                            Party <span className="text-red-500">*</span>
-                        </Label>
-                        <LedgerPicker
-                            group="Sundry Creditors"
-                            value={partyLedger}
-                            onChange={(l) => {
-                                setPartyLedger(l);
-                                setValue('partyLedgerId', l?.id ?? '', { shouldValidate: true });
-                            }}
-                            placeholder="Select party ledger..."
-                            className={errors.partyLedgerId ? 'ring-1 ring-red-400 rounded-md' : ''}
-                        />
-                        {errors.partyLedgerId && (
-                            <p className="text-xs text-red-500">{errors.partyLedgerId.message}</p>
-                        )}
-                    </div>
-
-                    {/* Purchase Type */}
-                    <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-slate-600">
-                            Purchase Type <span className="text-red-500">*</span>
-                        </Label>
-                        <Select
-                            defaultValue="credit"
-                            onValueChange={(v) => {
-                                setValue('purchaseType', v as 'cash' | 'credit');
-                                if (v === 'cash') setValue('dueDate', undefined);
-                                else              setValue('dueDate', defaultDue);
-                            }}
-                        >
-                            <SelectTrigger className="h-9 text-sm">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="credit">
-                                    <span className="flex items-center gap-2">
-                                        Credit
-                                        <Badge variant="outline" className="text-[10px] py-0">30 days</Badge>
-                                    </span>
-                                </SelectItem>
-                                <SelectItem value="cash">Cash</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-
-                    {/* Invoice No */}
-                    <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-slate-600">
-                            Invoice No <span className="text-red-500">*</span>
-                        </Label>
-                        <Input
-                            className={`h-9 text-sm ${(errors.invoiceNo || isDuplicate) ? 'border-red-400 focus-visible:ring-red-400' : ''}`}
-                            {...register('invoiceNo')}
-                            placeholder="e.g. AJD-2026-0123"
-                        />
-                        {errors.invoiceNo ? (
-                            <p className="text-xs text-red-500">{errors.invoiceNo.message}</p>
-                        ) : isDuplicate ? (
-                            <p className="flex items-center gap-1 text-xs text-red-500">
-                                <AlertTriangle className="h-3 w-3" />
-                                Invoice already exists for this party!
-                            </p>
-                        ) : null}
-                    </div>
-
-                    {/* Invoice Date */}
-                    <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-slate-600">Invoice Date</Label>
-                        <Input className="h-9 text-sm" type="date" {...register('invoiceDate')} />
-                    </div>
-
-                    {/* Credit Days — hidden for cash */}
-                    {watchedPurchaseType !== 'cash' && (
-                        <div className="space-y-1.5">
-                            <Label className="text-xs font-medium text-slate-600">Credit Days</Label>
-                            <Select
-                                value={Number.isFinite(creditDays) ? creditDays.toString() : "30"}
-                                onValueChange={(val) => {
-                                    const parsed = parseInt(val, 10);
-                                    setCreditDays(Number.isFinite(parsed) ? parsed : 30);
-                                }}
-                            >
-                                <SelectTrigger className="h-9 text-sm bg-white border-slate-200">
-                                    <SelectValue placeholder="Select days" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {Array.from(new Set([7, 15, 30, 45, 60, 90, creditDays])).sort((a, b) => a - b).map(d => (
-                                        <SelectItem key={d} value={d.toString()}>{d} Days</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            <input type="hidden" {...register('dueDate')} />
+            {/* ── Zone 1: Context Header (Top, Fixed) ───────────────────────────── */}
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-5 shadow-sm z-30 sticky top-0">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-4">
+                    
+                    {/* Column 1 */}
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                            <Label className="text-sm font-medium text-slate-700 w-1/3">Party <span className="text-red-500">*</span></Label>
+                            <div className="w-2/3">
+                                <LedgerPicker
+                                    group="Sundry Creditors"
+                                    value={partyLedger}
+                                    onChange={(l) => {
+                                        setPartyLedger(l);
+                                        setValue('partyLedgerId', l?.id ?? '', { shouldValidate: true });
+                                    }}
+                                    placeholder="Select party ledger..."
+                                    className={cn("h-10 text-sm", errors.partyLedgerId && "ring-1 ring-red-400 rounded-md")}
+                                />
+                                {errors.partyLedgerId && <p className="text-[11px] text-red-500 mt-1">{errors.partyLedgerId.message}</p>}
+                            </div>
                         </div>
-                    )}
-
-                    {/* PO Reference */}
-                    <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-slate-600">
-                            PO Reference
-                            <span className="ml-1 font-normal text-slate-400">(optional)</span>
-                        </Label>
-                        <Input
-                            className="h-9 text-sm"
-                            {...register('purchaseOrderRef')}
-                            placeholder="e.g. PO-2026-009"
-                        />
+                        <div className="flex items-center justify-between">
+                            <Label className="text-sm font-medium text-slate-700 w-1/3">Godown</Label>
+                            <div className="w-2/3">
+                                <Select defaultValue="main" onValueChange={(v) => setValue('godown', v)}>
+                                    <SelectTrigger className="h-10 text-sm bg-white">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {GODOWNS.map((g) => (
+                                            <SelectItem key={g.value} value={g.value}>{g.label}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
                     </div>
 
-                    {/* Godown */}
-                    <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-slate-600">Godown / Location</Label>
-                        <Select defaultValue="main" onValueChange={(v) => setValue('godown', v)}>
-                            <SelectTrigger className="h-9 text-sm">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {GODOWNS.map((g) => (
-                                    <SelectItem key={g.value} value={g.value}>{g.label}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                    {/* Column 2 */}
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                            <Label className="text-sm font-medium text-slate-700 w-1/3">Invoice No <span className="text-red-500">*</span></Label>
+                            <div className="w-2/3">
+                                <Input
+                                    className={cn("h-10 text-sm bg-white", (errors.invoiceNo || isDuplicate) && "border-red-400 focus-visible:ring-red-400")}
+                                    {...register('invoiceNo')}
+                                    placeholder="e.g. AJD-2026-0123"
+                                />
+                                {errors.invoiceNo ? (
+                                    <p className="text-[11px] text-red-500 mt-1">{errors.invoiceNo.message}</p>
+                                ) : isDuplicate ? (
+                                    <p className="flex items-center gap-1 text-[11px] text-red-500 mt-1">
+                                        <AlertTriangle className="h-3 w-3" /> Duplicate!
+                                    </p>
+                                ) : null}
+                            </div>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <Label className="text-sm font-medium text-slate-700 w-1/3">Invoice Date</Label>
+                            <div className="w-2/3">
+                                <Input className="h-10 text-sm bg-white" type="date" {...register('invoiceDate')} />
+                            </div>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <Label className="text-sm font-medium text-slate-700 w-1/3">PO Ref</Label>
+                            <div className="w-2/3">
+                                <Input className="h-10 text-sm bg-white" {...register('purchaseOrderRef')} placeholder="Optional" />
+                            </div>
+                        </div>
                     </div>
 
-                    {/* Notes */}
-                    <div className="space-y-1.5 md:col-span-3">
-                        <Label className="text-xs font-medium text-slate-600">Notes</Label>
-                        <Textarea
-                            className="resize-none text-sm"
-                            {...register('notes')}
-                            rows={2}
-                            placeholder="Optional notes about this invoice..."
-                        />
+                    {/* Column 3 */}
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                            <Label className="text-sm font-medium text-slate-700 w-1/3">Type <span className="text-red-500">*</span></Label>
+                            <div className="w-2/3">
+                                <Select
+                                    defaultValue="credit"
+                                    onValueChange={(v) => {
+                                        setValue('purchaseType', v as 'cash' | 'credit');
+                                        if (v === 'cash') setValue('dueDate', undefined);
+                                        else              setValue('dueDate', defaultDue);
+                                    }}
+                                >
+                                    <SelectTrigger className="h-10 text-sm bg-white">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="credit">Credit</SelectItem>
+                                        <SelectItem value="cash">Cash</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                        
+                        {watchedPurchaseType !== 'cash' && (
+                            <div className="flex items-center justify-between">
+                                <Label className="text-sm font-medium text-slate-700 w-1/3">Credit Days</Label>
+                                <div className="w-2/3">
+                                    <Select
+                                        value={Number.isFinite(creditDays) ? creditDays.toString() : "30"}
+                                        onValueChange={(val) => {
+                                            const parsed = parseInt(val, 10);
+                                            setCreditDays(Number.isFinite(parsed) ? parsed : 30);
+                                        }}
+                                    >
+                                        <SelectTrigger className="h-10 text-sm bg-white border-slate-200">
+                                            <SelectValue placeholder="Select days" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {Array.from(new Set([7, 15, 30, 45, 60, 90, creditDays])).sort((a, b) => a - b).map(d => (
+                                                <SelectItem key={d} value={d.toString()}>{d} Days</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <input type="hidden" {...register('dueDate')} />
+                                </div>
+                            </div>
+                        )}
+                        <div className="flex items-start justify-between">
+                            <Label className="text-sm font-medium text-slate-700 w-1/3 pt-2">Notes</Label>
+                            <div className="w-2/3">
+                                <Textarea
+                                    className="resize-none text-sm h-10 min-h-[40px] py-2 bg-white"
+                                    {...register('notes')}
+                                    placeholder="Optional notes..."
+                                />
+                            </div>
+                        </div>
                     </div>
+
                 </div>
             </div>
 
-            {/* ── Section B: Items ─────────────────────────────────────── */}
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-5 py-3">
+            {/* ── Zone 2: Data Engine (Middle, Scrollable Table) ───────────────────────────── */}
+            <div className="flex-1 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm flex flex-col mt-4">
+                <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-5 py-2">
                     <div className="flex items-center gap-2">
                         <Boxes className="h-4 w-4 text-slate-500" />
                         <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-600">Items</h3>
-                        <Badge variant="secondary" className="text-[11px]">
+                        <Badge variant="secondary" className="text-[11px] px-1.5 py-0">
                             {items.length} row{items.length !== 1 ? 's' : ''}
                         </Badge>
                         {totalUnits > 0 && (
-                            <Badge variant="outline" className="text-[11px] text-slate-500">
+                            <Badge variant="outline" className="text-[11px] text-slate-500 px-1.5 py-0">
                                 {totalUnits.toLocaleString('en-IN')} units
                             </Badge>
                         )}
                     </div>
                     <Button
                         type="button" variant="outline" size="sm"
-                        className="h-8 gap-1 text-xs"
+                        className="h-7 gap-1 text-xs"
                         onClick={handleAddItem}
                     >
                         <Plus className="h-3 w-3" /> Add Item
@@ -666,28 +651,30 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                 </div>
 
                 {errors.items && typeof errors.items.message === 'string' && (
-                    <p className="mx-5 mt-3 text-xs text-red-500">{errors.items.message}</p>
+                    <p className="mx-5 mt-2 text-[10px] text-red-500">{errors.items.message}</p>
                 )}
 
-                <div className="overflow-x-auto">
-                    <table className="w-full min-w-[1280px] text-xs">
-                        <thead className="border-b border-slate-100 bg-slate-50/80">
+                {/* Make this wrapper scrollable and force full width */}
+                <div className="flex-1 overflow-auto relative">
+                    <table className="w-full min-w-[1280px] text-xs border-collapse">
+                        <thead className="bg-slate-50 sticky top-0 z-20 shadow-[0_1px_2px_rgb(0,0,0,0.05)]">
                             <tr>
-                                <th className="w-6 px-2 py-2.5 text-center font-medium text-slate-400">#</th>
-                                <th className="px-2 py-2.5 text-left font-medium text-slate-500">Product</th>
-                                <th className="px-2 py-2.5 text-left font-medium text-slate-500">HSN</th>
-                                <th className="px-2 py-2.5 text-left font-medium text-slate-500">Batch</th>
-                                <th className="px-2 py-2.5 text-left font-medium text-slate-500">Expiry</th>
-                                <th className="px-2 py-2.5 text-right font-medium text-slate-500">Pkg</th>
-                                <th className="px-2 py-2.5 text-right font-medium text-slate-500">Qty</th>
-                                <th className="px-2 py-2.5 text-right font-medium text-slate-500">Free</th>
-                                <th className="px-2 py-2.5 text-right font-medium text-slate-500">Rate</th>
-                                <th className="px-2 py-2.5 text-right font-medium text-slate-500">Disc%</th>
-                                <th className="px-2 py-2.5 text-right font-medium text-slate-500">GST%</th>
-                                <th className="px-2 py-2.5 text-right font-medium text-slate-500">MRP</th>
-                                <th className="px-2 py-2.5 text-right font-medium text-slate-500">Amount</th>
-                                <th className="w-7" title="Expand PTR / PTS / CD / Cess" />
-                                <th className="w-7" />
+                                <th className="sticky left-0 z-30 bg-slate-50 border-r border-b border-slate-200 w-8 px-2 py-2 text-center text-[11px] uppercase tracking-wider text-slate-500 font-semibold">#</th>
+                                <th className="sticky left-8 z-30 bg-slate-50 border-r border-b border-slate-200 min-w-[200px] px-2 py-2 text-left text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Product</th>
+                                <th className="border-r border-b border-slate-200 px-2 py-2 text-left text-[11px] uppercase tracking-wider text-slate-500 font-semibold">HSN</th>
+                                <th className="border-r border-b border-slate-200 px-2 py-2 text-left text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Batch</th>
+                                <th className="border-r border-b border-slate-200 px-2 py-2 text-left text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Expiry</th>
+                                <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold w-16">Pkg</th>
+                                <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold w-20">Qty</th>
+                                <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Free</th>
+                                <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold w-20">Rate</th>
+                                <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Disc%</th>
+                                <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold">GST%</th>
+                                <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold">MRP</th>
+                                <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold">PTR</th>
+                                <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold">PTS</th>
+                                <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Amount</th>
+                                <th className="sticky right-0 z-30 bg-slate-50 border-l border-b border-slate-200 w-8 px-2 py-2 text-center text-[11px] uppercase tracking-wider text-slate-500 font-semibold" title="Delete">Act</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
@@ -786,112 +773,9 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                 )}
             </div>
 
-            {/* ── Section E: Bill Summary ──────────────────────────────── */}
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50 px-5 py-3">
-                    <Calculator className="h-4 w-4 text-slate-500" />
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                        Bill Summary
-                    </h3>
-                </div>
-                <div className="flex justify-end p-5">
-                    <div className="w-80 space-y-1.5 text-sm">
-
-                        <div className="flex justify-between text-slate-600">
-                            <span>Goods Value</span>
-                            <span className="font-mono">{fmt(goodsValue)}</span>
-                        </div>
-
-                        {totalTradeDisc > 0 && (
-                            <div className="flex justify-between text-slate-500">
-                                <span>Trade Discount</span>
-                                <span className="font-mono text-red-500">−{fmt(totalTradeDisc)}</span>
-                            </div>
-                        )}
-
-                        {totalCashDisc > 0 && (
-                            <div className="flex justify-between text-slate-500">
-                                <span>Cash Discount</span>
-                                <span className="font-mono text-red-500">−{fmt(totalCashDisc)}</span>
-                            </div>
-                        )}
-
-                        <div className="flex justify-between text-slate-700 font-medium">
-                            <span>Taxable Value</span>
-                            <span className="font-mono">{fmt(taxableValue)}</span>
-                        </div>
-
-                        <Separator className="my-1" />
-
-                        {!isInterstate ? (
-                            <>
-                                <div className="flex justify-between text-xs text-slate-500">
-                                    <span>SGST</span>
-                                    <span className="font-mono">{fmt(sgst)}</span>
-                                </div>
-                                <div className="flex justify-between text-xs text-slate-500">
-                                    <span>CGST</span>
-                                    <span className="font-mono">{fmt(cgst)}</span>
-                                </div>
-                            </>
-                        ) : (
-                            <div className="flex justify-between text-xs text-slate-500">
-                                <span>IGST <span className="text-[10px] text-orange-500 font-medium ml-1">Interstate</span></span>
-                                <span className="font-mono">{fmt(igst)}</span>
-                            </div>
-                        )}
-
-                        {totalCess > 0 && (
-                            <div className="flex justify-between text-xs text-slate-500">
-                                <span>Cess</span>
-                                <span className="font-mono">{fmt(totalCess)}</span>
-                            </div>
-                        )}
-
-                        {freight > 0 && (
-                            <div className="flex justify-between text-slate-500">
-                                <span>Freight</span>
-                                <span className="font-mono">{fmt(freight)}</span>
-                            </div>
-                        )}
-
-                        <div className="flex justify-between text-xs text-slate-400">
-                            <span>Round Off</span>
-                            <span className="font-mono">
-                                {roundOff >= 0 ? '+' : ''}{fmt(roundOff)}
-                            </span>
-                        </div>
-
-                        {ledgerAdjustment > 0 && (
-                            <div className={`flex justify-between border-t border-dashed border-slate-200 pt-1 text-sm ${adjustmentSign === '-' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                <span>Ledger Adjustment</span>
-                                <span className="font-mono">
-                                    {adjustmentSign === '-' ? '−' : '+'} ₹{ledgerAdjustment.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                </span>
-                            </div>
-                        )}
-
-                        <Separator />
-
-                        <div className="flex items-baseline justify-between pt-1">
-                            <span className="text-sm font-bold text-slate-800">NET PAYABLE</span>
-                            <span className="font-mono text-2xl font-bold text-slate-900">
-                                {fmt(netPayable)}
-                            </span>
-                        </div>
-
-                        {watchedPurchaseType === 'credit' && (
-                            <p className="text-right text-[11px] text-slate-400">
-                                Due: {watch('dueDate') ?? '—'}
-                            </p>
-                        )}
-                    </div>
-                </div>
-            </div>
-
             {/* ── Reason for Modification (Edit Mode Only) ──────────────── */}
             {invoiceToEdit && (
-                <div className="rounded-xl border border-blue-200 bg-blue-50 p-5 mt-2">
+                <div className="rounded-xl border border-blue-200 bg-blue-50 p-5 mt-4">
                     <h3 className="text-sm font-semibold text-blue-900 mb-3 flex items-center gap-2">
                         <FileText className="h-4 w-4" />
                         Reason for Modification
@@ -929,26 +813,63 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                 </div>
             )}
 
-            {/* ── Action bar ───────────────────────────────────────────── */}
-            <div className="flex items-center justify-between pb-2">
-                <Button
-                    type="button" variant="ghost" size="sm"
-                    className="gap-1.5 text-slate-500 hover:text-slate-700"
-                    onClick={saveDraft}
-                >
-                    <Save className="h-3.5 w-3.5" /> Save Draft
-                </Button>
-
-                <div className="flex gap-3">
-                    <Button type="button" variant="outline" onClick={onSuccess}>
+            {/* ── Zone 3: The Financial HUD (Bottom, Sticky) ───────────────────────────── */}
+            <div className="sticky bottom-0 bg-white border-t border-slate-200 shadow-[0_-4px_6px_-1px_rgb(0,0,0,0.05)] z-40 p-4 mt-4 -mx-1 flex justify-between items-end rounded-t-xl">
+                
+                {/* Actions Docked Left */}
+                <div className="flex items-center gap-3 pb-1">
+                    <Button
+                        type="button" variant="outline" size="sm"
+                        className="gap-1.5 text-slate-500 hover:text-slate-700 h-10"
+                        onClick={saveDraft}
+                        title="Shortcut: Alt + S"
+                    >
+                        <Save className="h-4 w-4" /> Save Draft <span className="text-[10px] text-slate-400 ml-1 border rounded px-1 hidden md:inline">Alt+S</span>
+                    </Button>
+                    <Button type="button" variant="outline" onClick={onSuccess} className="h-10">
                         <X className="mr-1 h-4 w-4" /> Cancel
                     </Button>
+                </div>
+
+                {/* Receipt Summary & Main Save Button Docked Right */}
+                <div className="flex gap-4 items-stretch">
+                    <div className="w-72 flex flex-col gap-1.5 text-sm bg-slate-50 p-3 rounded-lg border border-slate-200">
+                        <div className="flex justify-between text-slate-600">
+                            <span>Taxable Value</span>
+                            <span className="font-mono">{fmt(taxableValue)}</span>
+                        </div>
+                        <div className="flex justify-between text-slate-600">
+                            <span>Total GST</span>
+                            <span className="font-mono">{fmt(totalGST)}</span>
+                        </div>
+                        {ledgerAdjustment > 0 && (
+                            <div className={`flex justify-between ${adjustmentSign === '-' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                <span>Adjustment</span>
+                                <span className="font-mono">{adjustmentSign === '-' ? '−' : '+'} {fmt(ledgerAdjustment)}</span>
+                            </div>
+                        )}
+                        <Separator className="my-1 border-slate-300" />
+                        <div className="flex items-end justify-between">
+                            <span className="text-sm font-bold text-slate-800">NET PAYABLE</span>
+                            <span className="font-mono text-xl font-bold text-slate-900 leading-none">
+                                {fmt(netPayable)}
+                            </span>
+                        </div>
+                        {watchedPurchaseType === 'credit' && (
+                            <p className="text-right text-[10px] text-slate-400 mt-0.5">
+                                Due: {watch('dueDate') ?? '—'}
+                            </p>
+                        )}
+                    </div>
+                    
                     <Button
                         type="submit"
                         disabled={isSubmitting}
-                        className="min-w-[140px] gap-2"
+                        className="h-auto min-h-full w-32 flex flex-col gap-1 justify-center rounded-lg shadow-sm"
+                        title="Shortcut: Ctrl + Enter"
                     >
-                        {isSubmitting ? 'Saving...' : invoiceToEdit ? 'Update Purchase' : 'Save Purchase'}
+                        <span className="text-sm font-semibold">{isSubmitting ? 'Saving...' : invoiceToEdit ? 'Update' : 'Save'}</span>
+                        <span className="text-[10px] font-normal opacity-80 bg-black/20 rounded px-1.5 py-0.5">Ctrl + Enter</span>
                     </Button>
                 </div>
             </div>

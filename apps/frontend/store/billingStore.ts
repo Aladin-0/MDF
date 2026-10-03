@@ -44,6 +44,7 @@ interface BillingState {
     closeDraft: (id: string) => void;
     updateDraftHeader: (id: string, updates: Partial<Omit<DraftBill, 'id' | 'cart'>>) => void;
     setDraftDocumentMode: (id: string, mode: 'invoice' | 'quotation') => void;
+    setSaleType: (id: string, type: 'RETAIL' | 'WHOLESALE') => void;
     setDraftValidUntil: (id: string, dateStr: string | undefined) => void;
     setDraftSaveStatus: (id: string, status: 'saving' | 'saved' | 'error' | 'offline', time?: string) => void;
 
@@ -102,6 +103,15 @@ const initialPayment: PaymentSplit = {
 const createEmptyDraft = (id: string): DraftBill => ({
     id,
     documentMode: 'invoice',
+    saleType: 'RETAIL',
+    billingBasis: 'MRP',
+    transporterId: '',
+    vehicleNo: '',
+    transDistance: '',
+    transMode: 1,
+    vehicleType: 'R',
+    placeOfSupply: '',
+    isInterstate: false,
     customer: null,
     customerLedger: null,
     doctor: null,
@@ -218,6 +228,22 @@ export const useBillingStore = create<BillingState>((set, get) => ({
         };
     }),
 
+    setSaleType: (id, type) => set((state) => {
+        const draft = state.drafts[id];
+        if (!draft) return state;
+        
+        return {
+            drafts: {
+                ...state.drafts,
+                [id]: {
+                    ...draft,
+                    saleType: type,
+                    billingBasis: type === 'WHOLESALE' ? 'PTR' : draft.billingBasis,
+                }
+            }
+        };
+    }),
+
     setDraftDocumentMode: (id, mode) => set((state) => {
         const draft = state.drafts[id];
         if (!draft) return state;
@@ -308,7 +334,13 @@ export const useBillingStore = create<BillingState>((set, get) => ({
                 totalQty: item.totalQty
             };
         } else {
-            newCart = [...newCart, item];
+            newCart = [...newCart, { 
+                ...item, 
+                freeQtyStrips: item.freeQtyStrips ?? 0, 
+                freeQtyLoose: item.freeQtyLoose ?? 0, 
+                tradeDiscountAmount: item.tradeDiscountAmount ?? 0,
+                gstPct: item.gstPct ?? item.gstRate
+            }];
         }
 
         return {

@@ -1,3 +1,5 @@
+import { bankersRound } from './mathUtils';
+
 export function buildScheduleHPayload(customer: any, doctor: any, draft: any): any {
     if (draft?.scheduleHData) {
         return draft.scheduleHData;
@@ -53,6 +55,20 @@ export function buildSalePayload(draft: any, scheduleHData: any, totals: any, ac
         return 0;
     };
 
+    const outletState = activeStaff?.outlet?.state || activeStaff?.outlet?.stateCode || '';
+    const customerState = customerLedger?.state || customerLedger?.stateCode || customer?.state || customer?.stateCode || '';
+    const isInterstate = customerState ? customerState.toLowerCase() !== outletState.toLowerCase() : false;
+
+    let finalCgst = totals.cgstAmount;
+    let finalSgst = totals.sgstAmount;
+    let finalIgst = 0;
+
+    if (isInterstate) {
+        finalIgst = totals.cgstAmount + totals.sgstAmount;
+        finalCgst = 0;
+        finalSgst = 0;
+    }
+
     return {
         outletId: resolvedOutletId,
         invoiceDate: invoiceDateIso,
@@ -63,15 +79,22 @@ export function buildSalePayload(draft: any, scheduleHData: any, totals: any, ac
         hospitalName: draft.hospitalName,
         prescriptionNo: draft.prescriptionNo,
         billedBy: activeStaff?.id,
+        saleType: draft.saleType || 'RETAIL',
+        billingBasis: draft.billingBasis || 'MRP',
+        transporterId: draft.transporterId,
+        vehicleNo: draft.vehicleNo,
+        transDistance: Number(draft.transDistance) || 0,
+        transMode: Number(draft.transMode) || 1,
+        vehicleType: draft.vehicleType || "R",
         items: cart.map((item: any) => {
             const rawTotal = item.rate * item.totalQty;
-            const gstRate = item.gstRate || 0;
+            const gstRate = item.gstPct ?? item.gstRate ?? 0;
             const discountFactor = extraDiscountPct > 0 ? 1 - extraDiscountPct / 100 : 1;
             const discountedTotal = rawTotal * discountFactor;
             const taxable = gstRate > 0
-                ? Number((discountedTotal / (1 + gstRate / 100)).toFixed(2))
-                : Number(discountedTotal.toFixed(2));
-            const gst = Number((discountedTotal - taxable).toFixed(2));
+                ? bankersRound(discountedTotal / (1 + gstRate / 100))
+                : bankersRound(discountedTotal);
+            const gst = bankersRound(discountedTotal - taxable);
             return {
                 batchId: item.batchId,
                 name: item.name,
@@ -80,29 +103,31 @@ export function buildSalePayload(draft: any, scheduleHData: any, totals: any, ac
                 productId: item.productId,
                 qtyStrips: item.qtyStrips,
                 qtyLoose: item.qtyLoose,
+                freeQtyStrips: item.freeQtyStrips || 0,
+                freeQtyLoose: item.freeQtyLoose || 0,
                 saleMode: item.saleMode,
                 mrp: item.mrp || 0,
                 packSize: item.packSize || 1,
                 rate: item.rate,
                 discountPct: item.discountPct,
-                gstRate: item.gstRate,
+                gstRate: gstRate,
                 scheduleType: item.scheduleType || 'OTC',
                 taxableAmount: taxable,
                 gstAmount: gst,
-                totalAmount: Number(discountedTotal.toFixed(2)),
+                totalAmount: bankersRound(discountedTotal),
             };
         }),
-        subtotal: Number(totals.subtotal.toFixed(2)),
-        discountAmount: Number((totals.discountAmount + totals.extraDiscountAmount).toFixed(2)),
-        taxableAmount: Number(totals.taxableAmount.toFixed(2)),
-        cgstAmount: Number(totals.cgstAmount.toFixed(2)),
-        sgstAmount: Number(totals.sgstAmount.toFixed(2)),
-        igstAmount: 0,
-        cgst: Number(totals.cgstAmount.toFixed(2)),
-        sgst: Number(totals.sgstAmount.toFixed(2)),
-        igst: 0,
-        roundOff: Number(totals.roundOff.toFixed(2)),
-        grandTotal: Number(totals.grandTotal.toFixed(2)),
+        subtotal: bankersRound(totals.subtotal),
+        discountAmount: bankersRound(totals.discountAmount + totals.extraDiscountAmount),
+        taxableAmount: bankersRound(totals.taxableAmount),
+        cgstAmount: bankersRound(finalCgst),
+        sgstAmount: bankersRound(finalSgst),
+        igstAmount: bankersRound(finalIgst),
+        cgst: bankersRound(finalCgst),
+        sgst: bankersRound(finalSgst),
+        igst: bankersRound(finalIgst),
+        roundOff: bankersRound(totals.roundOff),
+        grandTotal: bankersRound(totals.grandTotal),
         extraDiscountPct,
         paymentMode: draft.payment.method,
         cashPaid: draft.payment.method === 'cash' ? (draft.payment.cashTendered || totals.grandTotal) : getPaid('cash'),
@@ -345,5 +370,8 @@ export function buildCustomerPayload(
         isChronic: form.isChronic,
         creditLimit: parseFloat(form.creditLimit) || 0,
         fixedDiscount: parseFloat(form.fixedDiscount) || 0,
+        dlNo20b: form.dlNo20b?.trim() || undefined,
+        dlNo21b: form.dlNo21b?.trim() || undefined,
+        dlExpiry: form.dlExpiry || undefined,
     };
 }

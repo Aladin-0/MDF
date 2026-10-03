@@ -11,6 +11,7 @@ export function useCheckout() {
     
     const [checkoutError, setCheckoutError] = useState<string | null>(null);
     const [reasonModalOpen, setReasonModalOpen] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const draft = activeDraftId ? drafts[activeDraftId] : null;
     const totals = activeDraftId ? getDraftTotals(activeDraftId) : null;
@@ -54,12 +55,17 @@ export function useCheckout() {
         isScheduleHValid && 
         !isTenderInvalid && 
         !isLoading && 
-        !isCreditInvalid
+        !isCreditInvalid &&
+        !isSubmitting
     );
 
     const executeCheckout = async () => {
-        if (!totals || !draft) return;
+        if (!totals || !draft || isSubmitting) return;
         setCheckoutError(null);
+        setIsSubmitting(true);
+
+
+
         try {
             // Ensure final grandTotal is updated before saving
             useBillingStore.getState().setPayment({
@@ -67,11 +73,15 @@ export function useCheckout() {
                 cashReturned: paymentMethod === 'cash' ? balance : 0,
             });
             await saveBill();
+
+
+
             toast({
                 title: 'Success',
                 description: 'Bill Saved Successfully!',
             });
         } catch (error: any) {
+
             logger.error('CHECKOUT_FAILED', error);
             const message = error?.message ?? error?.error?.message ?? error?.detail ?? 'Failed to save bill. Please try again.';
             setCheckoutError(message);
@@ -82,6 +92,8 @@ export function useCheckout() {
                 title: 'Checkout Failed',
                 description: message,
             });
+        } finally {
+            setIsSubmitting(false);
         }
     };
 

@@ -13,6 +13,7 @@ import { salesApi } from '@/lib/apiClient';
 import { Quotation } from '@/types';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { InvoicePreviewModal } from '@/components/billing/InvoicePreviewModal';
 
 const fmt = (n: number | undefined) =>
     '₹' + (n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -37,16 +38,25 @@ export default function QuotationsList() {
     const router = useRouter();
     const { toast } = useToast();
     const [search, setSearch] = useState('');
+    const [typeFilter, setTypeFilter] = useState<'ALL' | 'RETAIL' | 'WHOLESALE'>('ALL');
     const [convertingId, setConvertingId] = useState<string | null>(null);
+    const [previewInvoice, setPreviewInvoice] = useState<any>(null);
+    const [isPreviewOpen, setIsPreviewOpen] = useState(false);
     
     const { data, isLoading, refetch } = useQuotationsList();
     const quotations: Quotation[] = data?.data ?? [];
 
     const filteredQuotations = quotations.filter(q => 
-        q.quotationNo.toLowerCase().includes(search.toLowerCase()) || 
+        (typeFilter === 'ALL' || (q.saleType || 'RETAIL') === typeFilter) &&
+        (q.quotationNo.toLowerCase().includes(search.toLowerCase()) || 
         (q.customer?.name && q.customer.name.toLowerCase().includes(search.toLowerCase())) ||
-        (q.customer?.phone && q.customer.phone.includes(search))
+        (q.customer?.phone && q.customer.phone.includes(search)))
     );
+
+    const handleOpenPreview = (quotation: Quotation) => {
+        setPreviewInvoice(quotation);
+        setIsPreviewOpen(true);
+    };
 
     const handleOpenInBilling = async (quotation: Quotation) => {
         try {
@@ -63,18 +73,41 @@ export default function QuotationsList() {
                 quotationId: fullQ.id,
                 hospitalName: fullQ.hospitalName || fullQ.hospital_name || null,
                 doctor: fullQ.doctorName || fullQ.doctor_name ? { id: 'mock', name: fullQ.doctorName || fullQ.doctor_name } as any : null,
-                extraDiscountPct: fullQ.extraDiscountPct || fullQ.extra_discount_pct || 0
+                extraDiscountPct: fullQ.extraDiscountPct || fullQ.extra_discount_pct || 0,
+                billingBasis: (fullQ.billingBasis || fullQ.billing_basis || 'MRP') as any,
+                transporterId: fullQ.transporterId || fullQ.transporter_id || '',
+                vehicleNo: fullQ.vehicleNo || fullQ.vehicle_no || '',
+                placeOfSupply: fullQ.placeOfSupply || fullQ.place_of_supply || '',
+                isInterstate: fullQ.isInterstate || fullQ.is_interstate || false
             });
             
             // Set customer
             if (fullQ.customer) {
-                store.setCustomer(fullQ.customer);
+                let finalCustomerData = fullQ.customer;
+                try {
+                    const { customersApi } = await import('@/lib/apiClient');
+                    const fullProfile = await customersApi.getById(fullQ.customer.id);
+                    if (fullProfile) {
+                        finalCustomerData = { ...fullQ.customer, ...fullProfile };
+                    }
+                } catch (e) {
+                    console.error('Deep hydration of customer failed:', e);
+                }
+
+                store.setCustomer(finalCustomerData);
                 store.setCustomerLedger({
-                    id: 'mock',
-                    name: fullQ.customer.name || 'Unknown',
+                    id: finalCustomerData.ledgerId || finalCustomerData.ledger_id || 'mock',
+                    name: finalCustomerData.name || 'Unknown',
+                    phone: finalCustomerData.phone || '',
+                    address: finalCustomerData.address || '',
+                    gstin: finalCustomerData.gstin || '',
+                    creditLimit: finalCustomerData.creditLimit || finalCustomerData.credit_limit || 0,
+                    dlNo20b: finalCustomerData.dlNo20b || finalCustomerData.dl_no_20b || '',
+                    dlNo21b: finalCustomerData.dlNo21b || finalCustomerData.dl_no_21b || '',
+                    customerType: fullQ.saleType || 'RETAIL',
                     groupName: 'Sundry Debtors',
-                    currentBalance: 0,
-                    isMock: true,
+                    currentBalance: finalCustomerData.outstanding || 0,
+                    isMock: false,
                 } as any);
             }
             
@@ -167,23 +200,47 @@ export default function QuotationsList() {
             
             // Mode is invoice because we are converting to invoice
             store.setDraftDocumentMode(draftId, 'invoice');
+            store.setSaleType(draftId, fullQ.saleType || 'RETAIL');
             store.setDraftValidUntil(draftId, undefined);
             store.updateDraftHeader(draftId, { 
                 quotationId: fullQ.id,
                 sourceQuotationNo: fullQ.quotationNo,
                 hospitalName: fullQ.hospitalName || fullQ.hospital_name || null,
                 doctor: fullQ.doctorName || fullQ.doctor_name ? { id: 'mock', name: fullQ.doctorName || fullQ.doctor_name } as any : null,
-                extraDiscountPct: fullQ.extraDiscountPct || fullQ.extra_discount_pct || 0
+                extraDiscountPct: fullQ.extraDiscountPct || fullQ.extra_discount_pct || 0,
+                billingBasis: (fullQ.billingBasis || fullQ.billing_basis || 'MRP') as any,
+                transporterId: fullQ.transporterId || fullQ.transporter_id || '',
+                vehicleNo: fullQ.vehicleNo || fullQ.vehicle_no || '',
+                placeOfSupply: fullQ.placeOfSupply || fullQ.place_of_supply || '',
+                isInterstate: fullQ.isInterstate || fullQ.is_interstate || false
             });
             
             if (fullQ.customer) {
-                store.setCustomer(fullQ.customer);
+                let finalCustomerData = fullQ.customer;
+                try {
+                    const { customersApi } = await import('@/lib/apiClient');
+                    const fullProfile = await customersApi.getById(fullQ.customer.id);
+                    if (fullProfile) {
+                        finalCustomerData = { ...fullQ.customer, ...fullProfile };
+                    }
+                } catch (e) {
+                    console.error('Deep hydration of customer failed:', e);
+                }
+
+                store.setCustomer(finalCustomerData);
                 store.setCustomerLedger({
-                    id: 'mock',
-                    name: fullQ.customer.name || 'Unknown',
+                    id: finalCustomerData.ledgerId || finalCustomerData.ledger_id || 'mock',
+                    name: finalCustomerData.name || 'Unknown',
+                    phone: finalCustomerData.phone || '',
+                    address: finalCustomerData.address || '',
+                    gstin: finalCustomerData.gstin || '',
+                    creditLimit: finalCustomerData.creditLimit || finalCustomerData.credit_limit || 0,
+                    dlNo20b: finalCustomerData.dlNo20b || finalCustomerData.dl_no_20b || '',
+                    dlNo21b: finalCustomerData.dlNo21b || finalCustomerData.dl_no_21b || '',
+                    customerType: fullQ.saleType || 'RETAIL',
                     groupName: 'Sundry Debtors',
-                    currentBalance: 0,
-                    isMock: true,
+                    currentBalance: finalCustomerData.outstanding || 0,
+                    isMock: false,
                 } as any);
             }
             
@@ -202,6 +259,10 @@ export default function QuotationsList() {
                     const totalAmount   = Number(item.totalAmount   || item.total_amount   || 0);
                     const landingRate   = Number(item.landingRate   || item.landing_rate   || 0);
                     const costRate      = Number(item.costRate      || item.cost_rate      || 0);
+                    const ptr           = Number(item.ptr           || 0);
+                    const pts           = Number(item.pts           || 0);
+                    const freeQtyStrips = Number(item.freeQtyStrips || item.free_qty_strips || 0);
+                    const freeQtyLoose  = Number(item.freeQtyLoose  || item.free_qty_loose  || 0);
 
                     const batchId = item.batchId || item.batch;
                     const batchInfo = batchStatuses[batchId];
@@ -210,7 +271,8 @@ export default function QuotationsList() {
                         ...item,
                         name: item.medicineName || item.medicine_name || item.name || '',
                         mrp, rate, saleRate, discountPct, gstRate, qtyStrips, qtyLoose, packSize,
-                        taxableAmount, gstAmount, totalAmount, landingRate, costRate,
+                        taxableAmount, gstAmount, totalAmount, landingRate, costRate, ptr, pts,
+                        freeQtyStrips, freeQtyLoose,
                         totalQty: qtyStrips + (qtyLoose / packSize),
                         saleMode: item.saleMode || 'strip',
                         cgst: item.cgstRate || (gstRate ? gstRate / 2 : 0),
@@ -226,7 +288,8 @@ export default function QuotationsList() {
                 });
             }
             
-            router.push('/billing');
+            const mode = (fullQ.saleType || 'RETAIL').toLowerCase();
+            router.push(`/billing?quoteId=${fullQ.id}&mode=${mode}`);
         } catch (error: any) {
             console.error('Failed to prepare quotation for conversion:', error);
             const message = error?.detail || error?.message || 'Failed to prepare quotation for conversion';
@@ -248,6 +311,15 @@ export default function QuotationsList() {
                 </div>
                 
                 <div className="flex items-center gap-3 w-full sm:w-auto">
+                    <select
+                        className="h-10 px-3 py-2 rounded-md border border-slate-200 bg-white text-sm"
+                        value={typeFilter}
+                        onChange={(e) => setTypeFilter(e.target.value as any)}
+                    >
+                        <option value="ALL">All Types</option>
+                        <option value="RETAIL">Retail</option>
+                        <option value="WHOLESALE">Wholesale</option>
+                    </select>
                     <div className="relative flex-1 sm:w-64">
                         <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                         <Input
@@ -290,7 +362,14 @@ export default function QuotationsList() {
                                 filteredQuotations.map((q) => (
                                     <tr key={q.id} className="hover:bg-slate-50 transition-colors group">
                                         <td className="px-6 py-4">
-                                            <div className="font-semibold text-slate-900">{q.quotationNo}</div>
+                                            <div className="flex items-center gap-2">
+                                                <div className="font-semibold text-slate-900">{q.quotationNo}</div>
+                                                {(q.saleType === 'WHOLESALE') ? (
+                                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">WHOLESALE</span>
+                                                ) : (
+                                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200">RETAIL</span>
+                                                )}
+                                            </div>
                                             <div className="text-slate-500 text-xs mt-0.5">{fd(q.createdAt)}</div>
                                         </td>
                                         <td className="px-6 py-4">
@@ -333,10 +412,10 @@ export default function QuotationsList() {
                                                         <Button
                                                             variant="outline"
                                                             size="sm"
-                                                            onClick={() => handleOpenInBilling(q)}
+                                                            onClick={() => handleOpenPreview(q)}
                                                             className="h-8 border-blue-200 text-blue-700 hover:bg-blue-50"
                                                         >
-                                                            <FileEdit className="w-4 h-4 mr-1.5" />
+                                                            <Eye className="w-4 h-4 mr-1.5" />
                                                             Open
                                                         </Button>
                                                         <Button
@@ -359,6 +438,12 @@ export default function QuotationsList() {
                     </table>
                 </div>
             </Card>
+            
+            <InvoicePreviewModal 
+                isOpen={isPreviewOpen} 
+                onClose={() => setIsPreviewOpen(false)} 
+                invoice={previewInvoice} 
+            />
         </div>
     );
 }

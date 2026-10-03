@@ -418,6 +418,11 @@ class CustomerSearchView(APIView):
                 'gstin': customer.gstin,
                 'fixedDiscount': float(customer.fixed_discount),
                 'creditLimit': float(customer.credit_limit),
+                'dlNo20b': customer.dl_no_20b,
+                'dlNo21b': customer.dl_no_21b,
+                'dlExpiry': customer.dl_expiry.isoformat() if customer.dl_expiry else None,
+                'customerType': customer.customer_type,
+                'stateCode': customer.state_code,
                 'outstanding': float(customer.outstanding_balance),
                 'totalPurchases': float(customer.total_purchases),
                 'isChronic': customer.is_chronic,
@@ -477,6 +482,11 @@ class CustomerDetailView(APIView):
             'gstin': customer.gstin,
             'fixedDiscount': float(customer.fixed_discount),
             'creditLimit': float(customer.credit_limit),
+            'dlNo20b': customer.dl_no_20b,
+            'dlNo21b': customer.dl_no_21b,
+            'dlExpiry': customer.dl_expiry.isoformat() if customer.dl_expiry else None,
+            'customerType': customer.customer_type,
+            'stateCode': customer.state_code,
             'outstanding': float(customer.outstanding_balance),
             'totalPurchases': float(customer.total_purchases),
             'isChronic': customer.is_chronic,
@@ -539,6 +549,17 @@ class CustomerDetailView(APIView):
             if gstin and not re.match(r'^\d{2}[A-Z]{5}\d{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$', gstin):
                 return Response({'detail': 'gstin format is invalid'}, status=status.HTTP_400_BAD_REQUEST)
             customer.gstin = gstin
+
+        if 'dlNo20b' in request.data:
+            customer.dl_no_20b = request.data['dlNo20b'] or None
+        if 'dlNo21b' in request.data:
+            customer.dl_no_21b = request.data['dlNo21b'] or None
+        if 'dlExpiry' in request.data:
+            customer.dl_expiry = request.data['dlExpiry'] or None
+        if 'customerType' in request.data:
+            customer.customer_type = request.data['customerType'] or 'RETAIL'
+        if 'stateCode' in request.data:
+            customer.state_code = request.data['stateCode'] or '27'
 
         if 'creditLimit' in request.data:
             try:
@@ -608,6 +629,11 @@ class CustomerDetailView(APIView):
             'gstin': customer.gstin,
             'fixedDiscount': float(customer.fixed_discount),
             'creditLimit': float(customer.credit_limit),
+            'dlNo20b': customer.dl_no_20b,
+            'dlNo21b': customer.dl_no_21b,
+            'dlExpiry': customer.dl_expiry.isoformat() if customer.dl_expiry else None,
+            'customerType': customer.customer_type,
+            'stateCode': customer.state_code,
             'outstanding': float(customer.outstanding_balance),
             'totalPurchases': float(customer.total_purchases),
             'isChronic': customer.is_chronic,
@@ -699,6 +725,11 @@ class CustomerListView(APIView):
                 'gstin': customer.gstin,
                 'fixedDiscount': float(customer.fixed_discount),
                 'creditLimit': float(customer.credit_limit),
+                'dlNo20b': customer.dl_no_20b,
+                'dlNo21b': customer.dl_no_21b,
+                'dlExpiry': customer.dl_expiry.isoformat() if customer.dl_expiry else None,
+                'customerType': customer.customer_type,
+                'stateCode': customer.state_code,
                 'outstanding': outstanding,
                 'totalPurchases': float(customer.total_purchases),
                 'isChronic': customer.is_chronic,
@@ -734,6 +765,12 @@ class CustomerListView(APIView):
         is_chronic = bool(request.data.get('isChronic', False))
         fixed_discount = request.data.get('fixedDiscount', 0)
         credit_limit = request.data.get('creditLimit', 0)
+        
+        dl_no_20b = request.data.get('dlNo20b') or None
+        dl_no_21b = request.data.get('dlNo21b') or None
+        dl_expiry = request.data.get('dlExpiry') or None
+        customer_type = request.data.get('customerType') or 'RETAIL'
+        state_code = request.data.get('stateCode') or '27'
 
         # Validate required fields
         if not name:
@@ -793,6 +830,11 @@ class CustomerListView(APIView):
             is_chronic=is_chronic,
             fixed_discount=fixed_discount,
             credit_limit=credit_limit,
+            dl_no_20b=dl_no_20b,
+            dl_no_21b=dl_no_21b,
+            dl_expiry=dl_expiry,
+            customer_type=customer_type,
+            state_code=state_code,
             is_active=True,
         )
 
@@ -828,6 +870,11 @@ class CustomerListView(APIView):
             'gstin': customer.gstin,
             'fixedDiscount': float(customer.fixed_discount),
             'creditLimit': float(customer.credit_limit),
+            'dlNo20b': customer.dl_no_20b,
+            'dlNo21b': customer.dl_no_21b,
+            'dlExpiry': customer.dl_expiry.isoformat() if customer.dl_expiry else None,
+            'customerType': customer.customer_type,
+            'stateCode': customer.state_code,
             'outstanding': float(customer.outstanding_balance),
             'totalPurchases': float(customer.total_purchases),
             'isChronic': customer.is_chronic,

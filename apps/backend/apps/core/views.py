@@ -4,7 +4,7 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from apps.core.permissions import IsAdminStaff
 
-from apps.core.models import Outlet, OutletSettings
+from apps.core.models import Outlet, OutletSettings, default_print_settings_retail, default_print_settings_wholesale
 
 
 class OutletSettingsView(APIView):
@@ -40,6 +40,8 @@ class OutletSettingsView(APIView):
             'attendanceLatitude': str(settings.attendance_latitude) if settings.attendance_latitude else None,
             'attendanceLongitude': str(settings.attendance_longitude) if settings.attendance_longitude else None,
             'attendanceRadiusMeters': settings.attendance_radius_meters,
+            'printSettingsRetail': settings.print_settings_retail or default_print_settings_retail(),
+            'printSettingsWholesale': settings.print_settings_wholesale or default_print_settings_wholesale(),
             'updatedAt': settings.updated_at.isoformat(),
         }
 
@@ -84,6 +86,8 @@ class OutletSettingsView(APIView):
             'attendanceLatitude': 'attendance_latitude',
             'attendanceLongitude': 'attendance_longitude',
             'attendanceRadiusMeters': 'attendance_radius_meters',
+            'printSettingsRetail': 'print_settings_retail',
+            'printSettingsWholesale': 'print_settings_wholesale',
         }
 
         updated_fields = []

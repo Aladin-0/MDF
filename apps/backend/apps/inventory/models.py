@@ -93,6 +93,9 @@ class Batch(models.Model):
     mfg_date = models.DateField(null=True, blank=True)
     expiry_date = models.DateField()
     mrp = models.DecimalField(max_digits=10, decimal_places=2, help_text='Maximum Retail Price')
+    ptr = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text='Price to Retailer')
+    pts = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text='Price to Stockist')
+    default_scheme = models.CharField(max_length=50, blank=True, null=True, help_text='Default scheme, e.g., 10+1')
     purchase_rate = models.DecimalField(max_digits=10, decimal_places=2, help_text='Cost price per pack')
     landing_rate = models.DecimalField(max_digits=10, decimal_places=2, help_text='Landing cost per pack', null=True, blank=True)
     pack_size = models.IntegerField(default=1, help_text='Number of units per pack (e.g., 10 tablets per strip)')
@@ -119,6 +122,7 @@ class Batch(models.Model):
             models.Index(fields=['outlet', 'expiry_date']),
             models.Index(fields=['outlet', 'product', 'is_active']),
             models.Index(fields=['batch_no', 'outlet']),
+            models.Index(fields=['product_id', 'expiry_date', 'ptr']),
         ]
         constraints = [
             models.CheckConstraint(check=models.Q(qty_strips__gte=0), name='batch_qty_strips_non_negative'),

@@ -116,6 +116,58 @@ class Outlet(models.Model):
     def __str__(self):
         return self.name
 
+def default_print_settings_retail():
+    return {
+        "template": "Thermal_80mm",
+        "columns": [
+            { "id": "sn", "label": "Sn.", "isVisible": True, "order": 1, "width": "10%" },
+            { "id": "productName", "label": "Item", "isVisible": True, "order": 2, "width": "40%" },
+            { "id": "qty", "label": "Qty", "isVisible": True, "order": 3, "width": "15%" },
+            { "id": "mrp", "label": "M.R.P", "isVisible": True, "order": 4, "width": "15%" },
+            { "id": "amount", "label": "Amt", "isVisible": True, "order": 5, "width": "20%" },
+            { "id": "ptr", "label": "PTR", "isVisible": False, "order": 6, "width": "0%" },
+            { "id": "pts", "label": "PTS", "isVisible": False, "order": 7, "width": "0%" },
+            { "id": "batch", "label": "Batch", "isVisible": True, "order": 8, "width": "0%" },
+            { "id": "hsn", "label": "HSN", "isVisible": False, "order": 9, "width": "0%" }
+        ],
+        "header": {
+            "showLogo": True,
+            "showDrugLicense": False,
+            "showGstin": True,
+            "customText": ""
+        },
+        "footer": {
+            "bankDetails": "",
+            "terms": "1. Goods once sold will not be taken back."
+        }
+    }
+
+def default_print_settings_wholesale():
+    return {
+        "template": "A4",
+        "columns": [
+            { "id": "sn", "label": "Sn.", "isVisible": True, "order": 1, "width": "5%" },
+            { "id": "productName", "label": "Product Name", "isVisible": True, "order": 2, "width": "25%" },
+            { "id": "batch", "label": "Batch", "isVisible": True, "order": 3, "width": "10%" },
+            { "id": "mrp", "label": "M.R.P", "isVisible": False, "order": 4, "width": "10%" },
+            { "id": "ptr", "label": "PTR", "isVisible": True, "order": 5, "width": "10%" },
+            { "id": "pts", "label": "PTS", "isVisible": True, "order": 6, "width": "10%" },
+            { "id": "qty", "label": "QTY", "isVisible": True, "order": 7, "width": "10%" },
+            { "id": "hsn", "label": "HSN", "isVisible": True, "order": 8, "width": "10%" },
+            { "id": "amount", "label": "AMOUNT", "isVisible": True, "order": 9, "width": "10%" }
+        ],
+        "header": {
+            "showLogo": True,
+            "showDrugLicense": True,
+            "showGstin": True,
+            "customText": "S.P.S MANAVATA PHARMA"
+        },
+        "footer": {
+            "bankDetails": "Bank: HDFC, A/C: 1234...",
+            "terms": "1. Goods once sold will not be taken back."
+        }
+    }
+
 
 class OutletSettings(models.Model):
     """Per-outlet configuration (get_or_create, never crash if missing)."""
@@ -179,6 +231,10 @@ class OutletSettings(models.Model):
         default=100,
         help_text="Allowed radius in meters around the GPS coordinates."
     )
+
+    # Dual-Mode Print Engine Configurations
+    print_settings_retail = models.JSONField(default=default_print_settings_retail, blank=True)
+    print_settings_wholesale = models.JSONField(default=default_print_settings_wholesale, blank=True)
     
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -206,6 +262,8 @@ class SandboxConfiguration(models.Model):
     
     _api_key_encrypted = models.CharField(max_length=255, blank=True, default='')
     _api_secret_encrypted = models.CharField(max_length=255, blank=True, default='')
+    _einvoice_username_encrypted = models.CharField(max_length=255, blank=True, default='')
+    _einvoice_password_encrypted = models.CharField(max_length=255, blank=True, default='')
     
     base_url = models.CharField(max_length=255, default='https://api.sandbox.co.in')
     active = models.BooleanField(default=True)
@@ -248,6 +306,38 @@ class SandboxConfiguration(models.Model):
             self._api_secret_encrypted = ''
         else:
             self._api_secret_encrypted = _get_fernet().encrypt(value.encode()).decode()
+
+    @property
+    def einvoice_username(self):
+        if not self._einvoice_username_encrypted:
+            return ''
+        try:
+            return _get_fernet().decrypt(self._einvoice_username_encrypted.encode()).decode()
+        except Exception:
+            return ''
+
+    @einvoice_username.setter
+    def einvoice_username(self, value):
+        if not value:
+            self._einvoice_username_encrypted = ''
+        else:
+            self._einvoice_username_encrypted = _get_fernet().encrypt(value.encode()).decode()
+
+    @property
+    def einvoice_password(self):
+        if not self._einvoice_password_encrypted:
+            return ''
+        try:
+            return _get_fernet().decrypt(self._einvoice_password_encrypted.encode()).decode()
+        except Exception:
+            return ''
+
+    @einvoice_password.setter
+    def einvoice_password(self, value):
+        if not value:
+            self._einvoice_password_encrypted = ''
+        else:
+            self._einvoice_password_encrypted = _get_fernet().encrypt(value.encode()).decode()
 
     def __str__(self):
         scope = self.outlet.name if self.outlet else "Global"

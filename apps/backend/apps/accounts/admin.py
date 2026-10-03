@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import Staff, Customer
+from .models import Staff, Customer, PostDatedCheque
 
 
 @admin.register(Staff)
@@ -58,6 +58,8 @@ class CustomerAdmin(admin.ModelAdmin):
                 'fixed_discount',
                 'credit_limit',
                 'outstanding',
+                'credit_days',
+                'is_credit_blocked',
                 'total_purchases',
                 'total_visits',
             )
@@ -74,9 +76,15 @@ class CustomerAdmin(admin.ModelAdmin):
                 'notes',
             )
         }),
-        ('B2B', {'fields': ('gstin',)}),
+        ('Wholesale & Statutory', {'fields': ('customer_type', 'gstin', 'pan', 'dl_no_20b', 'dl_no_21b', 'dl_expiry', 'state_code')}),
         ('Status', {'fields': ('is_active',)}),
         ('Metadata', {'fields': ('created_at',)}),
     )
     
     readonly_fields = ('created_at', 'total_purchases', 'total_visits')
+
+@admin.register(PostDatedCheque)
+class PostDatedChequeAdmin(admin.ModelAdmin):
+    list_display = ('cheque_number', 'bank_name', 'customer', 'amount', 'cheque_date', 'status')
+    list_filter = ('status', 'cheque_date', 'deposit_date')
+    search_fields = ('cheque_number', 'bank_name', 'customer__name')

@@ -6,8 +6,10 @@ import {
     Printer, Eye, X, ShoppingBag, Search,
     CalendarRange, PlusCircle, ChevronLeft, ChevronRight, Users,
     TrendingUp, BarChart3, Wallet, CreditCard, Smartphone, Banknote, Tag, ArrowUpRight,
+    Download, RefreshCw
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
@@ -18,6 +20,7 @@ import { cn } from '@/lib/utils';
 import { InvoicePreviewModal } from '@/components/billing/InvoicePreviewModal';
 import { useBillingStore } from '@/store/billingStore';
 import { useAuthStore } from '@/store/authStore';
+import { getStoredToken } from '@/lib/apiClient';
 
 // ── formatters ────────────────────────────────────────────────────────────────
 const fmt = (n: number | undefined) =>
@@ -125,6 +128,62 @@ export default function SalesList() {
         setEndDate(end);
         setActivePreset(label);
         setPage(1);
+    };
+
+    const handleDownloadEwb = (saleId: string) => {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8090/api/v1';
+        const promise = fetch(`${apiUrl}/sales/${saleId}/eway-bill-pdf/`, {
+            headers: {
+                'Authorization': `Bearer ${getStoredToken()}`
+            }
+        }).then(async (res) => {
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.detail || 'Failed to download EWB PDF');
+            }
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'EwayBill.pdf';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            a.remove();
+        });
+
+        toast.promise(promise, {
+            loading: 'Fetching E-Way Bill...',
+            success: 'E-Way Bill downloaded successfully!',
+            error: (err) => err.message
+        });
+    };
+
+    const handleRetryEinvoice = (saleId: string) => {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8090/api/v1';
+        const promise = fetch(`${apiUrl}/sales/${saleId}/retry-einvoice/`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${getStoredToken()}`,
+                'Content-Type': 'application/json'
+            }
+        }).then(async (res) => {
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.detail || 'Failed to retry E-Invoice');
+            }
+            return res.json();
+        });
+
+        toast.promise(promise, {
+            loading: 'Retrying E-Invoice generation...',
+            success: 'E-Invoice generated successfully!',
+            error: (err) => err.message
+        });
+        
+        promise.then(() => {
+            setTimeout(() => window.location.reload(), 1500);
+        }).catch(() => {});
     };
 
     return (
@@ -411,6 +470,16 @@ export default function SalesList() {
                                     <td className="px-4 py-3 text-slate-600 text-xs">{inv.billedByName ?? '—'}</td>
                                     <td className="px-4 py-3 text-right">
                                         <div className="flex items-center justify-end gap-1">
+                                            {inv.eway_bill_no && (
+                                                <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-600 hover:text-blue-700 hover:bg-blue-50" title="Download E-Way Bill" onClick={() => handleDownloadEwb(inv.id)}>
+                                                    <Download className="w-4 h-4" />
+                                                </Button>
+                                            )}
+                                            {(inv.irnStatus === 'FAILED' || (inv as any).irn_status === 'FAILED') && (
+                                                <Button variant="ghost" size="icon" className="h-7 w-7 text-amber-600 hover:text-amber-700 hover:bg-amber-50" title="Retry E-Invoice Generation" onClick={() => handleRetryEinvoice(inv.id)}>
+                                                    <RefreshCw className="w-4 h-4" />
+                                                </Button>
+                                            )}
                                             <Button variant="ghost" size="icon" className="h-7 w-7" title="View Invoice" onClick={() => setSelectedInvoiceId(inv.id)}>
                                                 <Eye className="w-4 h-4" />
                                             </Button>

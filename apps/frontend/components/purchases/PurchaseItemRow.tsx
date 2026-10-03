@@ -81,6 +81,8 @@ export const PURCHASE_ITEM_COLS = [
     { key: 'disc',      width: 60  },
     { key: 'gst',       width: 52  },
     { key: 'mrp',       width: 76  },
+    { key: 'ptr',       width: 76  },
+    { key: 'pts',       width: 76  },
     { key: 'amount',    width: 84  },
     { key: 'expand',    width: 32  },
     { key: 'remove',    width: 32  },
@@ -113,8 +115,9 @@ export function PurchaseItemRow({
         value.discountPct || 0,
         value.cashDiscountPct || 0,
         value.gstRate || 0,
+        value.cess || 0,
         value.freightPerUnit || 0,
-        !!settings?.landingCostIncludeGst,
+        settings ? (!settings.gstRegistered || settings.landingCostIncludeGst) : false,
         settings?.landingCostIncludeFreight ?? true,
         value.otherCostPerUnit || 0
     );
@@ -494,7 +497,25 @@ export function PurchaseItemRow({
                     />
                 </td>
 
-                {/* Sale Rate was removed from here. */}
+                {/* PTR */}
+                <td className={td}>
+                    <input
+                        type="number" min={0} step="0.01"
+                        className={cellInputCls(false, 'right')}
+                        value={value.ptr || ''}
+                        onChange={(e) => num('ptr', e.target.value)}
+                    />
+                </td>
+
+                {/* PTS */}
+                <td className={td}>
+                    <input
+                        type="number" min={0} step="0.01"
+                        className={cellInputCls(false, 'right')}
+                        value={value.pts || ''}
+                        onChange={(e) => num('pts', e.target.value)}
+                    />
+                </td>
 
                 {/* Amount */}
                 <td className={cn(td, 'text-right')}>
@@ -546,10 +567,7 @@ export function PurchaseItemRow({
                             </span>
 
                             {[
-                                { label: 'Cash Disc%', field: 'cashDiscountPct' as const, width: 'w-14' },
                                 { label: 'Cess%',      field: 'cess'            as const, width: 'w-12' },
-                                { label: 'PTR ₹',     field: 'ptr'             as const, width: 'w-20' },
-                                { label: 'PTS ₹',     field: 'pts'             as const, width: 'w-20' },
                                 { label: 'Freight/Unit ₹', field: 'freightPerUnit' as const, width: 'w-20' },
                                 { label: 'Other/Unit ₹',   field: 'otherCostPerUnit' as const, width: 'w-20' },
                             ].map(({ label, field, width }) => (

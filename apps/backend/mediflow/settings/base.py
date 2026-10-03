@@ -215,6 +215,11 @@ AUDIT_V2_WRITE_ENABLED = True
 AUDIT_V2_READ_ENABLED = True
 
 # GST Sandbox Configuration
+SANDBOX_API_KEY = env('SANDBOX_API_KEY', default=None)
+SANDBOX_API_SECRET = env('SANDBOX_API_SECRET', default=None)
 SANDBOX_PROVIDER_MODE = env('SANDBOX_PROVIDER_MODE', default='test')
 SANDBOX_BASE_URL = env('SANDBOX_BASE_URL', default='https://test-api.sandbox.co.in')
 ENABLE_GST_SANDBOX_LIVE_MODE = env.bool('ENABLE_GST_SANDBOX_LIVE_MODE', default=False)
+SANDBOX_NIC_USERNAME = env('SANDBOX_NIC_USERNAME', default=None)
+SANDBOX_NIC_PASSWORD = env('SANDBOX_NIC_PASSWORD', default=None)
+GSTIN = env('GSTIN', default='27AAPCM1753L2ZX')

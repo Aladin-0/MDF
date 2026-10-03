@@ -283,6 +283,8 @@ export interface Batch {
     mfgDate?: string;
     expiryDate: string;
     mrp: number;
+    ptr?: number;
+    pts?: number;
     landingRate?: number;
     purchaseRate: number;
     saleRate: number;
@@ -321,6 +323,11 @@ export interface Customer {
     dob?: string;
     gstin?: string;
     state?: string;
+    stateCode?: string;
+    customerType?: 'RETAIL' | 'WHOLESALE';
+    dlNo20b?: string;
+    dlNo21b?: string;
+    dlExpiry?: string;
     fixedDiscount: number;
     creditLimit: number;
     outstanding: number;
@@ -404,9 +411,12 @@ export interface CartItem {
     expiryDate: string;
     scheduleType: DrugSchedule;
     mrp: number;
+    ptr?: number;
+    pts?: number;
     saleRate?: number;
     landingRate?: number;
     rate: number;
+    hsn?: string;
     qtyStrips: number;
     qtyLoose: number;
     totalQty: number;
@@ -414,10 +424,14 @@ export interface CartItem {
     discountPct: number;
     discountType?: 'percentage' | 'amount';
     discountAmount?: number;
+    tradeDiscountAmount?: number;
     gstRate: number;
+    gstPct?: number; // Used synonymously or as a backend alias
     taxableAmount: number;
     gstAmount: number;
     totalAmount: number;
+    freeQtyStrips?: number;
+    freeQtyLoose?: number;
     purchaseRate?: number;
     landingCost?: number;
     freight?: number;       // per-unit freight cost (from purchase) — used for floor rate calculation
@@ -469,6 +483,15 @@ export type DraftStatus = 'active' | 'draft' | 'held' | 'rx_pending' | 'payment_
 export interface DraftBill {
     id: string;
     documentMode: 'invoice' | 'quotation';
+    saleType: 'RETAIL' | 'WHOLESALE';
+    billingBasis: 'MRP' | 'PTR' | 'PTS';
+    transporterId?: string;
+    vehicleNo?: string;
+    transDistance?: number | '';
+    transMode?: number;
+    vehicleType?: string;
+    placeOfSupply?: string;
+    isInterstate?: boolean;
     invoiceDate?: string;
     quotationId?: string;
     sourceQuotationNo?: string;
@@ -536,6 +559,17 @@ export interface SaleInvoice {
     amountPaid: number;
     amountDue: number;
     isReturn: boolean;
+    saleType?: 'RETAIL' | 'WHOLESALE';
+    billingBasis?: 'MRP' | 'PTR' | 'PTS';
+    transporterId?: string;
+    vehicleNo?: string;
+    transDistance?: number;
+    transMode?: number;
+    vehicleType?: string;
+    irn?: string;
+    qr_code?: string;
+    eway_bill_no?: string;
+    eway_bill_status?: string;
     billedBy: string;
     billedByName: string;
     itemsCount?: number;
@@ -632,6 +666,11 @@ export interface SaleItemDetail {
     batchNo?: string;
     expiryDate?: string;
     gstRate?: number;
+    hsnCode?: string;
+    b_qty?: number;
+    f_qty?: number;
+    ptr?: number;
+    igstAmount?: number;
 }
 
 // ─── Credit ───────────────────────────────────────────────────────────────────
@@ -1227,6 +1266,33 @@ export interface GSTR2AReconciliation {
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
 
+export interface PrintColumn {
+    id: string;
+    label: string;
+    isVisible: boolean;
+    order: number;
+    width: string;
+}
+
+export interface PrintHeaderConfig {
+    showLogo: boolean;
+    showDrugLicense: boolean;
+    showGstin: boolean;
+    customText: string;
+}
+
+export interface PrintFooterConfig {
+    bankDetails: string;
+    terms: string;
+}
+
+export interface PrintSettingsConfig {
+    template: 'A4' | 'Thermal_80mm' | 'Thermal_58mm';
+    columns: PrintColumn[];
+    header: PrintHeaderConfig;
+    footer: PrintFooterConfig;
+}
+
 export interface OutletSettings {
     outletName: string;
     outletAddress: string;
@@ -1240,6 +1306,8 @@ export interface OutletSettings {
     outletLogoUrl: string | null;
     invoiceFooter: string;
     invoiceHeader: string;
+    printSettingsRetail?: PrintSettingsConfig;
+    printSettingsWholesale?: PrintSettingsConfig;
 }
 
 export interface GSTSettings {
@@ -1256,9 +1324,6 @@ export interface PrinterSettings {
     thermalWidth: '58mm' | '80mm';
     autoPrintAfterBill: boolean;
     printCopies: number;
-    showMRPOnInvoice: boolean;
-    showBatchOnInvoice: boolean;
-    showDoctorOnInvoice: boolean;
 }
 
 export interface BillingSettings {
