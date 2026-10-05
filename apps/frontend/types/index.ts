@@ -834,7 +834,8 @@ export interface PurchaseInvoice {
     // Bill amounts
     subtotal: number;               // goods value = sum(qty × pkg × rate)
     discountAmount: number;         // trade discount + cash discount combined
-    taxableAmount: number;          // subtotal − discountAmount
+    invoiceDiscount: number;        // global invoice discount
+    taxableAmount: number;          // subtotal − discountAmount - invoiceDiscount
     gstAmount: number;              // total SGST+CGST or IGST
     cessAmount: number;             // cess on applicable items
     freight: number;                // transport / freight charges
@@ -921,6 +922,7 @@ export interface CreatePurchasePayload {
     // Bill-level totals (pre-computed on client, stored as-is)
     subtotal: number;
     discountAmount: number;
+    invoiceDiscount: number;
     taxableAmount: number;
     gstAmount: number;
     cessAmount: number;

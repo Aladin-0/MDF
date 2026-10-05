@@ -132,6 +132,8 @@ class PurchaseInvoice(models.Model):
     subtotal = models.DecimalField(max_digits=12, decimal_places=2, help_text='Sum of item amounts before discount')
     discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0,
                                           help_text='Total trade + cash discount')
+    invoice_discount = models.DecimalField(max_digits=12, decimal_places=2, default=0,
+                                           help_text='Invoice-level cash discount amount applied before GST')
     taxable_amount = models.DecimalField(max_digits=12, decimal_places=2, help_text='subtotal - discount')
 
     # GST

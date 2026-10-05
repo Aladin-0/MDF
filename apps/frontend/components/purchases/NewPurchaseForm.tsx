@@ -60,6 +60,7 @@ const schema = z.object({
     purchaseOrderRef: z.string().optional(),
     godown:           z.string().optional(),
     freight:          z.number().min(0),
+    invoiceDiscount:  z.number().min(0).optional().default(0),
     notes:            z.string().optional(),
     items:            z.array(itemSchema).min(1, 'Add at least one item'),
 });
@@ -176,12 +177,14 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
             invoiceDate:  today,
             dueDate:      defaultDue,
             freight:      0,
+            invoiceDiscount: 0,
             items:        [emptyItem()],
         },
     });
 
     const watchedPurchaseType = watch('purchaseType');
     const watchedFreight      = watch('freight') ?? 0;
+    const watchedInvoiceDiscount = watch('invoiceDiscount') ?? 0;
     const watchedInvoiceNo    = watch('invoiceNo');
     const watchedPartyLedgerId = watch('partyLedgerId');
     const watchedInvoiceDate   = watch('invoiceDate');
@@ -289,6 +292,7 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                             purchaseOrderRef: '',
                             godown: 'main',
                             freight: 0,
+                            invoiceDiscount: 0,
                             notes: '',
                             items: formItems.length ? formItems : [emptyItem()],
                         });
@@ -348,6 +352,7 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
             purchaseOrderRef: invoiceToEdit.purchaseOrderRef || '',
             godown: (invoiceToEdit.godown as string) || 'main',
             freight: invoiceToEdit.freight || 0,
+            invoiceDiscount: (invoiceToEdit as any).invoiceDiscount || 0,
             notes: invoiceToEdit.notes || '',
             items: formItems,
         });
@@ -426,14 +431,22 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
         const afterTrade = it.qty * it.purchaseRate * (1 - it.discountPct / 100);
         return s + afterTrade * (it.cashDiscountPct / 100);
     }, 0);
-    const taxableValue   = goodsValue - totalTradeDisc - totalCashDisc;
+    
+    const preInvoiceDiscountBase = goodsValue - totalTradeDisc - totalCashDisc;
+    const invoiceDiscount = Number(watchedInvoiceDiscount) || 0;
+    const invoiceDiscountPct = preInvoiceDiscountBase > 0 ? (invoiceDiscount / preInvoiceDiscountBase) : 0;
+    
+    const taxableValue   = preInvoiceDiscountBase - invoiceDiscount;
+    
     const totalGST       = items.reduce((s, it) => {
         const base = it.qty * it.purchaseRate * (1 - it.discountPct / 100) * (1 - it.cashDiscountPct / 100);
-        return s + base * (it.gstRate / 100);
+        const baseAfterInvoiceDisc = base * (1 - invoiceDiscountPct);
+        return s + baseAfterInvoiceDisc * (it.gstRate / 100);
     }, 0);
     const totalCess      = items.reduce((s, it) => {
         const base = it.qty * it.purchaseRate * (1 - it.discountPct / 100) * (1 - it.cashDiscountPct / 100);
-        return s + base * (it.cess / 100);
+        const baseAfterInvoiceDisc = base * (1 - invoiceDiscountPct);
+        return s + baseAfterInvoiceDisc * (it.cess / 100);
     }, 0);
 
     // ── GST mode: interstate if partyLedger.state is set and != outlet state ──
@@ -842,12 +855,12 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                 </div>
             </div>
 
-            {/* ── Section C: Additional Charges ────────────────────────── */}
+            {/* ── Section C: Additional Charges & Discounts ────────────────────────── */}
             <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50 px-5 py-3">
                     <Truck className="h-4 w-4 text-slate-500" />
                     <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                        Additional Charges
+                        Additional Charges & Invoice Discount
                     </h3>
                 </div>
                 <div className="grid grid-cols-1 gap-4 p-5 md:grid-cols-4">
@@ -858,6 +871,15 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                             className="h-9 text-sm"
                             placeholder="0.00"
                             {...register('freight', { valueAsNumber: true })}
+                        />
+                    </div>
+                    <div className="space-y-1.5">
+                        <Label className="text-xs font-medium text-slate-600">Invoice Discount (₹)</Label>
+                        <Input
+                            type="number" step="0.01" min="0"
+                            className="h-9 text-sm text-green-700"
+                            placeholder="0.00"
+                            {...register('invoiceDiscount', { valueAsNumber: true })}
                         />
                     </div>
                 </div>
@@ -980,6 +1002,18 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                 {/* Receipt Summary & Main Save Button Docked Right */}
                 <div className="flex gap-4 items-stretch">
                     <div className="w-72 flex flex-col gap-1.5 text-sm bg-slate-50 p-3 rounded-lg border border-slate-200">
+                        {totalTradeDisc + totalCashDisc > 0 && (
+                            <div className="flex justify-between text-slate-500 text-xs">
+                                <span>Item Discounts</span>
+                                <span className="font-mono">− {fmt(totalTradeDisc + totalCashDisc)}</span>
+                            </div>
+                        )}
+                        {invoiceDiscount > 0 && (
+                            <div className="flex justify-between text-emerald-600 text-xs">
+                                <span>Invoice Discount</span>
+                                <span className="font-mono">− {fmt(invoiceDiscount)}</span>
+                            </div>
+                        )}
                         <div className="flex justify-between text-slate-600">
                             <span>Taxable Value</span>
                             <span className="font-mono">{fmt(taxableValue)}</span>
