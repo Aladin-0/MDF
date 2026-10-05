@@ -887,7 +887,7 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
 
             {/* ── Section D: Ledger Adjustment ────────────────────────── */}
             <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
                         <p className="text-sm font-semibold text-slate-700">Ledger Adjustment</p>
                         <p className="text-xs text-slate-400">
@@ -982,26 +982,26 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
             )}
 
             {/* ── Zone 3: The Financial HUD (Bottom, Sticky) ───────────────────────────── */}
-            <div className="sticky bottom-0 bg-white border-t border-slate-200 shadow-[0_-4px_6px_-1px_rgb(0,0,0,0.05)] z-40 p-4 mt-4 -mx-1 flex justify-between items-end rounded-t-xl">
+            <div className="sticky bottom-0 bg-white border-t border-slate-200 shadow-[0_-4px_6px_-1px_rgb(0,0,0,0.05)] z-40 p-4 mt-4 -mx-4 md:-mx-1 flex flex-col-reverse md:flex-row justify-between items-stretch md:items-end gap-4 rounded-t-xl">
                 
                 {/* Actions Docked Left */}
-                <div className="flex items-center gap-3 pb-1">
+                <div className="flex items-center gap-3 pb-1 justify-between md:justify-start">
                     <Button
                         type="button" variant="outline" size="sm"
-                        className="gap-1.5 text-slate-500 hover:text-slate-700 h-10"
+                        className="flex-1 md:flex-none gap-1.5 text-slate-500 hover:text-slate-700 h-10"
                         onClick={saveDraft}
                         title="Shortcut: Alt + S"
                     >
                         <Save className="h-4 w-4" /> Save Draft <span className="text-[10px] text-slate-400 ml-1 border rounded px-1 hidden md:inline">Alt+S</span>
                     </Button>
-                    <Button type="button" variant="outline" onClick={onSuccess} className="h-10">
+                    <Button type="button" variant="outline" onClick={onSuccess} className="flex-1 md:flex-none h-10">
                         <X className="mr-1 h-4 w-4" /> Cancel
                     </Button>
                 </div>
 
                 {/* Receipt Summary & Main Save Button Docked Right */}
-                <div className="flex gap-4 items-stretch">
-                    <div className="w-72 flex flex-col gap-1.5 text-sm bg-slate-50 p-3 rounded-lg border border-slate-200">
+                <div className="flex flex-col md:flex-row gap-4 items-stretch">
+                    <div className="w-full md:w-72 flex flex-col gap-1.5 text-sm bg-slate-50 p-3 rounded-lg border border-slate-200">
                         {totalTradeDisc + totalCashDisc > 0 && (
                             <div className="flex justify-between text-slate-500 text-xs">
                                 <span>Item Discounts</span>
@@ -1045,11 +1045,11 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                     <Button
                         type="submit"
                         disabled={isSubmitting}
-                        className="h-auto min-h-full w-32 flex flex-col gap-1 justify-center rounded-lg shadow-sm"
+                        className="h-14 md:h-auto min-h-full w-full md:w-32 flex flex-col gap-1 justify-center rounded-lg shadow-sm"
                         title="Shortcut: Ctrl + Enter"
                     >
                         <span className="text-sm font-semibold">{isSubmitting ? 'Saving...' : (invoiceToEdit && invoiceToEdit.status !== 'DRAFT') ? 'Update' : 'Save'}</span>
-                        <span className="text-[10px] font-normal opacity-80 bg-black/20 rounded px-1.5 py-0.5">Ctrl + Enter</span>
+                        <span className="text-[10px] font-normal opacity-80 bg-black/20 rounded px-1.5 py-0.5 hidden md:inline-block">Ctrl + Enter</span>
                     </Button>
                 </div>
             </div>
