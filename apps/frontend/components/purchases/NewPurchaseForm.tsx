@@ -874,7 +874,12 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                         />
                     </div>
                     <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-slate-600">Invoice Discount (₹)</Label>
+                        <Label className="text-xs font-medium text-slate-600 flex justify-between">
+                            <span>Invoice Discount (₹)</span>
+                            {invoiceDiscountPct > 0 && (
+                                <span className="text-emerald-600">{(invoiceDiscountPct * 100).toFixed(2)}%</span>
+                            )}
+                        </Label>
                         <Input
                             type="number" step="0.01" min="0"
                             className="h-9 text-sm text-green-700"
@@ -1010,7 +1015,7 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                         )}
                         {invoiceDiscount > 0 && (
                             <div className="flex justify-between text-emerald-600 text-xs">
-                                <span>Invoice Discount</span>
+                                <span>Invoice Discount ({(invoiceDiscountPct * 100).toFixed(2)}%)</span>
                                 <span className="font-mono">− {fmt(invoiceDiscount)}</span>
                             </div>
                         )}

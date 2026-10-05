@@ -50,6 +50,13 @@ export function PurchaseDetailModal({ open, onOpenChange, invoice, onEdit }: Pur
     const hasLedgerAdj     = ledgerAdj !== 0;
     const ledgerAdjSign    = ledgerAdj < 0 ? '+' : '−';
 
+    const invoiceDiscount = Number(displayInvoice.invoiceDiscount || 0);
+    const goodsValue = displayInvoice.items?.reduce((acc, item) => {
+        return acc + ((item.qty + item.freeQty) * item.purchaseRate);
+    }, 0) || 0;
+    const preDiscBase = goodsValue - (displayInvoice.discountAmount || 0);
+    const invoiceDiscountPct = preDiscBase > 0 ? (invoiceDiscount / preDiscBase) * 100 : 0;
+
     const handlePrint = () => {
         window.print();
     };
@@ -249,9 +256,15 @@ export function PurchaseDetailModal({ open, onOpenChange, invoice, onEdit }: Pur
                                 <span className="tabular-nums text-foreground font-medium">{formatINR(displayInvoice.subtotal)}</span>
                             </div>
                             <div className="flex justify-between text-muted-foreground">
-                                <span>Discount</span>
+                                <span>Item Discounts</span>
                                 <span className="tabular-nums text-emerald-600 font-medium">−{formatINR(displayInvoice.discountAmount)}</span>
                             </div>
+                            {invoiceDiscount > 0 && (
+                                <div className="flex justify-between text-muted-foreground">
+                                    <span>Invoice Discount ({invoiceDiscountPct.toFixed(2)}%)</span>
+                                    <span className="tabular-nums text-emerald-600 font-medium">−{formatINR(invoiceDiscount)}</span>
+                                </div>
+                            )}
                             <div className="flex justify-between text-muted-foreground">
                                 <span>Taxable Amount</span>
                                 <span className="tabular-nums text-foreground font-medium">{formatINR(displayInvoice.taxableAmount)}</span>
@@ -412,9 +425,15 @@ export function PurchaseDetailModal({ open, onOpenChange, invoice, onEdit }: Pur
                                                 <span className="font-medium">{formatINR(displayInvoice.subtotal)}</span>
                                             </div>
                                             <div className="flex justify-between">
-                                                <span>Discount :</span>
+                                                <span>Item Discounts :</span>
                                                 <span className="font-medium">{formatINR(displayInvoice.discountAmount)}</span>
                                             </div>
+                                            {invoiceDiscount > 0 && (
+                                                <div className="flex justify-between">
+                                                    <span>Invoice Disc ({invoiceDiscountPct.toFixed(2)}%) :</span>
+                                                    <span className="font-medium">{formatINR(invoiceDiscount)}</span>
+                                                </div>
+                                            )}
                                             <div className="flex justify-between">
                                                 <span>Taxable :</span>
                                                 <span className="font-medium">{formatINR(displayInvoice.taxableAmount)}</span>
