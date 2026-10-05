@@ -172,7 +172,7 @@ export function buildPurchasePayload(
         notes:            formState.notes,
         subtotal:         parseFloat(goodsValue.toFixed(2)),
         discountAmount:   parseFloat((totalTradeDisc + totalCashDisc).toFixed(2)),
-        invoiceDiscount:  parseFloat((formState.invoiceDiscount || 0).toFixed(2)),
+        invoiceDiscount:  parseFloat((Number(formState.invoiceDiscount) || 0).toFixed(2)),
         taxableAmount:    parseFloat(taxableValue.toFixed(2)),
         gstAmount:        parseFloat(totalGST.toFixed(2)),
         cessAmount:       parseFloat(totalCess.toFixed(2)),

@@ -125,7 +125,7 @@ def atomic_purchase_save(payload: Dict[str, Any], outlet_id: str, created_by_id:
             godown=payload.get('godown', 'main'),
             subtotal=Decimal(str(payload['subtotal'])),
             discount_amount=Decimal(str(payload['discountAmount'])),
-            invoice_discount=Decimal(str(payload.get('invoiceDiscount', 0))),
+            invoice_discount=Decimal(str(payload.get('invoiceDiscount') or 0)),
             taxable_amount=Decimal(str(payload['taxableAmount'])),
             gst_amount=Decimal(str(payload['gstAmount'])),
             cess_amount=Decimal(str(payload['cessAmount'])),
@@ -830,7 +830,7 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
         purchase_invoice.godown = payload.get('godown', 'main')
         purchase_invoice.subtotal = Decimal(str(payload['subtotal']))
         purchase_invoice.discount_amount = Decimal(str(payload['discountAmount']))
-        purchase_invoice.invoice_discount = Decimal(str(payload.get('invoiceDiscount', 0)))
+        purchase_invoice.invoice_discount = Decimal(str(payload.get('invoiceDiscount') or 0))
         purchase_invoice.taxable_amount = Decimal(str(payload['taxableAmount']))
         purchase_invoice.gst_amount = Decimal(str(payload['gstAmount']))
         purchase_invoice.cess_amount = Decimal(str(payload['cessAmount']))
