@@ -643,9 +643,9 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                     
                     {/* Column 1 */}
                     <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                            <Label className="text-sm font-medium text-slate-700 w-1/3">Party <span className="text-red-500">*</span></Label>
-                            <div className="w-2/3">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0">
+                            <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3">Party <span className="text-red-500">*</span></Label>
+                            <div className="w-full sm:w-2/3">
                                 <LedgerPicker
                                     group="Sundry Creditors"
                                     value={partyLedger}
@@ -659,9 +659,9 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                                 {errors.partyLedgerId && <p className="text-[11px] text-red-500 mt-1">{errors.partyLedgerId.message}</p>}
                             </div>
                         </div>
-                        <div className="flex items-center justify-between">
-                            <Label className="text-sm font-medium text-slate-700 w-1/3">Godown</Label>
-                            <div className="w-2/3">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0">
+                            <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3">Godown</Label>
+                            <div className="w-full sm:w-2/3">
                                 <Select defaultValue="main" onValueChange={(v) => setValue('godown', v)}>
                                     <SelectTrigger className="h-10 text-sm bg-white">
                                         <SelectValue />
@@ -678,9 +678,9 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
 
                     {/* Column 2 */}
                     <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                            <Label className="text-sm font-medium text-slate-700 w-1/3">Invoice No <span className="text-red-500">*</span></Label>
-                            <div className="w-2/3">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0">
+                            <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3">Invoice No <span className="text-red-500">*</span></Label>
+                            <div className="w-full sm:w-2/3">
                                 <Input
                                     className={cn("h-10 text-sm bg-white", (errors.invoiceNo || isDuplicate) && "border-red-400 focus-visible:ring-red-400")}
                                     {...register('invoiceNo')}
@@ -695,15 +695,15 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                                 ) : null}
                             </div>
                         </div>
-                        <div className="flex items-center justify-between">
-                            <Label className="text-sm font-medium text-slate-700 w-1/3">Invoice Date</Label>
-                            <div className="w-2/3">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0">
+                            <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3">Invoice Date</Label>
+                            <div className="w-full sm:w-2/3">
                                 <Input className="h-10 text-sm bg-white" type="date" {...register('invoiceDate')} />
                             </div>
                         </div>
-                        <div className="flex items-center justify-between">
-                            <Label className="text-sm font-medium text-slate-700 w-1/3">PO Ref</Label>
-                            <div className="w-2/3">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0">
+                            <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3">PO Ref</Label>
+                            <div className="w-full sm:w-2/3">
                                 <Input className="h-10 text-sm bg-white" {...register('purchaseOrderRef')} placeholder="Optional" />
                             </div>
                         </div>
@@ -711,9 +711,9 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
 
                     {/* Column 3 */}
                     <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                            <Label className="text-sm font-medium text-slate-700 w-1/3">Type <span className="text-red-500">*</span></Label>
-                            <div className="w-2/3">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0">
+                            <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3">Type <span className="text-red-500">*</span></Label>
+                            <div className="w-full sm:w-2/3">
                                 <Select
                                     defaultValue="credit"
                                     onValueChange={(v) => {
@@ -734,9 +734,9 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                         </div>
                         
                         {watchedPurchaseType !== 'cash' && (
-                            <div className="flex items-center justify-between">
-                                <Label className="text-sm font-medium text-slate-700 w-1/3">Credit Days</Label>
-                                <div className="w-2/3">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0">
+                                <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3">Credit Days</Label>
+                                <div className="w-full sm:w-2/3">
                                     <Select
                                         value={Number.isFinite(creditDays) ? creditDays.toString() : "30"}
                                         onValueChange={(val) => {
@@ -757,9 +757,9 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                                 </div>
                             </div>
                         )}
-                        <div className="flex items-start justify-between">
-                            <Label className="text-sm font-medium text-slate-700 w-1/3 pt-2">Notes</Label>
-                            <div className="w-2/3">
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1.5 sm:gap-0">
+                            <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3 pt-0 sm:pt-2">Notes</Label>
+                            <div className="w-full sm:w-2/3">
                                 <Textarea
                                     className="resize-none text-sm h-10 min-h-[40px] py-2 bg-white"
                                     {...register('notes')}

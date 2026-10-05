@@ -859,7 +859,7 @@ class PurchaseListView(APIView):
                 'createdAt': purchase_invoice.distributor.created_at.isoformat(),
             }
 
-        return {
+        data = {
             'id': str(purchase_invoice.id),
             'outletId': str(purchase_invoice.outlet_id),
             'distributorId': str(purchase_invoice.distributor_id) if purchase_invoice.distributor_id else None,
@@ -882,6 +882,11 @@ class PurchaseListView(APIView):
             'status': purchase_invoice.status,
             'createdAt': purchase_invoice.created_at.isoformat(),
         }
+        
+        if purchase_invoice.status == 'DRAFT' and hasattr(purchase_invoice, 'ocr_data') and purchase_invoice.ocr_data:
+            data['ocrData'] = purchase_invoice.ocr_data
+            
+        return data
 
 
 class DistributorPaymentView(APIView):

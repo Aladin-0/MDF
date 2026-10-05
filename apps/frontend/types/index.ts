@@ -861,6 +861,7 @@ export interface PurchaseInvoiceFull extends PurchaseInvoice {
     purchaseOrderRef?: string;
     godown: GodownLocation | string; // string fallback for custom godowns
     notes?: string;
+    ocrData?: any;
     // Party ledger — resolved from distributor link on read
     partyLedgerId?: string | null;
     partyLedger?: {

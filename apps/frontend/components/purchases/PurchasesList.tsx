@@ -299,25 +299,27 @@ export function PurchasesList({
                                                 )} />
                                             </td>
                                             <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
-                                                {format(new Date(inv.invoiceDate), 'dd MMM yyyy')}
+                                                {inv.status === 'DRAFT' 
+                                                    ? (inv.createdAt ? format(new Date(inv.createdAt), 'dd MMM yy, hh:mm a') : '—')
+                                                    : (inv.invoiceDate ? format(new Date(inv.invoiceDate), 'dd MMM yyyy') : '—')}
                                             </td>
                                             <td className="px-4 py-3 font-mono text-xs text-foreground whitespace-nowrap">
-                                                {inv.invoiceNo}
+                                                {inv.status === 'DRAFT' ? '—' : inv.invoiceNo}
                                             </td>
                                             <td className="px-4 py-3 text-foreground max-w-[180px] truncate">
-                                                {inv.distributor?.name || (inv.status === 'DRAFT' ? 'Pending OCR...' : '—')}
+                                                {inv.distributor?.name || (inv.status === 'DRAFT' && inv.ocrData?.header?.partyName ? `OCR: ${inv.ocrData.header.partyName}` : (inv.status === 'DRAFT' ? 'Pending OCR...' : '—'))}
                                             </td>
                                             <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
-                                                {inv.items?.length ?? 0}
+                                                {inv.status === 'DRAFT' ? (inv.ocrData?.items?.length ?? 0) : (inv.items?.length ?? 0)}
                                             </td>
                                             <td className="px-4 py-3 text-right tabular-nums text-foreground whitespace-nowrap">
-                                                {formatINR(inv.subtotal)}
+                                                {formatINR(inv.status === 'DRAFT' ? (inv.ocrData?.totals?.subtotal ?? 0) : inv.subtotal)}
                                             </td>
                                             <td className="px-4 py-3 text-right tabular-nums text-muted-foreground whitespace-nowrap">
-                                                −{formatINR(inv.discountAmount)}
+                                                −{formatINR(inv.status === 'DRAFT' ? (inv.ocrData?.totals?.discount ?? 0) : inv.discountAmount)}
                                             </td>
                                             <td className="px-4 py-3 text-right tabular-nums font-semibold text-foreground whitespace-nowrap">
-                                                {formatINR(inv.grandTotal)}
+                                                {formatINR(inv.status === 'DRAFT' ? (inv.ocrData?.totals?.grandTotal ?? 0) : inv.grandTotal)}
                                             </td>
                                             <td className="px-4 py-3 text-center">
                                                 <span className={cn(
