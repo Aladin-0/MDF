@@ -105,6 +105,7 @@ services:
     restart: unless-stopped
     command: [ "celery", "-A", "mediflow", "worker", "--loglevel=info", "--concurrency=2" ]
     volumes:
+      - ./apps/backend:/app
       - media_files:/app/media
       - ./logs:/app/logs
     env_file:
@@ -128,6 +129,7 @@ services:
     restart: unless-stopped
     command: [ "celery", "-A", "mediflow", "worker", "-Q", "audit", "--loglevel=info", "--concurrency=2" ]
     volumes:
+      - ./apps/backend:/app
       - media_files:/app/media
       - ./logs:/app/logs
     env_file:

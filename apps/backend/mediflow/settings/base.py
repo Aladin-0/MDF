@@ -110,6 +110,9 @@ USE_I18N = True
 USE_TZ = False  # Store naive IST datetimes in DB – all services run in Asia/Kolkata (TZ env set in docker-compose)
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL = 'accounts.Staff'
 

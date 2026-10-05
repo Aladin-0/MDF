@@ -576,11 +576,9 @@ class PurchaseCreateView(APIView):
 
     def _serialize_purchase_full(self, purchase_invoice):
         """Serialize PurchaseInvoice to PurchaseInvoiceFull response shape."""
-        return {
-            'id': str(purchase_invoice.id),
-            'outletId': str(purchase_invoice.outlet_id),
-            'distributorId': str(purchase_invoice.distributor_id),
-            'distributor': {
+        dist_data = None
+        if purchase_invoice.distributor:
+            dist_data = {
                 'id': str(purchase_invoice.distributor.id),
                 'name': purchase_invoice.distributor.name,
                 'gstin': purchase_invoice.distributor.gstin,
@@ -595,9 +593,15 @@ class PurchaseCreateView(APIView):
                 'balanceType': purchase_invoice.distributor.balance_type,
                 'isActive': purchase_invoice.distributor.is_active,
                 'createdAt': purchase_invoice.distributor.created_at.isoformat(),
-            },
+            }
+
+        return {
+            'id': str(purchase_invoice.id),
+            'outletId': str(purchase_invoice.outlet_id),
+            'distributorId': str(purchase_invoice.distributor_id) if purchase_invoice.distributor_id else None,
+            'distributor': dist_data,
             'invoiceNo': purchase_invoice.invoice_no,
-            'invoiceDate': purchase_invoice.invoice_date.isoformat(),
+            'invoiceDate': purchase_invoice.invoice_date.isoformat() if purchase_invoice.invoice_date else None,
             'dueDate': purchase_invoice.due_date.isoformat() if purchase_invoice.due_date else None,
             'purchaseType': purchase_invoice.purchase_type,
             'purchaseOrderRef': purchase_invoice.purchase_order_ref,
@@ -617,6 +621,7 @@ class PurchaseCreateView(APIView):
             'items': [self._serialize_purchase_item(item) for item in purchase_invoice.items.all()],
             'createdByName': purchase_invoice.created_by.name if purchase_invoice.created_by else 'Unknown',
             'notes': purchase_invoice.notes,
+            'status': purchase_invoice.status,
             'createdAt': purchase_invoice.created_at.isoformat(),
         }
 
@@ -764,23 +769,29 @@ class PurchaseListView(APIView):
 
             # Filter by status if provided
             status_filter = request.query_params.get('status')
-            if status_filter and status_filter != 'all':
-                today = datetime.now().date()
-                if status_filter == 'paid':
-                    queryset = queryset.filter(outstanding__lte=0)
-                elif status_filter == 'overdue':
-                    queryset = queryset.filter(outstanding__gt=0, due_date__lt=today)
-                elif status_filter == 'partial':
-                    # Not paid, not overdue, has some amount paid
-                    queryset = queryset.filter(outstanding__gt=0, amount_paid__gt=0).filter(
-                        Q(due_date__isnull=True) | Q(due_date__gte=today)
-                    )
-                elif status_filter == 'unpaid':
-                    # Not paid, not overdue, zero amount paid
-                    queryset = queryset.filter(outstanding__gt=0, amount_paid__lte=0).filter(
-                        Q(due_date__isnull=True) | Q(due_date__gte=today)
-                    )
-                logger.info(f"Filtered by status {status_filter}")
+            if status_filter == 'draft':
+                queryset = queryset.filter(status='DRAFT')
+            else:
+                # Exclude drafts from all other views
+                queryset = queryset.exclude(status='DRAFT')
+                
+                if status_filter and status_filter != 'all':
+                    today = datetime.now().date()
+                    if status_filter == 'paid':
+                        queryset = queryset.filter(outstanding__lte=0, status='POSTED')
+                    elif status_filter == 'overdue':
+                        queryset = queryset.filter(outstanding__gt=0, due_date__lt=today, status='POSTED')
+                    elif status_filter == 'partial':
+                        # Not paid, not overdue, has some amount paid
+                        queryset = queryset.filter(outstanding__gt=0, amount_paid__gt=0, status='POSTED').filter(
+                            Q(due_date__isnull=True) | Q(due_date__gte=today)
+                        )
+                    elif status_filter == 'unpaid':
+                        # Not paid, not overdue, zero amount paid
+                        queryset = queryset.filter(outstanding__gt=0, amount_paid__lte=0, status='POSTED').filter(
+                            Q(due_date__isnull=True) | Q(due_date__gte=today)
+                        )
+                    logger.info(f"Filtered by status {status_filter}")
 
             # Filter by search if provided
             search_query = request.query_params.get('search')
@@ -830,11 +841,9 @@ class PurchaseListView(APIView):
 
     def _serialize_purchase(self, purchase_invoice):
         """Serialize PurchaseInvoice (without items) to response shape."""
-        return {
-            'id': str(purchase_invoice.id),
-            'outletId': str(purchase_invoice.outlet_id),
-            'distributorId': str(purchase_invoice.distributor_id),
-            'distributor': {
+        dist_data = None
+        if purchase_invoice.distributor:
+            dist_data = {
                 'id': str(purchase_invoice.distributor.id),
                 'name': purchase_invoice.distributor.name,
                 'gstin': purchase_invoice.distributor.gstin,
@@ -848,9 +857,15 @@ class PurchaseListView(APIView):
                 'balanceType': purchase_invoice.distributor.balance_type,
                 'isActive': purchase_invoice.distributor.is_active,
                 'createdAt': purchase_invoice.distributor.created_at.isoformat(),
-            },
+            }
+
+        return {
+            'id': str(purchase_invoice.id),
+            'outletId': str(purchase_invoice.outlet_id),
+            'distributorId': str(purchase_invoice.distributor_id) if purchase_invoice.distributor_id else None,
+            'distributor': dist_data,
             'invoiceNo': purchase_invoice.invoice_no,
-            'invoiceDate': purchase_invoice.invoice_date.isoformat(),
+            'invoiceDate': purchase_invoice.invoice_date.isoformat() if purchase_invoice.invoice_date else None,
             'dueDate': purchase_invoice.due_date.isoformat() if purchase_invoice.due_date else None,
             'subtotal': float(purchase_invoice.subtotal),
             'discountAmount': float(purchase_invoice.discount_amount),
@@ -864,13 +879,14 @@ class PurchaseListView(APIView):
             'grandTotal': float(purchase_invoice.grand_total),
             'amountPaid': float(purchase_invoice.amount_paid),
             'outstanding': float(purchase_invoice.outstanding),
+            'status': purchase_invoice.status,
             'createdAt': purchase_invoice.created_at.isoformat(),
         }
 
 
 class DistributorPaymentView(APIView):
     """
-    POST /api/v1/purchases/payments/
+    POST /api/v1/purchases/payments/but 
 
     Record a payment to a distributor with bill-by-bill allocation.
     All operations wrapped in transaction.atomic() — full rollback on any failure.
@@ -1137,6 +1153,19 @@ class PurchaseDetailView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+    def delete(self, request, purchase_id, *args, **kwargs):
+        outlet_id = request.query_params.get('outletId')
+        try:
+            invoice = PurchaseInvoice.objects.get(id=purchase_id, outlet_id=outlet_id)
+        except PurchaseInvoice.DoesNotExist:
+            return Response({'error': {'message': 'Purchase invoice not found'}}, status=status.HTTP_404_NOT_FOUND)
+
+        if invoice.status != 'DRAFT':
+            return Response({'error': {'message': 'Only draft invoices can be deleted'}}, status=status.HTTP_400_BAD_REQUEST)
+
+        invoice.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 class PaymentListView(APIView):
     """
@@ -1287,3 +1316,352 @@ class PurchaseInvoiceSearchView(APIView):
                 'items': items,
             })
         return Response({'data': results})
+
+
+# =============================================================================
+# SCAN PURCHASE VIEWS
+# =============================================================================
+
+class InvoiceScanUploadView(APIView):
+    """
+    POST /api/v1/purchases/scan/upload/
+
+    Accept a scanned invoice image from mobile. Creates a DRAFT PurchaseInvoice
+    immediately and dispatches background OCR task. Returns 202 Accepted instantly
+    so mobile doesn't wait for heavy OCR processing.
+
+    Form data:
+        - outletId: UUID (required)
+        - image: file (required) — JPG/PNG of the invoice
+
+    Response 202:
+    {
+        "draftId": "uuid",
+        "status": "processing",
+        "message": "Invoice uploaded. OCR analysis in progress..."
+    }
+    """
+    permission_classes = [CanCreatePurchases]
+
+    def post(self, request, *args, **kwargs):
+        from apps.purchases.tasks import process_invoice_ocr
+
+        outlet_id = request.data.get('outletId')
+        image_file = request.FILES.get('image')
+
+        if not outlet_id:
+            return Response(
+                {'error': {'code': 'MISSING_OUTLET', 'message': 'outletId is required'}},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if not image_file:
+            return Response(
+                {'error': {'code': 'MISSING_IMAGE', 'message': 'image file is required'}},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            outlet = Outlet.objects.get(id=outlet_id)
+        except Outlet.DoesNotExist:
+            return Response(
+                {'error': {'code': 'OUTLET_NOT_FOUND', 'message': f'Outlet {outlet_id} not found'}},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Create a minimal DRAFT invoice (no distributor yet, no amounts)
+        # OCR task will populate all fields asynchronously
+        draft = PurchaseInvoice.objects.create(
+            outlet=outlet,
+            status='DRAFT',
+            invoice_image=image_file,
+            created_by=request.user,
+            # Placeholder values — will be overwritten by OCR
+            invoice_no='',
+            grand_total=0,
+            subtotal=0,
+            discount_amount=0,
+            taxable_amount=0,
+            gst_amount=0,
+            cess_amount=0,
+            freight=0,
+            round_off=0,
+            amount_paid=0,
+            outstanding=0,
+        )
+
+        logger.info(f"Created DRAFT invoice {draft.id} for outlet {outlet.name}, dispatching OCR task")
+
+        # Fire background OCR task — non-blocking
+        process_invoice_ocr.delay(str(draft.id))
+
+        return Response(
+            {
+                'draftId': str(draft.id),
+                'status': 'processing',
+                'message': 'Invoice uploaded successfully. OCR analysis is running in the background.',
+            },
+            status=status.HTTP_202_ACCEPTED
+        )
+
+
+class InvoiceOCRStatusView(APIView):
+    """
+    GET /api/v1/purchases/<purchase_id>/ocr-status/?outletId=xxx
+
+    Poll the OCR processing status and get the full extracted data for the review screen.
+    Frontend polls this endpoint until status is 'ready' or 'error'.
+
+    Response when processing:
+    { "status": "processing" }
+
+    Response when ready:
+    {
+        "status": "ready",
+        "draftId": "uuid",
+        "invoiceImageUrl": "/media/purchase_invoices/...",
+        "confidence": 0.87,
+        "warnings": [...],
+        "header": {
+            "distributorName": "Manavta Pharma",
+            "distributorId": "uuid or null",
+            "distributorIsNew": false,
+            "matchTier": 1,
+            "invoiceNo": "AMS26/41609",
+            "invoiceDate": "2026-09-26",
+            "gstin": "27AAPCM1753L2ZX",
+            "phone": "8999381254",
+            "dlNo": "20B-612209, 21B-612210",
+            "address": "Shop No. 1, Ghati Road, Jubipark"
+        },
+        "items": [
+            {
+                "name": "PARACETAMOL 500MG TAB",
+                "batchNo": "PC2609",
+                "expiry": "2027-12-01",
+                "qty": 10,
+                "freeQty": 2,
+                "mrp": 12.50,
+                "rate": 9.80,
+                "discount": 5,
+                "gstPct": 12,
+                "amount": 93.10,
+                "hsnCode": "30049099",
+                "medicineMatch": { "matched": true, "productId": "uuid", "confidence": 0.95 },
+                "validationOk": true
+            }
+        ],
+        "totals": {
+            "subtotal": 1000,
+            "cgst": 60,
+            "sgst": 60,
+            "grandTotal": 1120
+        }
+    }
+    """
+    permission_classes = [CanAccessPurchases]
+
+    def get(self, request, purchase_id, *args, **kwargs):
+        outlet_id = request.query_params.get('outletId')
+
+        try:
+            invoice = PurchaseInvoice.objects.get(id=purchase_id, outlet_id=outlet_id, status='DRAFT')
+        except PurchaseInvoice.DoesNotExist:
+            return Response(
+                {'error': {'code': 'NOT_FOUND', 'message': 'Draft invoice not found'}},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Still processing: OCR task hasn't written back yet
+        if invoice.ocr_raw_data is None and invoice.ocr_processing_error is None:
+            return Response({'status': 'processing'})
+
+        # OCR failed
+        if invoice.ocr_processing_error and invoice.ocr_raw_data is None:
+            return Response({
+                'status': 'error',
+                'message': invoice.ocr_processing_error,
+            })
+
+        # OCR complete — build review payload
+        ocr = invoice.ocr_raw_data or {}
+        header = ocr.get('header', {})
+        dist_match = ocr.get('distributor_match', {})
+        items_raw = ocr.get('items', [])
+        totals = ocr.get('totals', {})
+
+        # Serialize items for review screen
+        items_serialized = []
+        for item in items_raw:
+            med_match = item.get('_medicine_match', {})
+            items_serialized.append({
+                'name': item.get('name', ''),
+                'batchNo': item.get('batch_no', ''),
+                'expiry': item.get('expiry', ''),
+                'qty': item.get('qty', ''),
+                'freeQty': item.get('free_qty', 0),
+                'mrp': item.get('mrp', ''),
+                'rate': item.get('rate', ''),
+                'discount': item.get('discount', 0),
+                'gstPct': item.get('gst_pct', ''),
+                'amount': item.get('amount', ''),
+                'hsnCode': item.get('hsn_code', '') or (med_match.get('hsn_code') or ''),
+                'packSize': item.get('pack_size', ''),
+                'medicineMatch': {
+                    'matched': med_match.get('matched', False),
+                    'productId': med_match.get('product_id'),
+                    'productName': med_match.get('product_name', item.get('name', '')),
+                    'confidence': round(med_match.get('confidence', 0), 2),
+                    'gstRate': med_match.get('gst_rate'),
+                    'packSize': med_match.get('pack_size'),
+                },
+                'validationOk': item.get('_validation_ok', True),
+                # Unknown columns flagged for review
+                'unknownColumns': {k: v for k, v in item.items() if k.startswith('_col_')},
+            })
+
+        image_url = invoice.invoice_image.url if invoice.invoice_image else None
+
+        # Resolve the party ledger linked to this distributor
+        from apps.accounts.models import Ledger as AccountsLedger
+        import logging
+        logger = logging.getLogger(__name__)
+        party_ledger = None
+        if invoice.distributor:
+            party_ledger = AccountsLedger.objects.filter(
+                outlet_id=outlet_id,
+                linked_distributor=invoice.distributor
+            ).first()
+            logger.info(f"DEBUG OCR: outlet_id={outlet_id}, distributor={invoice.distributor.id}, party_ledger={party_ledger}")
+        else:
+            logger.info(f"DEBUG OCR: invoice.distributor is None")
+
+        return Response({
+            'status': 'ready',
+            'draftId': str(invoice.id),
+            'invoiceImageUrl': image_url,
+            'confidence': invoice.ocr_confidence,
+            'warnings': ocr.get('warnings', []),
+            'header': {
+                'distributorName': invoice.ocr_distributor_name or header.get('distributor_name', ''),
+                'distributorId': str(invoice.distributor_id) if invoice.distributor_id else None,
+                'distributor': {
+                    'id': str(invoice.distributor.id),
+                    'name': invoice.distributor.name,
+                    'gstin': invoice.distributor.gstin,
+                    'phone': invoice.distributor.phone,
+                    'email': invoice.distributor.email,
+                    'address': invoice.distributor.address,
+                    'city': invoice.distributor.city,
+                } if invoice.distributor else None,
+                'partyLedgerId': str(party_ledger.id) if party_ledger else None,
+                'partyLedger': {
+                    'id': str(party_ledger.id),
+                    'name': party_ledger.name,
+                    'group': party_ledger.group.name if party_ledger.group else None,
+                    'currentBalance': float(party_ledger.current_balance),
+                    'state': party_ledger.state or '',
+                } if party_ledger else None,
+                'distributorIsNew': dist_match.get('is_new', True),
+                'matchTier': dist_match.get('match_tier'),
+                'matchConfidence': dist_match.get('confidence'),
+                'invoiceNo': invoice.invoice_no or header.get('invoice_no', ''),
+                'invoiceDate': str(invoice.invoice_date) if invoice.invoice_date else header.get('invoice_date', ''),
+                'gstin': invoice.ocr_distributor_gstin or header.get('gstin', ''),
+                'phone': invoice.ocr_distributor_phone or header.get('mobile', '') or header.get('phone', ''),
+                'dlNo': invoice.ocr_distributor_dl or header.get('dl_no', ''),
+                'dl20b': header.get('dl_20b', ''),
+                'dl21b': header.get('dl_21b', ''),
+                'address': invoice.ocr_distributor_address or header.get('address', ''),
+                'stateCode': header.get('state_code', ''),
+            },
+            'items': items_serialized,
+            'totals': {
+                'subtotal': totals.get('subtotal'),
+                'cgst': totals.get('cgst'),
+                'sgst': totals.get('sgst'),
+                'igst': totals.get('igst'),
+                'grandTotal': totals.get('grand_total'),
+                'roundOff': totals.get('round_off'),
+            },
+        })
+
+
+class InvoiceDraftConfirmView(APIView):
+    """
+    POST /api/v1/purchases/<purchase_id>/confirm/
+
+    Confirm a DRAFT purchase after human review on the review screen.
+    Receives the corrected/verified payload and calls atomic_purchase_save
+    (same as regular purchase creation) to post to stock and ledger.
+
+    On success: DRAFT is deleted and a new POSTED PurchaseInvoice is created.
+    Returns the full POSTED invoice in the same shape as PurchaseCreateView.
+    """
+    permission_classes = [CanCreatePurchases]
+
+    def post(self, request, purchase_id, *args, **kwargs):
+        outlet_id = request.data.get('outletId')
+
+        try:
+            draft = PurchaseInvoice.objects.get(id=purchase_id, outlet_id=outlet_id, status='DRAFT')
+        except PurchaseInvoice.DoesNotExist:
+            return Response(
+                {'error': {'code': 'NOT_FOUND', 'message': 'Draft invoice not found'}},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        try:
+            payload = request.data
+
+            # Learn column map for this distributor (if provided by review screen)
+            learned_col_map = payload.pop('_learnedColumnMap', None)
+            distributor_id = payload.get('distributorId')
+
+            if learned_col_map and distributor_id:
+                try:
+                    from apps.purchases.models import Distributor
+                    dist = Distributor.objects.get(id=distributor_id, outlet_id=outlet_id)
+                    # Merge new learned synonyms into existing map
+                    existing = dist.ocr_column_map or {}
+                    existing.update(learned_col_map)
+                    dist.ocr_column_map = existing
+                    dist.save(update_fields=['ocr_column_map'])
+                    logger.info(f"Updated OCR column map for distributor {distributor_id}")
+                except Exception as e:
+                    logger.warning(f"Could not save learned column map: {e}")
+
+            # Call the same atomic purchase save as manual purchase
+            purchase_invoice = atomic_purchase_save(payload, outlet_id, request.user.id)
+
+            # Transfer the invoice image from draft to the new posted invoice
+            if draft.invoice_image:
+                purchase_invoice.invoice_image = draft.invoice_image
+                purchase_invoice.save(update_fields=['invoice_image'])
+
+            # Delete the draft now that it's confirmed
+            draft_image = draft.invoice_image.name if draft.invoice_image else None
+            draft.invoice_image = None  # Detach before delete to preserve the file
+            draft.save(update_fields=['invoice_image'])
+            draft.delete()
+
+            logger.info(f"DRAFT {purchase_id} confirmed → POSTED as {purchase_invoice.id}")
+
+            # Serialize using same shape as PurchaseCreateView
+            serializer = PurchaseCreateView()
+            result = serializer._serialize_purchase_full(purchase_invoice)
+            result['invoiceImageUrl'] = purchase_invoice.invoice_image.url if purchase_invoice.invoice_image else None
+
+            return Response(result, status=status.HTTP_201_CREATED)
+
+        except PurchaseServiceError as e:
+            logger.warning(f"Purchase service error confirming draft {purchase_id}: {e}")
+            return Response(
+                {'error': {'code': 'PURCHASE_ERROR', 'message': str(e)}},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            logger.error(f"Error confirming draft {purchase_id}: {e}", exc_info=True)
+            return Response(
+                {'error': {'code': 'INTERNAL_ERROR', 'message': 'Failed to confirm purchase'}},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

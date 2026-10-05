@@ -83,6 +83,22 @@ class MasterProduct(models.Model):
         return f"{self.name} ({self.pack_size}{self.pack_unit})"
 
 
+class MasterProductAlias(models.Model):
+    """Stores OCR aliases for products (e.g., 'PARA 500' -> 'Paracetamol 500mg')."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    outlet = models.ForeignKey('core.Outlet', on_delete=models.CASCADE, related_name='product_aliases')
+    product = models.ForeignKey(MasterProduct, on_delete=models.CASCADE, related_name='aliases')
+    alias_name = models.CharField(max_length=255, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'inventory_masterproductalias'
+        unique_together = ('outlet', 'alias_name')
+        
+    def __str__(self):
+        return f"{self.alias_name} -> {self.product.name}"
+
+
 class Batch(models.Model):
     """Stock batch tracking per outlet, with FEFO management."""
 

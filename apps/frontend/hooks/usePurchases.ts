@@ -50,6 +50,30 @@ export function useUpdatePurchase() {
     });
 }
 
+export function useConfirmDraft() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: ({ id, payload }: { id: string; payload: CreatePurchasePayload }) =>
+            purchasesApi.confirmDraft(id, payload),
+        onSuccess: async () => {
+            await queryClient.invalidateQueries({ queryKey: ['purchases'] });
+            await queryClient.invalidateQueries({ queryKey: ['inventory'] });
+            await queryClient.invalidateQueries({ queryKey: ['distributors'] });
+        },
+    });
+}
+
+export function useDeleteDraft() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: ({ id, outletId }: { id: string; outletId: string }) =>
+            purchasesApi.deleteDraft(id, outletId),
+        onSuccess: async () => {
+            await queryClient.invalidateQueries({ queryKey: ['purchases'] });
+        },
+    });
+}
+
 export function useRecordPayment() {
     const queryClient = useQueryClient();
     return useMutation({

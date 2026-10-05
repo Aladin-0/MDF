@@ -5,18 +5,20 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { format, addDays, differenceInDays } from 'date-fns';
-import { Plus, AlertTriangle, Save, X, FileText, Truck, Calculator, Boxes } from 'lucide-react';
+import { Plus, AlertTriangle, Save, X, FileText, Truck, Calculator, Boxes, Loader2, Image as ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { api } from '@/lib/api';
 // Note: Select still used for Purchase Type / Godown dropdowns
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import { useCreatePurchase, useUpdatePurchase, useCheckDuplicateInvoice } from '@/hooks/usePurchases';
+import { useCreatePurchase, useUpdatePurchase, useCheckDuplicateInvoice, useConfirmDraft } from '@/hooks/usePurchases';
 import { LedgerPicker } from '@/components/accounts/LedgerPicker';
 import { useAuthStore } from '@/store/authStore';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -107,6 +109,7 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
         : null;
     const createPurchase = useCreatePurchase();
     const updatePurchase = useUpdatePurchase();
+    const confirmDraft = useConfirmDraft();
     const [partyLedger, setPartyLedger] = useState<Ledger | null>(null);
 
     const [items,             setItems]             = useState<PurchaseItemFormData[]>([emptyItem()]);
@@ -121,6 +124,11 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
     const [drawerOpen,        setDrawerOpen]        = useState(false);
     const [drawerInitialName, setDrawerInitialName] = useState('');
     const [activeDrawerRow,   setActiveDrawerRow]   = useState(0);
+
+    const [ocrStatus, setOcrStatus] = useState<'idle' | 'processing' | 'ready' | 'error'>('idle');
+    const [ocrError, setOcrError] = useState('');
+    const [scannedImage, setScannedImage] = useState<string | null>(null);
+    const [scannedImageModalOpen, setScannedImageModalOpen] = useState(false);
 
     const handleOpenAddProduct = (rowIndex: number, name: string) => {
         setActiveDrawerRow(rowIndex);
@@ -212,11 +220,93 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
     // Check for duplicate invoice
     const duplicateInvoiceQuery = useCheckDuplicateInvoice(watchedInvoiceNo, watchedPartyLedgerId);
     // Don't show duplicate warning if we are editing that exact invoice
-    const isDuplicate = duplicateInvoiceQuery.data?.exists && (!invoiceToEdit || invoiceToEdit.invoiceNo.toLowerCase() !== watchedInvoiceNo?.toLowerCase());
+    const isDuplicate = duplicateInvoiceQuery.data?.exists && (!invoiceToEdit || invoiceToEdit.invoiceNo?.toLowerCase() !== watchedInvoiceNo?.toLowerCase());
 
     // Initialize form if editing — must be after useForm so `reset` is in scope
     useEffect(() => {
-        if (!invoiceToEdit) return;
+        if (!invoiceToEdit) {
+            setOcrStatus('idle');
+            setScannedImage(null);
+            return;
+        }
+
+        if (invoiceToEdit.status === 'DRAFT') {
+            setOcrStatus('processing');
+            setScannedImage(invoiceToEdit.invoiceImageUrl || null);
+            
+            const pollStatus = async () => {
+                if (!outlet?.id) return;
+                try {
+                    const res = await api.get(`/purchases/${invoiceToEdit.id}/ocr-status/`, {
+                        params: { outletId: outlet.id }
+                    });
+                    
+                    if (res.data.status === 'processing') {
+                        setTimeout(pollStatus, 2000);
+                    } else if (res.data.status === 'ready') {
+                        const ocrData = res.data;
+                        setOcrStatus('ready');
+                        
+                        // Set the Ledger object directly so the UI updates
+                        if (ocrData.header?.partyLedger) {
+                            setPartyLedger(ocrData.header.partyLedger);
+                        } else {
+                            setPartyLedger(null);
+                        }
+
+                        const formItems: PurchaseItemFormData[] = (ocrData.items || []).map((item: any) => ({
+                            productId: item.medicineMatch?.productId || '',
+                            productName: item.medicineMatch?.productId ? (item.medicineMatch?.productName || item.medicineMatch?.product_name || item.name) : item.name,
+                            isCustom: !item.medicineMatch?.productId,
+                            hsnCode: item.medicineMatch?.hsnCode || item.medicineMatch?.hsn_code || item.hsnCode || '',
+                            batchNo: item.batchNo || '',
+                            expiryDate: item.expiry || '',
+                            pkg: item.medicineMatch?.packSize || item.medicineMatch?.pack_size || item.packSize || 1,
+                            packUnitLabel: item.medicineMatch?.packUnit || item.medicineMatch?.pack_unit || '',
+                            qty: item.qty || 0,
+                            freeQty: item.freeQty || 0,
+                            purchaseRate: item.rate || 0,
+                            freightPerUnit: 0,
+                            otherCostPerUnit: 0,
+                            discountPct: item.discount || 0,
+                            cashDiscountPct: 0,
+                            gstRate: item.medicineMatch?.gstRate || item.medicineMatch?.gst_rate || item.gstPct || 0,
+                            cess: 0,
+                            mrp: item.mrp || 0,
+                            ptr: item.rate || 0,
+                            pts: item.rate || 0,
+                            saleRate: item.mrp || 0,
+                        }));
+                        
+                        setItems(formItems.length ? formItems : [emptyItem()]);
+                        
+                        reset({
+                            partyLedgerId: ocrData.header?.partyLedgerId || '', 
+                            purchaseType: 'credit',
+                            invoiceNo: ocrData.header?.invoiceNo || '',
+                            invoiceDate: ocrData.header?.invoiceDate || today,
+                            dueDate: defaultDue,
+                            purchaseOrderRef: '',
+                            godown: 'main',
+                            freight: 0,
+                            notes: '',
+                            items: formItems.length ? formItems : [emptyItem()],
+                        });
+                        
+                    } else {
+                        setOcrStatus('error');
+                        setOcrError(res.data.message || 'OCR failed');
+                    }
+                } catch (err: any) {
+                    setOcrStatus('error');
+                    setOcrError(err.response?.data?.error?.message || err.message);
+                }
+            };
+            pollStatus();
+            return;
+        }
+
+        // --- NORMAL EDIT INITIALIZATION ---
         const adj = invoiceToEdit.ledgerAdjustment ?? 0;
         // Backend convention: positive adj = subtract from total, negative adj = add to total
         setPartyLedger((invoiceToEdit.partyLedger as any) || null);
@@ -261,7 +351,8 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
             notes: invoiceToEdit.notes || '',
             items: formItems,
         });
-    }, [invoiceToEdit, reset]);
+    }, [invoiceToEdit, reset, outlet?.id]);
+
 
 
     // ── Draft ────────────────────────────────────────────────────────────────
@@ -372,7 +463,7 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
 
     const onSubmit = async (data: FormData) => {
         try {
-            if (invoiceToEdit) {
+            if (invoiceToEdit && invoiceToEdit.status !== 'DRAFT') {
                 if (!revisionReasonCode) {
                     toast({ variant: 'destructive', title: 'Revision reason code is required.' });
                     return;
@@ -401,11 +492,18 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                 invoiceToEdit ? revisionReasonText : undefined
             );
 
-            if (invoiceToEdit) {
+            if (invoiceToEdit && invoiceToEdit.status !== 'DRAFT') {
                 await updatePurchase.mutateAsync({ id: invoiceToEdit.id, payload });
                 toast({
                     title:       'Purchase updated ✓',
                     description: `Invoice ${data.invoiceNo} has been modified successfully.`,
+                });
+            } else if (invoiceToEdit && invoiceToEdit.status === 'DRAFT') {
+                await confirmDraft.mutateAsync({ id: invoiceToEdit.id, payload });
+                if (draftKey) localStorage.removeItem(draftKey);
+                toast({
+                    title:       'Purchase saved ✓',
+                    description: `Invoice ${data.invoiceNo} — ${items.length} item${items.length !== 1 ? 's' : ''}, ${totalUnits} units added to stock.`,
                 });
             } else {
                 await createPurchase.mutateAsync(payload);
@@ -455,7 +553,55 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                 title: 'Validation Error',
                 description: errMsg
             });
-        })} className="flex flex-col gap-5">
+        })} className="flex flex-col gap-5 relative">
+
+            {ocrStatus === 'processing' && (
+                <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm rounded-xl">
+                    <Loader2 className="w-10 h-10 animate-spin text-primary mb-4" />
+                    <h2 className="text-lg font-semibold text-slate-800">Analyzing Scanned Invoice</h2>
+                    <p className="text-sm text-slate-500 mt-2">Extracting items, batches, and prices...</p>
+                </div>
+            )}
+            
+            {ocrStatus === 'error' && (
+                <div className="mb-4 flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+                    <AlertTriangle className="h-4 w-4 shrink-0 text-red-600" />
+                    <p className="flex-1 text-sm text-red-800">
+                        OCR Failed: {ocrError}
+                    </p>
+                    <Button type="button" size="sm" variant="outline" onClick={() => setOcrStatus('idle')}>Dismiss</Button>
+                </div>
+            )}
+            
+            {/* View Image Dialog for Scans */}
+            {scannedImage && (
+                <Dialog open={scannedImageModalOpen} onOpenChange={setScannedImageModalOpen}>
+                    <div className="fixed bottom-6 right-6 z-40">
+                        <Button 
+                            type="button"
+                            size="lg"
+                            className="rounded-full shadow-lg gap-2"
+                            onClick={() => setScannedImageModalOpen(true)}
+                        >
+                            <ImageIcon className="w-5 h-5" />
+                            View Scanned Invoice
+                        </Button>
+                    </div>
+                    <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
+                        <DialogHeader>
+                            <DialogTitle>Scanned Invoice Image</DialogTitle>
+                        </DialogHeader>
+                        <div className="flex-1 overflow-auto bg-slate-100 rounded-md border border-border flex items-center justify-center p-4">
+                            {/* Use standard img tag instead of next/image since the URL is external/django */}
+                            <img 
+                                src={scannedImage} 
+                                alt="Scanned Invoice" 
+                                className="max-w-full max-h-full object-contain"
+                            />
+                        </div>
+                    </DialogContent>
+                </Dialog>
+            )}
 
             {/* ── Draft banner ────────────────────────────────────────── */}
             {hasDraft && (
@@ -774,7 +920,7 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
             </div>
 
             {/* ── Reason for Modification (Edit Mode Only) ──────────────── */}
-            {invoiceToEdit && (
+            {invoiceToEdit && invoiceToEdit.status !== 'DRAFT' && (
                 <div className="rounded-xl border border-blue-200 bg-blue-50 p-5 mt-4">
                     <h3 className="text-sm font-semibold text-blue-900 mb-3 flex items-center gap-2">
                         <FileText className="h-4 w-4" />
@@ -868,7 +1014,7 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                         className="h-auto min-h-full w-32 flex flex-col gap-1 justify-center rounded-lg shadow-sm"
                         title="Shortcut: Ctrl + Enter"
                     >
-                        <span className="text-sm font-semibold">{isSubmitting ? 'Saving...' : invoiceToEdit ? 'Update' : 'Save'}</span>
+                        <span className="text-sm font-semibold">{isSubmitting ? 'Saving...' : (invoiceToEdit && invoiceToEdit.status !== 'DRAFT') ? 'Update' : 'Save'}</span>
                         <span className="text-[10px] font-normal opacity-80 bg-black/20 rounded px-1.5 py-0.5">Ctrl + Enter</span>
                     </Button>
                 </div>

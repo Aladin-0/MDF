@@ -884,6 +884,23 @@ const realPurchasesApi = {
         await assertOk(response);
         return response.json();
     },
+    confirmDraft: async (id: string, payload: CreatePurchasePayload): Promise<PurchaseInvoiceFull> => {
+        const response = await fetch(`${API_URL}/purchases/${id}/confirm/`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify(payload),
+        });
+        await assertOk(response);
+        return response.json();
+    },
+    deleteDraft: async (id: string, outletId: string): Promise<void> => {
+        const response = await fetch(`${API_URL}/purchases/${id}/?outletId=${outletId}`, {
+            method: 'DELETE',
+            headers: getHeaders(),
+        });
+        await assertOk(response);
+        // Returns 204 No Content, so no json() parsing
+    },
     createPurchase: async (payload: any): Promise<PurchaseInvoiceFull> => {
         return realPurchasesApi.create(payload);
     },

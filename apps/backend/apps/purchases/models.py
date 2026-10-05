@@ -23,13 +23,24 @@ class Distributor(models.Model):
     outlet = models.ForeignKey('core.Outlet', on_delete=models.CASCADE, related_name='distributors')
     name = models.CharField(max_length=255)
     gstin = models.CharField(max_length=15, null=True, blank=True)
-    drug_license_no = models.CharField(max_length=100, null=True, blank=True)
+    drug_license_no = models.CharField(max_length=100, null=True, blank=True,
+                                       help_text='Combined DL number for display')
+    # Split DL fields for OCR 3-tier matching (20B and 21B licence numbers appear separately on invoices)
+    dl_no_20b = models.CharField(max_length=50, null=True, blank=True,
+                                 help_text='Drug Licence 20B number (retail)')
+    dl_no_21b = models.CharField(max_length=50, null=True, blank=True,
+                                 help_text='Drug Licence 21B number (wholesale)')
     food_license_no = models.CharField(max_length=50, null=True, blank=True)
-    phone = models.CharField(max_length=20)
+    phone = models.CharField(max_length=20, blank=True, default='')
+    mobile = models.CharField(max_length=15, null=True, blank=True,
+                              help_text='Mobile number for 3-tier OCR matching')
+    contact_person = models.CharField(max_length=100, null=True, blank=True)
     email = models.EmailField(null=True, blank=True)
-    address = models.TextField()
-    city = models.CharField(max_length=100)
-    state = models.CharField(max_length=100)
+    address = models.TextField(blank=True, default='')
+    city = models.CharField(max_length=100, blank=True, default='')
+    state = models.CharField(max_length=100, blank=True, default='')
+    state_code = models.CharField(max_length=5, null=True, blank=True,
+                                  help_text='GST state code e.g. 27 for Maharashtra')
 
     # Credit terms
     credit_days = models.IntegerField(default=0, help_text='Credit period in days')
@@ -37,6 +48,10 @@ class Distributor(models.Model):
                                           help_text='Opening balance for ledger')
     balance_type = models.CharField(max_length=2, choices=BALANCE_TYPE_CHOICES, default='CR',
                                     help_text='CR = distributor owes us, DR = we owe distributor')
+
+    # OCR learning: store distributor-specific column header mappings
+    ocr_column_map = models.JSONField(default=dict, blank=True,
+                                      help_text='Learned column header synonyms for this distributor')
 
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -46,11 +61,11 @@ class Distributor(models.Model):
     class Meta:
         db_table = 'purchases_distributor'
         ordering = ['name']
-        # GSTIN is unique per outlet — same supplier can serve multiple outlets
-        unique_together = [['outlet', 'gstin']]
+        # NOTE: GSTIN uniqueness is per outlet but nullable (not all distributors have GSTIN)
         indexes = [
             models.Index(fields=['outlet', 'is_active']),
             models.Index(fields=['gstin']),
+            models.Index(fields=['outlet', 'name']),
         ]
 
     def __str__(self):
@@ -71,13 +86,40 @@ class PurchaseInvoice(models.Model):
         ('credit', 'Credit Purchase'),
     ]
 
+    STATUS_CHOICES = [
+        ('DRAFT', 'Draft — Scanned, pending human review'),
+        ('POSTED', 'Posted — Confirmed, stock updated'),
+    ]
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     outlet = models.ForeignKey('core.Outlet', on_delete=models.CASCADE, related_name='purchase_invoices')
-    distributor = models.ForeignKey(Distributor, on_delete=models.PROTECT, related_name='purchase_invoices')
+    # distributor is nullable for DRAFT state (may not be matched yet at scan time)
+    distributor = models.ForeignKey(Distributor, on_delete=models.PROTECT, related_name='purchase_invoices',
+                                    null=True, blank=True)
+
+    # --- Scan Purchase fields ---
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='POSTED',
+                              help_text='DRAFT = OCR scan pending review; POSTED = confirmed & stock updated')
+    invoice_image = models.ImageField(upload_to='purchase_invoices/%Y/%m/', null=True, blank=True,
+                                      help_text='Scanned invoice photo')
+    # Raw OCR extraction stored as JSON for the review screen
+    ocr_raw_data = models.JSONField(null=True, blank=True,
+                                    help_text='OCR extracted data: header, items, totals')
+    ocr_confidence = models.FloatField(null=True, blank=True,
+                                       help_text='Overall OCR confidence score 0-1')
+    # Distributor details extracted by OCR before matching (used for new supplier creation)
+    ocr_distributor_name = models.CharField(max_length=255, null=True, blank=True,
+                                            help_text='Distributor name as read from invoice')
+    ocr_distributor_gstin = models.CharField(max_length=15, null=True, blank=True)
+    ocr_distributor_phone = models.CharField(max_length=20, null=True, blank=True)
+    ocr_distributor_dl = models.CharField(max_length=100, null=True, blank=True)
+    ocr_distributor_address = models.TextField(null=True, blank=True)
+    ocr_processing_error = models.TextField(null=True, blank=True,
+                                            help_text='Error message if OCR processing failed')
 
     # Invoice details
-    invoice_no = models.CharField(max_length=50, help_text='Distributor invoice number')
-    invoice_date = models.DateField()
+    invoice_no = models.CharField(max_length=100, help_text='Distributor invoice number', blank=True, default='')
+    invoice_date = models.DateField(null=True, blank=True)
     due_date = models.DateField(null=True, blank=True, help_text='Credit purchase due date')
     purchase_type = models.CharField(max_length=20, choices=PURCHASE_TYPE_CHOICES, default='credit')
     purchase_order_ref = models.CharField(max_length=100, null=True, blank=True, help_text='PO reference')
@@ -132,11 +174,22 @@ class PurchaseInvoice(models.Model):
             models.Index(fields=['outlet', 'invoice_date']),
             models.Index(fields=['outlet', 'distributor']),
             models.Index(fields=['invoice_no', 'outlet']),
+            models.Index(fields=['outlet', 'status']),
         ]
-        unique_together = [['outlet', 'invoice_no']]
+        # unique_together only for POSTED invoices (DRAFT may have blank invoice_no)
+        # Enforced at service level, not DB level, so we can allow DRAFT duplicates
 
     def __str__(self):
-        return f"{self.invoice_no} - ₹{self.grand_total}"
+        status_label = f"[{self.status}] " if self.status == 'DRAFT' else ''
+        return f"{status_label}{self.invoice_no} - ₹{self.grand_total if self.grand_total else '?'}"
+
+    @property
+    def is_draft(self):
+        return self.status == 'DRAFT'
+
+    @property
+    def is_posted(self):
+        return self.status == 'POSTED'
 
 
 class PurchaseItem(models.Model):

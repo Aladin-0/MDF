@@ -846,6 +846,8 @@ export interface PurchaseInvoice {
     // Payment
     amountPaid: number;
     outstanding: number;            // grandTotal − amountPaid
+    
+    status: 'DRAFT' | 'POSTED';
 
     createdAt: string;
 }

@@ -36,6 +36,11 @@ export default function PurchasesPage() {
         setActiveTab(tab);
     };
 
+    const handleScanSuccess = (draftId: string) => {
+        setEditingInvoice({ id: draftId, status: 'DRAFT' } as PurchaseInvoiceFull);
+        setActiveTab('new');
+    };
+
     return (
         // ✅ overflow-x-hidden on the page root prevents horizontal bleed from the wide table
         <div className="space-y-6 overflow-x-hidden">
@@ -75,7 +80,7 @@ export default function PurchasesPage() {
                 <div className="flex border-b border-border">
                     {tabs.map(({ value, label, icon: Icon }) => {
                         const isActive = activeTab === value;
-                        const isEditTab = value === 'new' && !!editingInvoice;
+                        const isEditTab = value === 'new' && !!editingInvoice && editingInvoice.status !== 'DRAFT';
                         return (
                             <button
                                 key={value}
@@ -102,7 +107,10 @@ export default function PurchasesPage() {
                 <div className="pt-6">
 
                     <TabsContent value="invoices" className="mt-0 outline-none">
-                        <PurchasesList onEditInvoice={canEdit ? handleEditInvoice : undefined} />
+                        <PurchasesList 
+                            onEditInvoice={canEdit ? handleEditInvoice : undefined} 
+                            onScanSuccess={canEdit ? handleScanSuccess : undefined}
+                        />
                     </TabsContent>
 
                     <TabsContent value="new" className="mt-0 outline-none">
@@ -114,7 +122,7 @@ export default function PurchasesPage() {
                          *     without breaking the rest of the form sections
                          */}
                         <div className="w-full overflow-x-auto">
-                            {editingInvoice && (
+                            {editingInvoice && editingInvoice.status !== 'DRAFT' && (
                                 <div className="mb-4 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                                     <Edit className="h-4 w-4 shrink-0 text-amber-600" />
                                     <span>You are <strong>editing</strong> invoice <strong>{editingInvoice.invoiceNo}</strong>. Changes will be synced across inventory, ledgers and journal entries.</span>

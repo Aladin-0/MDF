@@ -157,6 +157,17 @@ def atomic_purchase_save(payload: Dict[str, Any], outlet_id: str, created_by_id:
             if prod_id:
                 try:
                     master_product = MasterProduct.objects.get(id=prod_id)
+                    # --- AI Learning: Save OCR Alias if provided ---
+                    ocr_name = item_payload.get('ocrOriginalName')
+                    if ocr_name:
+                        ocr_clean = str(ocr_name).upper().strip()
+                        if ocr_clean and ocr_clean != master_product.name.upper():
+                            from apps.inventory.models import MasterProductAlias
+                            MasterProductAlias.objects.get_or_create(
+                                outlet=outlet,
+                                alias_name=ocr_clean,
+                                defaults={'product': master_product}
+                            )
                 except MasterProduct.DoesNotExist:
                     logger.warning(f"MasterProduct {prod_id} not found, creating custom product")
 

@@ -10,6 +10,9 @@ from apps.purchases.views import (
     PaymentListView,
     DistributorOutstandingView,
     PurchaseInvoiceSearchView,
+    InvoiceScanUploadView,
+    InvoiceOCRStatusView,
+    InvoiceDraftConfirmView,
 )
 from apps.purchases.models import PurchaseInvoice
 from apps.accounts.models import Ledger
@@ -68,6 +71,12 @@ class PaymentListCreateView(PaymentListView, DistributorPaymentView):
 
 
 urlpatterns = [
+    # --- Scan Purchase endpoints ---
+    path('scan/upload/', InvoiceScanUploadView.as_view(), name='purchase-scan-upload'),
+    path('<uuid:purchase_id>/ocr-status/', InvoiceOCRStatusView.as_view(), name='purchase-ocr-status'),
+    path('<uuid:purchase_id>/confirm/', InvoiceDraftConfirmView.as_view(), name='purchase-draft-confirm'),
+
+    # --- Existing endpoints ---
     path('check-invoice/', CheckPurchaseInvoiceView.as_view(), name='purchase-check-invoice'),
     path('invoices/search/', PurchaseInvoiceSearchView.as_view(), name='purchase-invoice-search'),
     path('', PurchasesView.as_view(), name='purchase-list-create'),

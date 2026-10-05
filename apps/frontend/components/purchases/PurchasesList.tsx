@@ -12,17 +12,23 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { PurchaseSummaryCards } from './PurchaseSummaryCards';
 import { PurchaseDetailModal } from './PurchaseDetailModal';
-import { usePurchasesList } from '@/hooks/usePurchases';
+import { usePurchasesList, useDeleteDraft } from '@/hooks/usePurchases';
 import { PurchaseInvoiceFull } from '@/types';
 import { cn } from '@/lib/utils';
 import { getPurchaseStatus, STATUS_CONFIG } from '@/lib/purchaseUtils';
+import { useRef } from 'react';
+import { api } from '@/lib/api';
+import { useAuthStore } from '@/store/authStore';
+import { Scan, Loader2 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { useRouter } from 'next/navigation';
 
 /* ─── helpers ─────────────────────────────────────────────── */
 
 const formatINR = (n: number) =>
     '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-type StatusFilter = 'all' | 'paid' | 'partial' | 'unpaid' | 'overdue';
+type StatusFilter = 'all' | 'draft' | 'paid' | 'partial' | 'unpaid' | 'overdue';
 type PeriodFilter = 'this_week' | 'this_month' | 'last_month' | 'all';
 
 const PAGE_SIZE = 10;
@@ -51,13 +57,54 @@ function getPeriodBounds(period: PeriodFilter): { start: string; end: string } |
 
 /* ─── component ───────────────────────────────────────────── */
 
-export function PurchasesList({ onEditInvoice }: { onEditInvoice?: (invoice: PurchaseInvoiceFull) => void }) {
+export function PurchasesList({ 
+    onEditInvoice,
+    onScanSuccess 
+}: { 
+    onEditInvoice?: (invoice: PurchaseInvoiceFull) => void;
+    onScanSuccess?: (draftId: string) => void;
+}) {
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
     const [period, setPeriod] = useState<PeriodFilter>('all');
     const [expandedId, setExpandedId] = useState<string | null>(null);
     const [page, setPage] = useState(1);
     const [selectedInvoice, setSelectedInvoice] = useState<PurchaseInvoiceFull | null>(null);
+    const [isUploading, setIsUploading] = useState(false);
+    
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const outlet = useAuthStore((s) => s.outlet);
+    const { toast } = useToast();
+    const router = useRouter();
+
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !outlet?.id) return;
+
+        setIsUploading(true);
+        const formData = new FormData();
+        formData.append('image', file);
+        formData.append('outletId', outlet.id);
+
+        try {
+            const res = await api.post('/purchases/scan/upload/', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            toast({ title: 'Upload Successful', description: 'Opening OCR analysis...' });
+            if (res.data.draftId && onScanSuccess) {
+                onScanSuccess(res.data.draftId);
+            }
+        } catch (err: any) {
+            toast({
+                variant: 'destructive',
+                title: 'Upload Failed',
+                description: err.response?.data?.error?.message || err.message,
+            });
+        } finally {
+            setIsUploading(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    };
 
     const queryParams = useMemo(() => {
         const bounds = getPeriodBounds(period);
@@ -79,6 +126,18 @@ export function PurchasesList({ onEditInvoice }: { onEditInvoice?: (invoice: Pur
 
     const resetPage = () => setPage(1);
 
+    const deleteDraft = useDeleteDraft();
+    const handleDeleteDraft = async (id: string) => {
+        if (!outlet?.id) return;
+        if (!confirm('Are you sure you want to discard this draft?')) return;
+        try {
+            await deleteDraft.mutateAsync({ id, outletId: outlet.id });
+            toast({ title: 'Draft discarded' });
+        } catch (err: any) {
+            toast({ variant: 'destructive', title: 'Failed to discard draft', description: err.message });
+        }
+    };
+
     /* ── render ─────────────────────────────────────────────── */
 
     return (
@@ -88,28 +147,49 @@ export function PurchasesList({ onEditInvoice }: { onEditInvoice?: (invoice: Pur
             {/* ── Controls ── */}
             <div className="flex flex-wrap gap-3 items-center justify-between">
 
-                {/* Search */}
-                <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                    <Input
-                        className="pl-9 pr-8 w-64 h-9"
-                        placeholder="Search invoice or distributor…"
-                        value={search}
-                        onChange={(e) => { setSearch(e.target.value); resetPage(); }}
+                {/* Search & Scan Upload */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+                    <div className="relative flex-1 sm:flex-none">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                        <Input
+                            className="pl-9 pr-8 w-full sm:w-64 h-10 sm:h-9"
+                            placeholder="Search invoice or distributor…"
+                            value={search}
+                            onChange={(e) => { setSearch(e.target.value); resetPage(); }}
+                        />
+                        {search && (
+                            <button
+                                onClick={() => { setSearch(''); resetPage(); }}
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                                <X className="w-3.5 h-3.5" />
+                            </button>
+                        )}
+                    </div>
+                    
+                    <input 
+                        type="file" 
+                        accept="image/jpeg,image/png,image/webp" 
+                        ref={fileInputRef} 
+                        onChange={handleFileUpload} 
+                        className="hidden" 
                     />
-                    {search && (
-                        <button
-                            onClick={() => { setSearch(''); resetPage(); }}
-                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                        >
-                            <X className="w-3.5 h-3.5" />
-                        </button>
-                    )}
+                    <Button 
+                        variant="default" 
+                        size="sm" 
+                        className="h-10 sm:h-9 gap-1.5 w-full sm:w-auto bg-primary text-primary-foreground shadow-sm" 
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isUploading}
+                    >
+                        {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Scan className="w-4 h-4" />}
+                        <span className="hidden sm:inline">Scan Bill</span>
+                        <span className="inline sm:hidden font-semibold">Tap to Scan Invoice</span>
+                    </Button>
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap">
                     {/* Status pills without live counts (moved to server-side) */}
-                    {(['all', 'paid', 'partial', 'unpaid', 'overdue'] as StatusFilter[]).map((s) => {
+                    {(['all', 'draft', 'paid', 'partial', 'unpaid', 'overdue'] as StatusFilter[]).map((s) => {
                         const isActive = statusFilter === s;
                         return (
                             <button
@@ -224,7 +304,7 @@ export function PurchasesList({ onEditInvoice }: { onEditInvoice?: (invoice: Pur
                                                 {inv.invoiceNo}
                                             </td>
                                             <td className="px-4 py-3 text-foreground max-w-[180px] truncate">
-                                                {inv.distributor?.name}
+                                                {inv.distributor?.name || (inv.status === 'DRAFT' ? 'Pending OCR...' : '—')}
                                             </td>
                                             <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
                                                 {inv.items?.length ?? 0}
@@ -247,10 +327,32 @@ export function PurchasesList({ onEditInvoice }: { onEditInvoice?: (invoice: Pur
                                                 </span>
                                             </td>
                                             <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                                                <Button variant="ghost" size="sm" className="h-7 px-2 text-xs gap-1" onClick={() => setSelectedInvoice(inv)}>
-                                                    <FileText className="h-3.5 w-3.5" />
-                                                    View
-                                                </Button>
+                                                {inv.status === 'DRAFT' ? (
+                                                    <div className="flex justify-end gap-2">
+                                                        <Button 
+                                                            variant="outline" 
+                                                            size="sm" 
+                                                            className="h-7 px-2 text-xs gap-1 border-red-200 text-red-600 hover:bg-red-50" 
+                                                            onClick={() => handleDeleteDraft(inv.id)}
+                                                            disabled={deleteDraft.isPending}
+                                                        >
+                                                            Discard
+                                                        </Button>
+                                                        <Button 
+                                                            variant="default" 
+                                                            size="sm" 
+                                                            className="h-7 px-2 text-xs gap-1 bg-blue-600 hover:bg-blue-700" 
+                                                            onClick={() => onEditInvoice && onEditInvoice(inv)}
+                                                        >
+                                                            Review Scan
+                                                        </Button>
+                                                    </div>
+                                                ) : (
+                                                    <Button variant="ghost" size="sm" className="h-7 px-2 text-xs gap-1" onClick={() => setSelectedInvoice(inv)}>
+                                                        <FileText className="h-3.5 w-3.5" />
+                                                        View
+                                                    </Button>
+                                                )}
                                             </td>
                                         </tr>
                                     );
