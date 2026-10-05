@@ -170,6 +170,7 @@ export function PurchasesList({
                     <input 
                         type="file" 
                         accept="image/jpeg,image/png,image/webp" 
+                        capture="environment"
                         ref={fileInputRef} 
                         onChange={handleFileUpload} 
                         className="hidden" 
