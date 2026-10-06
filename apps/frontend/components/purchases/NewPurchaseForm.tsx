@@ -30,6 +30,18 @@ import { buildPurchasePayload } from '@/utils/payloadBuilders';
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
+const safeNumber = (minVal = 0, defaultVal = 0) =>
+    z.preprocess(
+        (val) => (val === '' || val === null || val === undefined || Number.isNaN(Number(val)) ? defaultVal : Number(val)),
+        z.number().min(minVal)
+    );
+
+const safePositiveNumber = (errMsg: string) =>
+    z.preprocess(
+        (val) => (val === '' || val === null || val === undefined || Number.isNaN(Number(val)) ? 0 : Number(val)),
+        z.number().positive(errMsg)
+    );
+
 const itemSchema = z.object({
     productId:       z.string().optional().default(''),
     isCustom:        z.boolean().default(false),
@@ -37,18 +49,18 @@ const itemSchema = z.object({
     hsnCode:         z.string().optional().default(''),
     batchNo:         z.string().min(1, 'Batch required'),
     expiryDate:      z.string().min(1, 'Expiry required'),
-    pkg:             z.number().min(1, 'Pkg ≥ 1'),
-    qty:             z.number().positive('Qty must be > 0'),
-    freeQty:         z.number().min(0),
-    purchaseRate:    z.number().positive('Rate must be > 0'),
-    discountPct:     z.number().min(0).max(100),
-    cashDiscountPct: z.number().min(0).max(100),
-    gstRate:         z.number().min(0),
-    cess:            z.number().min(0),
-    mrp:             z.number().positive('MRP required'),
-    ptr:             z.number().min(0),
-    pts:             z.number().min(0),
-    saleRate:        z.number().min(0, 'Sale rate cannot be negative').optional().default(0),
+    pkg:             safeNumber(1, 1),
+    qty:             safePositiveNumber('Qty must be > 0'),
+    freeQty:         safeNumber(0, 0),
+    purchaseRate:    safePositiveNumber('Rate must be > 0'),
+    discountPct:     safeNumber(0, 0),
+    cashDiscountPct: safeNumber(0, 0),
+    gstRate:         safeNumber(0, 0),
+    cess:            safeNumber(0, 0),
+    mrp:             safePositiveNumber('MRP required'),
+    ptr:             safeNumber(0, 0),
+    pts:             safeNumber(0, 0),
+    saleRate:        safeNumber(0, 0),
 });
 
 const schema = z.object({
@@ -59,8 +71,8 @@ const schema = z.object({
     dueDate:          z.string().optional(),
     purchaseOrderRef: z.string().optional(),
     godown:           z.string().optional(),
-    freight:          z.number().min(0),
-    invoiceDiscount:  z.number().min(0).optional().default(0),
+    freight:          safeNumber(0, 0),
+    invoiceDiscount:  safeNumber(0, 0),
     notes:            z.string().optional(),
     items:            z.array(itemSchema).min(1, 'Add at least one item'),
 });
@@ -554,19 +566,25 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                 }
             }}
             onSubmit={handleSubmit(onSubmit, (errors) => {
-            console.error("FORM VALIDATION ERRORS:", errors);
-            let errMsg = "Validation failed";
-            if (errors.items && Array.isArray(errors.items) && errors.items.length > 0) {
-                const firstRowErrors = errors.items[0] || {};
-                errMsg = "Row 1 Failing Fields: " + Object.keys(firstRowErrors).join(", ");
-                alert(errMsg); // FORCE an unignorable popup!
-            }
-            toast({
-                variant: 'destructive',
-                title: 'Validation Error',
-                description: errMsg
-            });
-        })} className="flex flex-col gap-5 relative">
+                console.error("FORM VALIDATION ERRORS:", errors);
+                let errMsg = "Please check required fields in the form";
+                if (errors.partyLedgerId) {
+                    errMsg = errors.partyLedgerId.message || "Select a party ledger";
+                } else if (errors.invoiceNo) {
+                    errMsg = errors.invoiceNo.message || "Invoice No is required";
+                } else if (errors.items && Array.isArray(errors.items) && errors.items.length > 0) {
+                    const firstRowErrors = errors.items[0] || {};
+                    const failingKeys = Object.keys(firstRowErrors);
+                    errMsg = `Item Row 1: Please check ${failingKeys.join(", ")}`;
+                } else if (errors.items?.message) {
+                    errMsg = errors.items.message;
+                }
+                toast({
+                    variant: 'destructive',
+                    title: 'Form Validation Error',
+                    description: errMsg
+                });
+            })} className="flex flex-col gap-5 relative">
 
             {ocrStatus === 'processing' && (
                 <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm rounded-xl">

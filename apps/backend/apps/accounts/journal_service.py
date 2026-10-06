@@ -701,11 +701,13 @@ def post_purchase_invoice(purchase_invoice, distributor_ledger=None):
             freight_ledger = _get_ledger(outlet, 'Freight Inward')
             lines.append(('debit', freight_ledger, freight))
 
-        # Cr Discount Received
+        # Cr Discount Received (Item Discounts + Bulk Invoice Discount)
         discount_amount = getattr(purchase_invoice, 'discount_amount', Decimal('0')) or Decimal('0')
-        if discount_amount > 0:
+        invoice_discount = getattr(purchase_invoice, 'invoice_discount', Decimal('0')) or Decimal('0')
+        total_discount = discount_amount + invoice_discount
+        if total_discount > 0:
             discount_ledger = _get_ledger(outlet, 'Discount Received')
-            lines.append(('credit', discount_ledger, discount_amount))
+            lines.append(('credit', discount_ledger, total_discount))
 
         # Round Off — bridges the gap between (taxable + gst) and grand_total
         round_off = purchase_invoice.round_off or Decimal('0')
@@ -732,6 +734,20 @@ def post_purchase_invoice(purchase_invoice, distributor_ledger=None):
                 lines.append(('credit', ledger_adj_account, ledger_adj))
 
         lines.append(('credit', distributor_ledger, grand_total))
+
+        # ── Auto-balance: absorb sub-₹0.05 floating-point GST rounding drift ──
+        _pre_check_dr = sum(amt for t, _, amt in lines if t == 'debit')
+        _pre_check_cr = sum(amt for t, _, amt in lines if t == 'credit')
+        _drift = _pre_check_cr - _pre_check_dr  # positive = Cr heavy; negative = Dr heavy
+        if Decimal('0') < abs(_drift) <= Decimal('0.05'):
+            try:
+                _ro_ledger = _get_ledger(outlet, 'Round Off')
+                if _drift > 0:
+                    lines.append(('debit', _ro_ledger, _drift))
+                else:
+                    lines.append(('credit', _ro_ledger, abs(_drift)))
+            except Ledger.DoesNotExist:
+                pass
 
         # Verify double-entry balance before writing anything
         total_debit = sum(amt for t, _, amt in lines if t == 'debit')
