@@ -300,7 +300,7 @@ export function PurchasesList({
                                             </td>
                                             <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
                                                 {inv.status === 'SAVED' 
-                                                    ? (inv.createdAt ? format(new Date(inv.createdAt), 'dd MMM yy, hh:mm a') : '—')
+                                                    ? (inv.createdAt ? format(new Date(inv.createdAt), 'dd MMM yyyy, hh:mm a') : '—')
                                                     : (inv.invoiceDate ? format(new Date(inv.invoiceDate), 'dd MMM yyyy') : '—')}
                                             </td>
                                             <td className="px-4 py-3 font-mono text-xs text-foreground whitespace-nowrap">
