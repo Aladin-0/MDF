@@ -1536,3 +1536,5 @@ class BatchWiseReportExportView(APIView):
         except Exception as e:
             logger.exception(f"Error exporting batch-wise report as {export_format}")
             return Response({'detail': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+

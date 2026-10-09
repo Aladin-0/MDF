@@ -13,7 +13,6 @@ import { Sidebar } from '@/components/shared/Sidebar';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
-import { shortcutRegistry } from '@/lib/shortcuts';
 
 export function GlobalNavigation() {
     const pathname = usePathname();
@@ -72,25 +71,6 @@ export function GlobalNavigation() {
         }
     }, [focusedTopIndex, focusedChildIndex, openMenuIndex]);
 
-    // Register Alt+` to focus main nav
-    useEffect(() => {
-        const id = 'focus-main-nav';
-        shortcutRegistry.register({
-            id,
-            combo: 'Alt+`',
-            scope: 'global',
-            description: 'Focus Main Navigation',
-            handler: () => {
-                setFocusedTopIndex(initialFocusedTopIndex);
-                setOpenMenuIndex(-1);
-                setFocusedChildIndex(-1);
-                if (topItemRefs.current[initialFocusedTopIndex]) {
-                    topItemRefs.current[initialFocusedTopIndex]?.focus();
-                }
-            }
-        });
-        return () => shortcutRegistry.unregister(id);
-    }, [initialFocusedTopIndex]);
 
     // Handle logout
     const handleLogoutAction = async () => {

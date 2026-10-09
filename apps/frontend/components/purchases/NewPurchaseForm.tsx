@@ -1,7 +1,12 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useMagicSubmit } from '@/hooks/useMagicSubmit';
+import { useEnterNavigation } from '@/hooks/useEnterNavigation';
+import { useGridNavigation } from '@/hooks/useGridNavigation';
 import { useForm } from 'react-hook-form';
+import { useSearchParams } from 'next/navigation';
+import { API_URL, getHeaders } from '@/lib/apiClient';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { format, addDays, differenceInDays } from 'date-fns';
@@ -94,9 +99,14 @@ const isNearExpiry = (exp: string) =>
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () => void, invoiceToEdit?: PurchaseInvoiceFull | null }) {
+    const searchParams = useSearchParams();
+    const poId = searchParams?.get('poId');
+    const [linkedPoNo, setLinkedPoNo] = useState<string | null>(null);
+
     const { toast }   = useToast();
     const outletId    = useOutletId();
     const outlet      = useAuthStore((s) => s.outlet);
+    const formRef = useRef<HTMLFormElement>(null);
     const user        = useAuthStore((s) => s.user);
     const outletState = useSettingsStore((s) => s.outletState) || outlet?.state || 'Maharashtra';
 
@@ -111,6 +121,18 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
 
     const [items,             setItems]             = useState<PurchaseItemFormData[]>([emptyItem()]);
     const [hasDraft,          setHasDraft]          = useState(false);
+
+    // Refs for enter navigation
+    const partyRef = useRef<HTMLDivElement>(null);
+    const invoiceNoRef = useRef<HTMLInputElement>(null);
+    const dateRef = useRef<HTMLInputElement>(null);
+    const poRef = useRef<HTMLInputElement>(null);
+    const notesRef = useRef<HTMLTextAreaElement>(null);
+    const gridContainerRef = useRef<HTMLDivElement>(null);
+    
+    useEnterNavigation([partyRef, invoiceNoRef, dateRef, poRef, notesRef]);
+    useGridNavigation(gridContainerRef, () => handleAddItem());
+
     const [ledgerAdjustment,  setLedgerAdjustment]   = useState<number>(0);
     const [adjustmentSign,    setAdjustmentSign]     = useState<'-' | '+'>('-');
     const [ledgerNote,        setLedgerNote]         = useState<string>('');
@@ -262,6 +284,48 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
             items: formItems,
         });
     }, [invoiceToEdit, reset]);
+
+    // ── Autofill from PO Logic ───────────────────────────────────────────────
+    useEffect(() => {
+        if (poId && outletId && !invoiceToEdit) {
+            fetch(`${API_URL}/purchases/orders/${poId}/?outletId=${outletId}`, {
+                headers: getHeaders()
+            })
+            .then(res => {
+                if (!res.ok) throw new Error('PO fetch failed');
+                return res.json();
+            })
+            .then(data => {
+                if (data && data.items) {
+                    setLinkedPoNo(data.poNumber);
+                    setValue('purchaseOrderRef', data.id); // Save PO ID so backend can mark it
+                    
+                    const newItems = data.items.map((it: any) => {
+                        const remainingQty = it.qtyStrips - it.receivedQty;
+                        if (remainingQty <= 0) return null;
+                        
+                        return {
+                            ...emptyItem(),
+                            productId: it.productId,
+                            productName: it.productName,
+                            qty: remainingQty,
+                            purchaseRate: it.lastRate,
+                            ptr: it.lastRate,
+                        };
+                    }).filter(Boolean);
+                    
+                    if (newItems.length > 0) {
+                        setItems(newItems);
+                        toast({ title: 'PO Data Loaded', description: `Pre-filled ${newItems.length} items from ${data.poNumber}.` });
+                    }
+                }
+            })
+            .catch(err => {
+                console.error("Failed to fetch PO", err);
+                toast({ title: 'Error', description: 'Failed to load PO data.', variant: 'destructive' });
+            });
+        }
+    }, [poId, outletId, invoiceToEdit, setValue, toast]);
 
 
     // ── Draft ────────────────────────────────────────────────────────────────
@@ -429,19 +493,16 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
         }
     };
 
+    useMagicSubmit(formRef, () => {
+        handleSubmit(onSubmit)();
+    });
+
     // ─── JSX ─────────────────────────────────────────────────────────────────
 
     return (
         <>
         <form 
-            onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                    const target = e.target as HTMLElement;
-                    if (target.tagName.toLowerCase() !== 'textarea') {
-                        e.preventDefault();
-                    }
-                }
-            }}
+            ref={formRef}
             onSubmit={handleSubmit(onSubmit, (errors) => {
             console.error("FORM VALIDATION ERRORS:", errors);
             let errMsg = "Validation failed";
@@ -456,6 +517,14 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                 description: errMsg
             });
         })} className="flex flex-col gap-5">
+
+            {linkedPoNo && (
+                <div className="bg-indigo-50 border border-indigo-100 text-indigo-700 px-4 py-3 rounded-lg flex items-center gap-3">
+                    <FileText className="w-5 h-5 text-indigo-500" />
+                    <span className="font-medium">🔗 Linked to {linkedPoNo}</span>
+                    <span className="text-sm opacity-80">Line items have been automatically populated based on remaining quantities.</span>
+                </div>
+            )}
 
             {/* ── Draft banner ────────────────────────────────────────── */}
             {hasDraft && (
@@ -499,7 +568,7 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                     <div className="space-y-4">
                         <div className="flex items-center justify-between">
                             <Label className="text-sm font-medium text-slate-700 w-1/3">Party <span className="text-red-500">*</span></Label>
-                            <div className="w-2/3">
+                            <div className="w-2/3" ref={partyRef}>
                                 <LedgerPicker
                                     group="Sundry Creditors"
                                     value={partyLedger}
@@ -536,8 +605,16 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                             <Label className="text-sm font-medium text-slate-700 w-1/3">Invoice No <span className="text-red-500">*</span></Label>
                             <div className="w-2/3">
                                 <Input
+                                    ref={(e) => {
+                                        invoiceNoRef.current = e;
+                                        register('invoiceNo').ref(e);
+                                    }}
                                     className={cn("h-10 text-sm bg-white", (errors.invoiceNo || isDuplicate) && "border-red-400 focus-visible:ring-red-400")}
-                                    {...register('invoiceNo')}
+                                    {...register('invoiceNo', {
+                                        onChange: register('invoiceNo').onChange,
+                                        onBlur: register('invoiceNo').onBlur,
+                                        name: register('invoiceNo').name
+                                    })}
                                     placeholder="e.g. AJD-2026-0123"
                                 />
                                 {errors.invoiceNo ? (
@@ -552,13 +629,37 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                         <div className="flex items-center justify-between">
                             <Label className="text-sm font-medium text-slate-700 w-1/3">Invoice Date</Label>
                             <div className="w-2/3">
-                                <Input className="h-10 text-sm bg-white" type="date" {...register('invoiceDate')} />
+                                <Input 
+                                    className="h-10 text-sm bg-white" 
+                                    type="date" 
+                                    ref={(e) => {
+                                        dateRef.current = e;
+                                        register('invoiceDate').ref(e);
+                                    }}
+                                    {...register('invoiceDate', {
+                                        onChange: register('invoiceDate').onChange,
+                                        onBlur: register('invoiceDate').onBlur,
+                                        name: register('invoiceDate').name
+                                    })} 
+                                />
                             </div>
                         </div>
                         <div className="flex items-center justify-between">
                             <Label className="text-sm font-medium text-slate-700 w-1/3">PO Ref</Label>
                             <div className="w-2/3">
-                                <Input className="h-10 text-sm bg-white" {...register('purchaseOrderRef')} placeholder="Optional" />
+                                <Input 
+                                    className="h-10 text-sm bg-white" 
+                                    ref={(e) => {
+                                        poRef.current = e;
+                                        register('purchaseOrderRef').ref(e);
+                                    }}
+                                    {...register('purchaseOrderRef', {
+                                        onChange: register('purchaseOrderRef').onChange,
+                                        onBlur: register('purchaseOrderRef').onBlur,
+                                        name: register('purchaseOrderRef').name
+                                    })} 
+                                    placeholder="Optional" 
+                                />
                             </div>
                         </div>
                     </div>
@@ -616,7 +717,15 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                             <div className="w-2/3">
                                 <Textarea
                                     className="resize-none text-sm h-10 min-h-[40px] py-2 bg-white"
-                                    {...register('notes')}
+                                    ref={(e) => {
+                                        notesRef.current = e;
+                                        register('notes').ref(e);
+                                    }}
+                                    {...register('notes', {
+                                        onChange: register('notes').onChange,
+                                        onBlur: register('notes').onBlur,
+                                        name: register('notes').name
+                                    })}
                                     placeholder="Optional notes..."
                                 />
                             </div>
@@ -655,7 +764,7 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                 )}
 
                 {/* Make this wrapper scrollable and force full width */}
-                <div className="flex-1 overflow-auto relative">
+                <div className="flex-1 overflow-auto relative" ref={gridContainerRef}>
                     <table className="w-full min-w-[1280px] text-xs border-collapse">
                         <thead className="bg-slate-50 sticky top-0 z-20 shadow-[0_1px_2px_rgb(0,0,0,0.05)]">
                             <tr>

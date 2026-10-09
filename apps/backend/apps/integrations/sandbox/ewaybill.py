@@ -1,5 +1,5 @@
 from apps.billing.models import SaleInvoice
-from apps.integrations.sandbox.client import SandboxIntegrationError
+from apps.integrations.sandbox.client import SandboxIntegrationError, SandboxAPIClient
 from apps.compliance.services.sandbox_auth import SandboxAuthService
 from apps.core.models import SandboxConfiguration
 import requests

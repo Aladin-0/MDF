@@ -17,7 +17,6 @@ import { StaffReportTab } from '@/components/reports/StaffReportTab';
 import { PurchaseReportTab } from '@/components/reports/PurchaseReportTab';
 import { ScheduleReportTab } from '@/components/reports/ScheduleReportTab';
 import { BatchReportTab } from '@/components/reports/BatchReportTab';
-import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { getDefaultDateRange, getDateRangeForPeriod } from '@/hooks/useReports';
 import { DateRangeFilter } from '@/types';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -38,17 +37,6 @@ export default function ReportsPage() {
         // Trigger export dropdown — handled inside ExportButton
     }, []);
 
-    useKeyboardShortcuts({
-        '1': () => setActiveTab('sales'),
-        '2': () => setActiveTab('gst'),
-        '3': () => setActiveTab('stock'),
-        '4': () => setActiveTab('expiry'),
-        '5': () => setActiveTab('staff'),
-        '6': () => setActiveTab('purchases'),
-        '7': () => setActiveTab('schedule'),
-        'm': () => setDateRange(getDateRangeForPeriod('this_month')),
-        'w': () => setDateRange(getDateRangeForPeriod('this_week')),
-    });
 
     if (!hasPermission('view_reports')) {
         return (

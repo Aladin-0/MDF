@@ -10,7 +10,6 @@ import CustomerCreditDetail from '@/components/credit/CustomerCreditDetail';
 import EditCreditLimitModal from '@/components/credit/EditCreditLimitModal';
 import BulkReminderModal from '@/components/credit/BulkReminderModal';
 import RecordCreditPaymentModal from '@/components/credit/RecordCreditPaymentModal';
-import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useCreditAccounts, useCreditAgingSummary } from '@/hooks/useCredit';
 import { useAuthStore } from '@/store/authStore';
 import { exportToCSV } from '@/lib/export';
@@ -89,22 +88,6 @@ export default function CreditPage() {
         }
     };
 
-    // Keyboard shortcuts
-    useKeyboardShortcuts({
-        '/': () => {
-            const input = document.querySelector<HTMLInputElement>('input[placeholder*="Search"]');
-            input?.focus();
-        },
-        'Escape': () => {
-            setSelectedAccountId(null);
-            setSearchQuery('');
-        },
-        'p': () => selectedAccountId && setShowPaymentModal(true),
-        'w': () => selectedAccountId && handleWhatsApp(),
-        '1': () => setActiveFilter('all'),
-        '2': () => setActiveFilter('overdue'),
-        '3': () => setActiveFilter('active'),
-    });
 
     return (
         <div className="space-y-6">

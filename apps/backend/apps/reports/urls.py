@@ -30,5 +30,6 @@ urlpatterns = [
     path('batch-wise/', BatchWiseReportView.as_view(), name='batch-wise-report'),
     path('batch-wise/export/', BatchWiseReportExportView.as_view(), name='batch-wise-report-export'),
 
+
     # GST Dashboard MVP endpoints removed to gst_urls.py
 ]

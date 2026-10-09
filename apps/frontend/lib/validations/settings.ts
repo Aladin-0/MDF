@@ -34,6 +34,8 @@ export const gstSettingsSchema = z.object({
     defaultGSTRate: z.number().min(0).max(28),
     roundOffInvoice: z.boolean(),
     showGSTBreakup: z.boolean(),
+    enableEwayBill: z.boolean().default(false),
+    enableEinvoice: z.boolean().default(false),
     // outletStateCode is no longer a form field — it is derived automatically
     // from outletState by settingsStore.updateOutletSettings (M9).
 });

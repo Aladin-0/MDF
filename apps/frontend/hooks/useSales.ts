@@ -33,6 +33,7 @@ export interface SalesFilters {
     search?: string;
     doctorId?: string;
     hospitalName?: string;
+    saleType?: 'ALL' | 'RETAIL' | 'WHOLESALE';
 }
 
 export function useSalesList(filters?: SalesFilters) {
@@ -47,6 +48,7 @@ export function useSalesList(filters?: SalesFilters) {
             search: filters?.search,
             doctorId: filters?.doctorId,
             hospitalName: filters?.hospitalName,
+            saleType: filters?.saleType,
         }),
         enabled: !!outletId,
         staleTime: 30_000,

@@ -1,8 +1,14 @@
+@import url('https://fonts.googleapis.com/css2?family=Sansation:ital,wght@0,300;0,400;0,700;1,400&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
+  html {
+    font-size: 18px; /* Scales up the entire UI across the project */
+  }
+
   :root {
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
@@ -90,4 +96,16 @@
   outline: 2px solid hsl(var(--primary));
   outline-offset: 2px;
   border-radius: 4px;
+}
+
+/* Global Radix Primitive Focus Rings */
+[data-radix-collection-item]:focus-visible,
+[data-state]:focus-visible,
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
 }

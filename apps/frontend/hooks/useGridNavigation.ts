@@ -1,6 +1,6 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 
-export function useGridNavigation(containerRef: React.RefObject<HTMLElement>) {
+export function useGridNavigation(containerRef: React.RefObject<HTMLElement>, onAddRow?: () => void) {
     useEffect(() => {
         const container = containerRef.current;
         if (!container) return;
@@ -9,60 +9,90 @@ export function useGridNavigation(containerRef: React.RefObject<HTMLElement>) {
             const activeEl = document.activeElement as HTMLElement;
             if (!activeEl || !container.contains(activeEl)) return;
 
-            const row = activeEl.getAttribute('data-cart-row');
-            const col = activeEl.getAttribute('data-cart-col');
-
-            if (!row || !col) return;
-
-            const rowIndex = parseInt(row, 10);
-
-            let nextRowIndex = rowIndex;
-            let nextCol = col;
-            let shouldMove = false;
-
-            if (e.key === 'ArrowUp') {
-                nextRowIndex = rowIndex - 1;
-                shouldMove = true;
-            } else if (e.key === 'ArrowDown') {
-                nextRowIndex = rowIndex + 1;
-                shouldMove = true;
-            } else if (e.key === 'ArrowRight' && activeEl.tagName !== 'INPUT') {
-                // Simplified right/left for non-inputs to prevent breaking text cursor
-                shouldMove = true;
-                // Complex horizontal traversal is skipped for simplicity, 
-                // but we could map col names to an array: ['delete', 'strips', 'loose', 'rate']
-            }
-
-            if (shouldMove) {
-                // Only move if we are not actively typing in an input where up/down matters
-                // For number inputs, up/down changes value. We'll intercept it if Shift is held, or if the user prefers grid nav.
-                // Let's explicitly override ArrowUp/Down for inputs to mean grid nav unless Alt is held.
-                
-                // For fast entry, we want ArrowUp/Down to move rows.
-                if (activeEl.tagName === 'INPUT' && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
-                    // Stop native number increment
-                    e.preventDefault();
-                }
-
-                const nextSelector = `[data-cart-row="${nextRowIndex}"][data-cart-col="${nextCol}"]`;
-                const nextEl = container.querySelector(nextSelector) as HTMLElement;
-
-                if (nextEl) {
-                    nextEl.focus();
-                }
+            const rowElement = activeEl.closest('[data-cart-row]');
+            if (!rowElement) return;
+            
+            const rowStr = rowElement.getAttribute('data-cart-row');
+            if (!rowStr) return;
+            
+            const rowIndex = parseInt(rowStr, 10);
+            
+            // Get all focusable cells in the current row
+            let rowCells = Array.from(rowElement.querySelectorAll('input:not([disabled]), button:not([disabled])')) as HTMLElement[];
+            // If no inputs, the row itself is the only focusable "cell"
+            if (rowCells.length === 0 && (rowElement as HTMLElement).hasAttribute('tabindex')) {
+                rowCells = [rowElement as HTMLElement];
             }
             
-            // Delete row shortcut
-            if ((e.key === 'Delete' || (e.key === 'Backspace' && e.altKey)) && activeEl.tagName !== 'INPUT') {
-                const deleteBtn = container.querySelector(`[data-cart-row="${rowIndex}"][data-cart-col="delete"]`) as HTMLElement;
-                if (deleteBtn) {
+            const colIndex = rowCells.indexOf(activeEl);
+            
+            let shouldMove = false;
+            let targetEl: HTMLElement | null = null;
+            
+            if (e.key === 'ArrowRight') {
+                if (activeEl.tagName === 'INPUT') {
+                    const inputEl = activeEl as HTMLInputElement;
+                    if (inputEl.type !== 'number' && inputEl.selectionEnd !== inputEl.value.length) return;
+                }
+                if (colIndex !== -1 && colIndex < rowCells.length - 1) {
+                    targetEl = rowCells[colIndex + 1];
+                    shouldMove = true;
+                }
+            } else if (e.key === 'ArrowLeft') {
+                if (activeEl.tagName === 'INPUT') {
+                    const inputEl = activeEl as HTMLInputElement;
+                    if (inputEl.type !== 'number' && inputEl.selectionStart !== 0) return;
+                }
+                if (colIndex > 0) {
+                    targetEl = rowCells[colIndex - 1];
+                    shouldMove = true;
+                }
+            } else if (e.key === 'ArrowUp') {
+                const prevRow = container.querySelector(`[data-cart-row="${rowIndex - 1}"]`);
+                if (prevRow) {
+                    let prevCells = Array.from(prevRow.querySelectorAll('input:not([disabled]), button:not([disabled])')) as HTMLElement[];
+                    if (prevCells.length === 0 && (prevRow as HTMLElement).hasAttribute('tabindex')) {
+                        prevCells = [prevRow as HTMLElement];
+                    }
+                    targetEl = prevCells[colIndex !== -1 ? colIndex : 0] || prevCells[prevCells.length - 1];
+                    shouldMove = true;
+                }
+            } else if (e.key === 'ArrowDown') {
+                const nextRow = container.querySelector(`[data-cart-row="${rowIndex + 1}"]`);
+                if (nextRow) {
+                    let nextCells = Array.from(nextRow.querySelectorAll('input:not([disabled]), button:not([disabled])')) as HTMLElement[];
+                    if (nextCells.length === 0 && (nextRow as HTMLElement).hasAttribute('tabindex')) {
+                        nextCells = [nextRow as HTMLElement];
+                    }
+                    targetEl = nextCells[colIndex !== -1 ? colIndex : 0] || nextCells[nextCells.length - 1];
+                    shouldMove = true;
+                } else if (onAddRow) {
                     e.preventDefault();
-                    deleteBtn.click();
+                    onAddRow();
+                    setTimeout(() => {
+                        const newFirstCellRow = container.querySelector(`[data-cart-row="${rowIndex + 1}"]`);
+                        if (newFirstCellRow) {
+                            let newCells = Array.from(newFirstCellRow.querySelectorAll('input:not([disabled]), button:not([disabled])')) as HTMLElement[];
+                            if (newCells.length === 0 && (newFirstCellRow as HTMLElement).hasAttribute('tabindex')) {
+                                newCells = [newFirstCellRow as HTMLElement];
+                            }
+                            if (newCells[0]) newCells[0].focus();
+                        }
+                    }, 50);
+                    return;
+                }
+            }
+
+            if (shouldMove && targetEl) {
+                e.preventDefault();
+                targetEl.focus();
+                if (targetEl.tagName === 'INPUT') {
+                    (targetEl as HTMLInputElement).select();
                 }
             }
         };
 
         container.addEventListener('keydown', handleKeyDown);
         return () => container.removeEventListener('keydown', handleKeyDown);
-    }, [containerRef]);
+    }, [containerRef, onAddRow]);
 }

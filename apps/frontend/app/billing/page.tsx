@@ -12,28 +12,51 @@ import { useAutosaveDraft } from '@/hooks/useAutosaveDraft';
 import { useLoadDrafts } from '@/hooks/useLoadDrafts';
 import { BillSuccessScreen } from '@/components/billing/BillSuccessScreen';
 import { InvoicePreviewModal } from '@/components/billing/InvoicePreviewModal';
-import { useState, useEffect, Suspense } from 'react';
-import { shortcutRegistry } from '@/lib/shortcuts';
+import { useState, useEffect, Suspense, useRef } from 'react';
 import { EditSaleHydrator } from '@/components/billing/EditSaleHydrator';
+import { useEnterNavigation } from '@/hooks/useEnterNavigation';
 
 export default function FullScreenBillingPage() {
-    const { isPinVerified, activeDraftId, lastInvoice, setLastInvoice } = useBillingStore();
+    const { isPinVerified, activeDraftId, lastInvoice, setLastInvoice, drafts } = useBillingStore();
     useAutosaveDraft();
     const draftsLoaded = useLoadDrafts();
     const [showInvoicePreview, setShowInvoicePreview] = useState(false);
+    const toggleMarginInfo = useBillingStore(s => s.toggleMarginInfo);
 
+    // Refs for enter navigation
+    const customerRef = useRef<HTMLInputElement>(null);
+    const doctorRef = useRef<HTMLInputElement>(null);
+    const searchRef = useRef<HTMLInputElement>(null);
+    const pageRef = useRef<HTMLDivElement>(null);
+    useEnterNavigation([customerRef, doctorRef, searchRef]);
+
+    // Strict Header-First Initial Focus
     useEffect(() => {
-        return shortcutRegistry.register({
-            id: 'toggle-margin',
-            combo: 'Ctrl+Shift+m',
-            scope: 'global',
-            description: 'Toggle Margin Visibility',
-            handler: (e) => {
-                e.preventDefault();
-                useBillingStore.getState().toggleMarginInfo();
+        if (!draftsLoaded || !activeDraftId) return;
+        
+        // Timeout to allow DOM refs to attach
+        const timer = setTimeout(() => {
+            if (customerRef.current) {
+                // customerRef is now bound directly to the input, not a wrapper div
+                customerRef.current.focus();
             }
-        });
-    }, []);
+        }, 50);
+
+        return () => clearTimeout(timer);
+    }, [draftsLoaded, activeDraftId]); // Only run on load or draft switch
+
+    // Global Keyboard Shortcuts
+    useEffect(() => {
+        const handleGlobalKeyDown = (e: KeyboardEvent) => {
+            // Ctrl+M to toggle margin view
+            if (e.ctrlKey && e.key.toLowerCase() === 'm') {
+                e.preventDefault();
+                toggleMarginInfo();
+            }
+        };
+        window.addEventListener('keydown', handleGlobalKeyDown);
+        return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+    }, [toggleMarginInfo]);
 
     if (!isPinVerified) {
         return (
@@ -69,7 +92,7 @@ export default function FullScreenBillingPage() {
     }
 
     return (
-        <div className="h-screen w-screen overflow-hidden flex flex-col bg-[#F8FAFC] font-sans">
+        <div ref={pageRef} className="h-[100dvh] w-screen overflow-hidden flex flex-col bg-[#F8FAFC] font-sans">
             <Suspense fallback={null}>
                 <EditSaleHydrator />
             </Suspense>
@@ -84,18 +107,18 @@ export default function FullScreenBillingPage() {
             <ActiveBillsTabs />
 
             {/* Main Workspace (Split Left/Right) */}
-            <div className="flex flex-1 overflow-hidden">
+            <div className="flex flex-row flex-1 overflow-auto">
                 {/* Left Area: Context & Workspace */}
-                <div className="flex-1 min-w-[600px] flex flex-col">
+                <div className="flex-1 w-full flex flex-col min-h-[500px] min-w-0">
                     {/* V3 Header Strip (Context Band) */}
-                    {activeDraftId && <BillingHeaderStrip key={`header-${activeDraftId}`} />}
+                    {activeDraftId && <BillingHeaderStrip key={`header-${activeDraftId}`} customerRef={customerRef} doctorRef={doctorRef} medicineSearchRef={searchRef} />}
                     
                     {/* Invoice Table Workspace */}
-                    {activeDraftId && <MainInvoiceWorkspace key={`workspace-${activeDraftId}`} />}
+                    {activeDraftId && <MainInvoiceWorkspace key={`workspace-${activeDraftId}`} searchRef={searchRef} />}
                 </div>
 
                 {/* Right Area: Payment Dock */}
-                <div className="w-[400px] shrink-0">
+                <div className="w-[300px] lg:w-[400px] shrink-0 border-l">
                     {activeDraftId && <RightBillingRail key={`rail-${activeDraftId}`} />}
                 </div>
             </div>

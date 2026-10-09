@@ -2,7 +2,6 @@
 
 import { useState, useCallback } from 'react';
 import { usePermissions } from '@/hooks/usePermissions';
-import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { SettingsSidebar, type SectionId } from '@/components/settings/SettingsSidebar';
 import { OutletSettingsSection } from '@/components/settings/OutletSettingsSection';
 import { GSTSettingsSection } from '@/components/settings/GSTSettingsSection';
@@ -39,17 +38,6 @@ export default function SettingsPage() {
         setHasUnsavedChanges(false);
     }
 
-    // Keyboard shortcuts: 1-8 to switch sections, s to hint-save
-    useKeyboardShortcuts({
-        '1': () => canManageSettings && setActiveSection('outlet'),
-        '2': () => canManageSettings && setActiveSection('gst'),
-        '3': () => canManageSettings && setActiveSection('printer'),
-        '4': () => canManageSettings && setActiveSection('billing'),
-        '5': () => canManageSettings && setActiveSection('attendance'),
-        '6': () => canManageSettings && setActiveSection('notifications'),
-        '7': () => setActiveSection('preferences'),
-        '8': () => canManageSettings && setActiveSection('data'),
-    });
 
     const sectionProps = {
         onDirty: handleDirty,

@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useInventoryFilters } from '@/hooks/useInventoryFilters';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -168,19 +167,7 @@ export default function InventoryPage() {
         }
     };
 
-    useKeyboardShortcuts({
-        '/': () => {
-             // For simplicity, we trigger focus using regular DOM in StockTable component or here 
-             // In proper React we'd pass a ref, but using DOM is quicker for global shortcut
-             document.querySelector<HTMLInputElement>('input[placeholder="Search medicine, salt, brand..."]')?.focus();
-        },
-        'Escape': () => {
-             clearFilters();
-        },
-        'e': () => setActiveTab('expiring'),
-        'l': () => setActiveTab('low_stock'),
-        'a': () => setActiveTab('all'),
-    });
+
 
     return (
         <div className="space-y-6 bg-slate-50 min-h-[calc(100vh-4rem)] p-6 rounded-xl">

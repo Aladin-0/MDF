@@ -10,6 +10,12 @@ from apps.purchases.views import (
     PaymentListView,
     DistributorOutstandingView,
     PurchaseInvoiceSearchView,
+    PurchaseOrderBulkCreateView,
+    PurchaseOrderSuggestionsView,
+    PurchaseOrderListView,
+    PurchaseOrderDetailView,
+    PurchaseOrderExcelExportView,
+    PurchaseOrderPdfExportView,
 )
 from apps.purchases.models import PurchaseInvoice
 from apps.accounts.models import Ledger
@@ -70,6 +76,12 @@ class PaymentListCreateView(PaymentListView, DistributorPaymentView):
 urlpatterns = [
     path('check-invoice/', CheckPurchaseInvoiceView.as_view(), name='purchase-check-invoice'),
     path('invoices/search/', PurchaseInvoiceSearchView.as_view(), name='purchase-invoice-search'),
+    path('orders/', PurchaseOrderListView.as_view(), name='purchase-order-list'),
+    path('orders/<uuid:pk>/', PurchaseOrderDetailView.as_view(), name='purchase-order-detail'),
+    path('orders/<uuid:pk>/export/excel/', PurchaseOrderExcelExportView.as_view(), name='purchase-order-export-excel'),
+    path('orders/<uuid:pk>/export/pdf/', PurchaseOrderPdfExportView.as_view(), name='purchase-order-export-pdf'),
+    path('orders/suggestions/', PurchaseOrderSuggestionsView.as_view(), name='purchase-order-suggestions'),
+    path('orders/bulk-create/', PurchaseOrderBulkCreateView.as_view(), name='purchase-order-bulk-create'),
     path('', PurchasesView.as_view(), name='purchase-list-create'),
     path('payments/', PaymentListCreateView.as_view(), name='distributor-payment'),
     path('distributors/<uuid:pk>/outstanding/', DistributorOutstandingView.as_view(), name='distributor-outstanding'),

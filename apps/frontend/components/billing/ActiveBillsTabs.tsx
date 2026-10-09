@@ -4,60 +4,11 @@ import { useBillingStore } from '@/store/billingStore';
 import { Plus, X, User, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useEffect } from 'react';
-import { DISABLE_DISRUPTIVE_SHORTCUTS } from '@/lib/shortcuts';
 
 export function ActiveBillsTabs() {
     const { drafts, activeDraftId, switchDraft, closeDraft, createDraft } = useBillingStore();
     const draftList = Object.values(drafts).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
-    // Global keyboard shortcuts
-    useEffect(() => {
-        const handleGlobalKeyDown = (e: KeyboardEvent) => {
-            if (DISABLE_DISRUPTIVE_SHORTCUTS) return;
-            if (!e.altKey) return;
-            
-            // New Bill (Alt + N)
-            if (e.key.toLowerCase() === 'n') {
-                e.preventDefault();
-                if (!e.repeat) createDraft();
-            }
-            
-            // Switch to Previous Bill (Alt + [) or (Alt + LeftArrow)
-            if (e.key === '[' || e.key === 'ArrowLeft') {
-                e.preventDefault();
-                const currentIndex = draftList.findIndex(d => d.id === activeDraftId);
-                if (currentIndex > 0) {
-                    switchDraft(draftList[currentIndex - 1].id);
-                } else if (draftList.length > 0) {
-                    // wrap around to the end
-                    switchDraft(draftList[draftList.length - 1].id);
-                }
-            }
-            
-            // Switch to Next Bill (Alt + ]) or (Alt + RightArrow)
-            if (e.key === ']' || e.key === 'ArrowRight') {
-                e.preventDefault();
-                const currentIndex = draftList.findIndex(d => d.id === activeDraftId);
-                if (currentIndex >= 0 && currentIndex < draftList.length - 1) {
-                    switchDraft(draftList[currentIndex + 1].id);
-                } else if (draftList.length > 0) {
-                    // wrap around to the beginning
-                    switchDraft(draftList[0].id);
-                }
-            }
-            
-            // Switch to specific bill (Alt + 1...9)
-            if (/^[1-9]$/.test(e.key)) {
-                e.preventDefault();
-                const index = parseInt(e.key) - 1;
-                if (index < draftList.length) {
-                    switchDraft(draftList[index].id);
-                }
-            }
-        };
-        window.addEventListener('keydown', handleGlobalKeyDown);
-        return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-    }, [createDraft, switchDraft, draftList, activeDraftId]);
 
     // Auto-create initial draft if empty
     useEffect(() => {

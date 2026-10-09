@@ -15,13 +15,17 @@ interface DoctorPickerProps {
     onSelect: (doctor: Doctor | null) => void;
     placeholder?: string;
     className?: string;
+    inputRef?: React.RefObject<HTMLInputElement>;
+    nextInputRef?: React.RefObject<HTMLInputElement>;
 }
 
 export function DoctorPicker({ 
     currentDoctor, 
     onSelect, 
     placeholder = 'Dr. Name / Reg No...',
-    className 
+    className,
+    inputRef: externalInputRef,
+    nextInputRef
 }: DoctorPickerProps) {
     const outletId = useOutletId();
     
@@ -31,7 +35,8 @@ export function DoctorPicker({
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     
     const containerRef = useRef<HTMLDivElement>(null);
-    const inputRef = useRef<HTMLInputElement>(null);
+    const internalInputRef = useRef<HTMLInputElement>(null);
+    const inputRef = externalInputRef || internalInputRef;
 
     // Debounce search
     useEffect(() => {
@@ -69,6 +74,12 @@ export function DoctorPicker({
         onSelect(doctor);
         setIsOpen(false);
         setSearchQuery('');
+        
+        if (nextInputRef?.current) {
+            setTimeout(() => {
+                nextInputRef.current?.focus();
+            }, 10);
+        }
     };
 
     const handleCreateDoctor = (doctor: Doctor) => {
@@ -83,6 +94,8 @@ export function DoctorPicker({
             inputRef.current?.blur();
         }
         if (e.key === 'Enter' && doctors.length > 0) {
+            e.preventDefault();
+            e.stopPropagation();
             handleSelect(doctors[0]);
         }
     };
@@ -99,6 +112,17 @@ export function DoctorPicker({
                         <span className="text-[10px] bg-white text-slate-800 px-1.5 py-0.5 rounded font-bold shrink-0">{currentDoctor.regNo}</span>
                     )}
                 </div>
+                {/* Hidden input to maintain focus flow and Enter-to-advance */}
+                <input 
+                    ref={inputRef}
+                    className="opacity-0 absolute w-0 h-0"
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            nextInputRef?.current?.focus();
+                        }
+                    }}
+                />
                 <button 
                     className="text-[10px] text-purple-600 hover:text-purple-800 font-bold uppercase tracking-wider ml-2 shrink-0" 
                     onClick={() => handleSelect(null)}

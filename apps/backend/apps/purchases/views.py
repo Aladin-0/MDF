@@ -1287,3 +1287,530 @@ class PurchaseInvoiceSearchView(APIView):
                 'items': items,
             })
         return Response({'data': results})
+
+class PurchaseOrderSuggestionsView(APIView):
+    """
+    GET /api/v1/purchases/orders/suggestions/?outletId=xxx
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        outlet_id = request.query_params.get('outletId')
+        distributor_id = request.query_params.get('distributorId')
+        if not outlet_id:
+            return Response({'detail': 'outletId required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        from django.db.models import Sum, OuterRef, Subquery, IntegerField, F, FloatField, ExpressionWrapper, Q, CharField
+        from django.db.models.functions import Coalesce, Cast, NullIf
+        from apps.inventory.models import MasterProduct, Batch, OutletProductConfig
+        from apps.purchases.models import PurchaseOrderItem, PurchaseItem, Distributor
+        
+        # 1. Effective strips (from active batches)
+        active_batch_product_ids = Batch.objects.filter(
+            outlet_id=outlet_id,
+            is_active=True,
+        ).values('product_id')
+        
+        config_product_ids = OutletProductConfig.objects.filter(
+            outlet_id=outlet_id,
+            min_qty__gt=0
+        ).values('product_id')
+
+        products = MasterProduct.objects.filter(
+            Q(id__in=active_batch_product_ids) | Q(id__in=config_product_ids)
+        ).distinct()
+
+        config_sq = OutletProductConfig.objects.filter(
+            outlet_id=outlet_id,
+            product_id=OuterRef('pk')
+        )
+
+        all_active_sq = Batch.objects.filter(
+            outlet_id=outlet_id,
+            is_active=True,
+            product_id=OuterRef('pk'),
+        )
+
+        po_items_sq = PurchaseOrderItem.objects.filter(
+            product_id=OuterRef('pk'),
+            purchase_order__outlet_id=outlet_id,
+            purchase_order__status__in=['SENT', 'PARTIAL']
+        ).values('product_id').annotate(
+            s=Sum(F('qty_strips') - F('received_qty'))
+        ).values('s')[:1]
+        
+        last_dist_sq = PurchaseItem.objects.filter(
+            invoice__outlet_id=outlet_id,
+            master_product_id=OuterRef('pk')
+        ).order_by('-invoice__invoice_date', '-invoice__created_at').values('invoice__distributor_id')[:1]
+        
+        last_dist_name_sq = PurchaseItem.objects.filter(
+            invoice__outlet_id=outlet_id,
+            master_product_id=OuterRef('pk')
+        ).order_by('-invoice__invoice_date', '-invoice__created_at').values('invoice__distributor__name')[:1]
+
+        products = products.annotate(
+            total_strips=Coalesce(
+                Subquery(
+                    all_active_sq.values('product_id')
+                        .annotate(s=Sum('qty_strips')).values('s')[:1],
+                    output_field=IntegerField()
+                ),
+                0
+            ),
+            total_loose=Coalesce(
+                Subquery(
+                    all_active_sq.values('product_id')
+                        .annotate(s=Sum('qty_loose')).values('s')[:1],
+                    output_field=IntegerField()
+                ),
+                0
+            ),
+        )
+
+        products = products.annotate(
+            effective_strips=ExpressionWrapper(
+                F('total_strips') + (Cast(F('total_loose'), FloatField()) / Cast(Coalesce(NullIf(F('pack_size'), 0), 1), FloatField())),
+                output_field=FloatField()
+            ),
+            on_order=Coalesce(Subquery(po_items_sq, output_field=IntegerField()), 0),
+            outlet_min_qty=Coalesce(Subquery(config_sq.values('min_qty')[:1]), 0.0, output_field=FloatField()),
+            outlet_reorder_qty=Coalesce(Subquery(config_sq.values('reorder_qty')[:1]), 0.0, output_field=FloatField()),
+            last_dist_id=Subquery(last_dist_sq),
+            last_dist_name=Subquery(last_dist_name_sq),
+            estimated_ptr=Coalesce(Subquery(
+                Batch.objects.filter(outlet_id=outlet_id, product_id=OuterRef('pk')).order_by('-created_at').values('ptr')[:1]
+            ), 0.0, output_field=FloatField())
+        )
+        
+        products = products.annotate(
+            available=ExpressionWrapper(F('effective_strips') + Cast(F('on_order'), FloatField()), output_field=FloatField())
+        )
+        
+        low_stock_products = products.filter(available__lte=F('outlet_min_qty'))
+        if distributor_id:
+            low_stock_products = low_stock_products.filter(last_dist_id=distributor_id)
+        low_stock_products = low_stock_products[:200]
+        
+        results = []
+        for p in low_stock_products:
+            last_ptr = float(p.estimated_ptr)
+            if last_ptr == 0.0:
+                last_ptr = float(p.mrp) * 0.8 if p.mrp else 0.0
+                
+            deficit = float(p.outlet_reorder_qty) - float(p.available)
+            if deficit <= 0:
+                deficit = float(p.outlet_reorder_qty)
+                if deficit <= 0:
+                    deficit = float(p.outlet_min_qty) - float(p.available)
+            if deficit <= 0:
+                deficit = 1
+                
+            results.append({
+                'productId': str(p.id),
+                'productName': p.name,
+                'manufacturer': p.manufacturer,
+                'minQty': p.outlet_min_qty,
+                'reorderQty': p.outlet_reorder_qty,
+                'currentStock': float(p.effective_strips) if p.effective_strips is not None else 0.0,
+                'onOrder': p.on_order,
+                'available': float(p.available),
+                'deficit': float(deficit),
+                'lastDistributorId': str(p.last_dist_id) if p.last_dist_id else None,
+                'lastDistributorName': p.last_dist_name if p.last_dist_name else None,
+                'estimatedPtr': last_ptr
+            })
+            
+        return Response({'data': results})
+
+class PurchaseOrderBulkCreateView(APIView):
+    """
+    POST /api/v1/purchases/orders/bulk-create/
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        outlet_id = request.data.get('outletId')
+        items = request.data.get('items', [])
+        
+        if not outlet_id:
+            return Response({'detail': 'outletId required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        from collections import defaultdict
+        distributor_orders = defaultdict(list)
+        for item in items:
+            dist_id = item.get('distributorId') or item.get('lastDistributorId')
+            if not dist_id:
+                return Response({'detail': 'Missing distributorId for product ' + str(item.get('productId'))}, status=status.HTTP_400_BAD_REQUEST)
+            distributor_orders[dist_id].append(item)
+            
+        from apps.purchases.models import PurchaseOrder, PurchaseOrderItem
+        from apps.core.models import Outlet
+        from django.db import transaction
+        from datetime import datetime
+        
+        try:
+            outlet = Outlet.objects.get(id=outlet_id)
+        except Outlet.DoesNotExist:
+            return Response({'detail': 'Outlet not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        created_pos = []
+        with transaction.atomic():
+            for dist_id, dist_items in distributor_orders.items():
+                today_str = datetime.now().strftime("%Y%m%d")
+                count = PurchaseOrder.objects.filter(outlet=outlet, order_date=datetime.now().date()).count() + 1
+                po_num = f"PO-{today_str}-{count:03d}"
+                
+                po = PurchaseOrder.objects.create(
+                    outlet=outlet,
+                    distributor_id=dist_id,
+                    po_number=po_num,
+                    status='DRAFT'
+                )
+                
+                total_amount = 0
+                for item in dist_items:
+                    qty = int(item.get('orderQty', item.get('deficit', 0)))
+                    if qty <= 0:
+                        continue
+                    ptr = float(item.get('estimatedPtr', 0.0))
+                    amt = qty * ptr
+                    total_amount += amt
+                    
+                    PurchaseOrderItem.objects.create(
+                        purchase_order=po,
+                        product_id=item.get('productId'),
+                        qty_strips=qty,
+                        unit_ptr_estimated=ptr,
+                        last_rate=ptr,
+                        taxable_amount=amt
+                    )
+                
+                po.total_amount = total_amount
+                po.save()
+                created_pos.append(po.po_number)
+                
+        return Response({'detail': 'Orders generated', 'pos': created_pos}, status=status.HTTP_201_CREATED)
+
+
+class PurchaseOrderListView(APIView):
+    """
+    GET /api/v1/purchases/orders/?outletId=xxx
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        outlet_id = request.query_params.get('outletId')
+        
+        if not outlet_id:
+            return Response({'detail': 'outletId required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        from apps.purchases.models import PurchaseOrder
+        
+        orders = PurchaseOrder.objects.filter(outlet_id=outlet_id).select_related('distributor').order_by('-created_at')
+        
+        results = []
+        for po in orders:
+            results.append({
+                'id': str(po.id),
+                'poNumber': po.po_number,
+                'status': po.status,
+                'distributorName': po.distributor.name,
+                'orderDate': po.order_date.isoformat(),
+                'totalAmount': float(po.total_amount),
+            })
+            
+        return Response({'results': results}, status=status.HTTP_200_OK)
+
+    def post(self, request, *args, **kwargs):
+        outlet_id = request.data.get('outletId')
+        distributor_id = request.data.get('distributorId')
+        
+        if not outlet_id or not distributor_id:
+            return Response({'detail': 'outletId and distributorId required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        from apps.purchases.models import PurchaseOrder
+        from apps.core.models import Outlet
+        from datetime import datetime
+        
+        try:
+            outlet = Outlet.objects.get(id=outlet_id)
+        except Outlet.DoesNotExist:
+            return Response({'detail': 'Outlet not found'}, status=status.HTTP_404_NOT_FOUND)
+            
+        today_str = datetime.now().strftime("%Y%m%d")
+        count = PurchaseOrder.objects.filter(outlet=outlet, order_date=datetime.now().date()).count() + 1
+        po_num = f"PO-{today_str}-{count:03d}"
+        
+        po = PurchaseOrder.objects.create(
+            outlet=outlet,
+            distributor_id=distributor_id,
+            po_number=po_num,
+            status='DRAFT'
+        )
+        
+        return Response({'id': str(po.id), 'poNumber': po.po_number}, status=status.HTTP_201_CREATED)
+
+class PurchaseOrderDetailView(APIView):
+    """
+    GET /api/v1/purchases/orders/{id}/?outletId=xxx
+    PUT /api/v1/purchases/orders/{id}/
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk, *args, **kwargs):
+        outlet_id = request.query_params.get('outletId')
+        if not outlet_id:
+            return Response({'detail': 'outletId required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        from apps.purchases.models import PurchaseOrder
+        try:
+            po = PurchaseOrder.objects.prefetch_related('items', 'items__product').get(id=pk, outlet_id=outlet_id)
+        except PurchaseOrder.DoesNotExist:
+            return Response({'detail': 'PO not found'}, status=status.HTTP_404_NOT_FOUND)
+            
+        items = []
+        for item in po.items.all():
+            items.append({
+                'id': str(item.id),
+                'productId': str(item.product.id),
+                'productName': item.product.name,
+                'qtyStrips': item.qty_strips,
+                'receivedQty': item.received_qty,
+                'lastRate': float(item.last_rate) if item.last_rate else 0.0,
+                'taxableAmount': float(item.taxable_amount) if item.taxable_amount else 0.0,
+            })
+            
+        result = {
+            'id': str(po.id),
+            'poNumber': po.po_number,
+            'status': po.status,
+            'distributorId': str(po.distributor.id),
+            'distributorName': po.distributor.name,
+            'orderDate': po.order_date.isoformat(),
+            'totalAmount': float(po.total_amount),
+            'items': items,
+        }
+        
+        return Response(result, status=status.HTTP_200_OK)
+
+    def put(self, request, pk, *args, **kwargs):
+        outlet_id = request.data.get('outletId')
+        items_data = request.data.get('items', [])
+        
+        if not outlet_id:
+            return Response({'detail': 'outletId required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        from apps.purchases.models import PurchaseOrder, PurchaseOrderItem
+        from django.db import transaction
+        
+        try:
+            po = PurchaseOrder.objects.get(id=pk, outlet_id=outlet_id)
+        except PurchaseOrder.DoesNotExist:
+            return Response({'detail': 'PO not found'}, status=status.HTTP_404_NOT_FOUND)
+            
+        with transaction.atomic():
+            # Drop existing items
+            po.items.all().delete()
+            
+            total_amount = 0
+            for item in items_data:
+                qty = int(item.get('orderQty', item.get('deficit', 0)))
+                if qty <= 0:
+                    continue
+                ptr = float(item.get('estimatedPtr', item.get('lastRate', 0.0)))
+                amt = qty * ptr
+                total_amount += amt
+                
+                PurchaseOrderItem.objects.create(
+                    purchase_order=po,
+                    product_id=item.get('productId'),
+                    qty_strips=qty,
+                    unit_ptr_estimated=ptr,
+                    last_rate=ptr,
+                    taxable_amount=amt
+                )
+            
+            po.total_amount = total_amount
+            po.save()
+            
+        return Response({'detail': 'PO updated successfully'})
+
+class PurchaseOrderExcelExportView(APIView):
+    """
+    GET /api/v1/purchases/orders/{id}/export/excel/?outletId=xxx
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk, *args, **kwargs):
+        outlet_id = request.query_params.get('outletId')
+        if not outlet_id:
+            return Response({'detail': 'outletId required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        from apps.purchases.models import PurchaseOrder
+        try:
+            po = PurchaseOrder.objects.prefetch_related('items', 'items__product').get(id=pk, outlet_id=outlet_id)
+        except PurchaseOrder.DoesNotExist:
+            return Response({'detail': 'PO not found'}, status=status.HTTP_404_NOT_FOUND)
+            
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
+        from django.http import HttpResponse
+        import io
+        
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Purchase Order"
+        
+        # Header Metadata
+        ws.merge_cells('A1:F1')
+        title_cell = ws['A1']
+        title_cell.value = "PURCHASE ORDER"
+        title_cell.font = Font(bold=True, size=16)
+        title_cell.alignment = Alignment(horizontal='center')
+        
+        ws['A2'] = f"PO Number: {po.po_number}"
+        ws['A3'] = f"Date: {po.order_date}"
+        ws['A4'] = f"Distributor: {po.distributor.name}"
+        ws['A2'].font = Font(bold=True)
+        ws['A3'].font = Font(bold=True)
+        ws['A4'].font = Font(bold=True)
+        
+        # Table Styling & Headers
+        headers = ['S.No', 'Product Name', 'Pack', 'Order Qty', 'Rate', 'Amount']
+        ws.append(headers)
+        
+        header_row = ws.max_row
+        fill = PatternFill(start_color="EEEEEE", end_color="EEEEEE", fill_type="solid")
+        thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+        
+        for col_num in range(1, len(headers) + 1):
+            cell = ws.cell(row=header_row, column=col_num)
+            cell.font = Font(bold=True)
+            cell.fill = fill
+            cell.border = thin_border
+        
+        # Data Rows & Formatting
+        for i, item in enumerate(po.items.all(), 1):
+            row_data = [
+                i,
+                item.product.name,
+                item.product.pack_size or 1,
+                item.qty_strips,
+                float(item.last_rate) if item.last_rate else 0.0,
+                float(item.taxable_amount) if item.taxable_amount else 0.0,
+            ]
+            ws.append(row_data)
+            current_row = ws.max_row
+            
+            for col_num in range(1, len(row_data) + 1):
+                cell = ws.cell(row=current_row, column=col_num)
+                cell.border = thin_border
+                if col_num in [5, 6]:
+                    cell.number_format = '#,##0.00'
+                    
+        # Column Widths
+        ws.column_dimensions['A'].width = 8
+        ws.column_dimensions['B'].width = 45
+        ws.column_dimensions['C'].width = 12
+        ws.column_dimensions['D'].width = 12
+        ws.column_dimensions['E'].width = 15
+        ws.column_dimensions['F'].width = 15
+            
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+        
+        response = HttpResponse(
+            output.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = f'attachment; filename="PO_{po.po_number}.xlsx"'
+        return response
+
+class PurchaseOrderPdfExportView(APIView):
+    """
+    GET /api/v1/purchases/orders/{id}/export/pdf/?outletId=xxx
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk, *args, **kwargs):
+        outlet_id = request.query_params.get('outletId')
+        if not outlet_id:
+            return Response({'detail': 'outletId required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        from apps.purchases.models import PurchaseOrder
+        try:
+            po = PurchaseOrder.objects.prefetch_related('items', 'items__product').get(id=pk, outlet_id=outlet_id)
+        except PurchaseOrder.DoesNotExist:
+            return Response({'detail': 'PO not found'}, status=status.HTTP_404_NOT_FOUND)
+            
+        from django.http import HttpResponse
+        import io
+        from reportlab.lib.pagesizes import letter
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib import colors
+        
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+        elements = []
+        styles = getSampleStyleSheet()
+        
+        # Header Table
+        header_data = [
+            [
+                Paragraph(f"<b>Distributor:</b> {po.distributor.name}<br/><b>PO Number:</b> {po.po_number}<br/><b>Date:</b> {po.order_date}", styles['Normal']),
+                Paragraph("<font size=16><b>PURCHASE ORDER</b></font>", ParagraphStyle(name='RightAlign', parent=styles['Normal'], alignment=2))
+            ]
+        ]
+        header_table = Table(header_data, colWidths=[300, 240])
+        elements.append(header_table)
+        elements.append(Spacer(1, 20))
+        
+        # Items Table
+        table_data = [['S.No', 'Product Name', 'Pack', 'Order Qty', 'Rate', 'Amount']]
+        for i, item in enumerate(po.items.all(), 1):
+            table_data.append([
+                str(i),
+                Paragraph(item.product.name, styles['Normal']),
+                str(item.product.pack_size or 1),
+                str(item.qty_strips),
+                f"{float(item.last_rate or 0):.2f}",
+                f"{float(item.taxable_amount or 0):.2f}"
+            ])
+            
+        t = Table(table_data, colWidths=[40, 220, 50, 70, 70, 90])
+        t.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+            ('ALIGN', (3, 1), (5, -1), 'RIGHT'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ]))
+        elements.append(t)
+        elements.append(Spacer(1, 20))
+        
+        # Footer
+        footer_data = [
+            ["", "", Paragraph(f"<b>Total Amount: Rs {float(po.total_amount or 0):.2f}</b>", ParagraphStyle(name='RightBold', parent=styles['Normal'], alignment=2))]
+        ]
+        footer_table = Table(footer_data, colWidths=[300, 100, 140])
+        elements.append(footer_table)
+        
+        elements.append(Spacer(1, 40))
+        sign_data = [["", "--------------------------------------\nAuthorized Signatory"]]
+        sign_table = Table(sign_data, colWidths=[340, 200])
+        sign_table.setStyle(TableStyle([('ALIGN', (1, 0), (1, 0), 'RIGHT')]))
+        elements.append(sign_table)
+        
+        doc.build(elements)
+        
+        buffer.seek(0)
+        response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="PO_{po.po_number}.pdf"'
+        return response

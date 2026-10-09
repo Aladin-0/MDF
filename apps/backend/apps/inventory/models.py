@@ -2,6 +2,7 @@ from django.db import models
 from django.core.exceptions import ValidationError
 import uuid
 from django.conf import settings
+from django.contrib.postgres.indexes import GinIndex
 
 
 class OutletFilteredManager(models.Manager):
@@ -66,8 +67,6 @@ class MasterProduct(models.Model):
     is_discontinued = models.BooleanField(default=False)
     image_url = models.URLField(null=True, blank=True)
     mrp = models.DecimalField(max_digits=10, decimal_places=2, default=0, help_text='Default catalog MRP')
-    min_qty = models.IntegerField(default=10, help_text='Low-stock threshold in strips')
-    reorder_qty = models.IntegerField(default=50, help_text='Suggested reorder quantity')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -77,10 +76,37 @@ class MasterProduct(models.Model):
             models.Index(fields=['hsn_code']),
             models.Index(fields=['schedule_type']),
             models.Index(fields=['drug_type']),
+            GinIndex(fields=['name'], name='master_prod_name_trgm_gin', opclasses=['gin_trgm_ops']),
+            GinIndex(fields=['composition'], name='master_prod_comp_trgm_gin', opclasses=['gin_trgm_ops']),
+            GinIndex(fields=['manufacturer'], name='master_prod_mfg_trgm_gin', opclasses=['gin_trgm_ops']),
         ]
 
     def __str__(self):
         return f"{self.name} ({self.pack_size}{self.pack_unit})"
+
+
+class OutletProductConfig(models.Model):
+    """Outlet-specific inventory configuration and thresholds for a product."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    outlet = models.ForeignKey('core.Outlet', on_delete=models.CASCADE, related_name='product_configs')
+    product = models.ForeignKey(MasterProduct, on_delete=models.CASCADE, related_name='outlet_configs')
+    
+    min_qty = models.DecimalField(max_digits=10, decimal_places=2, default=0, help_text='Low-stock threshold in strips')
+    reorder_qty = models.DecimalField(max_digits=10, decimal_places=2, default=0, help_text='Suggested reorder quantity')
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'inventory_outletproductconfig'
+        unique_together = [['outlet', 'product']]
+        indexes = [
+            models.Index(fields=['outlet', 'product']),
+        ]
+
+    def __str__(self):
+        return f"{self.outlet.name} config for {self.product.name}"
 
 
 class Batch(models.Model):

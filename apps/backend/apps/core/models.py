@@ -191,6 +191,10 @@ class OutletSettings(models.Model):
     currency_symbol = models.CharField(max_length=5, default='₹')
     gstr2b_tolerance = models.DecimalField(max_digits=5, decimal_places=2, default=1.00, help_text="Tolerance for GSTR-2B reconciliation in INR")
     
+    # Compliance Automation Flags
+    enable_eway_bill = models.BooleanField(default=False)
+    enable_einvoice = models.BooleanField(default=False)
+    
     # Landing Cost & Margin Settings
     landing_cost_include_gst = models.BooleanField(
         default=False,

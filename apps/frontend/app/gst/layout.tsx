@@ -9,8 +9,6 @@ import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useAuthStore } from '@/store/authStore';
 import { authApi } from '@/lib/apiClient';
-import { useGlobalNavigationShortcuts } from '@/hooks/useGlobalNavigationShortcuts';
-import { ShortcutHelpModal } from '@/components/shared/ShortcutHelpModal';
 import { GlobalOverlays } from '@/components/shared/GlobalOverlays';
 import { cn } from '@/lib/utils';
 
@@ -34,7 +32,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         }
     }, [_hasHydrated, isAuthenticated, router]);
 
-    const { isHelpOpen, setIsHelpOpen } = useGlobalNavigationShortcuts();
+
     const pathname = usePathname();
     
     if (!_hasHydrated || !isAuthenticated) {
@@ -100,7 +98,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
             
             <GlobalOverlays />
-            <ShortcutHelpModal open={isHelpOpen} onOpenChange={setIsHelpOpen} />
         </div>
     );
 }

@@ -17,6 +17,9 @@ interface LedgerPickerProps {
     icon: React.ReactNode;
     placeholder?: string;
     className?: string;
+    autoFocus?: boolean;
+    inputRef?: React.RefObject<HTMLInputElement>;
+    nextInputRef?: React.RefObject<HTMLInputElement>;
 }
 
 export function LedgerPicker({ 
@@ -25,7 +28,10 @@ export function LedgerPicker({
     defaultGroupName, 
     icon, 
     placeholder = 'Search...',
-    className 
+    className,
+    autoFocus,
+    inputRef: externalInputRef,
+    nextInputRef
 }: LedgerPickerProps) {
     const outletId = useOutletId();
     
@@ -35,7 +41,8 @@ export function LedgerPicker({
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     
     const containerRef = useRef<HTMLDivElement>(null);
-    const inputRef = useRef<HTMLInputElement>(null);
+    const internalInputRef = useRef<HTMLInputElement>(null);
+    const inputRef = externalInputRef || internalInputRef;
 
     // Debounce search
     useEffect(() => {
@@ -78,6 +85,12 @@ export function LedgerPicker({
         onSelect(ledger);
         setIsOpen(false);
         setSearchQuery('');
+        
+        if (nextInputRef?.current) {
+            setTimeout(() => {
+                nextInputRef.current?.focus();
+            }, 10);
+        }
     };
 
     const handleCreateLedger = (ledger: Ledger) => {
@@ -92,6 +105,8 @@ export function LedgerPicker({
             inputRef.current?.blur();
         }
         if (e.key === 'Enter' && ledgers.length > 0) {
+            e.preventDefault();
+            e.stopPropagation();
             handleSelect(ledgers[0]);
         }
     };
@@ -108,6 +123,17 @@ export function LedgerPicker({
                         <span className="text-[10px] bg-white text-slate-800 px-1.5 py-0.5 rounded font-bold shrink-0">{currentLedger.phone}</span>
                     )}
                 </div>
+                {/* Hidden input to maintain focus flow and Enter-to-advance */}
+                <input 
+                    ref={inputRef}
+                    className="opacity-0 absolute w-0 h-0"
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            nextInputRef?.current?.focus();
+                        }
+                    }}
+                />
                 <button 
                     className="text-[10px] text-blue-600 hover:text-blue-800 font-bold uppercase tracking-wider ml-2 shrink-0" 
                     onClick={() => handleSelect(null)}
@@ -131,6 +157,7 @@ export function LedgerPicker({
             </div>
             <Input 
                 ref={inputRef}
+                autoFocus={autoFocus}
                 className={cn("w-full h-9 pl-8 pr-3 border border-slate-300 rounded focus-visible:ring-1 focus-visible:ring-blue-500 font-medium placeholder:text-slate-400 text-sm", className)}
                 placeholder={placeholder}
                 value={searchQuery}
@@ -157,7 +184,7 @@ export function LedgerPicker({
                                         e.preventDefault();
                                         handleSelect(ledger);
                                     }}
-                                    className="px-3 py-2 hover:bg-blue-50 cursor-pointer rounded flex flex-col group"
+                                    className="px-3 py-3 min-h-[48px] hover:bg-blue-50 cursor-pointer rounded flex flex-col group"
                                 >
                                     <div className="flex items-center justify-between">
                                         <span className="text-sm font-bold text-slate-700 group-hover:text-blue-700">{ledger.name}</span>

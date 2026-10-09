@@ -12,11 +12,14 @@ import { useProductSearch } from '@/hooks/useProductSearch';
 import { Batch, ProductSearchResult } from '@/types';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { DISABLE_DISRUPTIVE_SHORTCUTS } from '@/lib/shortcuts';
-
 import { InlineRowEditor } from './InlineRowEditor';
+import { useGridNavigation } from '@/hooks/useGridNavigation';
 
-export function MainInvoiceWorkspace() {
+interface MainInvoiceWorkspaceProps {
+    searchRef?: React.RefObject<HTMLElement>;
+}
+
+export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = {}) {
     const { drafts, activeDraftId, addToCart, removeFromCart, updateCartItem, showMarginInfo, activeStaff } = useBillingStore();
     
     // Search State
@@ -42,34 +45,12 @@ export function MainInvoiceWorkspace() {
     const searchContainerRef = useRef<HTMLDivElement>(null);
     const searchInputRef = useRef<HTMLInputElement>(null);
     const qtyInputRef = useRef<HTMLInputElement>(null);
+    const tableContainerRef = useRef<HTMLDivElement>(null);
 
-    // Focus search on mount
-    useEffect(() => {
+    useGridNavigation(tableContainerRef, () => {
         searchInputRef.current?.focus();
-    }, []);
+    });
 
-    // Global F4 Shortcut for Search
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (DISABLE_DISRUPTIVE_SHORTCUTS) return;
-            if (e.key === 'F4') {
-                e.preventDefault();
-                searchInputRef.current?.focus();
-            } else if (e.key === 'F2') {
-                e.preventDefault();
-                if (activeDraftId) {
-                    useBillingStore.getState().setSaleType(activeDraftId, 'RETAIL');
-                }
-            } else if (e.key === 'F3') {
-                e.preventDefault();
-                if (activeDraftId) {
-                    useBillingStore.getState().setSaleType(activeDraftId, 'WHOLESALE');
-                }
-            }
-        };
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [activeDraftId]);
 
     // Reset selected index when search changes
     useEffect(() => {
@@ -232,13 +213,13 @@ export function MainInvoiceWorkspace() {
             composition: quickAddProduct.composition,
             manufacturer: quickAddProduct.manufacturer,
             packSize: quickAddBatch.packSize,
-            packUnit: quickAddBatch.packUnit || quickAddProduct.packUnit,
+            packUnit: quickAddBatch.packUnit || quickAddProduct.packUnit || 'units',
             packType: quickAddBatch.packType || quickAddProduct.packType || '',
             requiresPrescription: ['H', 'H1', 'X', 'Narcotic'].includes(quickAddProduct.scheduleType),
             batchNo: quickAddBatch.batchNo,
             expiryDate: quickAddBatch.expiryDate,
             scheduleType: quickAddProduct.scheduleType as any,
-            hsn: quickAddProduct.hsnCode || quickAddProduct.hsn || '',
+            hsn: quickAddProduct.hsnCode || '',
             mrp: quickAddBatch.mrp,
             ptr: quickAddBatch.ptr || 0,
             pts: quickAddBatch.pts || 0,
@@ -260,7 +241,17 @@ export function MainInvoiceWorkspace() {
         // Reset
         setQuickAddProduct(null);
         setQuickAddBatch(null);
-        searchInputRef.current?.focus();
+        
+        // Retail Loop: Force focus back to search bar after DOM paints
+        setTimeout(() => {
+            if (searchRef && (searchRef as any).current) {
+                (searchRef as any).current.focus();
+                (searchRef as any).current.select();
+            } else if (searchInputRef.current) {
+                searchInputRef.current.focus();
+                searchInputRef.current.select();
+            }
+        }, 50);
     };
 
     const handleQtyKeyDown = (e: React.KeyboardEvent) => {
@@ -298,7 +289,6 @@ export function MainInvoiceWorkspace() {
                                 return (
                                     <button 
                                         key={batch.id}
-                                        autoFocus={idx === 0}
                                         onClick={() => !isExpired && handleSelectBatch(batch)}
                                         className={cn(
                                             "flex-shrink-0 flex flex-col p-3 rounded-md border text-left transition-all focus:ring-2 focus:ring-blue-500 focus:outline-none min-w-[140px]",
@@ -469,9 +459,12 @@ export function MainInvoiceWorkspace() {
                 <div className="relative w-full">
                     <Search className="absolute left-3 top-2.5 w-5 h-5 text-slate-400" />
                     <Input 
-                        ref={searchInputRef}
+                        ref={(node) => {
+                            if (searchInputRef) searchInputRef.current = node;
+                            if (searchRef) (searchRef as any).current = node;
+                        }}
                         className="w-full h-10 pl-10 pr-10 border-2 border-[#0EA5E9] rounded-md focus-visible:ring-0 focus-visible:border-[#0284C7] font-semibold text-sm shadow-sm"
-                        placeholder="Search Medicine [F4]..."
+                        placeholder="Search Medicine..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         onFocus={() => setIsSearchFocused(true)}
@@ -493,7 +486,7 @@ export function MainInvoiceWorkspace() {
 
                     {/* Floating Search Dropdown */}
                     {isSearchFocused && searchQuery.length >= 2 && !quickAddProduct && (
-                        <div className="absolute top-11 left-0 w-full bg-white border border-slate-300 rounded-md shadow-2xl z-50 max-h-[320px] overflow-y-auto">
+                        <div className="absolute top-11 left-0 w-full bg-white border border-slate-300 rounded-md shadow-2xl z-50 max-h-[40vh] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent">
                             {isFetching && searchResults.length === 0 ? (
                                 <div className="p-4 text-center text-slate-500 text-sm font-medium">Searching...</div>
                             ) : searchResults.length === 0 ? (
@@ -543,23 +536,21 @@ export function MainInvoiceWorkspace() {
             </div>
 
             {/* Dense Invoice Table Area */}
-            <div className="flex-1 overflow-auto bg-slate-50 relative">
-                <table className="w-full text-left border-collapse">
+            <div className="flex-1 w-full overflow-x-auto overflow-y-visible bg-slate-50 relative" ref={tableContainerRef}>
+                <table className="w-full min-w-[1000px] lg:min-w-[1200px] text-left border-collapse">
                     <thead className="bg-slate-200 sticky top-0 z-10 shadow-sm">
                         <tr>
                             <th className="px-2 py-1.5 text-[11px] font-bold text-slate-600 uppercase tracking-wider w-8 text-center border-r border-slate-300">#</th>
-                            <th className="px-3 py-1.5 text-[11px] font-bold text-slate-600 uppercase tracking-wider border-r border-slate-300">Product & Composition</th>
+                            <th className="px-3 py-1.5 text-[11px] font-bold text-slate-600 uppercase tracking-wider border-r border-slate-300 w-[300px] min-w-[300px] sticky left-0 z-20 bg-slate-200 shadow-[4px_0_10px_-3px_rgba(0,0,0,0.1)]">Product & Composition</th>
                             <th className="px-2 py-1.5 text-[11px] font-bold text-slate-600 uppercase tracking-wider w-20 border-r border-slate-300 text-center">HSN</th>
                             <th className="px-2 py-1.5 text-[11px] font-bold text-slate-600 uppercase tracking-wider w-24 border-r border-slate-300">Batch</th>
                             <th className="px-2 py-1.5 text-[11px] font-bold text-slate-600 uppercase tracking-wider w-16 text-center border-r border-slate-300">Exp</th>
                             <th className="px-2 py-1.5 text-[11px] font-bold text-slate-600 uppercase tracking-wider w-16 text-right border-r border-slate-300">MRP</th>
-                            {saleType === 'WHOLESALE' ? (
+                            {saleType === 'WHOLESALE' && (
                                 <>
                                     <th className="px-2 py-1.5 text-[11px] font-bold text-slate-600 uppercase tracking-wider w-16 text-right border-r border-slate-300">PTR</th>
                                     <th className="px-2 py-1.5 text-[11px] font-bold text-slate-600 uppercase tracking-wider w-16 text-right border-r border-slate-300">PTS</th>
                                 </>
-                            ) : (
-                                <th className="px-2 py-1.5 text-[11px] font-bold text-slate-600 uppercase tracking-wider w-16 text-right border-r border-slate-300">Rate</th>
                             )}
                             {saleType === 'RETAIL' ? (
                                 <th className="px-2 py-1.5 text-[11px] font-bold text-slate-600 uppercase tracking-wider w-20 text-right border-r border-slate-300">Qty</th>
@@ -582,7 +573,7 @@ export function MainInvoiceWorkspace() {
                                 {Array.from({ length: 15 }).map((_, i) => (
                                     <tr key={`empty-${i}`} className="pointer-events-none opacity-40 hover:bg-transparent">
                                         <td className="px-2 py-1.5 text-[11px] font-bold text-slate-300 text-center border-r border-slate-100">{i + 1}</td>
-                                        <td className="px-3 py-1.5 border-r border-slate-100">
+                                        <td className="px-3 py-1.5 border-r border-slate-100 sticky left-0 z-10 bg-white shadow-[4px_0_10px_-3px_rgba(0,0,0,0.1)]">
                                             <div className="h-3 w-48 bg-slate-100 rounded mb-1"></div>
                                             <div className="h-2 w-32 bg-slate-50 rounded"></div>
                                         </td>
@@ -590,13 +581,11 @@ export function MainInvoiceWorkspace() {
                                         <td className="px-2 py-1.5 border-r border-slate-100"><div className="h-3 w-16 bg-slate-100 rounded"></div></td>
                                         <td className="px-2 py-1.5 border-r border-slate-100"><div className="h-3 w-10 bg-slate-100 rounded mx-auto"></div></td>
                                         <td className="px-2 py-1.5 border-r border-slate-100"><div className="h-3 w-12 bg-slate-100 rounded ml-auto"></div></td>
-                                        {saleType === 'WHOLESALE' ? (
+                                        {saleType === 'WHOLESALE' && (
                                             <>
                                                 <td className="px-2 py-1.5 border-r border-slate-100"><div className="h-3 w-12 bg-slate-100 rounded ml-auto"></div></td>
                                                 <td className="px-2 py-1.5 border-r border-slate-100"><div className="h-3 w-12 bg-slate-100 rounded ml-auto"></div></td>
                                             </>
-                                        ) : (
-                                            <td className="px-2 py-1.5 border-r border-slate-100"><div className="h-3 w-12 bg-slate-100 rounded ml-auto"></div></td>
                                         )}
                                         {saleType === 'RETAIL' ? (
                                             <td className="px-2 py-1.5 border-r border-slate-100"><div className="h-3 w-12 bg-slate-100 rounded ml-auto"></div></td>
@@ -663,7 +652,7 @@ export function MainInvoiceWorkspace() {
                                         className="hover:bg-blue-50/50 focus-visible:bg-blue-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 cursor-pointer transition-colors group animate-in fade-in duration-300"
                                     >
                                         <td className={`px-2 py-1.5 text-[11px] font-bold text-slate-400 text-center border-r border-slate-100 ${statusBorder}`}>{index + 1}</td>
-                                        <td className="px-3 py-1.5 border-r border-slate-100">
+                                        <td className="px-3 py-1.5 border-r border-slate-100 sticky left-0 z-10 bg-white shadow-[4px_0_10px_-3px_rgba(0,0,0,0.1)]">
                                             <div className="font-bold text-[13px] text-slate-800 leading-tight flex items-center gap-2">
                                                 {item.name}
                                                 {item.batchAvailabilityStatus === 'BATCH_UNAVAILABLE' && (
@@ -711,7 +700,7 @@ export function MainInvoiceWorkspace() {
                                         <td className="px-2 py-1.5 text-[11px] font-bold text-slate-700 text-right border-r border-slate-100">
                                             ₹{item.mrp.toFixed(2)}
                                         </td>
-                                        {saleType === 'WHOLESALE' ? (
+                                        {saleType === 'WHOLESALE' && (
                                             <>
                                                 <td className={cn("px-2 py-1.5 text-[11px] font-bold text-right border-r border-slate-100", item.rate === item.ptr && item.ptr > 0 ? "text-purple-700" : "text-slate-600")}>
                                                     ₹{(item.ptr || 0).toFixed(2)}
@@ -720,10 +709,6 @@ export function MainInvoiceWorkspace() {
                                                     ₹{(item.pts || 0).toFixed(2)}
                                                 </td>
                                             </>
-                                        ) : (
-                                            <td className="px-2 py-1.5 text-[11px] font-bold text-indigo-700 text-right border-r border-slate-100">
-                                                ₹{(item.rate).toFixed(2)}
-                                            </td>
                                         )}
                                         {saleType === 'RETAIL' ? (
                                             <td className="px-2 py-1.5 text-right border-r border-slate-100">

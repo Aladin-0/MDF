@@ -496,6 +496,19 @@ class SaleCreateView(APIView):
                         status=status.HTTP_400_BAD_REQUEST
                     )
 
+                from django.utils import timezone
+                from django.utils.dateparse import parse_datetime
+
+                raw_invoice_date = request.data.get('invoiceDate')
+                invoice_date = timezone.now()
+                if raw_invoice_date:
+                    parsed = parse_datetime(raw_invoice_date)
+                    if parsed:
+                        if timezone.is_naive(parsed):
+                            invoice_date = timezone.make_aware(parsed)
+                        else:
+                            invoice_date = parsed
+
                 sale_type = request.data.get('saleType', 'RETAIL')
                 irn_status = 'NOT_REQUIRED'
                 if sale_type == 'WHOLESALE' and customer and customer.gstin and len(customer.gstin) == 15:
@@ -504,7 +517,7 @@ class SaleCreateView(APIView):
                 sale_invoice = SaleInvoice.objects.create(
                     outlet=outlet,
                     invoice_no=invoice_no,
-                    invoice_date=datetime.now(),
+                    invoice_date=invoice_date,
                     customer=customer,
                     doctor_id=doctor_id,
                     hospital_name=hospital_name,
@@ -1029,6 +1042,19 @@ class SaleListView(APIView):
         if hospital_name:
             invoices = invoices.filter(hospital_name__icontains=hospital_name)
 
+        # ── Optional saleType filter ─────────────────────────────────────────
+        sale_type_param = request.query_params.get('saleType') or request.query_params.get('sale_type')
+        sale_type_filter = {}
+        if sale_type_param and sale_type_param.upper() in ['RETAIL', 'WHOLESALE']:
+            sale_type_upper = sale_type_param.upper()
+            from django.db.models import Q
+            if sale_type_upper == 'RETAIL':
+                invoices = invoices.filter(Q(sale_type=sale_type_upper) | Q(sale_type__isnull=True))
+                sale_type_filter = {'sale_type__in': ['RETAIL', None]}
+            else:
+                invoices = invoices.filter(sale_type=sale_type_upper)
+                sale_type_filter = {'sale_type': sale_type_upper}
+
         # ── Optional search filter ───────────────────────────────────────────
         search_q = request.query_params.get('search', '').strip()
         if search_q:
@@ -1046,6 +1072,7 @@ class SaleListView(APIView):
             is_return=False,
             **({'invoice_date__date__gte': start_dt} if start_date_str else {}),
             **({'invoice_date__date__lte': end_dt}   if end_date_str   else {}),
+            **sale_type_filter
         ).aggregate(
             total_revenue=dSum('grand_total'),
             total_discount=dSum('discount_amount'),
@@ -1063,6 +1090,7 @@ class SaleListView(APIView):
             is_return=True,
             **({'invoice_date__date__gte': start_dt} if start_date_str else {}),
             **({'invoice_date__date__lte': end_dt}   if end_date_str   else {}),
+            **sale_type_filter
         ).aggregate(
             total_return=dSum('grand_total'),
             return_count=dCount('id'),
@@ -1141,6 +1169,7 @@ class SaleListView(APIView):
                 'outletId': str(invoice.outlet.id),
                 'invoiceNo': invoice.invoice_no,
                 'invoiceDate': invoice.invoice_date.isoformat(),
+                'saleType': invoice.sale_type,
                 'customerId': str(invoice.customer.id) if invoice.customer else None,
                 'customer': {
                     'id': str(invoice.customer.id),
@@ -2133,6 +2162,7 @@ class SaleDetailView(APIView):
             'outletId': str(invoice.outlet_id),
             'invoiceNo': invoice.invoice_no,
             'invoiceDate': invoice.invoice_date.isoformat(),
+            'saleType': invoice.sale_type,
             'customerId': str(invoice.customer.id) if invoice.customer else None,
             'customer': {
                 'id': str(invoice.customer.id),

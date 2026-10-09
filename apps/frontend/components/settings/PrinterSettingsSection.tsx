@@ -19,29 +19,38 @@ interface PrinterSettingsSectionProps {
 }
 
 const DEFAULT_RETAIL: PrintSettingsConfig = {
-    template: 'Thermal_80mm',
+    template: 'A4',
     columns: [
-        { id: "sn", label: "Sn.", isVisible: true, order: 1, width: "10%" },
-        { id: "productName", label: "Item", isVisible: true, order: 2, width: "40%" },
-        { id: "qty", label: "Qty", isVisible: true, order: 3, width: "15%" },
-        { id: "mrp", label: "M.R.P", isVisible: true, order: 4, width: "15%" },
-        { id: "amount", label: "Amt", isVisible: true, order: 5, width: "20%" },
+        { id: "sn", label: "SN", isVisible: true, order: 1, width: "5%" },
+        { id: "productName", label: "Item Name & Company", isVisible: true, order: 2, width: "31%" },
+        { id: "batch", label: "Batch", isVisible: true, order: 3, width: "11%" },
+        { id: "exp", label: "Exp", isVisible: true, order: 4, width: "8%" },
+        { id: "qty", label: "Qty", isVisible: true, order: 5, width: "8%" },
+        { id: "mrp", label: "MRP", isVisible: true, order: 6, width: "9%" },
+        { id: "ptr", label: "Rate", isVisible: true, order: 7, width: "9%" },
+        { id: "disc", label: "Disc", isVisible: true, order: 8, width: "7%" },
+        { id: "amount", label: "Amount(₹)", isVisible: true, order: 9, width: "12%" }
     ],
-    header: { showLogo: true, showDrugLicense: false, showGstin: true, customText: "" },
+    header: { showLogo: true, showDrugLicense: true, showGstin: true, customText: "S.P.S MANAVATA PHARMA" },
     footer: { bankDetails: "", terms: "1. Goods once sold will not be taken back." }
 };
 
 const DEFAULT_WHOLESALE: PrintSettingsConfig = {
     template: 'A4',
     columns: [
-        { id: "sn", label: "Sn.", isVisible: true, order: 1, width: "5%" },
-        { id: "productName", label: "Product Name", isVisible: true, order: 2, width: "25%" },
-        { id: "batch", label: "Batch", isVisible: true, order: 3, width: "10%" },
-        { id: "ptr", label: "PTR", isVisible: true, order: 4, width: "10%" },
-        { id: "pts", label: "PTS", isVisible: true, order: 5, width: "10%" },
-        { id: "qty", label: "QTY", isVisible: true, order: 6, width: "10%" },
-        { id: "hsn", label: "HSN", "isVisible": true, order: 7, width: "10%" },
-        { id: "amount", label: "AMOUNT", isVisible: true, order: 8, width: "10%" }
+        { id: "sn", label: "SN", isVisible: true, order: 1, width: "4%" },
+        { id: "productName", label: "Item Name & Details", isVisible: true, order: 2, width: "22%" },
+        { id: "hsn", label: "HSN", isVisible: true, order: 3, width: "6%" },
+        { id: "batch", label: "Batch", isVisible: true, order: 4, width: "8%" },
+        { id: "exp", label: "Exp", isVisible: true, order: 5, width: "6%" },
+        { id: "b_qty", label: "B-Qty", isVisible: true, order: 6, width: "5%" },
+        { id: "f_qty", label: "F-Qty", isVisible: true, order: 7, width: "5%" },
+        { id: "mrp", label: "MRP", isVisible: true, order: 8, width: "7%" },
+        { id: "ptr", label: "PTR", isVisible: true, order: 9, width: "7%" },
+        { id: "disc", label: "Disc", isVisible: true, order: 10, width: "5%" },
+        { id: "gst", label: "GST", isVisible: true, order: 11, width: "5%" },
+        { id: "taxable", label: "Taxable", isVisible: true, order: 12, width: "8%" },
+        { id: "amount", label: "Amount(₹)", isVisible: true, order: 13, width: "12%" }
     ],
     header: { showLogo: true, showDrugLicense: true, showGstin: true, customText: "S.P.S MANAVATA PHARMA" },
     footer: { bankDetails: "Bank: HDFC, A/C: 1234...", terms: "1. Goods once sold will not be taken back." }
@@ -60,10 +69,21 @@ export function PrinterSettingsSection({ onDirty, onSaved, discardKey }: Printer
     useEffect(() => {
         if (settings) {
             if (settings.printSettingsRetail?.columns) {
-                setRetailConfig(settings.printSettingsRetail);
+                const hasExp = settings.printSettingsRetail.columns.some((c: any) => c.id === 'exp');
+                // Auto-heal legacy configs that are missing the new columns
+                if (!hasExp || settings.printSettingsRetail.columns.length < DEFAULT_RETAIL.columns.length) {
+                    setRetailConfig(DEFAULT_RETAIL);
+                } else {
+                    setRetailConfig(settings.printSettingsRetail);
+                }
             }
             if (settings.printSettingsWholesale?.columns) {
-                setWholesaleConfig(settings.printSettingsWholesale);
+                const hasExp = settings.printSettingsWholesale.columns.some((c: any) => c.id === 'exp');
+                if (!hasExp || settings.printSettingsWholesale.columns.length < DEFAULT_WHOLESALE.columns.length) {
+                    setWholesaleConfig(DEFAULT_WHOLESALE);
+                } else {
+                    setWholesaleConfig(settings.printSettingsWholesale);
+                }
             }
         }
         setIsDirty(false);

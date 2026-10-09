@@ -7,8 +7,7 @@ import { DashboardSkeleton } from '@/components/shared/DashboardSkeleton';
 import { GlobalNavigation } from '@/components/layout/GlobalNavigation';
 import { useAuthStore } from '@/store/authStore';
 import { authApi } from '@/lib/apiClient';
-import { useGlobalNavigationShortcuts } from '@/hooks/useGlobalNavigationShortcuts';
-import { ShortcutHelpModal } from '@/components/shared/ShortcutHelpModal';
+
 import { GlobalOverlays } from '@/components/shared/GlobalOverlays';
 import { cn } from '@/lib/utils';
 
@@ -33,7 +32,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         }
     }, [_hasHydrated, isAuthenticated, router]);
 
-    const { isHelpOpen, setIsHelpOpen } = useGlobalNavigationShortcuts();
     if (!_hasHydrated || !isAuthenticated) {
         return <DashboardSkeleton />;
     }
@@ -55,7 +53,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </div>
             
             <GlobalOverlays />
-            <ShortcutHelpModal open={isHelpOpen} onOpenChange={setIsHelpOpen} />
         </div>
     );
 }

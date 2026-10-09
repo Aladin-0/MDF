@@ -115,3 +115,34 @@ export function useCheckDuplicateInvoice(invoiceNo: string, partyLedgerId: strin
         staleTime: 1000 * 60,
     });
 }
+
+export function usePurchaseOrders() {
+    const outletId = useOutletId();
+    return useQuery({
+        queryKey: ['purchaseOrders', outletId],
+        queryFn: () => purchasesApi.getOrders(outletId!),
+        enabled: !!outletId,
+    });
+}
+
+export function usePurchaseOrderSuggestions() {
+    const outletId = useOutletId();
+    return useQuery({
+        queryKey: ['purchaseOrderSuggestions', outletId],
+        queryFn: () => purchasesApi.getOrderSuggestions(outletId!),
+        enabled: !!outletId,
+    });
+}
+
+export function useBulkCreatePurchaseOrders() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (payload: { outletId: string, items: any[] }) =>
+            purchasesApi.bulkCreateOrders(payload),
+        onSuccess: async () => {
+            await queryClient.invalidateQueries({ queryKey: ['purchaseOrders'] });
+            await queryClient.invalidateQueries({ queryKey: ['purchaseOrderSuggestions'] });
+        },
+    });
+}
+

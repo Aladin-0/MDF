@@ -20,6 +20,7 @@ interface LedgerPickerProps {
     placeholder?: string;
     className?: string;
     showOutstanding?: boolean;
+    autoFocus?: boolean;
 }
 
 export function LedgerPicker({
@@ -31,6 +32,7 @@ export function LedgerPicker({
     placeholder = 'Search ledger...',
     className,
     showOutstanding,
+    autoFocus,
 }: LedgerPickerProps) {
     const outletId = useOutletId();
     const [open, setOpen] = useState(false);
@@ -112,50 +114,77 @@ export function LedgerPicker({
         setShowCreateModal(false);
     }
 
+    const handleBlur = (e: React.FocusEvent) => {
+        if (!containerRef.current?.contains(e.relatedTarget as Node)) {
+            setOpen(false);
+        }
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Escape') {
+            setOpen(false);
+            searchRef.current?.blur();
+        }
+        if (e.key === 'Enter' && ledgers.length > 0) {
+            select(ledgers[0]);
+        }
+    };
+
+    if (value) {
+        return (
+            <>
+                <div className={cn("relative w-full h-10 pl-8 pr-3 border border-input rounded-md flex items-center justify-between bg-background", className)}>
+                    <div className="absolute left-2.5 top-2.5 text-muted-foreground">
+                        <Search className="w-4 h-4 shrink-0 mt-0.5" />
+                    </div>
+                    <div className="flex items-center gap-2 truncate flex-1">
+                        <span className="font-medium text-sm truncate">{value.name}</span>
+                        <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded font-bold shrink-0">{value.groupName}</span>
+                    </div>
+                    <button 
+                        type="button"
+                        className="text-xs text-muted-foreground hover:text-foreground shrink-0 ml-2" 
+                        onClick={clear}
+                    >
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
+                {showCreateModal && outletId && (
+                    <CreateLedgerModal
+                        initialName={search}
+                        outletId={outletId}
+                        defaultGroupName={group}
+                        isQuickCustomerMode={group === 'Sundry Debtors'}
+                        onSave={handleCreateLedger}
+                        onClose={() => setShowCreateModal(false)}
+                    />
+                )}
+            </>
+        );
+    }
+
     return (
         <>
-            <div ref={containerRef} className={cn('relative', className)}>
-                <button
-                    type="button"
-                    onClick={() => setOpen((o) => !o)}
-                    className={cn(
-                        'w-full flex items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm text-left',
-                        'hover:border-primary/50 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1',
-                        !value && 'text-muted-foreground'
-                    )}
-                >
-                    <span className="flex-1 truncate">
-                        {value ? (
-                            <span className="flex flex-col">
-                                <span className="font-medium text-foreground">{value.name}</span>
-                                <span className="text-xs text-muted-foreground">{value.groupName}</span>
-                            </span>
-                        ) : (
-                            placeholder
-                        )}
-                    </span>
-                    {value ? (
-                        <X className="ml-2 h-4 w-4 shrink-0 text-muted-foreground hover:text-foreground" onClick={clear} />
-                    ) : (
-                        <Search className="ml-2 h-4 w-4 shrink-0 text-muted-foreground" />
-                    )}
-                </button>
+            <div className={cn('relative', className)} ref={containerRef} onBlur={handleBlur}>
+                <div className="absolute left-2.5 top-2.5 text-muted-foreground">
+                    <Search className="w-4 h-4 shrink-0 mt-0.5" />
+                </div>
+                <input
+                    ref={searchRef}
+                    autoFocus={autoFocus}
+                    className="w-full h-10 pl-9 pr-3 border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 text-sm placeholder:text-muted-foreground"
+                    placeholder={placeholder}
+                    value={search}
+                    onChange={(e) => {
+                        setSearch(e.target.value);
+                        if (!open) setOpen(true);
+                    }}
+                    onFocus={() => setOpen(true)}
+                    onKeyDown={handleKeyDown}
+                />
 
                 {open && (
-                    <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-md">
-                        <div className="p-2 border-b">
-                            <div className="flex items-center gap-2 px-2 py-1 rounded border bg-background">
-                                <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                <input
-                                    ref={searchRef}
-                                    autoFocus
-                                    className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-                                    placeholder="Type to search..."
-                                    value={search}
-                                    onChange={(e) => setSearch(e.target.value)}
-                                />
-                            </div>
-                        </div>
+                    <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-md left-0 right-0 top-full">
                         <div className="max-h-60 overflow-y-auto py-1">
                             {loading && (
                                 <div className="px-3 py-2 text-sm text-muted-foreground">Loading...</div>
@@ -176,8 +205,7 @@ export function LedgerPicker({
                                     type="button"
                                     onClick={() => select(ledger)}
                                     className={cn(
-                                        'w-full flex flex-col items-start px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground transition-colors',
-                                        value?.id === ledger.id && 'bg-primary/10 text-primary'
+                                        'w-full flex flex-col items-start px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground transition-colors'
                                     )}
                                 >
                                     <span className="font-medium">{ledger.name}</span>

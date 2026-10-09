@@ -6,7 +6,7 @@ import { Switch } from '@/components/ui/switch'; // Assuming a switch component 
 import { format } from 'date-fns';
 
 export function TransactionStrip() {
-    const { drafts, activeDraftId, setDraftDocumentMode } = useBillingStore();
+    const { drafts, activeDraftId, setDraftDocumentMode, activeStaff } = useBillingStore();
     
     if (!activeDraftId) return null;
     const activeDraft = drafts[activeDraftId];
@@ -16,28 +16,30 @@ export function TransactionStrip() {
         <div className="w-full bg-slate-50 border-b border-slate-200 px-4 py-2 flex items-center justify-between shrink-0 shadow-sm z-40 relative">
             {/* Left side: Breadcrumb & Status */}
             <div className="flex items-center gap-3">
-                <div className="flex items-center text-xs font-semibold text-slate-500">
-                    Sales <ChevronRight className="w-3 h-3 mx-1" /> 
-                    <span className="text-slate-800">
-                        {activeDraft.documentMode === 'quotation' ? 'New Quotation' : 'New Bill'}
-                    </span>
-                </div>
-                
-                <div className="w-px h-4 bg-slate-300 mx-2"></div>
-                
                 <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-slate-700">Bill: {activeDraft.id.slice(0, 8).toUpperCase()}</span>
-                    <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded tracking-wider">DRAFT</span>
+                    <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-100 px-2 py-1 rounded">
+                        <span className="w-5 h-5 bg-indigo-500 text-white rounded-full flex items-center justify-center font-bold text-[10px]">
+                            {activeStaff?.name?.substring(0, 2).toUpperCase() || 'U'}
+                        </span>
+                        <span className="text-indigo-900 font-bold text-xs uppercase">
+                            {activeStaff?.name || 'Unknown User'}
+                        </span>
+                        <span className="text-[9px] uppercase tracking-wider text-indigo-500 bg-indigo-200 px-1 py-0.5 rounded font-bold">
+                            {activeStaff?.role?.replace('_', ' ') || 'STAFF'}
+                        </span>
+                    </div>
                     
-                    {activeDraft.saveStatus === 'saving' && (
-                        <span className="text-[10px] font-medium text-slate-500 ml-2 italic animate-pulse">• Saving...</span>
-                    )}
-                    {activeDraft.saveStatus === 'saved' && (
-                        <span className="text-[10px] font-medium text-emerald-600 ml-2 italic">• Saved just now</span>
-                    )}
-                    {activeDraft.saveStatus === 'error' && (
-                        <span className="text-[10px] font-medium text-red-600 ml-2 italic">• Sync failed</span>
-                    )}
+                    <div className="flex items-center gap-2">
+                        {activeDraft.saveStatus === 'saving' && (
+                            <span className="text-[10px] font-medium text-slate-500 ml-2 italic animate-pulse">• Saving...</span>
+                        )}
+                        {activeDraft.saveStatus === 'saved' && (
+                            <span className="text-[10px] font-medium text-emerald-600 ml-2 italic">• Saved just now</span>
+                        )}
+                        {activeDraft.saveStatus === 'error' && (
+                            <span className="text-[10px] font-medium text-red-600 ml-2 italic">• Sync failed</span>
+                        )}
+                    </div>
                 </div>
 
                 <div className="w-px h-4 bg-slate-300 mx-2"></div>

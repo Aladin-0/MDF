@@ -1,21 +1,42 @@
 'use client';
 
 import { useBillingStore } from '@/store/billingStore';
+import { useSettingsStore } from '@/store/settingsStore';
 import { LedgerPicker } from './LedgerPicker';
 import { DoctorPicker } from './DoctorPicker';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { UserPlus, Search, Stethoscope, PlusSquare, Upload, FileText } from 'lucide-react';
+import { UserPlus, Search, Stethoscope, PlusSquare, Upload, FileText, Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export function BillingHeaderStrip() {
-    const { drafts, activeDraftId, setCustomer, setDraftDocumentMode, setSaleType, updateDraftHeader } = useBillingStore();
+interface BillingHeaderStripProps {
+    customerRef?: React.RefObject<HTMLInputElement>;
+    doctorRef?: React.RefObject<HTMLInputElement>;
+    medicineSearchRef?: React.RefObject<HTMLInputElement>; // Added to complete the retail loop
+}
+
+export function BillingHeaderStrip({ customerRef, doctorRef, medicineSearchRef }: BillingHeaderStripProps = {}) {
+    // Cleanly destructure all necessary state and actions from the store
+    const {
+        drafts,
+        activeDraftId,
+        setCustomer,
+        setCustomerLedger,
+        setDoctor,
+        setHospitalName,
+        setDraftDocumentMode,
+        setSaleType,
+        updateDraftHeader
+    } = useBillingStore();
+
+    const enableEwayBill = useSettingsStore(s => s.enableEwayBill);
 
     if (!activeDraftId) return null;
     const activeDraft = drafts[activeDraftId];
     if (!activeDraft) return null;
 
     const { customer, customerLedger, doctor, hospitalName, documentMode, saleType, quotationId, transporterId, vehicleNo, transDistance, transMode, vehicleType } = activeDraft;
+
     // Only allow toggling if no quotationId (open/convert sets mode explicitly)
     const canToggleMode = !quotationId;
 
@@ -30,69 +51,65 @@ export function BillingHeaderStrip() {
                             <button
                                 disabled={!canToggleMode}
                                 onClick={() => setSaleType(activeDraftId, 'RETAIL')}
-                                className={`px-3 py-1 text-xs font-bold rounded transition-all ${
-                                    saleType === 'RETAIL'
+                                className={`px-3 py-1 text-xs font-bold rounded transition-all ${saleType === 'RETAIL'
                                         ? 'bg-white text-blue-700 shadow-sm'
                                         : 'text-slate-500 hover:text-slate-700'
-                                } ${!canToggleMode ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    } ${!canToggleMode ? 'opacity-50 cursor-not-allowed' : ''}`}
                             >
-                                Retail [F2]
+                                Retail
                             </button>
                             <button
                                 disabled={!canToggleMode}
                                 onClick={() => setSaleType(activeDraftId, 'WHOLESALE')}
-                                className={`px-3 py-1 text-xs font-bold rounded transition-all ${
-                                    saleType === 'WHOLESALE'
+                                className={`px-3 py-1 text-xs font-bold rounded transition-all ${saleType === 'WHOLESALE'
                                         ? 'bg-indigo-600 text-white shadow-sm'
                                         : 'text-slate-500 hover:text-slate-700'
-                                } ${!canToggleMode ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    } ${!canToggleMode ? 'opacity-50 cursor-not-allowed' : ''}`}
                             >
-                                Wholesale [F3]
+                                Wholesale
                             </button>
                         </div>
                         <div className="flex items-center gap-0.5 bg-slate-100 rounded-md p-0.5">
                             <button
                                 disabled={!canToggleMode}
                                 onClick={() => setDraftDocumentMode(activeDraftId, 'invoice')}
-                                className={`px-3 py-1 text-xs font-bold rounded transition-all ${
-                                    documentMode === 'invoice'
+                                className={`px-3 py-1 text-xs font-bold rounded transition-all ${documentMode === 'invoice'
                                         ? 'bg-white text-blue-700 shadow-sm'
                                         : 'text-slate-500 hover:text-slate-700'
-                                } ${!canToggleMode ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    } ${!canToggleMode ? 'opacity-50 cursor-not-allowed' : ''}`}
                             >
                                 Invoice
                             </button>
                             <button
                                 disabled={!canToggleMode}
                                 onClick={() => setDraftDocumentMode(activeDraftId, 'quotation')}
-                                className={`px-3 py-1 text-xs font-bold rounded transition-all ${
-                                    documentMode === 'quotation'
+                                className={`px-3 py-1 text-xs font-bold rounded transition-all ${documentMode === 'quotation'
                                         ? 'bg-amber-500 text-white shadow-sm'
                                         : 'text-slate-500 hover:text-slate-700'
-                                } ${!canToggleMode ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    } ${!canToggleMode ? 'opacity-50 cursor-not-allowed' : ''}`}
                             >
                                 Quotation
                             </button>
                         </div>
                     </div>
                 </div>
-                
-                <div className="grid grid-cols-12 gap-4">
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {/* Customer Search */}
-                    <div className="col-span-5">
+                    <div>
                         <label className="text-[11px] font-bold text-slate-600 mb-1 block">Customer Search</label>
-                        <LedgerPicker 
+                        <LedgerPicker
+                            inputRef={customerRef} // Changed: Pass ref directly to the picker
+                            nextInputRef={doctorRef} // Changed: Active Focus Handoff
                             currentLedger={customerLedger || null}
                             onSelect={(ledger) => {
-                                const { setCustomerLedger, setCustomer } = useBillingStore.getState();
                                 setCustomerLedger(ledger);
-                                // Also set customer for backward compatibility if needed
                                 if (ledger) {
-                                    setCustomer({ 
-                                        id: ledger.id, 
-                                        name: ledger.name, 
-                                        phone: ledger.phone || '', 
-                                        gstin: ledger.gstin || '', 
+                                    setCustomer({
+                                        id: ledger.id,
+                                        name: ledger.name,
+                                        phone: ledger.phone || '',
+                                        gstin: ledger.gstin || '',
                                         address: ledger.address || '',
                                         creditLimit: (ledger as any).creditLimit,
                                         dlNo20b: (ledger as any).dlNo20b,
@@ -125,7 +142,7 @@ export function BillingHeaderStrip() {
                             ) : (
                                 <span>No Customer Selected</span>
                             )}
-                            
+
                             {/* Wholesale Badges */}
                             {saleType === 'WHOLESALE' && customer && (
                                 <div className="flex gap-2 ml-4">
@@ -146,53 +163,55 @@ export function BillingHeaderStrip() {
                     {saleType === 'RETAIL' ? (
                         <>
                             {/* Prescribing Doctor */}
-                            <div className="col-span-4 relative">
+                            <div className="relative">
                                 <label className="text-[11px] font-bold text-slate-600 mb-1 block">Prescribing Doctor</label>
-                                <DoctorPicker 
+                                <DoctorPicker
+                                    inputRef={doctorRef} // Changed: Pass ref directly to the picker
+                                    nextInputRef={medicineSearchRef} // Changed: Active Focus Handoff to main grid
                                     currentDoctor={doctor}
-                                    onSelect={(doc) => useBillingStore.getState().setDoctor(doc)}
+                                    onSelect={(doc) => setDoctor(doc)}
                                 />
                             </div>
 
                             {/* Hospital / Referral */}
-                            <div className="col-span-3">
+                            <div>
                                 <label className="text-[11px] font-bold text-slate-600 mb-1 block">Hospital / Referral</label>
                                 <div className="relative">
                                     <PlusSquare className="absolute left-2.5 top-2.5 w-4 h-4 text-slate-400" />
-                                    <Input 
+                                    <Input
                                         value={hospitalName || ''}
-                                        onChange={e => useBillingStore.getState().setHospitalName(e.target.value)}
-                                        className="w-full h-9 pl-8 pr-3 border border-slate-300 rounded focus-visible:ring-1 focus-visible:ring-blue-500 font-medium placeholder:text-slate-400 text-sm bg-white" 
-                                        placeholder="Hospital Name..." 
+                                        onChange={e => setHospitalName(e.target.value)}
+                                        className="w-full h-9 pl-8 pr-3 border border-slate-300 rounded focus-visible:ring-1 focus-visible:ring-blue-500 font-medium placeholder:text-slate-400 text-sm bg-white"
+                                        placeholder="Hospital Name..."
                                     />
                                 </div>
                             </div>
                         </>
-                    ) : (
+                    ) : enableEwayBill ? (
                         <>
                             {/* Transporter Details */}
-                            <div className="col-span-3 relative">
+                            <div className="relative">
                                 <label className="text-[11px] font-bold text-slate-600 mb-1 block">Transporter GSTIN</label>
-                                <Input 
+                                <Input
                                     value={transporterId || ''}
                                     onChange={e => updateDraftHeader(activeDraftId, { transporterId: e.target.value })}
-                                    className="w-full h-9 border border-slate-300 rounded focus-visible:ring-1 focus-visible:ring-indigo-500 font-medium placeholder:text-slate-400 text-sm bg-white" 
-                                    placeholder="Enter GSTIN..." 
+                                    className="w-full h-9 border border-slate-300 rounded focus-visible:ring-1 focus-visible:ring-indigo-500 font-medium placeholder:text-slate-400 text-sm bg-white"
+                                    placeholder="Enter GSTIN..."
                                 />
                             </div>
-                            <div className="col-span-2">
+                            <div>
                                 <label className="text-[11px] font-bold text-slate-600 mb-1 block">Distance (km)</label>
-                                <Input 
+                                <Input
                                     type="number"
                                     value={transDistance === '' ? '' : transDistance || ''}
                                     onChange={e => updateDraftHeader(activeDraftId, { transDistance: e.target.value === '' ? '' : Number(e.target.value) })}
-                                    className="w-full h-9 border border-slate-300 rounded focus-visible:ring-1 focus-visible:ring-indigo-500 font-medium placeholder:text-slate-400 text-sm bg-white" 
-                                    placeholder="e.g. 50" 
+                                    className="w-full h-9 border border-slate-300 rounded focus-visible:ring-1 focus-visible:ring-indigo-500 font-medium placeholder:text-slate-400 text-sm bg-white"
+                                    placeholder="e.g. 50"
                                 />
                             </div>
-                            <div className="col-span-2">
+                            <div>
                                 <label className="text-[11px] font-bold text-slate-600 mb-1 block">Mode</label>
-                                <select 
+                                <select
                                     value={transMode || 1}
                                     onChange={e => updateDraftHeader(activeDraftId, { transMode: Number(e.target.value) })}
                                     className="w-full h-9 border border-slate-300 rounded focus-visible:ring-1 focus-visible:ring-indigo-500 font-medium text-sm bg-white"
@@ -203,9 +222,9 @@ export function BillingHeaderStrip() {
                                     <option value={4}>Ship</option>
                                 </select>
                             </div>
-                            <div className="col-span-2">
+                            <div>
                                 <label className="text-[11px] font-bold text-slate-600 mb-1 block">Vehicle Type</label>
-                                <select 
+                                <select
                                     value={vehicleType || 'R'}
                                     onChange={e => updateDraftHeader(activeDraftId, { vehicleType: e.target.value })}
                                     className="w-full h-9 border border-slate-300 rounded focus-visible:ring-1 focus-visible:ring-indigo-500 font-medium text-sm bg-white"
@@ -214,17 +233,17 @@ export function BillingHeaderStrip() {
                                     <option value="O">ODC</option>
                                 </select>
                             </div>
-                            <div className="col-span-3">
+                            <div>
                                 <label className="text-[11px] font-bold text-slate-600 mb-1 block">Vehicle No.</label>
-                                <Input 
+                                <Input
                                     value={vehicleNo || ''}
                                     onChange={e => updateDraftHeader(activeDraftId, { vehicleNo: e.target.value })}
-                                    className="w-full h-9 border border-slate-300 rounded focus-visible:ring-1 focus-visible:ring-indigo-500 font-medium placeholder:text-slate-400 text-sm bg-white uppercase" 
-                                    placeholder="e.g. MH01AB1234" 
+                                    className="w-full h-9 border border-slate-300 rounded focus-visible:ring-1 focus-visible:ring-indigo-500 font-medium placeholder:text-slate-400 text-sm bg-white uppercase"
+                                    placeholder="e.g. MH01AB1234"
                                 />
                             </div>
                         </>
-                    )}
+                    ) : null}
                 </div>
 
                 {/* Prescription Row (Only Retail) */}
@@ -232,20 +251,51 @@ export function BillingHeaderStrip() {
                     <div className="flex items-center gap-4 mt-3">
                         <div className="flex items-center gap-2">
                             <label className="text-xs font-bold text-slate-600">Prescription</label>
-                            <Input 
+                            <Input
                                 value={activeDraft.prescriptionNo || ''}
                                 onChange={(e) => updateDraftHeader(activeDraftId, { prescriptionNo: e.target.value })}
-                                className="w-48 h-9 border border-slate-300 rounded text-sm" 
-                                placeholder="Rx Number..." 
+                                className="w-48 h-9 border border-slate-300 rounded text-sm"
+                                placeholder="Rx Number..."
                             />
-                            <Button variant="outline" className="h-9 px-4 text-blue-600 border-blue-200 hover:bg-blue-50 font-semibold flex items-center gap-2">
-                                <Upload className="w-4 h-4" /> Upload Rx
-                            </Button>
-                        </div>
-                        
-                        <div className="flex items-center gap-2 ml-auto">
-                            <span className="bg-[#D32F2F] text-white text-[10px] font-bold px-2 py-1 rounded tracking-wider">RX REQUIRED</span>
-                            <span className="bg-[#2E7D32] text-white text-[10px] font-bold px-2 py-1 rounded tracking-wider">SCHEDULE H1</span>
+                            <div className="relative">
+                                <input
+                                    type="file"
+                                    accept="image/*,.pdf"
+                                    className="hidden"
+                                    id="rx-upload"
+                                    onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) {
+                                            const reader = new FileReader();
+                                            reader.onload = (e) => {
+                                                const dataUrl = e.target?.result as string;
+                                                updateDraftHeader(activeDraftId, { prescriptionImageUrl: dataUrl });
+                                            };
+                                            reader.readAsDataURL(file);
+                                        }
+                                    }}
+                                />
+                                <Button
+                                    variant="outline"
+                                    onClick={() => document.getElementById('rx-upload')?.click()}
+                                    className={cn("h-9 px-4 font-semibold flex items-center gap-2",
+                                        activeDraft.prescriptionImageUrl
+                                            ? "text-emerald-600 border-emerald-200 hover:bg-emerald-50"
+                                            : "text-blue-600 border-blue-200 hover:bg-blue-50"
+                                    )}
+                                >
+                                    {activeDraft.prescriptionImageUrl ? <Check className="w-4 h-4" /> : <Upload className="w-4 h-4" />}
+                                    {activeDraft.prescriptionImageUrl ? 'Rx Uploaded' : 'Upload Rx'}
+                                </Button>
+                                {activeDraft.prescriptionImageUrl && (
+                                    <button
+                                        onClick={() => updateDraftHeader(activeDraftId, { prescriptionImageUrl: null })}
+                                        className="absolute -top-2 -right-2 bg-red-100 text-red-600 rounded-full p-0.5 hover:bg-red-200"
+                                    >
+                                        <X className="w-3 h-3" />
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     </div>
                 )}

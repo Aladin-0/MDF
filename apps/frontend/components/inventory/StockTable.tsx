@@ -377,8 +377,8 @@ export function StockTable({ onProductClick, onAdjustClick, onEditClick }: any) 
                  )}
              </div>
 
-              <div className="bg-white border rounded-xl overflow-hidden">
-                  <Table>
+              <div className="bg-white border rounded-xl overflow-x-auto">
+                  <Table className="min-w-[1000px]">
                       <TableHeader className="bg-slate-50 border-b text-xs font-semibold text-slate-500 uppercase tracking-wider">
                            {table.getHeaderGroups().map(hg => (
                                <TableRow key={hg.id}>

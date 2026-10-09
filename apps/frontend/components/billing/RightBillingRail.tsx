@@ -1,8 +1,10 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useBillingStore } from '@/store/billingStore';
-import { cn, isChromium } from '@/lib/utils';
+import { useMagicSubmit } from '@/hooks/useMagicSubmit';
+import { useAuthStore } from '@/store/authStore';
+import { cn } from '@/lib/utils';
 import { calculateTotalMargin } from '@/lib/billingMarginUtils';
 import { useCheckout } from '@/hooks/useCheckout';
 import { useToast } from '@/hooks/use-toast';
@@ -10,18 +12,15 @@ import { RevisionReasonModal } from './RevisionReasonModal';
 
 export function RightBillingRail() {
     const { drafts, activeDraftId, getDraftTotals, setDraftDocumentMode, setRevisionContext, showMarginInfo, activeStaff } = useBillingStore();
+    const { outlet } = useAuthStore();
+    const containerRef = useRef<HTMLDivElement>(null);
     
     const draft = activeDraftId ? drafts[activeDraftId] : null;
     const isQuotation = draft?.documentMode === 'quotation';
     const paymentMethod = draft?.payment?.method || 'cash';
-    const cashReceived = draft?.payment?.cashTendered ? String(draft.payment.cashTendered) : '';
 
     const setPaymentMethod = (mode: any) => {
         useBillingStore.getState().setPayment({ method: mode });
-    };
-
-    const setCashReceived = (val: string) => {
-        useBillingStore.getState().setPayment({ cashTendered: val === '' ? 0 : Number(val) });
     };
 
     useEffect(() => {
@@ -41,7 +40,7 @@ export function RightBillingRail() {
     const extraDiscountPct = activeDraft.extraDiscountPct || 0;
     const { updateDraftHeader } = useBillingStore.getState();
 
-    const outletState = activeStaff?.outlet?.state || activeStaff?.outlet?.stateCode || '';
+    const outletState = outlet?.state || outlet?.stateCode || '';
     const customerState = activeDraft?.customerLedger?.state || activeDraft?.customerLedger?.stateCode || activeDraft?.customer?.state || activeDraft?.customer?.stateCode || '';
     const isInterstate = customerState ? customerState.toLowerCase() !== outletState.toLowerCase() : false;
 
@@ -82,41 +81,34 @@ export function RightBillingRail() {
         reasonModalOpen,
         setReasonModalOpen,
         isLoading,
-        balance,
         isScheduleHValid,
-        isTenderInvalid,
         isCreditInvalid
     } = useCheckout();
 
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'F8' || (e.key === 'Enter' && e.ctrlKey)) {
-                e.preventDefault();
-                if (canCheckout && !(paymentMethod === 'credit' && isCreditBlocked)) {
-                    handleCheckout();
-                }
-            }
-        };
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [canCheckout, paymentMethod, isCreditBlocked, handleCheckout]);
+    useMagicSubmit(null, () => {
+        if (canCheckout && !(paymentMethod === 'credit' && isCreditBlocked)) {
+            handleCheckout();
+        }
+    });
 
     return (
-        <div className="flex flex-col h-full bg-white relative overflow-hidden border-l border-slate-200">
+        <div ref={containerRef} className="flex flex-col h-full bg-white relative overflow-hidden border-l border-slate-200">
             {/* Bill Summary Header */}
             <div className="px-5 py-4 border-b border-slate-200 shrink-0">
                 <h3 className="font-bold text-slate-800 text-lg">Bill Summary</h3>
-                {activeDraft?.saleType === 'WHOLESALE' && !isChromium() && (
-                    <div className="mt-2 text-[10px] text-amber-700 bg-amber-50 p-2 rounded border border-amber-200">
-                        <strong>Note:</strong> For accurate A4 wholesale printing, Google Chrome or Microsoft Edge is highly recommended.
-                    </div>
-                )}
             </div>
 
             {/* Quick Stats */}
             <div className="px-5 py-3 border-b border-slate-200 flex justify-between items-center bg-slate-50/50 shrink-0">
                 <div className="text-sm font-medium text-slate-600" data-testid="cart-summary-items">
-                    {totals.itemCount} Items | {cart.reduce((s, i) => s + (i.qtyStrips * i.packSize + i.qtyLoose), 0)} Quantities
+                    {totals.itemCount} Items | {(() => {
+                        const totalStrips = cart.reduce((s, i) => s + i.qtyStrips, 0);
+                        const totalLoose = cart.reduce((s, i) => s + i.qtyLoose, 0);
+                        if (totalStrips > 0 || totalLoose > 0) {
+                            return `${totalStrips > 0 ? `${totalStrips} S` : ''}${totalStrips > 0 && totalLoose > 0 ? ' ' : ''}${totalLoose > 0 ? `${totalLoose} L` : ''}`;
+                        }
+                        return `${cart.reduce((s, i) => s + (i.totalQty || i.qtyStrips), 0)} Qty`;
+                    })()}
                 </div>
                 <div className="text-sm font-bold text-blue-600">
                     Bill Disc: -₹{totals.extraDiscountAmount.toFixed(2)}
@@ -243,13 +235,38 @@ export function RightBillingRail() {
                 {/* Payment Options (Hide if Quotation) */}
                 {!isQuotation && (
                     <>
-                        <div className="mb-4">
+                        <div className="mb-4" onKeyDown={(e) => {
+                            if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                const buttons = Array.from(e.currentTarget.querySelectorAll('button[data-payment-mode]')) as HTMLButtonElement[];
+                                const currentIndex = buttons.indexOf(document.activeElement as HTMLButtonElement);
+                                if (currentIndex !== -1) {
+                                    let nextIndex = currentIndex;
+                                    if (e.key === 'ArrowRight') {
+                                        nextIndex = (currentIndex + 1) % buttons.length;
+                                    } else if (e.key === 'ArrowLeft') {
+                                        nextIndex = (currentIndex - 1 + buttons.length) % buttons.length;
+                                    }
+                                    buttons[nextIndex].focus();
+                                }
+                            }
+                        }}>
                             <span className="text-xs font-semibold text-slate-400 block mb-2">Payment Mode</span>
                             <div className="flex gap-2">
                                 {['cash', 'upi', 'card', 'credit'].map((mode) => (
                                     <button
                                         key={mode}
+                                        type="button"
+                                        data-payment-mode="true"
                                         onClick={() => setPaymentMethod(mode as any)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' || e.key === ' ') {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                setPaymentMethod(mode as any);
+                                            }
+                                        }}
                                         className={cn(
                                             "flex-1 py-1.5 border rounded text-sm font-bold capitalize transition-colors",
                                             paymentMethod === mode 
@@ -263,27 +280,7 @@ export function RightBillingRail() {
                             </div>
                         </div>
 
-                        {/* Cash Received & Balance */}
-                        {paymentMethod === 'cash' && (
-                            <div className="grid grid-cols-2 gap-4 mb-6">
-                                <div>
-                                    <span className="text-xs font-semibold text-slate-400 block mb-1">Received</span>
-                                    <input 
-                                        type="number"
-                                        value={cashReceived}
-                                        onChange={(e) => setCashReceived(e.target.value)}
-                                        placeholder={totals.grandTotal.toString()}
-                                        className="w-full bg-[#1C2029] border border-slate-600 rounded px-3 py-2 text-white font-bold outline-none focus:border-[#0EA5E9]"
-                                    />
-                                </div>
-                                <div>
-                                    <span className="text-xs font-semibold text-slate-400 block mb-1">Balance</span>
-                                    <div className="w-full bg-[#1C2029] border border-slate-600 rounded px-3 py-2 flex items-center">
-                                        <span className="text-emerald-400 font-bold">₹ {balance.toFixed(2)}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
+
                     </>
                 )}
 
@@ -299,8 +296,9 @@ export function RightBillingRail() {
 
                 {/* Submit Button */}
                 <button 
+                    data-testid="checkout-button"
                     onClick={handleCheckout}
-                    disabled={!canCheckout || (paymentMethod === 'credit' && isCreditBlocked)}
+                    disabled={!canCheckout || (paymentMethod === 'credit' && !!isCreditBlocked)}
                     className="w-full py-3.5 bg-[#0EA5E9] hover:bg-[#0284C7] disabled:bg-slate-700 disabled:text-slate-400 text-white font-black text-lg rounded shadow-sm transition-colors flex justify-center items-center gap-2 tracking-wide"
                 >
                     <span className="bg-transparent border-none p-0 flex items-center gap-2">
@@ -308,9 +306,9 @@ export function RightBillingRail() {
                             isQuotation ? (
                                 <>SAVE QUOTATION</>
                             ) : paymentMethod === 'credit' ? (
-                                <>SAVE ON CREDIT <span className="text-blue-200 text-xs font-normal ml-1 border border-blue-400/30 px-1 rounded bg-blue-500/20">[F8]</span></>
+                                <>SAVE ON CREDIT <span className="text-blue-200 text-xs font-normal ml-1 border border-blue-400/30 px-1 rounded bg-blue-500/20">(Ctrl + Enter)</span></>
                             ) : (
-                                <>COLLECT PAYMENT <span className="text-blue-200 text-xs font-normal ml-1 border border-blue-400/30 px-1 rounded bg-blue-500/20">[F8]</span></>
+                                <>COLLECT PAYMENT <span className="text-blue-200 text-xs font-normal ml-1 border border-blue-400/30 px-1 rounded bg-blue-500/20">(Ctrl + Enter)</span></>
                             )
                         )}
                     </span>
@@ -327,9 +325,7 @@ export function RightBillingRail() {
                     {cart.length > 0 && !isScheduleHValid && !checkoutError && (
                         <span className="text-xs font-bold text-red-400">Missing Schedule H details</span>
                     )}
-                    {cart.length > 0 && isScheduleHValid && isTenderInvalid && !checkoutError && (
-                        <span className="text-xs font-bold text-red-400">Tender amount cannot be less than total</span>
-                    )}
+
                     {cart.length > 0 && isCreditInvalid && !checkoutError && (
                         <span className="text-xs font-bold text-red-400">Customer is required for credit bills</span>
                     )}

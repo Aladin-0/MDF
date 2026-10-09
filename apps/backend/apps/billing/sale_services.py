@@ -50,6 +50,13 @@ def threaded_process_pending_irn(invoice_id: str):
 def process_pending_irn(invoice_id: str):
     try:
         invoice = SaleInvoice.objects.get(id=invoice_id)
+        
+        # Feature Flag Kill-Switch
+        if hasattr(invoice.outlet, 'settings') and not invoice.outlet.settings.enable_einvoice:
+            invoice.irn_status = 'NOT_APPLICABLE'
+            invoice.save(update_fields=['irn_status'])
+            return
+            
         if invoice.irn_status != 'PENDING':
             return
 
@@ -98,6 +105,13 @@ def process_pending_ewaybill(invoice_id: str):
     from django.utils.timezone import now
     try:
         invoice = SaleInvoice.objects.get(id=invoice_id)
+        
+        # Feature Flag Kill-Switch
+        if hasattr(invoice.outlet, 'settings') and not invoice.outlet.settings.enable_eway_bill:
+            invoice.eway_bill_status = 'NOT_APPLICABLE'
+            invoice.save(update_fields=['eway_bill_status'])
+            return
+            
         if invoice.eway_bill_status != 'PENDING':
             return
             

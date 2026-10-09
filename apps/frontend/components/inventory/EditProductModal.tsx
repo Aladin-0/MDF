@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useForm, Controller, useFieldArray } from 'react-hook-form';
+import { useMagicSubmit } from '@/hooks/useMagicSubmit';
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
@@ -18,12 +19,14 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { productsApi } from '@/lib/apiClient';
+import { productsApi, API_URL, getHeaders } from '@/lib/apiClient';
+import { useAuthStore } from '@/store/authStore';
 import { MasterProduct } from '@/types';
 import {
     Package, Pill, Barcode, Thermometer, AlertTriangle,
     RotateCcw, IndianRupee, ReceiptText, FlaskConical,
 } from 'lucide-react';
+import { useDistributorList } from '@/hooks/usePurchases';
 import { PACK_TYPE_OPTIONS, DISPENSING_UNIT_OPTIONS } from '@/constants/productBehavior';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { inferPackUnit } from '@/utils/productUtils';
@@ -93,9 +96,13 @@ export function EditProductModal({
 }: EditProductModalProps) {
     const { toast } = useToast();
     const queryClient = useQueryClient();
+    const outlet = useAuthStore(s => s.outlet);
     const [saving, setSaving] = useState(false);
     const [isEditingUnit, setIsEditingUnit] = useState(false);
     const [apiErrors, setApiErrors] = useState<Record<string, string>>({});
+    const formRef = useRef<HTMLFormElement>(null);
+
+    const { data: distributors } = useDistributorList();
 
     const {
         register,
@@ -190,12 +197,23 @@ export function EditProductModal({
                 scheduleType:   values.scheduleType as any,
                 mrp:            Number(values.mrp),
                 barcode:        values.barcode || undefined,
-                minQty:         Number(values.minQty),
-                reorderQty:     Number(values.reorderQty),
                 isFridge:       values.isFridge,
                 isDiscontinued: values.isDiscontinued,
                 batches:        values.batches,
             });
+
+            if (outlet?.id) {
+                await fetch(`${API_URL}/inventory/outlet-configs/`, {
+                    method: 'POST',
+                    headers: getHeaders(),
+                    body: JSON.stringify({
+                        outletId: outlet.id,
+                        productId: product.id,
+                        minQty: Number(values.minQty),
+                        reorderQty: Number(values.reorderQty),
+                    })
+                });
+            }
             // Invalidate all inventory + product queries
             queryClient.invalidateQueries({ queryKey: ['inventory'] });
             queryClient.invalidateQueries({ queryKey: ['stock-list'] });
@@ -219,6 +237,10 @@ export function EditProductModal({
         }
     };
 
+    useMagicSubmit(formRef, () => {
+        handleSubmit(onSubmit)();
+    }, isDirty && !saving);
+
     if (!product) return null;
 
     const fieldErr = (key: keyof FormValues) =>
@@ -226,8 +248,8 @@ export function EditProductModal({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-2xl p-0 gap-0 overflow-hidden">
-                <DialogHeader className="px-6 pt-6 pb-4 border-b bg-gradient-to-r from-indigo-50 to-purple-50">
+            <DialogContent className="max-w-2xl p-0 gap-0 overflow-hidden max-h-[90vh] flex flex-col">
+                <DialogHeader className="px-6 pt-6 pb-4 border-b bg-gradient-to-r from-indigo-50 to-purple-50 shrink-0">
                     <div className="flex items-center gap-3">
                         <div className="rounded-full bg-indigo-100 p-2">
                             <Package className="h-5 w-5 text-indigo-600" />
@@ -255,9 +277,9 @@ export function EditProductModal({
                     </div>
                 </DialogHeader>
 
-                <form onSubmit={handleSubmit(onSubmit)}>
-                    <ScrollArea className="max-h-[70vh]">
-                        <div className="px-6 py-5">
+                <form ref={formRef} onSubmit={handleSubmit(onSubmit)} className="flex flex-col flex-1 overflow-hidden">
+                    <div className="flex-1 overflow-y-auto">
+                        <div className="px-6 pt-5 pb-6">
                             <Tabs defaultValue="attributes" className="w-full">
                                 <TabsList className="w-full grid grid-cols-3 mb-6 bg-slate-100">
                                     <TabsTrigger value="attributes">Attributes</TabsTrigger>
@@ -322,7 +344,7 @@ export function EditProductModal({
                                     </Section>
                                     <Separator />
                                     {/* ── Section: Stock Management ── */}
-                                    <Section icon={<RotateCcw className="h-4 w-4 text-blue-500" />} title="Stock Management">
+                                    <Section icon={<RotateCcw className="h-4 w-4 text-blue-500" />} title="Stock Management (Current Outlet)">
                                         <div className="grid grid-cols-2 gap-4">
                                             <Field label="Low Stock Alert (strips)" error={fieldErr('minQty')}>
                                                 <Input type="number" min={0} {...register('minQty', { valueAsNumber: true, min: 0 })} />
@@ -438,9 +460,9 @@ export function EditProductModal({
                                 </TabsContent>
                             </Tabs>
                         </div>
-                    </ScrollArea>
+                    </div>
 
-                    <DialogFooter className="border-t px-6 py-4 bg-slate-50/80">
+                    <DialogFooter className="bg-white border-t border-gray-200 px-6 py-4 shrink-0">
                         <Button variant="outline" type="button" onClick={() => onOpenChange(false)} disabled={saving}>
                             Cancel
                         </Button>

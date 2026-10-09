@@ -34,6 +34,8 @@ export function GSTSettingsSection({ onDirty, onSaved, discardKey }: GSTSettings
         defaultGSTRate: store.defaultGSTRate,
         roundOffInvoice: store.roundOffInvoice,
         showGSTBreakup: store.showGSTBreakup,
+        enableEwayBill: store.enableEwayBill,
+        enableEinvoice: store.enableEinvoice,
         // outletStateCode is derived — not included in form values
     });
 
@@ -171,6 +173,34 @@ export function GSTSettingsSection({ onDirty, onSaved, discardKey }: GSTSettings
                         onCheckedChange={(v) => setValue('showGSTBreakup', v, { shouldDirty: true })}
                         className="border-b-0"
                     />
+                </div>
+            </div>
+
+            {/* Compliance Automation */}
+            <div className="space-y-1.5 pt-4">
+                <Label>Compliance Automation</Label>
+                <p className="text-xs text-muted-foreground mb-2">
+                    Enable or disable automatic generation of E-Way Bills and E-Invoices.
+                </p>
+                <div className="rounded-xl border bg-white divide-y">
+                    <div className="p-4">
+                        <SettingsToggleRow
+                            label="Auto-Generate E-Way Bills"
+                            description="Shows transport fields in POS and generates E-Way Bill on checkout"
+                            checked={watch('enableEwayBill')}
+                            onCheckedChange={(v) => setValue('enableEwayBill', v, { shouldDirty: true })}
+                            className="border-b-0"
+                        />
+                    </div>
+                    <div className="p-4">
+                        <SettingsToggleRow
+                            label="Auto-Generate E-Invoices"
+                            description="Automatically generates an IRN for B2B sales"
+                            checked={watch('enableEinvoice')}
+                            onCheckedChange={(v) => setValue('enableEinvoice', v, { shouldDirty: true })}
+                            className="border-b-0"
+                        />
+                    </div>
                 </div>
             </div>
 

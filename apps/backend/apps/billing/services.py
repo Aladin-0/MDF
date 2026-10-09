@@ -230,35 +230,27 @@ def generate_invoice_number(outlet_id: str) -> str:
     # Now that the outlet is locked, it's safe to query the last invoice
     last_invoice = (
         SaleInvoice.objects
-        .filter(outlet=outlet)
-        .order_by('-created_at')
+        .filter(outlet=outlet, invoice_no__startswith=f"INV-{current_year}-")
+        .order_by('-invoice_no')
         .first()
     )
 
     if not last_invoice:
         # First invoice for this outlet this year
         sequence_num = 1
-        logger.debug(f"No previous invoices for outlet {outlet.name} - starting at sequence 1")
+        logger.debug(f"No previous invoices for outlet {outlet.name} in {current_year} - starting at sequence 1")
     else:
         # Extract sequence number from last invoice_no (e.g., "INV-2026-000123" → 123)
-        match = re.search(r'INV-(\d{4})-(\d+)', last_invoice.invoice_no)
+        match = re.search(r'INV-\d{4}-(\d+)', last_invoice.invoice_no)
 
         if not match:
-            # Fallback if format doesn't match
+            # Fallback if format doesn't match (unlikely due to filter)
             logger.warning(f"Last invoice {last_invoice.invoice_no} doesn't match expected format, resetting sequence")
             sequence_num = 1
         else:
-            last_year = int(match.group(1))
-            last_sequence = int(match.group(2))
-
-            if last_year != current_year:
-                # New year - reset sequence
-                sequence_num = 1
-                logger.debug(f"New year ({last_year} → {current_year}) - resetting sequence to 1")
-            else:
-                # Same year - increment sequence
-                sequence_num = last_sequence + 1
-                logger.debug(f"Incrementing sequence from {last_sequence} to {sequence_num}")
+            last_sequence = int(match.group(1))
+            sequence_num = last_sequence + 1
+            logger.debug(f"Incrementing sequence from {last_sequence} to {sequence_num}")
 
     # Format: INV-YYYY-XXXXXX (6-digit zero-padded sequence)
     invoice_number = f"INV-{current_year}-{sequence_num:06d}"

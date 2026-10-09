@@ -286,6 +286,15 @@ const realProductsApi = {
             }),
         }));
     },
+    catalogSearch: async (q: string, outletId: string): Promise<ProductSearchResult[]> => {
+        const response = await fetch(
+            `${API_URL}/products/catalog/search/?q=${encodeURIComponent(q)}&outletId=${outletId}`,
+            { headers: getHeaders() }
+        );
+        await assertOk(response);
+        const data = await response.json();
+        return data.data || [];
+    },
     create: async (payload: import('@/types').CreateProductPayload): Promise<ProductSearchResult> => {
         const response = await fetch(`${API_URL}/products/`, {
             method: 'POST',
@@ -491,6 +500,7 @@ const realSalesApi = {
         if (params?.startDate) url += `&startDate=${params.startDate}`;
         if (params?.endDate) url += `&endDate=${params.endDate}`;
         if (params?.search) url += `&search=${encodeURIComponent(params.search)}`;
+        if (params?.saleType && params.saleType !== 'ALL') url += `&saleType=${params.saleType}`;
 
         const response = await fetch(url, { headers: getHeaders() });
         await assertOk(response);
@@ -825,6 +835,27 @@ const realStaffApi = {
 };
 
 const realPurchasesApi = {
+    getOrders: async (outletId: string): Promise<any[]> => {
+        const response = await fetch(`${API_URL}/purchases/orders/?outletId=${outletId}`, { headers: getHeaders() });
+        await assertOk(response);
+        const data = await response.json();
+        return data.results || data || [];
+    },
+    getOrderSuggestions: async (outletId: string): Promise<any[]> => {
+        const response = await fetch(`${API_URL}/purchases/orders/suggestions/?outletId=${outletId}`, { headers: getHeaders() });
+        await assertOk(response);
+        const data = await response.json();
+        return data.data || [];
+    },
+    bulkCreateOrders: async (payload: { outletId: string, items: any[] }) => {
+        const response = await fetch(`${API_URL}/purchases/orders/bulk-create/`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify(payload),
+        });
+        await assertOk(response);
+        return response.json();
+    },
     list: async (outletId: string, filters?: any): Promise<PaginatedResponse<PurchaseInvoiceFull>> => {
         let url = `${API_URL}/purchases/?outletId=${outletId}`;
         if (filters?.distributorId) url += `&distributorId=${filters.distributorId}`;

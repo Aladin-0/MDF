@@ -7,15 +7,17 @@ import { Separator } from '@/components/ui/separator';
 import { PurchasesList } from '@/components/purchases/PurchasesList';
 import { NewPurchaseForm } from '@/components/purchases/NewPurchaseForm';
 import { DistributorsTab } from '@/components/purchases/DistributorsTab';
-import { FileText, Plus, Users, ShoppingCart, Edit } from 'lucide-react';
+import { PurchaseOrdersList } from '@/components/purchases/PurchaseOrdersList';
+import { FileText, Plus, Users, ShoppingCart, Edit, ClipboardList } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PurchaseInvoiceFull } from '@/types';
 import { useAuthStore } from '@/store/authStore';
 
 const tabs = [
-    { value: 'invoices',     label: 'Invoices',      icon: FileText },
-    { value: 'new',          label: 'New Purchase',  icon: Plus     },
-    { value: 'distributors', label: 'Distributors',  icon: Users    },
+    { value: 'invoices',        label: 'Invoices',        icon: FileText },
+    { value: 'purchase_orders', label: 'Purchase Orders', icon: ClipboardList },
+    { value: 'new',             label: 'New Purchase',    icon: Plus     },
+    { value: 'distributors',    label: 'Distributors',    icon: Users    },
 ];
 
 
@@ -103,6 +105,10 @@ export default function PurchasesPage() {
 
                     <TabsContent value="invoices" className="mt-0 outline-none">
                         <PurchasesList onEditInvoice={canEdit ? handleEditInvoice : undefined} />
+                    </TabsContent>
+
+                    <TabsContent value="purchase_orders" className="mt-0 outline-none">
+                        <PurchaseOrdersList />
                     </TabsContent>
 
                     <TabsContent value="new" className="mt-0 outline-none">

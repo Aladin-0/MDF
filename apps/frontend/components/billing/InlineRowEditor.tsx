@@ -169,8 +169,8 @@ export function InlineRowEditor({ item, saleType = 'RETAIL', onSave, onCancel, o
     }
 
     return (
-        <tr className="bg-blue-50/80 border-y-2 border-blue-400 shadow-[inset_0_2px_8px_rgba(0,0,0,0.05)] relative z-20">
-            <td colSpan={8} className={`p-0 ${statusBorder}`}>
+        <tr data-cart-row="0" className="bg-blue-50/80 border-y-2 border-blue-400 shadow-[inset_0_2px_8px_rgba(0,0,0,0.05)] relative z-20">
+            <td colSpan={8} className={`p-0 relative ${statusBorder}`}>
                 <div className="flex flex-col p-4 gap-4">
                     {/* Header Row */}
                     <div className="flex justify-between items-start border-b border-blue-200 pb-3">
@@ -182,27 +182,6 @@ export function InlineRowEditor({ item, saleType = 'RETAIL', onSave, onCancel, o
                             <p className="text-xs text-slate-500 font-medium">
                                 {item.composition} • 1 Strip = {currentBatch.packSize} {currentBatch.packUnit}
                             </p>
-                        </div>
-                        <div className="flex gap-2">
-                            <button 
-                                onClick={onRemove}
-                                className="px-3 py-1.5 text-xs font-bold text-red-600 bg-red-100 hover:bg-red-200 rounded flex items-center gap-1 transition-colors"
-                            >
-                                <Trash2 className="w-3.5 h-3.5" /> Remove
-                            </button>
-                            <button 
-                                onClick={onCancel}
-                                className="px-3 py-1.5 text-xs font-bold text-slate-600 bg-slate-200 hover:bg-slate-300 rounded flex items-center gap-1 transition-colors"
-                            >
-                                <X className="w-3.5 h-3.5" /> Cancel
-                            </button>
-                            <button 
-                                onClick={commitSave}
-                                disabled={!isValid}
-                                className="px-4 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 rounded flex items-center gap-1 shadow-sm transition-colors"
-                            >
-                                <Check className="w-3.5 h-3.5" /> Save [Enter]
-                            </button>
                         </div>
                     </div>
 
@@ -318,7 +297,7 @@ export function InlineRowEditor({ item, saleType = 'RETAIL', onSave, onCancel, o
                                         )}
                                         <div>
                                             <label className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider block mb-1">
-                                                Rate (₹)
+                                                {saleType === 'WHOLESALE' ? 'PTS (₹)' : 'Rate (₹)'}
                                             </label>
                                             <Input 
                                                 type="number" 
@@ -417,6 +396,29 @@ export function InlineRowEditor({ item, saleType = 'RETAIL', onSave, onCancel, o
                                 </div>
                             )}
                         </div>
+                    </div>
+                    
+                    {/* Action Buttons (Rendered last for correct Tab order, positioned top-right) */}
+                    <div className="absolute top-4 right-4 flex gap-2">
+                        <button 
+                            onClick={onRemove}
+                            className="px-3 py-1.5 text-xs font-bold text-red-600 bg-red-100 hover:bg-red-200 rounded flex items-center gap-1 transition-colors"
+                        >
+                            <Trash2 className="w-3.5 h-3.5" /> Remove
+                        </button>
+                        <button 
+                            onClick={onCancel}
+                            className="px-3 py-1.5 text-xs font-bold text-slate-600 bg-slate-200 hover:bg-slate-300 rounded flex items-center gap-1 transition-colors"
+                        >
+                            <X className="w-3.5 h-3.5" /> Cancel
+                        </button>
+                        <button 
+                            onClick={commitSave}
+                            disabled={!isValid}
+                            className="px-4 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 rounded flex items-center gap-1 shadow-sm transition-colors"
+                        >
+                            <Check className="w-3.5 h-3.5" /> Save [Enter]
+                        </button>
                     </div>
                 </div>
             </td>

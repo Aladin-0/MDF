@@ -34,6 +34,8 @@ const DEFAULT_GST: GSTSettings = {
     roundOffInvoice: true,
     showGSTBreakup: true,
     outletStateCode: '27',
+    enableEwayBill: false,
+    enableEinvoice: false,
 };
 
 const DEFAULT_PRINTER: PrinterSettings = {

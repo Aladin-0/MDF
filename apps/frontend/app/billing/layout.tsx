@@ -7,7 +7,7 @@ import { DashboardSkeleton } from '@/components/shared/DashboardSkeleton';
 import { useAuthStore } from '@/store/authStore';
 import { authApi } from '@/lib/apiClient';
 import { GlobalOverlays } from '@/components/shared/GlobalOverlays';
-import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
+
 
 export default function BillingLayout({ children }: { children: React.ReactNode }) {
     const { isAuthenticated, _hasHydrated } = useAuthStore();
@@ -28,11 +28,6 @@ export default function BillingLayout({ children }: { children: React.ReactNode 
         }
     }, [_hasHydrated, isAuthenticated, router]);
 
-    // Shortcuts for the full-screen app wrapper
-    useKeyboardShortcuts({
-        'Escape': () => { /* Prevent default if needed */ },
-        'Ctrl+q': () => router.push('/dashboard') // Quick exit back to dashboard
-    });
 
     if (!_hasHydrated || !isAuthenticated) {
         return <DashboardSkeleton />;

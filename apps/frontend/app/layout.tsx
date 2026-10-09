@@ -4,6 +4,10 @@ import './globals.css';
 import { Providers } from './providers';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 import { Toaster } from '@/components/ui/toaster';
+import { CommandMenu } from '@/components/shared/CommandMenu';
+import { GlobalModalManager } from '@/components/shared/GlobalModalManager';
+
+
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -18,6 +22,14 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
     title: 'MediFlow — Modern Pharmacy Management',
     description: 'Fast, reliable, and compliant pharmacy management software for India.',
+    appleWebApp: {
+        capable: true,
+        statusBarStyle: 'default',
+        title: 'MediFlow',
+    },
+    formatDetection: {
+        telephone: false,
+    },
 };
 
 export default function RootLayout({
@@ -31,6 +43,8 @@ export default function RootLayout({
                 <ErrorBoundary>
                     <Providers>{children}</Providers>
                     <Toaster />
+                    <CommandMenu />
+                    <GlobalModalManager />
                 </ErrorBoundary>
             </body>
         </html>

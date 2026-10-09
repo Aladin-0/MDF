@@ -400,6 +400,7 @@ class ProductDetailView(APIView):
             product.barcode = (data['barcode'] or '').strip() or None
 
         if errors:
+            print("Product PUT errors:", errors, flush=True)
             return Response({'errors': errors}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
@@ -583,16 +584,40 @@ class ProductSearchView(APIView):
         today = datetime.now().date()
         query_lower = query.lower()
 
-        from django.db.models import Sum, F, Case, When, Value, BooleanField, IntegerField, Subquery, OuterRef
+        from django.db.models import Sum, F, Case, When, Value, BooleanField, IntegerField, Subquery, OuterRef, Q, FloatField
         from django.db.models.functions import Coalesce
+        from django.contrib.postgres.search import SearchVector, SearchQuery, SearchRank, TrigramSimilarity
 
-        # Search active MasterProducts by name, composition, manufacturer
-        products_query = MasterProduct.objects.filter(
-            is_discontinued=False
-        ).filter(
-            Q(name__icontains=query_lower) |
-            Q(composition__icontains=query_lower) |
-            Q(manufacturer__icontains=query_lower)
+        # Prepare the search query
+        search_query = SearchQuery(query, search_type='websearch')
+
+        # Construct SearchVector with weights
+        vector = (
+            SearchVector('name', weight='A') +
+            SearchVector('composition', weight='A') +
+            SearchVector('manufacturer', weight='B')
+        )
+
+        # Base query with active products
+        products_query = MasterProduct.objects.filter(is_discontinued=False)
+
+        # Annotate full-text search rank and trigram similarities
+        products_query = products_query.annotate(
+            fts_rank=SearchRank(vector, search_query),
+            name_sim=TrigramSimilarity('name', query),
+            comp_sim=TrigramSimilarity('composition', query),
+        ).annotate(
+            score=(Coalesce('fts_rank', Value(0.0), output_field=FloatField()) * 2.0) +
+                  (Coalesce('name_sim', Value(0.0), output_field=FloatField()) * 1.5) +
+                  Coalesce('comp_sim', Value(0.0), output_field=FloatField())
+        )
+
+        # Filter candidates based on hybrid criteria
+        products_query = products_query.filter(
+            Q(fts_rank__gte=0.1) |
+            Q(name_sim__gte=0.2) |
+            Q(comp_sim__gte=0.2) |
+            Q(name__icontains=query_lower)
         )
 
         # Build subquery to compute stock per product
@@ -622,19 +647,28 @@ class ProductSearchView(APIView):
                 ),
                 0
             )
-        ).annotate(
+        )
+        from apps.inventory.models import OutletProductConfig
+        config_sq = OutletProductConfig.objects.filter(
+            outlet_id=outlet_id,
+            product_id=OuterRef('pk')
+        )
+
+        products_query = products_query.annotate(
             total_qty=F('total_strips') + F('total_loose'),
             has_stock=Case(
                 When(total_qty__gt=0, then=Value(True)),
                 default=Value(False),
                 output_field=BooleanField()
-            )
-        ).order_by('-has_stock', 'name')
+            ),
+            outlet_min_qty=Coalesce(Subquery(config_sq.values('min_qty')[:1], output_field=FloatField()), 0.0),
+            outlet_reorder_qty=Coalesce(Subquery(config_sq.values('reorder_qty')[:1], output_field=FloatField()), 0.0)
+        ).order_by('-has_stock', '-score')
 
-        # Limit to 5 in-stock and 3 zero-stock
+        # Limit to 10 in-stock and 5 zero-stock
         all_matched_products = list(products_query[:50])
-        in_stock_products = [p for p in all_matched_products if p.has_stock][:5]
-        no_stock_products = [p for p in all_matched_products if not p.has_stock][:3]
+        in_stock_products = [p for p in all_matched_products if p.has_stock][:10]
+        no_stock_products = [p for p in all_matched_products if not p.has_stock][:5]
 
         final_products = in_stock_products + no_stock_products
 
@@ -692,6 +726,8 @@ class ProductSearchView(APIView):
                 'mrp': float(product.mrp),
                 'saleRate': float(product.mrp),
                 'outletProductId': str(product.id),
+                'minQty': product.outlet_min_qty,
+                'reorderQty': product.outlet_reorder_qty,
                 
                 'has_stock': product.has_stock,
                 'total_qty_strips': total_stock_strips,
@@ -706,6 +742,112 @@ class ProductSearchView(APIView):
             results.append(result)
 
         logger.info(f"Returning {len(results)} products with stock data")
+        return Response({'data': results}, status=status.HTTP_200_OK)
+
+
+class MasterCatalogSearchView(APIView):
+    """
+    GET /api/v1/products/catalog/search/?q=paracetamol&outletId=xxx
+    
+    Strictly for Procurement/PO Workspace.
+    Searches global MasterProduct catalog so zero-stock items can be ordered.
+    Returns pack_size, pack_type, dynamically annotated current_stock, and min_qty.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        query = request.query_params.get('q', '').strip()
+        outlet_id = request.query_params.get('outletId')
+
+        if len(query) < 2:
+            return Response({'data': []}, status=status.HTTP_200_OK)
+
+        try:
+            outlet = Outlet.objects.get(id=outlet_id)
+        except Outlet.DoesNotExist:
+            return Response({'detail': f'Outlet {outlet_id} not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        query_lower = query.lower()
+
+        from django.db.models import Sum, F, FloatField, IntegerField, Subquery, OuterRef, Q, Value
+        from django.db.models.functions import Coalesce
+        from django.contrib.postgres.search import SearchVector, SearchQuery, SearchRank, TrigramSimilarity
+
+        search_query = SearchQuery(query, search_type='websearch')
+        vector = (
+            SearchVector('name', weight='A') +
+            SearchVector('composition', weight='A') +
+            SearchVector('manufacturer', weight='B')
+        )
+
+        products = MasterProduct.objects.filter(is_discontinued=False).annotate(
+            fts_rank=SearchRank(vector, search_query),
+            name_sim=TrigramSimilarity('name', query),
+            comp_sim=TrigramSimilarity('composition', query),
+        ).annotate(
+            score=(Coalesce('fts_rank', Value(0.0), output_field=FloatField()) * 2.0) +
+                  (Coalesce('name_sim', Value(0.0), output_field=FloatField()) * 1.5) +
+                  Coalesce('comp_sim', Value(0.0), output_field=FloatField())
+        ).filter(
+            Q(fts_rank__gte=0.1) |
+            Q(name_sim__gte=0.2) |
+            Q(comp_sim__gte=0.2) |
+            Q(name__icontains=query_lower)
+        )
+
+        # Annotate current stock across all batches
+        active_batches_sq = Batch.objects.filter(
+            outlet_id=outlet_id,
+            is_active=True,
+            product_id=OuterRef('pk')
+        )
+        
+        from apps.inventory.models import OutletProductConfig
+        config_sq = OutletProductConfig.objects.filter(
+            outlet_id=outlet_id,
+            product_id=OuterRef('pk')
+        )
+
+        products = products.annotate(
+            total_strips=Coalesce(
+                Subquery(
+                    active_batches_sq.values('product_id')
+                    .annotate(s=Sum('qty_strips')).values('s')[:1],
+                    output_field=IntegerField()
+                ),
+                0
+            ),
+            total_loose=Coalesce(
+                Subquery(
+                    active_batches_sq.values('product_id')
+                    .annotate(s=Sum('qty_loose')).values('s')[:1],
+                    output_field=IntegerField()
+                ),
+                0
+            ),
+            outlet_min_qty=Coalesce(Subquery(config_sq.values('min_qty')[:1], output_field=FloatField()), 0.0),
+        ).order_by('-score')[:50]
+
+        results = []
+        for p in products:
+            strips = p.total_strips
+            loose = p.total_loose
+            effective_stock = strips + (loose / (p.pack_size or 1))
+            
+            results.append({
+                'id': str(p.id),
+                'name': p.name,
+                'composition': p.composition,
+                'manufacturer': p.manufacturer,
+                'packSize': p.pack_size,
+                'packUnit': p.pack_unit,
+                'packType': p.pack_type,
+                'minQty': p.outlet_min_qty,
+                'currentStock': effective_stock,
+                'mrp': float(p.mrp),
+                'purchaseRate': float(p.mrp) * 0.8, # fallback logic
+            })
+
         return Response({'data': results}, status=status.HTTP_200_OK)
 
 
@@ -727,8 +869,8 @@ class InventoryListView(APIView):
         import hashlib
         import json as _json
         from collections import defaultdict
-        from django.db.models import Sum, OuterRef, Subquery, IntegerField, F
-        from django.db.models.functions import Coalesce
+        from django.db.models import Sum, OuterRef, Subquery, IntegerField, F, FloatField, ExpressionWrapper
+        from django.db.models.functions import Coalesce, Cast, NullIf
         from datetime import timedelta
 
         outlet_id = request.query_params.get('outletId')
@@ -803,6 +945,12 @@ class InventoryListView(APIView):
             product_id=OuterRef('pk'),
         )
 
+        from apps.inventory.models import OutletProductConfig
+        config_sq = OutletProductConfig.objects.filter(
+            outlet_id=outlet_id,
+            product_id=OuterRef('pk')
+        )
+
         products = products.annotate(
             total_strips=Coalesce(
                 Subquery(
@@ -823,11 +971,18 @@ class InventoryListView(APIView):
             nearest_expiry=Subquery(
                 non_expired_sq.order_by('expiry_date').values('expiry_date')[:1]
             ),
+            outlet_min_qty=Coalesce(Subquery(config_sq.values('min_qty')[:1], output_field=FloatField()), 0.0),
+            outlet_reorder_qty=Coalesce(Subquery(config_sq.values('reorder_qty')[:1], output_field=FloatField()), 0.0)
         )
 
         # Push low-stock and expiring-soon filters to DB
         if low_stock:
-            products = products.filter(total_strips__lt=F('min_qty'))
+            products = products.annotate(
+                effective_strips=ExpressionWrapper(
+                    F('total_strips') + (Cast(F('total_loose'), FloatField()) / Cast(Coalesce(NullIf(F('pack_size'), 0), 1), FloatField())),
+                    output_field=FloatField()
+                )
+            ).filter(effective_strips__lt=F('outlet_min_qty'))
 
         if expiring_soon:
             cutoff = today + timedelta(days=90)
@@ -933,7 +1088,7 @@ class InventoryListView(APIView):
             tot_loose = product.total_loose
             total_stock_fractional = tot_stock + (tot_loose / (product.pack_size or 1))
             near_exp  = product.nearest_expiry.isoformat() if product.nearest_expiry else "2099-12-31"
-            is_low    = total_stock_fractional < (product.min_qty or 10)
+            is_low    = total_stock_fractional < (product.outlet_min_qty or 10)
 
             results.append({
                 'id':              str(product.id),
@@ -948,8 +1103,8 @@ class InventoryListView(APIView):
                 'packSize':        product.pack_size,
                 'packUnit':        product.pack_unit,
                 'packType':        product.pack_type,
-                'minQty':          product.min_qty,
-                'reorderQty':      product.reorder_qty,
+                'minQty':          product.outlet_min_qty,
+                'reorderQty':      product.outlet_reorder_qty,
                 'barcode':         product.barcode,
                 'isFridge':        product.is_fridge,
                 'isDiscontinued':  product.is_discontinued,
@@ -1574,3 +1729,39 @@ class BatchAvailabilityCheckView(APIView):
                 })
 
         return Response(results, status=status.HTTP_200_OK)
+
+
+class OutletProductConfigView(APIView):
+    permission_classes = [IsManagerOrAbove]
+
+    def post(self, request, *args, **kwargs):
+        print("OutletProductConfigView POST received data:", request.data, flush=True)
+        data = request.data
+        outlet_id = data.get('outletId')
+        product_id = data.get('productId')
+        
+        if not outlet_id or not product_id:
+            return Response({'error': 'outletId and productId are required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        try:
+            from apps.inventory.models import OutletProductConfig, MasterProduct
+            from apps.core.models import Outlet
+            
+            outlet = Outlet.objects.get(id=outlet_id)
+            product = MasterProduct.objects.get(id=product_id)
+            
+            config, created = OutletProductConfig.objects.get_or_create(
+                outlet=outlet,
+                product=product
+            )
+            
+            from decimal import Decimal
+            if 'minQty' in data:
+                config.min_qty = Decimal(str(data['minQty']))
+            if 'reorderQty' in data:
+                config.reorder_qty = Decimal(str(data['reorderQty']))
+                
+            config.save()
+            return Response({'status': 'success'}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)

@@ -93,6 +93,7 @@ export interface Outlet {
     address: string;
     city: string;
     state: string;
+    stateCode?: string;
     pincode: string;
     gstin: string;
     drugLicenseNo: string;
@@ -530,6 +531,8 @@ export interface SaleInvoice {
     outletId: string;
     invoiceNo: string;
     invoiceDate: string;
+    quotationNo?: string;
+    placeOfSupply?: string;
     customerId?: string;
     customer?: Customer;
     doctorId?: string;
@@ -1313,6 +1316,8 @@ export interface GSTSettings {
     roundOffInvoice: boolean;
     showGSTBreakup: boolean;
     outletStateCode: string;
+    enableEwayBill: boolean;
+    enableEinvoice: boolean;
 }
 
 export interface PrinterSettings {
@@ -1605,6 +1610,7 @@ export interface Ledger {
     balancingMethod?: 'bill_by_bill' | 'on_account';
     ledgerCategory?: string;
     state?: string;
+    stateCode?: string;
     country?: string;
     color?: 'normal' | 'red' | 'green' | 'blue';
     isHidden?: boolean;

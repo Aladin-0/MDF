@@ -440,7 +440,7 @@ export default function TrialBalancePage() {
 
             {/* ── Ledger drilldown Sheet — outside print-root so it doesn't print ── */}
             <Sheet open={!!selectedLedgerId} onOpenChange={(open) => !open && setSelectedLedgerId(null)}>
-                <SheetContent side="right" className="w-[800px] sm:max-w-4xl overflow-y-auto bg-slate-50">
+                <SheetContent side="right" className="w-full sm:max-w-3xl lg:max-w-4xl overflow-y-auto bg-slate-50">
                     <SheetHeader className="bg-white p-6 border-b -mx-6 -mt-6 rounded-t-xl mb-6 shadow-sm">
                         <SheetTitle className="text-2xl text-slate-800 tracking-tight">
                             Ledger Drilldown: {selectedLedgerName}

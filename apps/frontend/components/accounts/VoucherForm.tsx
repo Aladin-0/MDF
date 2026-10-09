@@ -15,7 +15,6 @@ import { api } from '@/lib/api';
 import { Ledger, Voucher, PendingBill } from '@/types';
 import { LedgerPicker } from './LedgerPicker';
 import { cn } from '@/lib/utils';
-import { DISABLE_DISRUPTIVE_SHORTCUTS, isEditableElement } from '@/lib/shortcuts';
 import { buildVoucherPayload } from '@/utils/payloadBuilders';
 
 type VoucherType = 'receipt' | 'payment' | 'contra' | 'journal';
@@ -214,12 +213,12 @@ export function VoucherForm({ initialType = 'receipt', voucherId, onSuccess }: V
                 setVoucherType(type);
             }
             if (e.ctrlKey && e.key === 's') { 
-                if (isEditableElement(e.target)) return;
+                const tag = (e.target as HTMLElement).tagName;
+                if (tag === 'INPUT' || tag === 'TEXTAREA') return;
                 e.preventDefault(); 
                 handleSave(); 
             }
             if (e.key === 'Escape') {
-                if (DISABLE_DISRUPTIVE_SHORTCUTS) return;
                 handleClear();
             }
         }

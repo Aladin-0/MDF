@@ -291,7 +291,7 @@ export function PurchaseItemRow({
                 document.body,
             )}
 
-            <tr className={cn('group border-b border-slate-100 transition-colors hover:bg-blue-50/20', rowBg)}>
+            <tr data-cart-row={index} className={cn('group border-b border-slate-100 transition-colors hover:bg-blue-50/20', rowBg)}>
 
                 {/* # */}
                 <td className={cn(td, 'text-center text-[11px] font-medium text-slate-400')}>

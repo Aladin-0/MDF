@@ -78,6 +78,7 @@ export default function SalesList() {
     const [search, setSearch] = useState('');
     const [filterDoctorId, setFilterDoctorId] = useState<string>('');
     const [filterHospital, setFilterHospital] = useState<string>('');
+    const [saleType, setSaleType] = useState<'ALL' | 'RETAIL' | 'WHOLESALE'>('ALL');
     const [page, setPage] = useState(1);
     const user = useAuthStore((s) => s.user);
     const canEdit = user?.role === 'super_admin' || user?.role === 'admin' || !!user?.canEditSales || !!user?.canModifyDraftBill || !!user?.canModifyUnpaidBill || !!user?.canModifyPaidBill;
@@ -99,6 +100,7 @@ export default function SalesList() {
         search: search.trim() || undefined,
         doctorId: filterDoctorId || undefined,
         hospitalName: filterHospital.trim() || undefined,
+        saleType: saleType === 'ALL' ? undefined : saleType,
     });
     const invoices: SaleInvoice[] = data?.data ?? [];
     const pagination = data?.pagination;
@@ -194,6 +196,25 @@ export default function SalesList() {
                     <h1 className="text-2xl font-bold text-slate-900">Sales</h1>
                     <p className="text-sm text-muted-foreground mt-0.5">Complete billing & invoice history with revenue analytics</p>
                 </div>
+                
+                {/* ── Wholesale / Retail Toggle ── */}
+                <div className="flex bg-slate-100/50 p-1 rounded-xl border border-slate-200/60 shadow-sm mx-auto sm:mx-0">
+                    {(['ALL', 'RETAIL', 'WHOLESALE'] as const).map(type => (
+                        <button
+                            key={type}
+                            onClick={() => { setSaleType(type); setPage(1); }}
+                            className={cn(
+                                "px-5 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 capitalize",
+                                saleType === type 
+                                    ? "bg-white text-primary shadow-sm ring-1 ring-black/5" 
+                                    : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
+                            )}
+                        >
+                            {type.toLowerCase()}
+                        </button>
+                    ))}
+                </div>
+
                 <Button 
                     onClick={() => {
                         useBillingStore.getState().resetBilling();
@@ -252,7 +273,9 @@ export default function SalesList() {
             <div className="bg-gradient-to-br from-primary/5 to-blue-50/50 border border-primary/20 rounded-2xl p-5 space-y-4">
                 <div className="flex items-center gap-2">
                     <BarChart3 className="w-4 h-4 text-primary" />
-                    <h2 className="text-sm font-bold text-primary uppercase tracking-wide">Sales &amp; Profit Analytics</h2>
+                    <h2 className="text-sm font-bold text-primary uppercase tracking-wide">
+                        {saleType === 'ALL' ? 'Sales & Profit Analytics' : `${saleType} Sales Analytics`}
+                    </h2>
                     <span className="ml-auto text-xs text-muted-foreground">
                         {isSearching
                             ? `Search results: ${totalBills} bills (all dates)`
@@ -422,8 +445,17 @@ export default function SalesList() {
                                 <th className="px-4 py-3 font-semibold text-muted-foreground uppercase text-xs">Invoice No</th>
                                 <th className="px-4 py-3 font-semibold text-muted-foreground uppercase text-xs">Date</th>
                                 <th className="px-4 py-3 font-semibold text-muted-foreground uppercase text-xs">Customer</th>
-                                <th className="px-4 py-3 font-semibold text-muted-foreground uppercase text-xs">Doctor</th>
-                                <th className="px-4 py-3 font-semibold text-muted-foreground uppercase text-xs">Hospital</th>
+                                {saleType === 'WHOLESALE' ? (
+                                    <>
+                                        <th className="px-4 py-3 font-semibold text-muted-foreground uppercase text-xs">GSTIN</th>
+                                        <th className="px-4 py-3 font-semibold text-muted-foreground uppercase text-xs">E-Way Bill</th>
+                                    </>
+                                ) : (
+                                    <>
+                                        <th className="px-4 py-3 font-semibold text-muted-foreground uppercase text-xs">Doctor</th>
+                                        <th className="px-4 py-3 font-semibold text-muted-foreground uppercase text-xs">Hospital</th>
+                                    </>
+                                )}
                                 <th className="px-4 py-3 font-semibold text-muted-foreground uppercase text-xs text-right">Items</th>
                                 <th className="px-4 py-3 font-semibold text-muted-foreground uppercase text-xs text-right">Amount</th>
                                 <th className="px-4 py-3 font-semibold text-muted-foreground uppercase text-xs">Payment</th>
@@ -450,7 +482,21 @@ export default function SalesList() {
                             )}
                             {!isLoading && filteredInvoices.map(inv => (
                                 <tr key={inv.id} className="hover:bg-slate-50 transition-colors">
-                                    <td className="px-4 py-3 font-mono text-xs font-semibold text-primary">{inv.invoiceNo}</td>
+                                    <td className="px-4 py-3 font-mono text-xs font-semibold text-primary">
+                                        <div className="flex flex-col gap-1 items-start">
+                                            <span>{inv.invoiceNo}</span>
+                                            {saleType === 'ALL' && (
+                                                <span className={cn(
+                                                    "text-[9px] px-1.5 py-0.5 rounded-sm border uppercase font-medium tracking-wide",
+                                                    inv.saleType?.toUpperCase() === 'WHOLESALE' 
+                                                        ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+                                                        : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                                )}>
+                                                    {inv.saleType?.toUpperCase() || 'RETAIL'}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </td>
                                     <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{format(new Date(inv.invoiceDate), 'dd MMM yyyy')}</td>
                                     <td className="px-4 py-3">
                                         <div className="flex items-center gap-1.5">
@@ -458,8 +504,26 @@ export default function SalesList() {
                                             <span className="text-slate-700">{inv.customer?.name ?? 'Walk-in'}</span>
                                         </div>
                                     </td>
-                                    <td className="px-4 py-3 text-slate-600">{inv.doctorName ?? '—'}</td>
-                                    <td className="px-4 py-3 text-slate-600">{inv.hospitalName ?? '—'}</td>
+                                    {saleType === 'WHOLESALE' ? (
+                                        <>
+                                            <td className="px-4 py-3 text-slate-600 text-xs font-mono">{inv.customer?.gstin ?? '—'}</td>
+                                            <td className="px-4 py-3">
+                                                <span className={cn(
+                                                    "text-[10px] px-2 py-0.5 rounded-full border uppercase font-semibold",
+                                                    inv.eway_bill_status === 'GENERATED' ? "bg-green-50 text-green-700 border-green-200" :
+                                                    inv.eway_bill_status === 'FAILED' ? "bg-red-50 text-red-700 border-red-200" :
+                                                    "bg-slate-50 text-slate-600 border-slate-200"
+                                                )}>
+                                                    {inv.eway_bill_status || 'N/A'}
+                                                </span>
+                                            </td>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <td className="px-4 py-3 text-slate-600">{inv.doctorName ?? '—'}</td>
+                                            <td className="px-4 py-3 text-slate-600">{inv.hospitalName ?? '—'}</td>
+                                        </>
+                                    )}
                                     <td className="px-4 py-3 text-right text-slate-600">{inv.itemsCount ?? inv.items?.length ?? 0}</td>
                                     <td className="px-4 py-3 text-right font-semibold tabular-nums text-slate-900">{fmt(inv.grandTotal)}</td>
                                     <td className="px-4 py-3">

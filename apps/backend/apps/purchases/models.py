@@ -57,6 +57,65 @@ class Distributor(models.Model):
         return self.name
 
 
+class PurchaseOrder(models.Model):
+    """Draft or Sent Purchase Order representing reorder plans."""
+
+    STATUS_CHOICES = [
+        ('SAVED', 'Saved'),
+        ('SENT', 'Sent'),
+        ('PARTIAL', 'Partially Received'),
+        ('COMPLETED', 'Completed'),
+        ('CANCELLED', 'Cancelled'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    outlet = models.ForeignKey('core.Outlet', on_delete=models.CASCADE, related_name='purchase_orders')
+    distributor = models.ForeignKey(Distributor, on_delete=models.PROTECT, related_name='purchase_orders')
+    
+    po_number = models.CharField(max_length=50, help_text='Auto-generated PO number')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='SAVED')
+    order_date = models.DateField(auto_now_add=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    expected_date = models.DateField(null=True, blank=True)
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text='Estimated total cost')
+    purchase_bill = models.ForeignKey('PurchaseInvoice', on_delete=models.SET_NULL, null=True, blank=True, related_name='linked_pos')    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    objects = OutletFilteredManager()
+
+    class Meta:
+        db_table = 'purchases_purchaseorder'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['outlet', 'status']),
+            models.Index(fields=['po_number']),
+        ]
+
+    def __str__(self):
+        return f"PO {self.po_number} - {self.distributor.name}"
+
+
+class PurchaseOrderItem(models.Model):
+    """Line items for a PurchaseOrder."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    purchase_order = models.ForeignKey(PurchaseOrder, on_delete=models.CASCADE, related_name='items')
+    product = models.ForeignKey('inventory.MasterProduct', on_delete=models.PROTECT, related_name='po_items')
+    
+    qty_strips = models.IntegerField(default=1, help_text='Quantity ordered in strips/packs')
+    received_qty = models.IntegerField(default=0, help_text='Quantity received so far')
+    last_rate = models.DecimalField(max_digits=10, decimal_places=2, default=0, help_text='PTR at time of order')
+    unit_ptr_estimated = models.DecimalField(max_digits=10, decimal_places=2, default=0, help_text='Estimated PTR per pack')
+    taxable_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text='Estimated amount')
+
+    class Meta:
+        db_table = 'purchases_purchaseorderitem'
+
+    def __str__(self):
+        return f"{self.product.name} (Qty: {self.qty_strips})"
+
+
+
 class PurchaseInvoice(models.Model):
     """Purchase GRN (Goods Receipt Note) with multi-godown support and bill-by-bill payment tracking."""
 
