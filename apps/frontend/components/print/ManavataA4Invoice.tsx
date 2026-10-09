@@ -101,10 +101,9 @@ export const ManavataA4Invoice = forwardRef<HTMLDivElement, InvoicePreviewProps>
     ];
 
     const defaultActiveColumns = isWholesale ? defaultWholesaleColumns : defaultRetailColumns;
-    const hasExp = activeConfig.columns?.some((c: any) => c.id === 'exp');
-    const activeColumns = (!hasExp || activeConfig.columns?.length < defaultActiveColumns.length) 
-        ? defaultActiveColumns 
-        : activeConfig.columns;
+    const activeColumns = (activeConfig.columns && activeConfig.columns.length > 0) 
+        ? activeConfig.columns 
+        : defaultActiveColumns;
     const sortedColumns = [...activeColumns].filter(c => c.isVisible).sort((a, b) => a.order - b.order);
 
     const calculateRowMath = (item: CartItem & { b_qty?: number, f_qty?: number, rate?: number }) => {

@@ -116,7 +116,7 @@ export function useSaveBill() {
 
             const enrichedInvoice = {
                 ...invoice,
-                customer: (invoice as any).customer ?? customer ?? undefined,
+                customer: (invoice as any)?.customer ?? customer ?? undefined,
                 doctorName: doctor?.name ?? scheduleHData?.doctorName ?? undefined,
                 doctorRegNo: doctor?.regNo ?? scheduleHData?.doctorRegNo ?? undefined,
                 doctorDegree: doctor?.degree ?? undefined,

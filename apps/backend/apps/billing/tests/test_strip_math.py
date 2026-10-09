@@ -19,7 +19,7 @@ class StripMathTestCase(APITestCase):
         cls.products = []
         cls.batches = []
         for i, v in enumerate(cls.variants):
-            prod = MasterProduct.objects.create(name=f'Test Prod {i} - size {v['pack_size']}', drug_type='allopathy', schedule_type='OTC', pack_size=v['pack_size'], pack_unit=v['pack_unit'], pack_type=v['pack_type'], mrp=Decimal('100.00'))
+            prod = MasterProduct.objects.create(name=f"Test Prod {i} - size {v['pack_size']}", drug_type='allopathy', schedule_type='OTC', pack_size=v['pack_size'], pack_unit=v['pack_unit'], pack_type=v['pack_type'], mrp=Decimal('100.00'))
             cls.products.append(prod)
             batch = Batch.objects.create(outlet=cls.outlet, product=prod, batch_no=f'B-{uuid.uuid4().hex[:6]}', expiry_date=timezone.now().date() + timezone.timedelta(days=365), mrp=Decimal('100.00'), purchase_rate=Decimal('70.00'), pack_size=v['pack_size'], pack_type=v['pack_type'], qty_strips=10, qty_loose=0)
             cls.batches.append(batch)

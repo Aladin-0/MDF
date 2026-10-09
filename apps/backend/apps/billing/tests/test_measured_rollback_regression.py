@@ -36,7 +36,7 @@ def test_data():
 def test_inventory_list_api(api_client, test_data):
     api_client.force_authenticate(user=test_data['user'])
     Batch.objects.create(outlet=test_data['outlet'], product=test_data['product'], batch_no='B001', expiry_date=date.today() + timedelta(days=365), mrp=Decimal('150.00'), purchase_rate=Decimal('100.00'), pack_size=1, pack_unit='bottle', pack_type='bottle', qty_strips=10, qty_loose=0)
-    url = f'/api/v1/inventory/?outletId={test_data['outlet'].id}'
+    url = f"/api/v1/inventory/?outletId={test_data['outlet'].id}"
     response = api_client.get(url)
     assert response.status_code == 200, f'Expected 200 OK, got {response.status_code}. Response: {response.content}'
     data = response.json()
@@ -56,12 +56,12 @@ def test_bottle_purchase_and_billing(api_client, test_data):
     batch = Batch.objects.get(batch_no='B-NEW')
     assert batch.qty_strips == 5
     assert batch.qty_loose == 0
-    search_url = f'/api/v1/products/search/?q=Syrup&outletId={test_data['outlet'].id}&context=purchase'
+    search_url = f"/api/v1/products/search/?q=Syrup&outletId={test_data['outlet'].id}&context=purchase"
     response = api_client.get(search_url)
     assert response.status_code == 200
     search_data = response.json()
     assert len(search_data['data']) > 0
-    search_url = f'/api/v1/products/search/?q=Syrup&outletId={test_data['outlet'].id}&context=billing'
+    search_url = f"/api/v1/products/search/?q=Syrup&outletId={test_data['outlet'].id}&context=billing"
     response = api_client.get(search_url)
     assert response.status_code == 200
     search_data = response.json()

@@ -90,7 +90,7 @@ class Command(BaseCommand):
                     outlet=outlet,
                     product=p,
                     batch=b,
-                    txn_type='PURCHASE_IN',
+                    txn_type='OPENING',
                     txn_date=datetime.date.today(),
                     voucher_type='OPENING',
                     voucher_number='SEED',

@@ -21,7 +21,7 @@ def box_product(db):
 
 @pytest.fixture
 def low_stock_product(db):
-    return MasterProductFactory(name='Aspirin 75mg', pack_type='strip', pack_size=15, pack_unit='tablet', mrp=30.0, min_qty=10)
+    return MasterProductFactory(name='Aspirin 75mg', pack_type='strip', pack_size=15, pack_unit='tablet', mrp=30.0)
 
 @pytest.fixture
 def strip_batch(db, inventory_outlet, strip_product):

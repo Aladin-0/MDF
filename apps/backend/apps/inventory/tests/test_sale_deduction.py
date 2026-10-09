@@ -3,13 +3,13 @@ import pytest
 from apps.billing.sale_services import atomic_sale_save
 from apps.inventory.models import StockLedger
 from apps.inventory.tests.factories import BatchFactory, ProductFactory
-from apps.accounts.tests.factories import OutletFactory, UserFactory
+from apps.accounts.tests.factories import OutletFactory, StaffFactory
 
 @pytest.mark.django_db
 def test_fractional_sale_deduction_ledger_precision():
     # Setup
     outlet = OutletFactory()
-    user = UserFactory()
+    user = StaffFactory()
     
     product = ProductFactory(pack_size=10, pack_type='strip')
     batch = BatchFactory(

@@ -105,7 +105,12 @@ def _auto_create_stock_adjustment(entry):
             reason="Auto-generated from StockLedger ADJUSTMENT_OUT"
         )
 
-        pis = list(PurchaseItem.objects.filter(batch=batch).select_for_update().select_related('invoice', 'invoice__distributor', 'invoice__outlet').order_by('invoice__invoice_date', 'created_at'))
+        pis = list(
+            PurchaseItem.objects.filter(batch=batch)
+            .select_for_update()
+            .select_related('invoice', 'invoice__outlet')
+            .order_by('invoice__invoice_date', 'created_at')
+        )
         total_pi_qty = sum(Decimal(str(pi.actual_qty)) for pi in pis)
 
         prior_qty = entry.running_qty + entry.qty_out

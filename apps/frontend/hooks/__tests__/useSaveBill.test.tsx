@@ -30,7 +30,7 @@ describe('useSaveBill', () => {
         });
     });
 
-    it('throws error if customer is missing for Sale Invoices', async () => {
+    it('succeeds even if customer is missing for Cash Sale Invoices', async () => {
         const mockDraft = {
             id: 'local-123',
             documentMode: 'invoice',
@@ -48,15 +48,21 @@ describe('useSaveBill', () => {
             activeDraftId: 'local-123',
             drafts: { 'local-123': mockDraft },
             getDraftTotals: mockGetDraftTotals,
-            activeStaff: { id: 'staff-1' }
+            activeStaff: { id: 'staff-1' },
+            closeDraft: jest.fn(),
+            incrementBillsToday: jest.fn(),
+            setLastInvoice: jest.fn()
         });
+
+        (salesApi.create as jest.Mock).mockResolvedValue({ id: 'inv-123' });
 
         const wrapper = ({ children }: { children: React.ReactNode }) => (
             <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
         );
         const { result } = renderHook(() => useSaveBill(), { wrapper });
 
-        await expect(result.current.saveBill()).rejects.toThrow("Customer selection is mandatory for Sale Invoices.");
+        await result.current.saveBill();
+        expect(salesApi.create).toHaveBeenCalled();
     });
 
     it('serializes invoiceDate properly when set', async () => {

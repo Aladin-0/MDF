@@ -39,7 +39,10 @@ def test_ledger_parity_after_adjustment(client, inventory_outlet, box_batch):
     """
     3. Execute a manual adjustment (via InventoryAdjustView), then verify the ledger parity invariant.
     """
-    staff = StaffFactory(outlet=inventory_outlet, staff_pin='1234')
+    from django.contrib.auth.hashers import make_password
+    staff = StaffFactory(outlet=inventory_outlet)
+    staff.staff_pin = make_password('1234')
+    staff.save()
     from rest_framework.test import APIClient
     api_client = APIClient()
     api_client.force_authenticate(user=staff)
@@ -57,7 +60,10 @@ def test_auditability_fields(client, inventory_outlet, box_batch):
     """
     4. Verify that manual adjustments correctly log the reason, actor (user), and timestamp in the StockLedger.
     """
-    staff = StaffFactory(outlet=inventory_outlet, staff_pin='1234')
+    from django.contrib.auth.hashers import make_password
+    staff = StaffFactory(outlet=inventory_outlet)
+    staff.staff_pin = make_password('1234')
+    staff.save()
     from rest_framework.test import APIClient
     api_client = APIClient()
     api_client.force_authenticate(user=staff)
@@ -98,7 +104,7 @@ def test_reconcile_inventory_discrepancy():
     call_command('reconcile_inventory', stdout=out)
     output = out.getvalue()
     assert 'discrepancies' in output
-    assert 'expected 60.000, got 50' in output
+    assert 'expected 60.0000, got 50' in output
 
 @pytest.mark.django_db
 def test_playwright_seeded_batch_rebuild():

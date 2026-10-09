@@ -66,7 +66,7 @@ def atomic_purchase_save(payload: Dict[str, Any], outlet_id: str, created_by_id:
         if party_ledger_id:
             # Marg-style: party selected as a Ledger (Sundry Creditor)
             try:
-                party_ledger = Ledger.objects.select_related('linked_distributor').get(
+                party_ledger = Ledger.objects.select_for_update().get(
                     id=party_ledger_id, outlet=outlet
                 )
             except Ledger.DoesNotExist:
@@ -91,6 +91,16 @@ def atomic_purchase_save(payload: Dict[str, Any], outlet_id: str, created_by_id:
                 party_ledger.save(update_fields=['linked_distributor'])
 
         logger.info(f"Distributor: {distributor.name}")
+
+        invoice_no = payload.get('invoiceNo')
+        if invoice_no:
+            if PurchaseInvoice.objects.filter(
+                outlet=outlet,
+                distributor=distributor,
+                invoice_no=invoice_no,
+                status='POSTED'
+            ).exists():
+                raise PurchaseServiceError(f"Purchase invoice '{invoice_no}' from this distributor already exists.")
 
         # ─── Step 3: Get or create Staff (created_by) ──────────────────────────────────
         try:

@@ -71,7 +71,10 @@ def test_returns(inventory_outlet, strip_product, strip_batch):
 @pytest.mark.django_db
 def test_manual_adjustment(inventory_outlet, strip_batch):
     from apps.accounts.tests.factories import StaffFactory
-    staff = StaffFactory(outlet=inventory_outlet, role='admin', staff_pin='1234')
+    from django.contrib.auth.hashers import make_password
+    staff = StaffFactory(outlet=inventory_outlet, role='admin')
+    staff.staff_pin = make_password('1234')
+    staff.save()
     client = APIClient()
     client.force_authenticate(user=staff)
     url = reverse('inventory-adjust') + f'?outletId={inventory_outlet.id}'

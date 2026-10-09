@@ -771,10 +771,10 @@ class PurchaseListView(APIView):
             # Filter by status if provided
             status_filter = request.query_params.get('status')
             if status_filter == 'draft':
-                queryset = queryset.filter(status='DRAFT')
+                queryset = queryset.filter(status='SAVED')
             else:
                 # Exclude drafts from all other views
-                queryset = queryset.exclude(status='DRAFT')
+                queryset = queryset.exclude(status='SAVED')
                 
                 if status_filter and status_filter != 'all':
                     today = datetime.now().date()
@@ -885,7 +885,7 @@ class PurchaseListView(APIView):
             'createdAt': purchase_invoice.created_at.isoformat(),
         }
         
-        if purchase_invoice.status == 'DRAFT' and hasattr(purchase_invoice, 'ocr_data') and purchase_invoice.ocr_data:
+        if purchase_invoice.status == 'SAVED' and hasattr(purchase_invoice, 'ocr_data') and purchase_invoice.ocr_data:
             data['ocrData'] = purchase_invoice.ocr_data
             
         return data
@@ -1168,7 +1168,7 @@ class PurchaseDetailView(APIView):
         except PurchaseInvoice.DoesNotExist:
             return Response({'error': {'message': 'Purchase invoice not found'}}, status=status.HTTP_404_NOT_FOUND)
 
-        if invoice.status != 'DRAFT':
+        if invoice.status != 'SAVED':
             return Response({'error': {'message': 'Only draft invoices can be deleted'}}, status=status.HTTP_400_BAD_REQUEST)
 
         invoice.delete()
@@ -1502,7 +1502,7 @@ class PurchaseOrderBulkCreateView(APIView):
                     outlet=outlet,
                     distributor_id=dist_id,
                     po_number=po_num,
-                    status='DRAFT'
+                    status='SAVED'
                 )
                 
                 total_amount = 0
@@ -1579,12 +1579,38 @@ class PurchaseOrderListView(APIView):
         count = PurchaseOrder.objects.filter(outlet=outlet, order_date=datetime.now().date()).count() + 1
         po_num = f"PO-{today_str}-{count:03d}"
         
-        po = PurchaseOrder.objects.create(
-            outlet=outlet,
-            distributor_id=distributor_id,
-            po_number=po_num,
-            status='DRAFT'
-        )
+        items_data = request.data.get('items', [])
+        from apps.purchases.models import PurchaseOrderItem
+        from django.db import transaction
+        
+        with transaction.atomic():
+            po = PurchaseOrder.objects.create(
+                outlet=outlet,
+                distributor_id=distributor_id,
+                po_number=po_num,
+                status='SAVED'
+            )
+            
+            total_amount = 0
+            for item in items_data:
+                qty = int(item.get('orderQty', item.get('deficit', 0)))
+                if qty <= 0:
+                    continue
+                ptr = float(item.get('estimatedPtr', item.get('lastRate', 0.0)))
+                amt = qty * ptr
+                total_amount += amt
+                
+                PurchaseOrderItem.objects.create(
+                    purchase_order=po,
+                    product_id=item.get('productId'),
+                    qty_strips=qty,
+                    unit_ptr_estimated=ptr,
+                    last_rate=ptr,
+                    taxable_amount=amt
+                )
+            
+            po.total_amount = total_amount
+            po.save()
         
         return Response({'id': str(po.id), 'poNumber': po.po_number}, status=status.HTTP_201_CREATED)
 
@@ -1861,7 +1887,7 @@ class InvoiceScanUploadView(APIView):
     """
     POST /api/v1/purchases/scan/upload/
 
-    Accept a scanned invoice image from mobile. Creates a DRAFT PurchaseInvoice
+    Accept a scanned invoice image from mobile. Creates a SAVED PurchaseInvoice
     immediately and dispatches background OCR task. Returns 202 Accepted instantly
     so mobile doesn't wait for heavy OCR processing.
 
@@ -1903,11 +1929,11 @@ class InvoiceScanUploadView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # Create a minimal DRAFT invoice (no distributor yet, no amounts)
+        # Create a minimal SAVED invoice (no distributor yet, no amounts)
         # OCR task will populate all fields asynchronously
         draft = PurchaseInvoice.objects.create(
             outlet=outlet,
-            status='DRAFT',
+            status='SAVED',
             invoice_image=image_file,
             created_by=request.user,
             # Placeholder values — will be overwritten by OCR
@@ -1924,7 +1950,7 @@ class InvoiceScanUploadView(APIView):
             outstanding=0,
         )
 
-        logger.info(f"Created DRAFT invoice {draft.id} for outlet {outlet.name}, dispatching OCR task")
+        logger.info(f"Created SAVED invoice {draft.id} for outlet {outlet.name}, dispatching OCR task")
 
         # Fire background OCR task — non-blocking
         process_invoice_ocr.delay(str(draft.id))
@@ -1999,7 +2025,7 @@ class InvoiceOCRStatusView(APIView):
         outlet_id = request.query_params.get('outletId')
 
         try:
-            invoice = PurchaseInvoice.objects.get(id=purchase_id, outlet_id=outlet_id, status='DRAFT')
+            invoice = PurchaseInvoice.objects.get(id=purchase_id, outlet_id=outlet_id, status='SAVED')
         except PurchaseInvoice.DoesNotExist:
             return Response(
                 {'error': {'code': 'NOT_FOUND', 'message': 'Draft invoice not found'}},
@@ -2125,11 +2151,11 @@ class InvoiceDraftConfirmView(APIView):
     """
     POST /api/v1/purchases/<purchase_id>/confirm/
 
-    Confirm a DRAFT purchase after human review on the review screen.
+    Confirm a SAVED purchase after human review on the review screen.
     Receives the corrected/verified payload and calls atomic_purchase_save
     (same as regular purchase creation) to post to stock and ledger.
 
-    On success: DRAFT is deleted and a new POSTED PurchaseInvoice is created.
+    On success: SAVED is deleted and a new POSTED PurchaseInvoice is created.
     Returns the full POSTED invoice in the same shape as PurchaseCreateView.
     """
     permission_classes = [CanCreatePurchases]
@@ -2138,7 +2164,7 @@ class InvoiceDraftConfirmView(APIView):
         outlet_id = request.data.get('outletId')
 
         try:
-            draft = PurchaseInvoice.objects.get(id=purchase_id, outlet_id=outlet_id, status='DRAFT')
+            draft = PurchaseInvoice.objects.get(id=purchase_id, outlet_id=outlet_id, status='SAVED')
         except PurchaseInvoice.DoesNotExist:
             return Response(
                 {'error': {'code': 'NOT_FOUND', 'message': 'Draft invoice not found'}},
@@ -2179,7 +2205,7 @@ class InvoiceDraftConfirmView(APIView):
             draft.save(update_fields=['invoice_image'])
             draft.delete()
 
-            logger.info(f"DRAFT {purchase_id} confirmed → POSTED as {purchase_invoice.id}")
+            logger.info(f"SAVED {purchase_id} confirmed → POSTED as {purchase_invoice.id}")
 
             # Serialize using same shape as PurchaseCreateView
             serializer = PurchaseCreateView()

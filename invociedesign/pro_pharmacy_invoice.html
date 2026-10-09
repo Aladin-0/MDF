@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tax Invoice - S.P.S Manavata Pharma</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            font-size: 14px; 
+            --primary-color: #0f766e; /* Teal 700 */
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            -webkit-font-smoothing: antialiased;
+            margin: 0;
+            padding: 20px 0;
+            transition: all 0.3s ease;
+        }
+
+        .ui-controls {
+            margin: 0 auto 16px auto;
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            transition: max-width 0.3s ease;
+        }
+        .ui-btn {
+            font-size: 14px !important;
+            padding: 8px 16px !important;
+            border-radius: 6px !important;
+            font-weight: 600 !important;
+            display: flex !important;
+            align-items: center !important;
+            gap: 8px !important;
+            cursor: pointer !important;
+            transition: all 0.2s !important;
+            border: 1px solid transparent !important;
+        }
+        .ui-btn-outline {
+            background-color: #f3f4f6 !important;
+            color: #374151 !important;
+            border-color: #d1d5db !important;
+        }
+        .ui-btn-outline:hover { background-color: #e5e7eb !important; }
+        .ui-btn-primary {
+            background-color: var(--primary-color) !important;
+            color: white !important;
+        }
+        .ui-btn-primary:hover { background-color: #115e59 !important; }
+        .ui-btn-active {
+            background-color: #1f2937 !important;
+            color: white !important;
+            border-color: #1f2937 !important;
+        }
+
+        #print-container {
+            margin: 0 auto;
+            display: flex;
+            /* Will be set dynamically by JS to stack or go side-by-side */
+            align-items: center; 
+        }
+
+        .invoice-wrapper {
+            background-color: white;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            display: flex; 
+            flex-direction: column;
+        }
+
+        /* Border & Table Utilities */
+        .pdf-table th, .pdf-table td {
+            border: 1px solid #d1d5db;
+        }
+        .border-heavy { border-width: 2px; border-color: #1f2937; }
+        .border-b-heavy { border-bottom-width: 2px; border-color: #1f2937; }
+        .border-t-heavy { border-top-width: 2px; border-color: #1f2937; }
+        .border-r-heavy { border-right-width: 2px; border-color: #1f2937; }
+        .border-l-heavy { border-left-width: 2px; border-color: #1f2937; }
+
+        @media print {
+            body { background-color: white; padding: 0; }
+            .ui-controls { display: none !important; }
+            
+            #print-container {
+                gap: 0 !important; 
+                display: flex !important;
+            }
+
+            .invoice-wrapper {
+                box-shadow: none !important;
+                margin: 0 !important;
+                page-break-inside: avoid;
+                /* Remove any dynamic scaling margin for print */
+            }
+
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+        }
+    </style>
+    
+    <!-- Dynamic Print Page Style -->
+    <style id="print-page-style">
+        @page { size: A4 portrait; margin: 0; }
+    </style>
+</head>
+<body>
+
+    <div class="ui-controls" id="controls-container" style="max-width: 297mm;">
+        <!-- INVOICE TYPE TOGGLE -->
+        <div style="display: flex; gap: 8px; margin-right: 24px; border-right: 2px solid #d1d5db; padding-right: 24px;">
+            <button id="btn-retail" onclick="setType('retail')" class="ui-btn ui-btn-active">
+                <svg style="width:16px; height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
+                Retail
+            </button>
+            <button id="btn-wholesale" onclick="setType('wholesale')" class="ui-btn ui-btn-outline">
+                <svg style="width:16px; height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+                Wholesale
+            </button>
+        </div>
+        <div style="flex-grow: 1; display: flex; gap: 8px;">
+            <button id="btn-a4" onclick="setFormat('A4')" class="ui-btn ui-btn-outline" title="Prints on Full A4 Paper (Landscape)">
+                <svg style="width:16px; height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
+                A4 (Wide Landscape)
+            </button>
+            <button id="btn-a5" onclick="setFormat('A5')" class="ui-btn ui-btn-active" title="Stacks 2 copies vertically on A4 Portrait (Cut in half)">
+                <svg style="width:16px; height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>
+                A5 (Standard Half-Page)
+            </button>
+        </div>
+        <button onclick="window.print()" class="ui-btn ui-btn-primary">
+            <svg style="width:16px; height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+            Print
+        </button>
+    </div>
+
+    <div id="print-container">
+        <!-- Invoice 1 (Original) -->
+        <div class="invoice-wrapper" id="invoice-1" style="width: 210mm; min-height: 148.5mm;">
+        </div>
+
+        <!-- Invoice 2 (Duplicate - Only used in A5 to fill bottom half of paper) -->
+        <div class="invoice-wrapper" id="invoice-2" style="width: 210mm; min-height: 148.5mm; border-top: 1px dashed #9ca3af;">
+        </div>
+    </div>
+
+    <template id="invoice-template">
+        <div class="m-2 border-heavy flex flex-col flex-grow relative bg-white" style="margin: 6px;">
+            
+            <!-- Horizontal Header: 3 Columns -->
+            <div class="flex border-b-heavy items-stretch">
+                
+                <!-- Col 1: Logo & Company (40%) -->
+                <div class="w-[40%] p-1.5 flex gap-2 items-center border-r-heavy bg-gray-50/50">
+                    <div class="w-12 h-12 rounded flex-shrink-0 flex items-center justify-center border border-teal-700 bg-white">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" class="w-8 h-8 text-teal-700">
+                            <path fill="currentColor" d="M20,40 C20,70 30,85 50,85 C70,85 80,70 80,40 Z" />
+                            <rect fill="currentColor" x="15" y="30" width="70" height="10" rx="3" />
+                            <path fill="currentColor" d="M65,15 C60,10 50,25 45,35 L55,40 C60,30 75,20 65,15 Z" />
+                            <path fill="white" d="M45,55 L45,45 L55,45 L55,55 L65,55 L65,65 L55,65 L55,75 L45,75 L45,65 L35,65 L35,55 Z" />
+                        </svg>
+                    </div>
+                    <div class="flex-grow">
+                        <h1 class="font-bold text-gray-900 tracking-wide uppercase leading-tight" style="font-size: 1rem;">S.P.S MANAVATA PHARMA</h1>
+                        <p class="text-gray-700 leading-tight mt-0.5" style="font-size: 0.65rem;">Shop No. 1, 2, 3, Gr Floor, Shanta Complex,<br>
+                        Nutan Colony Signal, Chhatrapati Sambhajinagar</p>
+                        <p class="text-gray-600 leading-tight mt-0.5" style="font-size: 0.65rem;">
+                            <span class="font-semibold text-gray-800">Ph:</span> +91-9876543210 &bull; <span class="font-semibold text-gray-800">GSTIN:</span> 27AATCS1234A1Z5<br>
+                            <span class="font-semibold text-gray-800">DL:</span> 20B: MH-MZ3-315174 | 21B: MH-MZ3-315175
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Col 2: Patient Details (35%) -->
+                <div class="w-[35%] p-1.5 border-r-heavy flex flex-col justify-center">
+                    <h3 class="font-bold text-gray-800 uppercase border-b border-gray-300 pb-0.5 mb-1 inline-block" style="font-size: 0.65rem;">Bill To / Patient Details</h3>
+                    <div class="flex justify-between items-start">
+                        <div class="w-1/2 pr-1">
+                            <p class="text-gray-500 uppercase leading-none" style="font-size: 0.55rem;">Patient</p>
+                            <p class="font-bold text-gray-900 leading-tight truncate" style="font-size: 0.85rem;">Nagesh Jadhav</p>
+                            <p class="text-gray-700 leading-tight" style="font-size: 0.65rem;">+91-9689181333</p>
+                        </div>
+                        <div class="w-1/2 pl-1 border-l border-gray-200">
+                            <p class="text-gray-500 uppercase leading-none" style="font-size: 0.55rem;">Doctor</p>
+                            <p class="font-bold text-gray-900 leading-tight truncate" style="font-size: 0.85rem;">Dr. A. Mehta</p>
+                            <p class="text-gray-700 leading-tight truncate" style="font-size: 0.65rem;">City Care Hospital</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Col 3: Invoice Info (25%) -->
+                <div class="w-[25%] p-1.5 flex flex-col justify-between items-end bg-teal-50/30">
+                    <div class="bg-teal-700 text-white rounded px-2 py-0.5 shadow-sm text-center w-full">
+                        <h2 class="font-bold uppercase tracking-wider leading-tight" style="font-size: 0.85rem;">TAX INVOICE <span class="font-normal text-teal-100" style="font-size: 0.6rem;">(Retail)</span></h2>
+                    </div>
+                    <table class="w-full text-right mt-1" style="font-size: 0.75rem;">
+                        <tr>
+                            <td class="font-semibold text-gray-600 py-0.5">Inv No:</td>
+                            <td class="font-bold text-gray-900 py-0.5">INV-2026-001688</td>
+                        </tr>
+                        <tr>
+                            <td class="font-semibold text-gray-600 py-0.5">Date:</td>
+                            <td class="font-bold text-gray-900 py-0.5">03-Oct-2026</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="flex-grow flex flex-col min-h-0 bg-white"> 
+                <table class="w-full text-left pdf-table h-full table-fixed" style="font-size: 0.75rem;">
+                    <thead>
+                        <tr class="bg-gray-100 text-gray-800 uppercase tracking-wide" style="font-size: 0.6rem;">
+                            <th class="py-0.5 px-1 w-6 text-center border-l-0 border-t-0 border-r border-b-heavy">SN</th>
+                            <th class="py-0.5 px-1 border-t-0 border-r border-b-heavy w-auto">Item Name & Company</th>
+                            <th class="py-0.5 px-1 w-[11%] border-t-0 border-r border-b-heavy">Batch</th>
+                            <th class="py-0.5 px-1 w-[8%] border-t-0 border-r border-b-heavy text-center">Exp</th>
+                            <th class="py-0.5 px-1 w-[8%] border-t-0 border-r border-b-heavy text-center">Qty</th>
+                            <th class="py-0.5 px-1 w-[9%] border-t-0 border-r border-b-heavy text-right">MRP</th>
+                            <th class="py-0.5 px-1 w-[9%] border-t-0 border-r border-b-heavy text-right">Rate</th>
+                            <th class="py-0.5 px-1 w-[7%] border-t-0 border-r border-b-heavy text-center">Disc</th>
+                            <th class="py-0.5 px-1 w-[12%] border-t-0 border-l-0 border-r-0 border-b-heavy text-right">Amount(₹)</th>
+                        </tr>
+                    </thead>
+                    <tbody class="align-top">
+                        <!-- Item Row 1 -->
+                        <tr>
+                            <td class="py-0.5 px-1 text-center border-l-0 border-b-0 border-r">1</td>
+                            <td class="py-0.5 px-1 border-b-0 border-r">
+                                <span class="font-bold text-gray-900 leading-none">DOLO 650MG TABLET</span>
+                                <span class="text-gray-500 leading-none ml-1" style="font-size: 0.6rem;">Paracetamol 650mg &bull; Micro Labs</span>
+                            </td>
+                            <td class="py-0.5 px-1 border-b-0 border-r leading-tight" style="font-size: 0.7rem;">B-7483</td>
+                            <td class="py-0.5 px-1 text-center border-b-0 border-r leading-tight" style="font-size: 0.7rem;">12/28</td>
+                            <td class="py-0.5 px-1 text-center border-b-0 border-r leading-tight">2 Strips</td>
+                            <td class="py-0.5 px-1 text-right border-b-0 border-r leading-tight">30.00</td>
+                            <td class="py-0.5 px-1 text-right border-b-0 border-r leading-tight">30.00</td>
+                            <td class="py-0.5 px-1 text-center border-b-0 border-r leading-tight">10%</td>
+                            <td class="py-0.5 px-1 text-right font-semibold border-b-0 border-r-0 text-gray-900 leading-tight">54.00</td>
+                        </tr>
+                        <!-- Item Row 2 -->
+                        <tr>
+                            <td class="py-0.5 px-1 text-center border-l-0 border-b-0 border-r border-t">2</td>
+                            <td class="py-0.5 px-1 border-b-0 border-r border-t">
+                                <span class="font-bold text-gray-900 leading-none">AUGMENTIN 625 DUO</span>
+                                <span class="text-gray-500 leading-none ml-1" style="font-size: 0.6rem;">Amoxicillin + Clav &bull; GSK</span>
+                            </td>
+                            <td class="py-0.5 px-1 border-b-0 border-r border-t leading-tight" style="font-size: 0.7rem;">C-992</td>
+                            <td class="py-0.5 px-1 text-center border-b-0 border-r border-t leading-tight" style="font-size: 0.7rem;">05/27</td>
+                            <td class="py-0.5 px-1 text-center border-b-0 border-r border-t leading-tight">1 Strip</td>
+                            <td class="py-0.5 px-1 text-right border-b-0 border-r border-t leading-tight">200.00</td>
+                            <td class="py-0.5 px-1 text-right border-b-0 border-r border-t leading-tight">200.00</td>
+                            <td class="py-0.5 px-1 text-center border-b-0 border-r border-t leading-tight">10%</td>
+                            <td class="py-0.5 px-1 text-right font-semibold border-b-0 border-r-0 border-t text-gray-900 leading-tight">180.00</td>
+                        </tr>
+                        <!-- Item Row 3 -->
+                        <tr>
+                            <td class="py-0.5 px-1 text-center border-l-0 border-b-0 border-r border-t">3</td>
+                            <td class="py-0.5 px-1 border-b-0 border-r border-t">
+                                <span class="font-bold text-gray-900 leading-none">CORSODYL MOUTHWASH</span>
+                                <span class="text-gray-500 leading-none ml-1" style="font-size: 0.6rem;">Chlorhexidine &bull; GSK</span>
+                            </td>
+                            <td class="py-0.5 px-1 border-b-0 border-r border-t leading-tight" style="font-size: 0.7rem;">L-1100</td>
+                            <td class="py-0.5 px-1 text-center border-b-0 border-r border-t leading-tight" style="font-size: 0.7rem;">1/29</td>
+                            <td class="py-0.5 px-1 text-center border-b-0 border-r border-t leading-tight">1 Unit</td>
+                            <td class="py-0.5 px-1 text-right border-b-0 border-r border-t leading-tight">150.00</td>
+                            <td class="py-0.5 px-1 text-right border-b-0 border-r border-t leading-tight">150.00</td>
+                            <td class="py-0.5 px-1 text-center border-b-0 border-r border-t leading-tight">0%</td>
+                            <td class="py-0.5 px-1 text-right font-semibold border-b-0 border-r-0 border-t text-gray-900 leading-tight">150.00</td>
+                        </tr>
+                        
+                        <!-- Empty Spacer Row (pushes content up) -->
+                        <tr class="h-auto flex-grow">
+                            <td class="border-l-0 border-b-0 border-r border-t"></td>
+                            <td class="border-b-0 border-r border-t"></td>
+                            <td class="border-b-0 border-r border-t"></td>
+                            <td class="border-b-0 border-r border-t"></td>
+                            <td class="border-b-0 border-r border-t"></td>
+                            <td class="border-b-0 border-r border-t"></td>
+                            <td class="border-b-0 border-r border-t"></td>
+                            <td class="border-b-0 border-r border-t"></td>
+                            <td class="border-r-0 border-b-0 border-t"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="flex border-t-heavy bg-white items-stretch flex-shrink-0">
+                
+                <!-- Left Block: Terms, GST & Words (72%) -->
+                <div class="w-[72%] flex flex-col border-r-heavy">
+                    
+                    <!-- Top Section: Terms & GST Breakdown -->
+                    <div class="flex flex-grow items-stretch border-b border-gray-300">
+                        
+                        <!-- Terms & Bank -->
+                        <div class="w-[45%] p-1.5 border-r border-gray-300 flex flex-col justify-between">
+                            <div>
+                                <h4 class="font-bold text-gray-800 uppercase mb-0.5" style="font-size: 0.55rem;">Terms & Conditions</h4>
+                                <ol class="list-decimal list-inside text-gray-700 space-y-0.5" style="font-size: 0.5rem; line-height: 1.2;">
+                                    <li>Medicines once sold will not be taken back.</li>
+                                    <li>Store in a cool and dry place.</li>
+                                </ol>
+                            </div>
+                            <div class="mt-1 pt-1.5 border-t border-gray-100 flex items-center gap-1.5">
+                                <div class="w-6 h-6 border border-gray-300 rounded flex items-center justify-center bg-gray-50 flex-shrink-0 shadow-sm">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
+                                </div>
+                                <div>
+                                    <p class="text-gray-500 uppercase leading-none" style="font-size: 0.45rem;">Pay via UPI</p>
+                                    <p class="font-bold text-gray-900 mt-0.5" style="font-size: 0.55rem;">manavata@sbi</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Redesigned GST Summary Cards -->
+                        <div class="w-[55%] p-1.5 bg-gray-50/50 flex flex-col justify-center">
+                            <h4 class="font-bold text-gray-800 uppercase mb-1 flex justify-between items-end" style="font-size: 0.55rem;">
+                                <span>GST Breakdown</span>
+                                <span class="text-gray-400 font-normal normal-case" style="font-size: 0.45rem;">Total Tax: ₹47.95</span>
+                            </h4>
+                            
+                            <div class="flex flex-col gap-1">
+                                <!-- 12% Card -->
+                                <div class="flex justify-between items-center bg-white border border-gray-200 rounded px-1.5 py-1 shadow-sm">
+                                    <div class="flex flex-col">
+                                        <span class="font-bold text-gray-900 leading-tight" style="font-size: 0.55rem;">GST 12%</span>
+                                        <span class="text-gray-500 leading-tight mt-0.5" style="font-size: 0.45rem;">Taxable: ₹208.93</span>
+                                    </div>
+                                    <div class="flex gap-2 text-center">
+                                        <div class="leading-tight"><span class="block text-gray-400 uppercase" style="font-size: 0.4rem;">CGST</span><span class="font-semibold text-gray-700" style="font-size: 0.5rem;">₹12.54</span></div>
+                                        <div class="leading-tight"><span class="block text-gray-400 uppercase" style="font-size: 0.4rem;">SGST</span><span class="font-semibold text-gray-700" style="font-size: 0.5rem;">₹12.54</span></div>
+                                    </div>
+                                    <div class="text-right leading-tight">
+                                        <span class="block text-gray-400 uppercase" style="font-size: 0.4rem;">Tax</span>
+                                        <span class="font-bold text-teal-700" style="font-size: 0.55rem;">₹25.07</span>
+                                    </div>
+                                </div>
+                                
+                                <!-- 18% Card -->
+                                <div class="flex justify-between items-center bg-white border border-gray-200 rounded px-1.5 py-1 shadow-sm">
+                                    <div class="flex flex-col">
+                                        <span class="font-bold text-gray-900 leading-tight" style="font-size: 0.55rem;">GST 18%</span>
+                                        <span class="text-gray-500 leading-tight mt-0.5" style="font-size: 0.45rem;">Taxable: ₹127.12</span>
+                                    </div>
+                                    <div class="flex gap-2 text-center">
+                                        <div class="leading-tight"><span class="block text-gray-400 uppercase" style="font-size: 0.4rem;">CGST</span><span class="font-semibold text-gray-700" style="font-size: 0.5rem;">₹11.44</span></div>
+                                        <div class="leading-tight"><span class="block text-gray-400 uppercase" style="font-size: 0.4rem;">SGST</span><span class="font-semibold text-gray-700" style="font-size: 0.5rem;">₹11.44</span></div>
+                                    </div>
+                                    <div class="text-right leading-tight">
+                                        <span class="block text-gray-400 uppercase" style="font-size: 0.4rem;">Tax</span>
+                                        <span class="font-bold text-teal-700" style="font-size: 0.55rem;">₹22.88</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Amount in Words Strip -->
+                    <div class="p-1.5 flex items-center bg-white" style="height: 7mm;">
+                        <span class="text-gray-500 uppercase mr-1.5" style="font-size: 0.5rem;">Amount in Words:</span>
+                        <span class="font-bold text-gray-900 uppercase" style="font-size: 0.55rem;">Rupees Three Hundred Eighty-Four Only.</span>
+                    </div>
+                </div>
+
+                <!-- Right Block: Totals & Signature (28%) -->
+                <div class="w-[28%] flex flex-col bg-white">
+                    
+                    <!-- Financial Totals -->
+                    <div class="bg-teal-50/30 flex flex-col border-b border-gray-300">
+                        <div class="p-1.5 space-y-1">
+                            <div class="flex justify-between items-center text-gray-600" style="font-size: 0.55rem;">
+                                <span>Subtotal (3 Items, 4 Qty)</span>
+                                <span class="font-semibold text-gray-900">₹410.00</span>
+                            </div>
+                            <div class="flex justify-between items-center text-green-700" style="font-size: 0.55rem;">
+                                <span>Discount Savings</span>
+                                <span class="font-bold">-₹26.00</span>
+                            </div>
+                        </div>
+                        <div class="bg-teal-700 text-white px-2 py-1 flex justify-between items-center shadow-inner">
+                            <span class="font-bold uppercase tracking-wide" style="font-size: 0.6rem;">Grand Total</span>
+                            <span class="font-bold" style="font-size: 0.85rem;">₹384.00</span>
+                        </div>
+                    </div>
+
+                    <!-- Signature Area -->
+                    <div class="flex-grow flex flex-col items-center justify-end p-1.5 relative min-h-[14mm]">
+                        <div class="font-bold text-gray-800 text-center absolute top-1.5 w-full leading-tight" style="font-size: 0.5rem;">For S.P.S MANAVATA PHARMA</div>
+                        <!-- Space for physical signature -->
+                        <div class="w-4/5 border-t border-gray-400 mt-6 pt-0.5 text-center">
+                            <span class="text-gray-500 uppercase tracking-wide font-medium" style="font-size: 0.45rem;">Authorized Signatory</span>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+            
+            <!-- Bottom Brand Strip -->
+            <div class="bg-gray-800 text-white text-center py-0.5 uppercase font-semibold" style="font-size: 0.5rem; letter-spacing: 0.1em;">
+                Thank You For Your Visit • Wish You A Speedy Recovery
+            </div>
+
+        </div>
+    </template>
+
+    <!-- WHOLESALE INVOICE TEMPLATE -->
+    <template id="wholesale-template">
+        <div class="m-2 border-heavy flex flex-col flex-grow relative bg-white" style="margin: 6px;">
+            
+            <!-- Horizontal Header: 3 Columns -->
+            <div class="flex border-b-heavy items-stretch">
+                
+                <!-- Col 1: Logo & Company (35%) -->
+                <div class="w-[35%] p-1.5 flex gap-2 items-center border-r-heavy bg-gray-50/50">
+                    <div class="w-12 h-12 rounded flex-shrink-0 flex items-center justify-center border border-teal-700 bg-white">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" class="w-8 h-8 text-teal-700">
+                            <path fill="currentColor" d="M20,40 C20,70 30,85 50,85 C70,85 80,70 80,40 Z" />
+                            <rect fill="currentColor" x="15" y="30" width="70" height="10" rx="3" />
+                            <path fill="currentColor" d="M65,15 C60,10 50,25 45,35 L55,40 C60,30 75,20 65,15 Z" />
+                            <path fill="white" d="M45,55 L45,45 L55,45 L55,55 L65,55 L65,65 L55,65 L55,75 L45,75 L45,65 L35,65 L35,55 Z" />
+                        </svg>
+                    </div>
+                    <div class="flex-grow">
+                        <h1 class="font-bold text-gray-900 tracking-wide uppercase leading-tight" style="font-size: 0.9rem;">S.P.S MANAVATA PHARMA</h1>
+                        <p class="text-gray-700 leading-tight mt-0.5" style="font-size: 0.6rem;">Shop No. 1, 2, 3, Gr Floor, Shanta Complex,<br>
+                        Nutan Colony Signal, Chhatrapati Sambhajinagar</p>
+                        <p class="text-gray-600 leading-tight mt-0.5" style="font-size: 0.55rem;">
+                            <span class="font-semibold text-gray-800">Ph:</span> +91-9876543210 &bull; <span class="font-semibold text-gray-800">GSTIN:</span> 27AATCS1234A1Z5<br>
+                            <span class="font-semibold text-gray-800">DL:</span> 20B: MH-MZ3-315174 | 21B: MH-MZ3-315175
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Col 2: Buyer Details (35%) -->
+                <div class="w-[35%] p-1.5 border-r-heavy flex flex-col justify-center">
+                    <h3 class="font-bold text-gray-800 uppercase border-b border-gray-300 pb-0.5 mb-1 inline-block" style="font-size: 0.65rem;">Bill To / Buyer Details</h3>
+                    <p class="font-bold text-gray-900 leading-tight truncate" style="font-size: 0.85rem;">Horizon Retail Pvt. Ltd.</p>
+                    <p class="text-gray-700 leading-tight" style="font-size: 0.65rem;">8, Commercial Street, Chhatrapati Sambhajinagar - 431005</p>
+                    <p class="text-gray-600 leading-tight mt-0.5" style="font-size: 0.6rem;">
+                        <span class="font-semibold text-gray-800">GSTIN:</span> 27AACCH4523M1Z3<br>
+                        <span class="font-semibold text-gray-800">DL:</span> 20B: MH-MZ3-999991 | 21B: MH-MZ3-999992<br>
+                        <span class="font-semibold text-gray-800">Place of Supply:</span> Maharashtra (27)
+                    </p>
+                </div>
+
+                <!-- Col 3: Invoice Info (30%) -->
+                <div class="w-[30%] p-1.5 flex flex-col bg-teal-50/30 justify-center">
+                    <!-- Full width Tax Invoice Banner -->
+                    <div class="bg-teal-700 text-white rounded px-2 py-0.5 shadow-sm text-center w-full mb-1.5">
+                        <h2 class="font-bold uppercase tracking-wider leading-tight" style="font-size: 0.8rem;">TAX INVOICE <span class="font-normal text-teal-100" style="font-size: 0.55rem;">(Wholesale)</span></h2>
+                    </div>
+                    
+                    <!-- Details & QR Side-by-Side -->
+                    <div class="flex justify-between items-start w-full gap-2">
+                        <div class="flex-grow">
+                            <table class="w-full text-left" style="font-size: 0.6rem;">
+                                <tr><td class="font-semibold text-gray-600 py-0.5">Inv No:</td><td class="font-bold text-gray-900 py-0.5">INV-2026-001689</td></tr>
+                                <tr><td class="font-semibold text-gray-600 py-0.5">Date:</td><td class="font-bold text-gray-900 py-0.5">03-Oct-2026</td></tr>
+                                <tr><td class="font-semibold text-gray-600 py-0.5 w-10">E-Way:</td><td class="font-bold text-gray-900 py-0.5">123456789012</td></tr>
+                                <tr><td class="font-semibold text-gray-600 py-0.5">Validity:</td><td class="font-bold text-gray-900 py-0.5">04-Oct-2026</td></tr>
+                            </table>
+                        </div>
+                        <!-- QR Code Placeholder -->
+                        <div class="w-14 h-14 border-2 border-dashed border-teal-700/30 bg-white flex items-center justify-center flex-shrink-0 rounded-sm mt-0.5">
+                            <span class="text-gray-400 text-center leading-tight font-semibold" style="font-size: 0.45rem;">E-INV<br>QR</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex-grow flex flex-col min-h-0 bg-white"> 
+                <table class="w-full text-left pdf-table h-full table-fixed" style="font-size: 0.7rem;">
+                    <thead>
+                        <tr class="bg-gray-100 text-gray-800 uppercase tracking-wide" style="font-size: 0.55rem;">
+                            <th class="py-0.5 px-0.5 w-6 text-center border-l-0 border-t-0 border-r border-b-heavy">SN</th>
+                            <th class="py-0.5 px-1 border-t-0 border-r border-b-heavy w-auto">Item Name & Details</th>
+                            <th class="py-0.5 px-0.5 w-[6%] border-t-0 border-r border-b-heavy text-center">HSN</th>
+                            <th class="py-0.5 px-0.5 w-[8%] border-t-0 border-r border-b-heavy">Batch</th>
+                            <th class="py-0.5 px-0.5 w-[6%] border-t-0 border-r border-b-heavy text-center">Exp</th>
+                            <th class="py-0.5 px-0.5 w-[5%] border-t-0 border-r border-b-heavy text-center">B-Qty</th>
+                            <th class="py-0.5 px-0.5 w-[5%] border-t-0 border-r border-b-heavy text-center">F-Qty</th>
+                            <th class="py-0.5 px-0.5 w-[6%] border-t-0 border-r border-b-heavy text-right">MRP</th>
+                            <th class="py-0.5 px-0.5 w-[6%] border-t-0 border-r border-b-heavy text-right">PTR</th>
+                            <th class="py-0.5 px-0.5 w-[5%] border-t-0 border-r border-b-heavy text-center">Disc</th>
+                            <th class="py-0.5 px-0.5 w-[5%] border-t-0 border-r border-b-heavy text-center">GST</th>
+                            <th class="py-0.5 px-1 w-[8%] border-t-0 border-r border-b-heavy text-right">Taxable</th>
+                            <th class="py-0.5 px-1 w-[9%] border-t-0 border-l-0 border-r-0 border-b-heavy text-right">Amount(₹)</th>
+                        </tr>
+                    </thead>
+                    <tbody class="align-top">
+                        <!-- Item Row 1 -->
+                        <tr>
+                            <td class="py-0.5 px-0.5 text-center border-l-0 border-b-0 border-r">1</td>
+                            <td class="py-0.5 px-1 border-b-0 border-r">
+                                <span class="font-bold text-gray-900 leading-none" style="font-size: 0.65rem;">PARACETAMOL 500MG</span>
+                                <span class="text-gray-500 leading-none ml-1" style="font-size: 0.55rem;">Micro Labs &bull; 10x10 T</span>
+                            </td>
+                            <td class="py-0.5 px-0.5 text-center border-b-0 border-r leading-tight" style="font-size: 0.6rem;">3004</td>
+                            <td class="py-0.5 px-0.5 border-b-0 border-r leading-tight" style="font-size: 0.6rem;">B-112</td>
+                            <td class="py-0.5 px-0.5 text-center border-b-0 border-r leading-tight" style="font-size: 0.6rem;">12/28</td>
+                            <td class="py-0.5 px-0.5 text-center font-bold text-gray-900 border-b-0 border-r leading-tight">100</td>
+                            <td class="py-0.5 px-0.5 text-center border-b-0 border-r leading-tight">10</td>
+                            <td class="py-0.5 px-0.5 text-right border-b-0 border-r leading-tight">50.00</td>
+                            <td class="py-0.5 px-0.5 text-right border-b-0 border-r leading-tight">35.00</td>
+                            <td class="py-0.5 px-0.5 text-center border-b-0 border-r leading-tight">10%</td>
+                            <td class="py-0.5 px-0.5 text-center border-b-0 border-r leading-tight">12%</td>
+                            <td class="py-0.5 px-1 text-right border-b-0 border-r leading-tight">3150.00</td>
+                            <td class="py-0.5 px-1 text-right font-semibold border-b-0 border-r-0 text-gray-900 leading-tight">3528.00</td>
+                        </tr>
+                        <!-- Item Row 2 -->
+                        <tr>
+                            <td class="py-0.5 px-0.5 text-center border-l-0 border-b-0 border-r border-t">2</td>
+                            <td class="py-0.5 px-1 border-b-0 border-r border-t">
+                                <span class="font-bold text-gray-900 leading-none" style="font-size: 0.65rem;">AZITHROMYCIN 500MG</span>
+                                <span class="text-gray-500 leading-none ml-1" style="font-size: 0.55rem;">Cipla &bull; 5x3 T</span>
+                            </td>
+                            <td class="py-0.5 px-0.5 text-center border-b-0 border-r border-t leading-tight" style="font-size: 0.6rem;">3004</td>
+                            <td class="py-0.5 px-0.5 border-b-0 border-r border-t leading-tight" style="font-size: 0.6rem;">A-908</td>
+                            <td class="py-0.5 px-0.5 text-center border-b-0 border-r border-t leading-tight" style="font-size: 0.6rem;">08/27</td>
+                            <td class="py-0.5 px-0.5 text-center font-bold text-gray-900 border-b-0 border-r border-t leading-tight">50</td>
+                            <td class="py-0.5 px-0.5 text-center border-b-0 border-r border-t leading-tight">0</td>
+                            <td class="py-0.5 px-0.5 text-right border-b-0 border-r border-t leading-tight">110.00</td>
+                            <td class="py-0.5 px-0.5 text-right border-b-0 border-r border-t leading-tight">80.00</td>
+                            <td class="py-0.5 px-0.5 text-center border-b-0 border-r border-t leading-tight">0%</td>
+                            <td class="py-0.5 px-0.5 text-center border-b-0 border-r border-t leading-tight">18%</td>
+                            <td class="py-0.5 px-1 text-right border-b-0 border-r border-t leading-tight">4000.00</td>
+                            <td class="py-0.5 px-1 text-right font-semibold border-b-0 border-r-0 border-t text-gray-900 leading-tight">4720.00</td>
+                        </tr>
+                        
+                        <!-- Empty Spacer Row (pushes content up) -->
+                        <tr class="h-auto flex-grow">
+                            <td class="border-l-0 border-b-0 border-r border-t"></td><td class="border-b-0 border-r border-t"></td><td class="border-b-0 border-r border-t"></td><td class="border-b-0 border-r border-t"></td><td class="border-b-0 border-r border-t"></td><td class="border-b-0 border-r border-t"></td><td class="border-b-0 border-r border-t"></td><td class="border-b-0 border-r border-t"></td><td class="border-b-0 border-r border-t"></td><td class="border-b-0 border-r border-t"></td><td class="border-b-0 border-r border-t"></td><td class="border-b-0 border-r border-t"></td><td class="border-r-0 border-b-0 border-t"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="flex border-t-heavy bg-white items-stretch flex-shrink-0">
+                
+                <!-- Left Block: Terms, Bank, Transporter, GST & Words (72%) -->
+                <div class="w-[72%] flex flex-col border-r-heavy">
+                    
+                    <div class="flex flex-grow items-stretch border-b border-gray-300">
+                        
+                        <!-- Terms, Bank & Transporter -->
+                        <div class="w-[50%] p-1.5 border-r border-gray-300 flex flex-col justify-between">
+                            <div class="flex gap-2 mb-1">
+                                <div class="w-1/2">
+                                    <h4 class="font-bold text-gray-800 uppercase mb-0.5" style="font-size: 0.55rem;">Bank Details</h4>
+                                    <p class="text-gray-700 leading-tight" style="font-size: 0.55rem;">
+                                        Bank: <span class="font-semibold text-gray-900">HDFC Bank</span><br>
+                                        A/C: <span class="font-semibold text-gray-900">50200012345678</span><br>
+                                        IFSC: <span class="font-semibold text-gray-900">HDFC0001234</span>
+                                    </p>
+                                </div>
+                                <div class="w-1/2">
+                                    <h4 class="font-bold text-gray-800 uppercase mb-0.5" style="font-size: 0.55rem;">Transporter</h4>
+                                    <p class="text-gray-700 leading-tight" style="font-size: 0.55rem;">
+                                        GSTIN: <span class="font-semibold text-gray-900">27ABCDE1234F1Z5</span><br>
+                                        Vehicle: <span class="font-semibold text-gray-900">MH-20-AB-1234</span><br>
+                                        Dist/Mode: <span class="font-semibold text-gray-900">15 km / Road</span>
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="mt-auto pt-1 border-t border-gray-100">
+                                <h4 class="font-bold text-gray-800 uppercase mb-0.5" style="font-size: 0.5rem;">Terms & Conditions</h4>
+                                <ol class="list-decimal list-inside text-gray-500" style="font-size: 0.45rem; line-height: 1.2;">
+                                    <li>Subject to Chhatrapati Sambhajinagar jurisdiction.</li>
+                                    <li>Goods once sold will not be taken back.</li>
+                                </ol>
+                            </div>
+                        </div>
+
+                        <!-- GST Summary Cards -->
+                        <div class="w-[50%] p-1.5 bg-gray-50/50 flex flex-col justify-center">
+                            <h4 class="font-bold text-gray-800 uppercase mb-1 flex justify-between items-end" style="font-size: 0.55rem;">
+                                <span>GST Breakdown</span>
+                                <span class="text-gray-400 font-normal normal-case" style="font-size: 0.45rem;">Total Tax: ₹1098.00</span>
+                            </h4>
+                            
+                            <div class="flex flex-col gap-1">
+                                <!-- 12% Card -->
+                                <div class="flex justify-between items-center bg-white border border-gray-200 rounded px-1.5 py-1 shadow-sm">
+                                    <div class="flex flex-col">
+                                        <span class="font-bold text-gray-900 leading-tight" style="font-size: 0.55rem;">GST 12%</span>
+                                        <span class="text-gray-500 leading-tight mt-0.5" style="font-size: 0.45rem;">Taxable: ₹3150.00</span>
+                                    </div>
+                                    <div class="flex gap-2 text-center">
+                                        <div class="leading-tight"><span class="block text-gray-400 uppercase" style="font-size: 0.4rem;">CGST</span><span class="font-semibold text-gray-700" style="font-size: 0.5rem;">₹189.00</span></div>
+                                        <div class="leading-tight"><span class="block text-gray-400 uppercase" style="font-size: 0.4rem;">SGST</span><span class="font-semibold text-gray-700" style="font-size: 0.5rem;">₹189.00</span></div>
+                                    </div>
+                                    <div class="text-right leading-tight">
+                                        <span class="block text-gray-400 uppercase" style="font-size: 0.4rem;">Tax</span>
+                                        <span class="font-bold text-teal-700" style="font-size: 0.55rem;">₹378.00</span>
+                                    </div>
+                                </div>
+                                
+                                <!-- 18% Card -->
+                                <div class="flex justify-between items-center bg-white border border-gray-200 rounded px-1.5 py-1 shadow-sm">
+                                    <div class="flex flex-col">
+                                        <span class="font-bold text-gray-900 leading-tight" style="font-size: 0.55rem;">GST 18%</span>
+                                        <span class="text-gray-500 leading-tight mt-0.5" style="font-size: 0.45rem;">Taxable: ₹4000.00</span>
+                                    </div>
+                                    <div class="flex gap-2 text-center">
+                                        <div class="leading-tight"><span class="block text-gray-400 uppercase" style="font-size: 0.4rem;">CGST</span><span class="font-semibold text-gray-700" style="font-size: 0.5rem;">₹360.00</span></div>
+                                        <div class="leading-tight"><span class="block text-gray-400 uppercase" style="font-size: 0.4rem;">SGST</span><span class="font-semibold text-gray-700" style="font-size: 0.5rem;">₹360.00</span></div>
+                                    </div>
+                                    <div class="text-right leading-tight">
+                                        <span class="block text-gray-400 uppercase" style="font-size: 0.4rem;">Tax</span>
+                                        <span class="font-bold text-teal-700" style="font-size: 0.55rem;">₹720.00</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Amount in Words Strip -->
+                    <div class="p-1.5 flex items-center bg-white" style="height: 6mm;">
+                        <span class="text-gray-500 uppercase mr-1.5" style="font-size: 0.5rem;">Amount in Words:</span>
+                        <span class="font-bold text-gray-900 uppercase" style="font-size: 0.55rem;">Rupees Eight Thousand Two Hundred Forty-Eight Only.</span>
+                    </div>
+                </div>
+
+                <!-- Right Block: Totals & Signature (28%) -->
+                <div class="w-[28%] flex flex-col bg-white">
+                    
+                    <!-- Financial Totals -->
+                    <div class="bg-teal-50/30 flex flex-col border-b border-gray-300">
+                        <div class="p-1.5 space-y-0.5">
+                            <div class="flex justify-between items-center text-gray-600" style="font-size: 0.55rem;">
+                                <span>Items (2) Qty (B/F)</span>
+                                <span class="font-semibold text-gray-900">150 / 10</span>
+                            </div>
+                            <div class="flex justify-between items-center text-gray-600" style="font-size: 0.55rem;">
+                                <span>Total Taxable</span>
+                                <span class="font-semibold text-gray-900">₹7150.00</span>
+                            </div>
+                            <div class="flex justify-between items-center text-gray-600" style="font-size: 0.55rem;">
+                                <span>Total GST</span>
+                                <span class="font-semibold text-gray-900">₹1098.00</span>
+                            </div>
+                        </div>
+                        <div class="bg-teal-700 text-white px-2 py-1 flex justify-between items-center shadow-inner mt-0.5">
+                            <span class="font-bold uppercase tracking-wide" style="font-size: 0.6rem;">Grand Total</span>
+                            <span class="font-bold" style="font-size: 0.85rem;">₹8248.00</span>
+                        </div>
+                    </div>
+
+                    <!-- Signature Area -->
+                    <div class="flex-grow flex flex-col items-center justify-end p-1.5 relative min-h-[14mm]">
+                        <div class="font-bold text-gray-800 text-center absolute top-1.5 w-full leading-tight" style="font-size: 0.5rem;">For S.P.S MANAVATA PHARMA</div>
+                        <div class="w-4/5 border-t border-gray-400 mt-6 pt-0.5 text-center">
+                            <span class="text-gray-500 uppercase tracking-wide font-medium" style="font-size: 0.45rem;">Authorized Signatory</span>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+            
+            <!-- Bottom Brand Strip -->
+            <div class="bg-gray-800 text-white text-center py-0.5 uppercase font-semibold" style="font-size: 0.5rem; letter-spacing: 0.1em;">
+                Wholesale Drug License • Keep Medicines in Cool & Dry Place
+            </div>
+
+        </div>
+    </template>
+
+    <script>
+        let currentType = 'retail';
+        let currentFormat = 'A5';
+
+        document.addEventListener('DOMContentLoaded', () => {
+            setType('retail');
+            setFormat('A5');
+        });
+
+        function setType(type) {
+            currentType = type;
+            
+            // Update UI Buttons
+            document.getElementById('btn-retail').className = type === 'retail' ? 'ui-btn ui-btn-active' : 'ui-btn ui-btn-outline';
+            document.getElementById('btn-wholesale').className = type === 'wholesale' ? 'ui-btn ui-btn-active' : 'ui-btn ui-btn-outline';
+            
+            // Load correct template
+            const templateId = type === 'retail' ? 'invoice-template' : 'wholesale-template';
+            const template = document.getElementById(templateId).innerHTML;
+            
+            document.getElementById('invoice-1').innerHTML = template;
+            document.getElementById('invoice-2').innerHTML = template;
+        }
+
+        /**
+         * Switches the layout to horizontal models.
+         * A4 = Full Width Landscape (Massive columns)
+         * A5 = Half Page Landscape (Standard Pharmacy Size, prints 2 vertically on A4 Portrait)
+         */
+        function setFormat(format) {
+            const root = document.documentElement;
+            const invoice1 = document.getElementById('invoice-1');
+            const invoice2 = document.getElementById('invoice-2');
+            const printContainer = document.getElementById('print-container');
+            const controlsContainer = document.getElementById('controls-container');
+            const pageStyle = document.getElementById('print-page-style');
+            
+            const btnA4 = document.getElementById('btn-a4');
+            const btnA5 = document.getElementById('btn-a5');
+
+            btnA4.className = 'ui-btn ui-btn-outline';
+            btnA5.className = 'ui-btn ui-btn-outline';
+
+            if (format === 'A4') {
+                // A4 Landscape Layout (297mm Wide x 210mm High)
+                root.style.fontSize = '18px'; // Scale fonts up for massive page
+                
+                invoice1.style.width = '297mm';
+                invoice1.style.minHeight = '210mm';
+                
+                // Hide duplicate, only need 1 for A4 landscape
+                invoice2.style.display = 'none';
+                
+                controlsContainer.style.maxWidth = '297mm';
+                printContainer.style.flexDirection = 'row';
+                printContainer.style.gap = '20px'; // For screen viewing
+                
+                // Tell printer to use A4 Landscape
+                pageStyle.innerHTML = '@page { size: A4 landscape; margin: 0; }';
+                btnA4.className = 'ui-btn ui-btn-active';
+                
+            } else {
+                // A5 Landscape Layout (210mm Wide x 148.5mm High)
+                // This is the standard width of an A4 paper (210mm).
+                root.style.fontSize = '14px'; // Standard font size
+                
+                const a5Width = '210mm';
+                const a5Height = '148.5mm';
+                
+                invoice1.style.width = a5Width;
+                invoice1.style.minHeight = a5Height;
+                
+                invoice2.style.display = 'flex';
+                invoice2.style.width = a5Width;
+                invoice2.style.minHeight = a5Height;
+                
+                controlsContainer.style.maxWidth = '210mm';
+                printContainer.style.flexDirection = 'column'; // Stack vertically!
+                printContainer.style.gap = '20px'; // Gap for screen, removed in print
+                
+                // Tell printer to use A4 Portrait. 
+                // Since 2 copies of 148.5mm = 297mm, they perfectly fill the A4 height!
+                pageStyle.innerHTML = '@page { size: A4 portrait; margin: 0; }';
+                btnA5.className = 'ui-btn ui-btn-active';
+            }
+        }
+    </script>
+</body>
+</html>

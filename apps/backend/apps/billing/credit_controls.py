@@ -25,7 +25,16 @@ def validate_statutory_compliance(customer, sale_type):
     if not customer.dl_expiry:
         raise ValidationError(f"Sale Blocked: Drug License expiry date is missing for {customer.name}.")
         
-    if customer.dl_expiry < timezone.now().date():
+    import datetime
+    if isinstance(customer.dl_expiry, str):
+        try:
+            dl_expiry_date = datetime.datetime.strptime(customer.dl_expiry, '%Y-%m-%d').date()
+        except ValueError:
+            dl_expiry_date = customer.dl_expiry
+    else:
+        dl_expiry_date = customer.dl_expiry
+        
+    if dl_expiry_date < timezone.now().date():
         raise ValidationError(f"Sale Blocked: Drug License for {customer.name} expired on {customer.dl_expiry}.")
         
     return True

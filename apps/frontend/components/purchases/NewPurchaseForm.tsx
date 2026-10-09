@@ -267,7 +267,7 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
             return;
         }
 
-        if (invoiceToEdit.status === 'DRAFT') {
+        if (invoiceToEdit.status === 'SAVED') {
             setOcrStatus('processing');
             setScannedImage(invoiceToEdit.invoiceImageUrl || null);
             
@@ -552,7 +552,7 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
 
     const onSubmit = async (data: FormData) => {
         try {
-            if (invoiceToEdit && invoiceToEdit.status !== 'DRAFT') {
+            if (invoiceToEdit && invoiceToEdit.status !== 'SAVED') {
                 if (!revisionReasonCode) {
                     toast({ variant: 'destructive', title: 'Revision reason code is required.' });
                     return;
@@ -581,13 +581,13 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                 invoiceToEdit ? revisionReasonText : undefined
             );
 
-            if (invoiceToEdit && invoiceToEdit.status !== 'DRAFT') {
+            if (invoiceToEdit && invoiceToEdit.status !== 'SAVED') {
                 await updatePurchase.mutateAsync({ id: invoiceToEdit.id, payload });
                 toast({
                     title:       'Purchase updated ✓',
                     description: `Invoice ${data.invoiceNo} has been modified successfully.`,
                 });
-            } else if (invoiceToEdit && invoiceToEdit.status === 'DRAFT') {
+            } else if (invoiceToEdit && invoiceToEdit.status === 'SAVED') {
                 await confirmDraft.mutateAsync({ id: invoiceToEdit.id, payload });
                 if (draftKey) localStorage.removeItem(draftKey);
                 toast({
@@ -1074,7 +1074,7 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
             </div>
 
             {/* ── Reason for Modification (Edit Mode Only) ──────────────── */}
-            {invoiceToEdit && invoiceToEdit.status !== 'DRAFT' && (
+            {invoiceToEdit && invoiceToEdit.status !== 'SAVED' && (
                 <div className="rounded-xl border border-blue-200 bg-blue-50 p-5 mt-4">
                     <h3 className="text-sm font-semibold text-blue-900 mb-3 flex items-center gap-2">
                         <FileText className="h-4 w-4" />
@@ -1180,7 +1180,7 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                         className="h-14 md:h-auto min-h-full w-full md:w-32 flex flex-col gap-1 justify-center rounded-lg shadow-sm"
                         title="Shortcut: Ctrl + Enter"
                     >
-                        <span className="text-sm font-semibold">{isSubmitting ? 'Saving...' : (invoiceToEdit && invoiceToEdit.status !== 'DRAFT') ? 'Update' : 'Save'}</span>
+                        <span className="text-sm font-semibold">{isSubmitting ? 'Saving...' : (invoiceToEdit && invoiceToEdit.status !== 'SAVED') ? 'Update' : 'Save'}</span>
                         <span className="text-[10px] font-normal opacity-80 bg-black/20 rounded px-1.5 py-0.5 hidden md:inline-block">Ctrl + Enter</span>
                     </Button>
                 </div>

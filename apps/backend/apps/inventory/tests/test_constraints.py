@@ -57,6 +57,8 @@ def test_atomicity_on_failure(api_client, strip_batch):
 @pytest.mark.django_db(transaction=True)
 def test_concurrency_stock_deduction(strip_batch):
     customer = CustomerFactory(outlet=strip_batch.outlet)
+    from apps.accounts.tests.factories import LedgerFactory
+    LedgerFactory(outlet=strip_batch.outlet, name=customer.name, linked_customer=customer)
     url = reverse('sale-list-create')
     payload = {'outletId': str(strip_batch.outlet.id), 'customerId': str(customer.id), 'grandTotal': '3000.00', 'subtotal': '3000.00', 'discountAmount': '0', 'paymentMode': 'cash', 'cashPaid': '3000.00', 'invoiceDate': '2026-08-01', 'items': [{'productId': str(strip_batch.product.id), 'batchId': str(strip_batch.id), 'qtyStrips': 60, 'qtyLoose': 0, 'saleRate': '50.00', 'mrp': '50.00'}]}
 

@@ -30,7 +30,7 @@ def product_b_inclusive(db):
 @pytest.fixture
 def product_c_low_stock(db):
     """MasterProduct: low stock boundary testing."""
-    return MasterProductFactory(name='Product C (Low Stock)', min_qty=10)
+    return MasterProductFactory(name='Product C (Low Stock)')
 
 @pytest.fixture
 def batch_a(default_outlet, product_a_pack10, db):

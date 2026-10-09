@@ -78,7 +78,7 @@ export function PODetailView({ orderId }: { orderId: string }) {
 
     const po = isNew ? {
         id: 'new',
-        poNumber: 'NEW DRAFT PO',
+        poNumber: 'NEW SAVED PO',
         status: 'NEW',
         distributorId: distId || '',
         distributorName: distributors?.find((d: any) => d.id === distId)?.name || 'Unknown Distributor',
@@ -276,7 +276,7 @@ export function PODetailView({ orderId }: { orderId: string }) {
                 <div>
                     <h2 className="text-2xl font-bold flex items-center gap-3">
                         {po.poNumber}
-                        <Badge variant="outline">{po.status === 'NEW' || po.status === 'DRAFT' ? 'SAVED' : po.status}</Badge>
+                        <Badge variant="outline">{po.status === 'NEW' || po.status === 'SAVED' ? 'SAVED' : po.status}</Badge>
                     </h2>
                     <p className="text-muted-foreground mt-1 text-sm">
                         Distributor: <span className="font-medium text-slate-800">{po.distributorName}</span> &bull; Date: {format(new Date(po.orderDate), 'dd MMM yyyy')}

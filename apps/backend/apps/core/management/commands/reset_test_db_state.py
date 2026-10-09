@@ -29,16 +29,16 @@ class Command(BaseCommand):
         
         test_product = MasterProductFactory(name='test medicine')
         tb = BatchFactory(outlet=outlet, product=test_product, qty_strips=1000)
-        StockLedgerFactory(outlet=outlet, product=test_product, batch=tb, qty_in=1000, running_qty=1000)
+        StockLedgerFactory(outlet=outlet, product=test_product, batch=tb, txn_type='OPENING', qty_in=1000, running_qty=1000)
         
         test_h1_product = MasterProductFactory(name='test schedule h1', schedule_type='H1')
         tb_h1 = BatchFactory(outlet=outlet, product=test_h1_product, qty_strips=1000)
-        StockLedgerFactory(outlet=outlet, product=test_h1_product, batch=tb_h1, qty_in=1000, running_qty=1000)
+        StockLedgerFactory(outlet=outlet, product=test_h1_product, batch=tb_h1, txn_type='OPENING', qty_in=1000, running_qty=1000)
         
         for i in range(4):
             product = MasterProductFactory()
             b = BatchFactory(outlet=outlet, product=product)
-            StockLedgerFactory(outlet=outlet, product=product, batch=b, qty_in=10, running_qty=10)
+            StockLedgerFactory(outlet=outlet, product=product, batch=b, txn_type='OPENING', qty_in=10, running_qty=10)
             
         call_command('seed_gst_e2e_data')
             

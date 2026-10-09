@@ -3,6 +3,9 @@ import { useAutosaveDraft } from '../useAutosaveDraft';
 import { useBillingStore } from '@/store/billingStore';
 import { useAuthStore } from '@/store/authStore';
 
+// Mock uuid to avoid ES module Jest parsing error
+jest.mock('uuid', () => ({ v4: () => 'uuid-1234' }));
+
 // Mock the stores
 jest.mock('@/store/billingStore');
 jest.mock('@/store/authStore');
@@ -93,7 +96,8 @@ describe('useAutosaveDraft', () => {
         jest.advanceTimersByTime(2000);
 
         // Verify POST was called
-        expect(global.fetch).toHaveBeenCalledTimes(1);
+        const { waitFor } = await import('@testing-library/react');
+        await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
         expect(global.fetch).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ method: 'POST' }));
 
         // 2. Rapid typing simulation while POST is inflight (delayed network)
@@ -106,7 +110,7 @@ describe('useAutosaveDraft', () => {
         jest.advanceTimersByTime(2000);
 
         // Because the lock is active, it should NOT have fired another POST
-        expect(global.fetch).toHaveBeenCalledTimes(1); 
+        await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1)); 
 
         // Now resolve the slow network POST
         await resolvePost();
@@ -125,7 +129,7 @@ describe('useAutosaveDraft', () => {
         jest.advanceTimersByTime(2000);
 
         // Verify it correctly fired a PUT request for the new cart data, NOT a second POST
-        expect(global.fetch).toHaveBeenCalledTimes(2);
+        await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
         expect(global.fetch).toHaveBeenLastCalledWith(expect.stringContaining('uuid-123'), expect.objectContaining({ method: 'PUT' }));
         
         // Verify payload of PUT contains the updated cart data

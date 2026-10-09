@@ -146,19 +146,19 @@ class PurchaseInvoice(models.Model):
     ]
 
     STATUS_CHOICES = [
-        ('DRAFT', 'Draft — Scanned, pending human review'),
+        ('SAVED', 'Draft — Scanned, pending human review'),
         ('POSTED', 'Posted — Confirmed, stock updated'),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     outlet = models.ForeignKey('core.Outlet', on_delete=models.CASCADE, related_name='purchase_invoices')
-    # distributor is nullable for DRAFT state (may not be matched yet at scan time)
+    # distributor is nullable for SAVED state (may not be matched yet at scan time)
     distributor = models.ForeignKey(Distributor, on_delete=models.PROTECT, related_name='purchase_invoices',
                                     null=True, blank=True)
 
     # --- Scan Purchase fields ---
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='POSTED',
-                              help_text='DRAFT = OCR scan pending review; POSTED = confirmed & stock updated')
+                              help_text='SAVED = OCR scan pending review; POSTED = confirmed & stock updated')
     invoice_image = models.ImageField(upload_to='purchase_invoices/%Y/%m/', null=True, blank=True,
                                       help_text='Scanned invoice photo')
     # Raw OCR extraction stored as JSON for the review screen
@@ -237,16 +237,16 @@ class PurchaseInvoice(models.Model):
             models.Index(fields=['invoice_no', 'outlet']),
             models.Index(fields=['outlet', 'status']),
         ]
-        # unique_together only for POSTED invoices (DRAFT may have blank invoice_no)
-        # Enforced at service level, not DB level, so we can allow DRAFT duplicates
+        # unique_together only for POSTED invoices (SAVED may have blank invoice_no)
+        # Enforced at service level, not DB level, so we can allow SAVED duplicates
 
     def __str__(self):
-        status_label = f"[{self.status}] " if self.status == 'DRAFT' else ''
+        status_label = f"[{self.status}] " if self.status == 'SAVED' else ''
         return f"{status_label}{self.invoice_no} - ₹{self.grand_total if self.grand_total else '?'}"
 
     @property
     def is_draft(self):
-        return self.status == 'DRAFT'
+        return self.status == 'SAVED'
 
     @property
     def is_posted(self):
