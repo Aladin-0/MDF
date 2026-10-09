@@ -39,7 +39,7 @@ export default function PurchasesPage() {
     };
 
     const handleScanSuccess = (draftId: string) => {
-        setEditingInvoice({ id: draftId, status: 'DRAFT' } as PurchaseInvoiceFull);
+        setEditingInvoice({ id: draftId, status: 'SAVED' } as PurchaseInvoiceFull);
         setActiveTab('new');
     };
 
