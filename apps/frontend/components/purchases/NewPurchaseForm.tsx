@@ -69,9 +69,9 @@ const itemSchema = z.object({
 });
 
 const schema = z.object({
-    partyLedgerId:    z.string().min(1, 'Select a party ledger'),
+    partyLedgerId:    z.string({ required_error: 'Select a party ledger', invalid_type_error: 'Select a party ledger' }).min(1, 'Select a party ledger'),
     purchaseType:     z.enum(['credit', 'cash']),
-    invoiceNo:        z.string().min(1, 'Invoice No required'),
+    invoiceNo:        z.string({ required_error: 'Invoice No required', invalid_type_error: 'Invoice No required' }).min(1, 'Invoice No required'),
     invoiceDate:      z.string(),
     dueDate:          z.string().optional(),
     purchaseOrderRef: z.string().optional(),
@@ -207,6 +207,10 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
     } = useForm<FormData>({
         resolver: zodResolver(schema) as any,
         defaultValues: {
+            partyLedgerId: '',
+            invoiceNo: '',
+            godown: 'main',
+            notes: '',
             purchaseType: 'credit',
             invoiceDate:  today,
             dueDate:      defaultDue,
