@@ -885,8 +885,8 @@ class PurchaseListView(APIView):
             'createdAt': purchase_invoice.created_at.isoformat(),
         }
         
-        if purchase_invoice.status == 'SAVED' and hasattr(purchase_invoice, 'ocr_data') and purchase_invoice.ocr_data:
-            data['ocrData'] = purchase_invoice.ocr_data
+        if purchase_invoice.status == 'SAVED' and hasattr(purchase_invoice, 'ocr_raw_data') and purchase_invoice.ocr_raw_data:
+            data['ocrData'] = purchase_invoice.ocr_raw_data
             
         return data
 

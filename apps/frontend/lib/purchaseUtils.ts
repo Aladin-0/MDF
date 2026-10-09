@@ -3,7 +3,7 @@ import { PurchaseInvoiceFull } from '@/types';
 export type PurchaseStatus = 'paid' | 'partial' | 'unpaid' | 'overdue' | 'draft';
 
 export function getPurchaseStatus(inv: PurchaseInvoiceFull): PurchaseStatus {
-    if (inv.status === 'DRAFT') return 'draft';
+    if (inv.status === 'SAVED') return 'draft';
     
     const today = new Date().toISOString().split('T')[0];
     if (inv.outstanding <= 0) return 'paid';
