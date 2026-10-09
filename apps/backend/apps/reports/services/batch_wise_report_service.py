@@ -10,6 +10,7 @@ from django.utils import timezone
 from django.http import HttpResponse, StreamingHttpResponse
 from django.template.loader import render_to_string
 
+import openpyxl
 from openpyxl.styles import Font, PatternFill
 
 from apps.inventory.models import Batch, StockLedger
@@ -148,7 +149,6 @@ class BatchWiseReportService:
         # Format results
         rows = []
         warnings = []
-        total_batches = len(batches)
         total_active_batches = 0
         total_near_expiry_batches = 0
         total_expired_batches = 0
@@ -161,6 +161,18 @@ class BatchWiseReportService:
         
         for b in batches:
             days_to_expiry = (b.expiry_date - today).days if b.expiry_date else None
+            
+            # For movement reports, completely skip batches with zero activity and zero stock
+            if report_type == 'movement':
+                if (b.opening_qty_raw == Decimal('0') and 
+                    b.closing_qty_raw == Decimal('0') and 
+                    getattr(b, 'purchased_qty_raw', 0) == Decimal('0') and 
+                    getattr(b, 'sold_qty_raw', 0) == Decimal('0') and
+                    getattr(b, 'sales_return_qty_raw', 0) == Decimal('0') and
+                    getattr(b, 'purchase_return_qty_raw', 0) == Decimal('0') and
+                    getattr(b, 'adjustment_in_qty_raw', 0) == Decimal('0') and
+                    getattr(b, 'adjustment_out_qty_raw', 0) == Decimal('0')):
+                    continue
             
             is_manual_adjusted = False
             if hasattr(b, 'adjustment_in_qty_raw') and hasattr(b, 'adjustment_out_qty_raw'):
@@ -203,7 +215,7 @@ class BatchWiseReportService:
             stock_value = float(b.closing_qty_raw) * float(b.purchase_rate)
             total_stock_value += Decimal(str(stock_value))
             
-            margin_pct = ((float(b.sale_rate) - float(b.purchase_rate)) / float(b.purchase_rate) * 100) if float(b.purchase_rate) > 0 else 0
+            margin_pct = ((float(getattr(b, 'sale_rate', b.mrp)) - float(b.purchase_rate)) / float(b.purchase_rate) * 100) if float(b.purchase_rate) > 0 else 0
             
             # Pack conversion helpers
             ps = b.pack_size or 1
@@ -225,7 +237,7 @@ class BatchWiseReportService:
                     "warning_type": "PURCHASE_RATE_EXCEEDS_MRP",
                     "message": f"Purchase rate ₹{b.purchase_rate} exceeds MRP ₹{b.mrp}"
                 })
-            if b.sale_rate < b.purchase_rate:
+            if getattr(b, 'sale_rate', None) is not None and float(b.sale_rate) < float(b.purchase_rate):
                 warnings.append({
                     "batch_id": str(b.id),
                     "batch_no": b.batch_no,
@@ -252,7 +264,7 @@ class BatchWiseReportService:
                 'expiry_status': expiry_status,
                 'mrp': float(b.mrp),
                 'purchase_rate': float(b.purchase_rate),
-                'sale_rate': float(b.sale_rate),
+                'sale_rate': float(getattr(b, 'sale_rate', b.mrp)),
                 'stock_value': stock_value,
                 'margin_pct': margin_pct,
                 'pack_size': ps,
@@ -289,7 +301,7 @@ class BatchWiseReportService:
             'data': rows,
             'warnings': warnings,
             'summary': {
-                'total_batches': total_batches,
+                'total_batches': len(rows),
                 'total_active_batches': total_active_batches,
                 'total_near_expiry_batches': total_near_expiry_batches,
                 'total_expired_batches': total_expired_batches,

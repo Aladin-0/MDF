@@ -191,6 +191,10 @@ export interface StaffMember {
     canModifyPaidBill?: boolean;
     canCancelAndReissueBill?: boolean;
     canViewBillRevisionHistory?: boolean;
+    canManagePartners?: boolean;
+    shiftStartTime?: string | null;
+    shiftEndTime?: string | null;
+    weeklyOffDay?: number | null;
     isActive: boolean;
     joiningDate: string;
     lastLogin?: string;
@@ -833,7 +837,8 @@ export interface PurchaseInvoice {
     // Bill amounts
     subtotal: number;               // goods value = sum(qty × pkg × rate)
     discountAmount: number;         // trade discount + cash discount combined
-    taxableAmount: number;          // subtotal − discountAmount
+    invoiceDiscount: number;        // global invoice discount
+    taxableAmount: number;          // subtotal − discountAmount - invoiceDiscount
     gstAmount: number;              // total SGST+CGST or IGST
     cessAmount: number;             // cess on applicable items
     freight: number;                // transport / freight charges
@@ -845,6 +850,8 @@ export interface PurchaseInvoice {
     // Payment
     amountPaid: number;
     outstanding: number;            // grandTotal − amountPaid
+    
+    status: 'DRAFT' | 'POSTED';
 
     createdAt: string;
 }
@@ -858,6 +865,7 @@ export interface PurchaseInvoiceFull extends PurchaseInvoice {
     purchaseOrderRef?: string;
     godown: GodownLocation | string; // string fallback for custom godowns
     notes?: string;
+    ocrData?: any;
     // Party ledger — resolved from distributor link on read
     partyLedgerId?: string | null;
     partyLedger?: {
@@ -917,6 +925,7 @@ export interface CreatePurchasePayload {
     // Bill-level totals (pre-computed on client, stored as-is)
     subtotal: number;
     discountAmount: number;
+    invoiceDiscount: number;
     taxableAmount: number;
     gstAmount: number;
     cessAmount: number;
@@ -1345,6 +1354,10 @@ export interface AttendanceSettings {
     kioskAutoResetSeconds: number;
     enableAttendance: boolean;
     workingHoursPerDay: number;
+    allowedAttendanceIps?: string;
+    attendanceLatitude?: string;
+    attendanceLongitude?: string;
+    attendanceRadiusMeters?: number;
 }
 
 export interface NotificationSettings {

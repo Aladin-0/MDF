@@ -17,8 +17,26 @@ import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 
-interface Props {
-    onMarkManual: () => void;
+import { ManualAttendanceModal } from './ManualAttendanceModal';
+
+// Helper to convert 24h (HH:mm) to 12h (hh:mm A)
+function formatTime12h(timeStr: string) {
+    if (!timeStr) return '';
+    const [hStr, mStr] = timeStr.split(':');
+    let h = parseInt(hStr, 10);
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12;
+    h = h ? h : 12;
+    return `${h.toString().padStart(2, '0')}:${mStr} ${ampm}`;
+}
+
+// Helper to convert minutes to h m
+function formatLateMin(mins: number) {
+    if (!mins) return '';
+    if (mins < 60) return `${mins} min`;
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
 function StatusBadge({ record }: { record?: AttendanceRecord }) {
@@ -40,7 +58,7 @@ function StatusBadge({ record }: { record?: AttendanceRecord }) {
     };
     const labelMap: Record<string, string> = {
         present: 'Present',
-        late: `Late (${record.lateByMinutes ?? 0} min)`,
+        late: `Late (${formatLateMin(record.lateByMinutes ?? 0)})`,
         absent: 'Absent',
         half_day: 'Half Day',
         weekly_off: 'Weekly Off',
@@ -73,12 +91,14 @@ function LiveHours({ record }: { record?: AttendanceRecord }) {
     );
 }
 
-export function TodayAttendanceTab({ onMarkManual }: Props) {
+export function TodayAttendanceTab() {
     const { data: todayRecords, isLoading } = useTodayAttendance();
     const { data: staffList = [] } = useStaffList();
     const { user } = useAuthStore();
     const { toast } = useToast();
     const markManual = useMarkManualAttendance();
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [selectedStaffForModal, setSelectedStaffForModal] = useState<string | undefined>();
     const DEFAULT_SHIFT_START = '09:00';
     const DEFAULT_SHIFT_END = '18:00';
 
@@ -162,7 +182,7 @@ export function TodayAttendanceTab({ onMarkManual }: Props) {
                                     <TableCell>
                                         {record?.checkInTime ? (
                                             <div>
-                                                <span className="text-sm">{record.checkInTime.slice(0, 5)}</span>
+                                                <span className="text-sm">{formatTime12h(record.checkInTime.slice(0, 5))}</span>
                                                 {record.isLate && (
                                                     <span className="ml-2 text-xs text-amber-600">Late</span>
                                                 )}
@@ -175,7 +195,7 @@ export function TodayAttendanceTab({ onMarkManual }: Props) {
                                     {/* Check Out */}
                                     <TableCell>
                                         {record?.checkOutTime ? (
-                                            <span className="text-sm">{record.checkOutTime.slice(0, 5)}</span>
+                                            <span className="text-sm">{formatTime12h(record.checkOutTime.slice(0, 5))}</span>
                                         ) : record?.checkInTime ? (
                                             <span className="text-xs text-green-600 animate-pulse">
                                                 Still working...
@@ -205,10 +225,26 @@ export function TodayAttendanceTab({ onMarkManual }: Props) {
                                                     variant="ghost"
                                                     size="sm"
                                                     className="text-xs h-7"
-                                                    onClick={onMarkManual}
+                                                    onClick={() => {
+                                                        setSelectedStaffForModal(staff.id);
+                                                        setIsModalOpen(true);
+                                                    }}
                                                 >
                                                     Edit
                                                 </Button>
+                                                {!isCheckedIn && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="text-xs h-7 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                                        onClick={() => {
+                                                            setSelectedStaffForModal(staff.id);
+                                                            setIsModalOpen(true);
+                                                        }}
+                                                    >
+                                                        Mark Present
+                                                    </Button>
+                                                )}
                                                 <Button
                                                     variant="ghost"
                                                     size="sm"
@@ -227,6 +263,12 @@ export function TodayAttendanceTab({ onMarkManual }: Props) {
                     </TableBody>
                 </Table>
             </CardContent>
+
+            <ManualAttendanceModal 
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                prefillStaffId={selectedStaffForModal}
+            />
         </Card>
     );
 }

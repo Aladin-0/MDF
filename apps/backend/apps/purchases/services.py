@@ -125,6 +125,7 @@ def atomic_purchase_save(payload: Dict[str, Any], outlet_id: str, created_by_id:
             godown=payload.get('godown', 'main'),
             subtotal=Decimal(str(payload['subtotal'])),
             discount_amount=Decimal(str(payload['discountAmount'])),
+            invoice_discount=Decimal(str(payload.get('invoiceDiscount') or 0)),
             taxable_amount=Decimal(str(payload['taxableAmount'])),
             gst_amount=Decimal(str(payload['gstAmount'])),
             cess_amount=Decimal(str(payload['cessAmount'])),
@@ -157,6 +158,17 @@ def atomic_purchase_save(payload: Dict[str, Any], outlet_id: str, created_by_id:
             if prod_id:
                 try:
                     master_product = MasterProduct.objects.get(id=prod_id)
+                    # --- AI Learning: Save OCR Alias if provided ---
+                    ocr_name = item_payload.get('ocrOriginalName')
+                    if ocr_name:
+                        ocr_clean = str(ocr_name).upper().strip()
+                        if ocr_clean and ocr_clean != master_product.name.upper():
+                            from apps.inventory.models import MasterProductAlias
+                            MasterProductAlias.objects.get_or_create(
+                                outlet=outlet,
+                                alias_name=ocr_clean,
+                                defaults={'product': master_product}
+                            )
                 except MasterProduct.DoesNotExist:
                     logger.warning(f"MasterProduct {prod_id} not found, creating custom product")
 
@@ -818,6 +830,7 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
         purchase_invoice.godown = payload.get('godown', 'main')
         purchase_invoice.subtotal = Decimal(str(payload['subtotal']))
         purchase_invoice.discount_amount = Decimal(str(payload['discountAmount']))
+        purchase_invoice.invoice_discount = Decimal(str(payload.get('invoiceDiscount') or 0))
         purchase_invoice.taxable_amount = Decimal(str(payload['taxableAmount']))
         purchase_invoice.gst_amount = Decimal(str(payload['gstAmount']))
         purchase_invoice.cess_amount = Decimal(str(payload['cessAmount']))

@@ -3,13 +3,15 @@
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Clock, Camera, ExternalLink } from 'lucide-react';
+import { Clock, Camera, ExternalLink, ShieldCheck, MapPin, Wifi } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { useSettingsStore } from '@/store/settingsStore';
+import { useAuthStore } from '@/store/authStore';
 import { useToast } from '@/hooks/use-toast';
+import { settingsApi, attendanceApi } from '@/lib/apiClient';
 import { attendanceSettingsSchema, type AttendanceSettingsFormValues } from '@/lib/validations/settings';
 import { SettingsSectionHeader } from './SettingsSectionHeader';
 import { SettingsToggleRow } from './SettingsToggleRow';
@@ -22,6 +24,7 @@ interface AttendanceSettingsSectionProps {
 
 export function AttendanceSettingsSection({ onDirty, onSaved, discardKey }: AttendanceSettingsSectionProps) {
     const store = useSettingsStore();
+    const { outlet } = useAuthStore();
     const { toast } = useToast();
 
     const getDefaults = (): AttendanceSettingsFormValues => ({
@@ -30,6 +33,10 @@ export function AttendanceSettingsSection({ onDirty, onSaved, discardKey }: Atte
         kioskAutoResetSeconds: store.kioskAutoResetSeconds,
         enableAttendance: store.enableAttendance,
         workingHoursPerDay: store.workingHoursPerDay,
+        allowedAttendanceIps: store.allowedAttendanceIps || '',
+        attendanceLatitude: store.attendanceLatitude || '',
+        attendanceLongitude: store.attendanceLongitude || '',
+        attendanceRadiusMeters: store.attendanceRadiusMeters || 100,
     });
 
     const { handleSubmit, watch, setValue, register, reset, formState: { isDirty, errors } } =
@@ -51,12 +58,53 @@ export function AttendanceSettingsSection({ onDirty, onSaved, discardKey }: Atte
     const graceMinutes = watch('attendanceGraceMinutes');
     const autoResetSeconds = watch('kioskAutoResetSeconds');
 
-    function onSubmit(data: AttendanceSettingsFormValues) {
+    async function onSubmit(data: AttendanceSettingsFormValues) {
+        // Persist security settings to the backend server
+        if (outlet) {
+            try {
+                await settingsApi.updateSettings(outlet.id, {
+                    allowedAttendanceIps: data.allowedAttendanceIps || '',
+                    attendanceLatitude: data.attendanceLatitude || null,
+                    attendanceLongitude: data.attendanceLongitude || null,
+                    attendanceRadiusMeters: data.attendanceRadiusMeters ?? 100,
+                });
+            } catch {
+                toast({ variant: 'destructive', title: 'Failed to save security settings to server.' });
+                return;
+            }
+        }
         store.updateAttendanceSettings(data);
         toast({ title: 'Attendance settings saved' });
         onSaved();
         reset(data);
     }
+
+    const captureIP = async () => {
+        try {
+            const data = await attendanceApi.getMyIp();
+            setValue('allowedAttendanceIps', data.ip, { shouldDirty: true });
+            toast({ title: 'Current IP captured' });
+        } catch {
+            toast({ title: 'Failed to capture IP', variant: 'destructive' });
+        }
+    };
+
+    const captureLocation = () => {
+        if (!navigator.geolocation) {
+            toast({ title: 'Geolocation is not supported by your browser', variant: 'destructive' });
+            return;
+        }
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                setValue('attendanceLatitude', String(position.coords.latitude.toFixed(7)), { shouldDirty: true });
+                setValue('attendanceLongitude', String(position.coords.longitude.toFixed(7)), { shouldDirty: true });
+                toast({ title: 'Current GPS Location captured' });
+            },
+            () => {
+                toast({ title: 'Unable to retrieve your location', variant: 'destructive' });
+            }
+        );
+    };
 
     return (
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
@@ -176,6 +224,63 @@ export function AttendanceSettingsSection({ onDirty, onSaved, discardKey }: Atte
                     <p className="text-xs text-red-500">{errors.workingHoursPerDay.message}</p>
                 )}
                 <p className="text-xs text-muted-foreground">Used to calculate attendance percentage</p>
+            </div>
+
+            {/* Attendance Security (Dual Validation) */}
+            <div className="rounded-xl border bg-white p-4 space-y-6">
+                <p className="text-sm font-semibold text-slate-800">Security & Restrictions (Dual Validation)</p>
+
+                <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                        <Label htmlFor="allowedAttendanceIps" className="text-sm font-medium">
+                            Allowed Wi-Fi IP Addresses (Primary Check)
+                        </Label>
+                        <Button type="button" variant="outline" size="sm" onClick={captureIP}>
+                            Capture Current IP
+                        </Button>
+                    </div>
+                    <Input
+                        id="allowedAttendanceIps"
+                        placeholder="e.g. 192.168.1.1, 45.123.x.x"
+                        {...register('allowedAttendanceIps')}
+                    />
+                    <p className="text-xs text-muted-foreground">Staff check-ins are instantly approved if they are connected to these IPs.</p>
+                </div>
+
+                <div className="space-y-4 pt-4 border-t">
+                    <div className="flex justify-between items-center">
+                        <Label className="text-sm font-medium">GPS Geofencing (Fallback Check)</Label>
+                        <Button type="button" variant="outline" size="sm" onClick={captureLocation}>
+                            Capture Current Location
+                        </Button>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="attendanceLatitude" className="text-xs text-muted-foreground">Latitude</Label>
+                            <Input id="attendanceLatitude" {...register('attendanceLatitude')} placeholder="e.g. 19.0760" />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="attendanceLongitude" className="text-xs text-muted-foreground">Longitude</Label>
+                            <Input id="attendanceLongitude" {...register('attendanceLongitude')} placeholder="e.g. 72.8777" />
+                        </div>
+                    </div>
+                    
+                    <div className="space-y-2 pt-2">
+                        <div className="flex items-center justify-between">
+                            <Label className="text-xs text-muted-foreground">Allowed Radius</Label>
+                            <span className="text-sm font-semibold text-primary">{watch('attendanceRadiusMeters') || 100} meters</span>
+                        </div>
+                        <Slider
+                            min={10}
+                            max={500}
+                            step={10}
+                            value={[watch('attendanceRadiusMeters') || 100]}
+                            onValueChange={([val]) => setValue('attendanceRadiusMeters', val, { shouldDirty: true })}
+                        />
+                        <p className="text-xs text-muted-foreground">If staff are not on the Wi-Fi, they must be within this circle to check in.</p>
+                    </div>
+                </div>
             </div>
 
             <Button type="submit" className="w-full sm:w-auto">

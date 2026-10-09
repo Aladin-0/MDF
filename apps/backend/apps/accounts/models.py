@@ -86,6 +86,12 @@ class Staff(AbstractBaseUser, PermissionsMixin):
     can_modify_paid_bill = models.BooleanField(default=False)
     can_cancel_and_reissue_bill = models.BooleanField(default=False)
     can_view_bill_revision_history = models.BooleanField(default=False)
+    
+    # Attendance Configuration
+    shift_start_time = models.TimeField(null=True, blank=True, help_text="Specific shift start time. If null, falls back to outlet opening time.")
+    shift_end_time = models.TimeField(null=True, blank=True, help_text="Specific shift end time. If null, falls back to outlet closing time.")
+    weekly_off_day = models.IntegerField(null=True, blank=True, help_text="0=Monday, 6=Sunday. Null means no specific off day.")
+
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     joining_date = models.DateTimeField(auto_now_add=True)

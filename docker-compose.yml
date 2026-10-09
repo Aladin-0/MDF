@@ -50,7 +50,7 @@ services:
     command:
       - "sh"
       - "-c"
-      - "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+      - "python manage.py migrate --noinput && gunicorn mediflow.wsgi:application --bind 0.0.0.0:8000 --workers 4 --threads 2 --worker-class gthread --timeout 120 --max-requests 1000 --max-requests-jitter 100"
     env_file:
       - ./apps/backend/.env
     environment:
@@ -105,6 +105,7 @@ services:
     restart: unless-stopped
     command: [ "celery", "-A", "mediflow", "worker", "--loglevel=info", "--concurrency=2" ]
     volumes:
+      - ./apps/backend:/app
       - media_files:/app/media
       - ./logs:/app/logs
     env_file:
@@ -128,6 +129,7 @@ services:
     restart: unless-stopped
     command: [ "celery", "-A", "mediflow", "worker", "-Q", "audit", "--loglevel=info", "--concurrency=2" ]
     volumes:
+      - ./apps/backend:/app
       - media_files:/app/media
       - ./logs:/app/logs
     env_file:

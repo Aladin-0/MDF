@@ -915,6 +915,23 @@ const realPurchasesApi = {
         await assertOk(response);
         return response.json();
     },
+    confirmDraft: async (id: string, payload: CreatePurchasePayload): Promise<PurchaseInvoiceFull> => {
+        const response = await fetch(`${API_URL}/purchases/${id}/confirm/`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify(payload),
+        });
+        await assertOk(response);
+        return response.json();
+    },
+    deleteDraft: async (id: string, outletId: string): Promise<void> => {
+        const response = await fetch(`${API_URL}/purchases/${id}/?outletId=${outletId}`, {
+            method: 'DELETE',
+            headers: getHeaders(),
+        });
+        await assertOk(response);
+        // Returns 204 No Content, so no json() parsing
+    },
     createPurchase: async (payload: any): Promise<PurchaseInvoiceFull> => {
         return realPurchasesApi.create(payload);
     },
@@ -1127,6 +1144,8 @@ const realAttendanceApi = {
                 staffId: payload.staffId,
                 type: payload.type,
                 photoBase64: payload.photoBase64 ?? null,
+                latitude: payload.latitude ?? null,
+                longitude: payload.longitude ?? null,
             }),
         });
         await assertOk(response);
@@ -1141,6 +1160,8 @@ const realAttendanceApi = {
                 staffId: payload.staffId,
                 type: 'check_out',
                 photoBase64: payload.photoBase64 ?? null,
+                latitude: payload.latitude ?? null,
+                longitude: payload.longitude ?? null,
             }),
         });
         await assertOk(response);
@@ -1152,6 +1173,11 @@ const realAttendanceApi = {
             headers: getHeaders(),
             body: JSON.stringify(payload),
         });
+        await assertOk(response);
+        return response.json();
+    },
+    getMyIp: async () => {
+        const response = await fetch(`${API_URL}/attendance/my-ip/`, { headers: getHeaders() });
         await assertOk(response);
         return response.json();
     }
@@ -1352,8 +1378,12 @@ const realReportsApi = {
     },
     getBatchReport: async (outletId: string, filters: any): Promise<any> => {
         const searchParams = new URLSearchParams({ outletId });
-        if (filters.from) searchParams.append('from', filters.from);
-        if (filters.to) searchParams.append('to', filters.to);
+        const formatDt = (d: any) => d instanceof Date ? d.toISOString().split('T')[0] : d;
+        if (filters.from) searchParams.append('date_from', formatDt(filters.from));
+        if (filters.to) searchParams.append('date_to', formatDt(filters.to));
+        if (filters.report_type) searchParams.append('report_type', filters.report_type);
+        if (filters.search) searchParams.append('search', filters.search);
+        if (filters.expiry_within_days) searchParams.append('expiry_within_days', filters.expiry_within_days);
         const response = await fetch(`${API_URL}/reports/batch-wise/?${searchParams.toString()}`, { headers: getHeaders() });
         await assertOk(response);
         return response.json();

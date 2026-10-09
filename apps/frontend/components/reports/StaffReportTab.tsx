@@ -6,9 +6,10 @@ import {
     Tooltip, Legend, ResponsiveContainer,
 } from 'recharts';
 import {
-    useReactTable, getCoreRowModel, getSortedRowModel,
+    useReactTable, getCoreRowModel, getSortedRowModel, getPaginationRowModel,
     flexRender, createColumnHelper, SortingState,
 } from '@tanstack/react-table';
+import { Button } from '@/components/ui/button';
 import { Trophy, ArrowUpDown } from 'lucide-react';
 import { DateRangeFilter, StaffReportRow } from '@/types';
 import { useStaffReport } from '@/hooks/useReports';
@@ -102,6 +103,7 @@ export function StaffReportTab({ dateRange }: StaffReportTabProps) {
         onSortingChange: setSorting,
         getCoreRowModel: getCoreRowModel(),
         getSortedRowModel: getSortedRowModel(),
+        getPaginationRowModel: getPaginationRowModel(),
     });
 
     if (isLoading) {
@@ -224,6 +226,31 @@ export function StaffReportTab({ dateRange }: StaffReportTabProps) {
                         )}
                     </table>
                 </div>
+                {sortedRows.length > 0 && (
+                    <div className="flex items-center justify-between px-4 py-3 border-t bg-slate-50 text-sm">
+                        <div className="text-slate-500">
+                            Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount() || 1}
+                        </div>
+                        <div className="flex gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => table.previousPage()}
+                                disabled={!table.getCanPreviousPage()}
+                            >
+                                Previous
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => table.nextPage()}
+                                disabled={!table.getCanNextPage()}
+                            >
+                                Next
+                            </Button>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

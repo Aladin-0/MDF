@@ -10,18 +10,20 @@ import { API_URL, getHeaders } from '@/lib/apiClient';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { format, addDays, differenceInDays } from 'date-fns';
-import { Plus, AlertTriangle, Save, X, FileText, Truck, Calculator, Boxes } from 'lucide-react';
+import { Plus, AlertTriangle, Save, X, FileText, Truck, Calculator, Boxes, Loader2, Image as ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { api } from '@/lib/api';
 // Note: Select still used for Purchase Type / Godown dropdowns
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import { useCreatePurchase, useUpdatePurchase, useCheckDuplicateInvoice } from '@/hooks/usePurchases';
+import { useCreatePurchase, useUpdatePurchase, useCheckDuplicateInvoice, useConfirmDraft } from '@/hooks/usePurchases';
 import { LedgerPicker } from '@/components/accounts/LedgerPicker';
 import { useAuthStore } from '@/store/authStore';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -33,6 +35,18 @@ import { buildPurchasePayload } from '@/utils/payloadBuilders';
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
+const safeNumber = (minVal = 0, defaultVal = 0) =>
+    z.preprocess(
+        (val) => (val === '' || val === null || val === undefined || Number.isNaN(Number(val)) ? defaultVal : Number(val)),
+        z.number().min(minVal)
+    );
+
+const safePositiveNumber = (errMsg: string) =>
+    z.preprocess(
+        (val) => (val === '' || val === null || val === undefined || Number.isNaN(Number(val)) ? 0 : Number(val)),
+        z.number().positive(errMsg)
+    );
+
 const itemSchema = z.object({
     productId:       z.string().optional().default(''),
     isCustom:        z.boolean().default(false),
@@ -40,18 +54,18 @@ const itemSchema = z.object({
     hsnCode:         z.string().optional().default(''),
     batchNo:         z.string().min(1, 'Batch required'),
     expiryDate:      z.string().min(1, 'Expiry required'),
-    pkg:             z.number().min(1, 'Pkg ≥ 1'),
-    qty:             z.number().positive('Qty must be > 0'),
-    freeQty:         z.number().min(0),
-    purchaseRate:    z.number().positive('Rate must be > 0'),
-    discountPct:     z.number().min(0).max(100),
-    cashDiscountPct: z.number().min(0).max(100),
-    gstRate:         z.number().min(0),
-    cess:            z.number().min(0),
-    mrp:             z.number().positive('MRP required'),
-    ptr:             z.number().min(0),
-    pts:             z.number().min(0),
-    saleRate:        z.number().min(0, 'Sale rate cannot be negative').optional().default(0),
+    pkg:             safeNumber(1, 1),
+    qty:             safePositiveNumber('Qty must be > 0'),
+    freeQty:         safeNumber(0, 0),
+    purchaseRate:    safePositiveNumber('Rate must be > 0'),
+    discountPct:     safeNumber(0, 0),
+    cashDiscountPct: safeNumber(0, 0),
+    gstRate:         safeNumber(0, 0),
+    cess:            safeNumber(0, 0),
+    mrp:             safePositiveNumber('MRP required'),
+    ptr:             safeNumber(0, 0),
+    pts:             safeNumber(0, 0),
+    saleRate:        safeNumber(0, 0),
 });
 
 const schema = z.object({
@@ -62,7 +76,8 @@ const schema = z.object({
     dueDate:          z.string().optional(),
     purchaseOrderRef: z.string().optional(),
     godown:           z.string().optional(),
-    freight:          z.number().min(0),
+    freight:          safeNumber(0, 0),
+    invoiceDiscount:  safeNumber(0, 0),
     notes:            z.string().optional(),
     items:            z.array(itemSchema).min(1, 'Add at least one item'),
 });
@@ -117,6 +132,7 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
         : null;
     const createPurchase = useCreatePurchase();
     const updatePurchase = useUpdatePurchase();
+    const confirmDraft = useConfirmDraft();
     const [partyLedger, setPartyLedger] = useState<Ledger | null>(null);
 
     const [items,             setItems]             = useState<PurchaseItemFormData[]>([emptyItem()]);
@@ -143,6 +159,11 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
     const [drawerOpen,        setDrawerOpen]        = useState(false);
     const [drawerInitialName, setDrawerInitialName] = useState('');
     const [activeDrawerRow,   setActiveDrawerRow]   = useState(0);
+
+    const [ocrStatus, setOcrStatus] = useState<'idle' | 'processing' | 'ready' | 'error'>('idle');
+    const [ocrError, setOcrError] = useState('');
+    const [scannedImage, setScannedImage] = useState<string | null>(null);
+    const [scannedImageModalOpen, setScannedImageModalOpen] = useState(false);
 
     const handleOpenAddProduct = (rowIndex: number, name: string) => {
         setActiveDrawerRow(rowIndex);
@@ -190,12 +211,14 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
             invoiceDate:  today,
             dueDate:      defaultDue,
             freight:      0,
+            invoiceDiscount: 0,
             items:        [emptyItem()],
         },
     });
 
     const watchedPurchaseType = watch('purchaseType');
     const watchedFreight      = watch('freight') ?? 0;
+    const watchedInvoiceDiscount = watch('invoiceDiscount') ?? 0;
     const watchedInvoiceNo    = watch('invoiceNo');
     const watchedPartyLedgerId = watch('partyLedgerId');
     const watchedInvoiceDate   = watch('invoiceDate');
@@ -234,11 +257,94 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
     // Check for duplicate invoice
     const duplicateInvoiceQuery = useCheckDuplicateInvoice(watchedInvoiceNo, watchedPartyLedgerId);
     // Don't show duplicate warning if we are editing that exact invoice
-    const isDuplicate = duplicateInvoiceQuery.data?.exists && (!invoiceToEdit || invoiceToEdit.invoiceNo.toLowerCase() !== watchedInvoiceNo?.toLowerCase());
+    const isDuplicate = duplicateInvoiceQuery.data?.exists && (!invoiceToEdit || invoiceToEdit.invoiceNo?.toLowerCase() !== watchedInvoiceNo?.toLowerCase());
 
     // Initialize form if editing — must be after useForm so `reset` is in scope
     useEffect(() => {
-        if (!invoiceToEdit) return;
+        if (!invoiceToEdit) {
+            setOcrStatus('idle');
+            setScannedImage(null);
+            return;
+        }
+
+        if (invoiceToEdit.status === 'DRAFT') {
+            setOcrStatus('processing');
+            setScannedImage(invoiceToEdit.invoiceImageUrl || null);
+            
+            const pollStatus = async () => {
+                if (!outlet?.id) return;
+                try {
+                    const res = await api.get(`/purchases/${invoiceToEdit.id}/ocr-status/`, {
+                        params: { outletId: outlet.id }
+                    });
+                    
+                    if (res.data.status === 'processing') {
+                        setTimeout(pollStatus, 2000);
+                    } else if (res.data.status === 'ready') {
+                        const ocrData = res.data;
+                        setOcrStatus('ready');
+                        
+                        // Set the Ledger object directly so the UI updates
+                        if (ocrData.header?.partyLedger) {
+                            setPartyLedger(ocrData.header.partyLedger);
+                        } else {
+                            setPartyLedger(null);
+                        }
+
+                        const formItems: PurchaseItemFormData[] = (ocrData.items || []).map((item: any) => ({
+                            productId: item.medicineMatch?.productId || '',
+                            productName: item.medicineMatch?.productId ? (item.medicineMatch?.productName || item.medicineMatch?.product_name || item.name) : item.name,
+                            isCustom: !item.medicineMatch?.productId,
+                            hsnCode: item.medicineMatch?.hsnCode || item.medicineMatch?.hsn_code || item.hsnCode || '',
+                            batchNo: item.batchNo || '',
+                            expiryDate: item.expiry || '',
+                            pkg: item.medicineMatch?.packSize || item.medicineMatch?.pack_size || item.packSize || 1,
+                            packUnitLabel: item.medicineMatch?.packUnit || item.medicineMatch?.pack_unit || '',
+                            qty: item.qty || 0,
+                            freeQty: item.freeQty || 0,
+                            purchaseRate: item.rate || 0,
+                            freightPerUnit: 0,
+                            otherCostPerUnit: 0,
+                            discountPct: item.discount || 0,
+                            cashDiscountPct: 0,
+                            gstRate: item.medicineMatch?.gstRate || item.medicineMatch?.gst_rate || item.gstPct || 0,
+                            cess: 0,
+                            mrp: item.mrp || 0,
+                            ptr: item.rate || 0,
+                            pts: item.rate || 0,
+                            saleRate: item.mrp || 0,
+                        }));
+                        
+                        setItems(formItems.length ? formItems : [emptyItem()]);
+                        
+                        reset({
+                            partyLedgerId: ocrData.header?.partyLedgerId || '', 
+                            purchaseType: 'credit',
+                            invoiceNo: ocrData.header?.invoiceNo || '',
+                            invoiceDate: ocrData.header?.invoiceDate || today,
+                            dueDate: defaultDue,
+                            purchaseOrderRef: '',
+                            godown: 'main',
+                            freight: 0,
+                            invoiceDiscount: 0,
+                            notes: '',
+                            items: formItems.length ? formItems : [emptyItem()],
+                        });
+                        
+                    } else {
+                        setOcrStatus('error');
+                        setOcrError(res.data.message || 'OCR failed');
+                    }
+                } catch (err: any) {
+                    setOcrStatus('error');
+                    setOcrError(err.response?.data?.error?.message || err.message);
+                }
+            };
+            pollStatus();
+            return;
+        }
+
+        // --- NORMAL EDIT INITIALIZATION ---
         const adj = invoiceToEdit.ledgerAdjustment ?? 0;
         // Backend convention: positive adj = subtract from total, negative adj = add to total
         setPartyLedger((invoiceToEdit.partyLedger as any) || null);
@@ -280,10 +386,12 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
             purchaseOrderRef: invoiceToEdit.purchaseOrderRef || '',
             godown: (invoiceToEdit.godown as string) || 'main',
             freight: invoiceToEdit.freight || 0,
+            invoiceDiscount: (invoiceToEdit as any).invoiceDiscount || 0,
             notes: invoiceToEdit.notes || '',
             items: formItems,
         });
-    }, [invoiceToEdit, reset]);
+    }, [invoiceToEdit, reset, outlet?.id]);
+
 
     // ── Autofill from PO Logic ───────────────────────────────────────────────
     useEffect(() => {
@@ -399,14 +507,22 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
         const afterTrade = it.qty * it.purchaseRate * (1 - it.discountPct / 100);
         return s + afterTrade * (it.cashDiscountPct / 100);
     }, 0);
-    const taxableValue   = goodsValue - totalTradeDisc - totalCashDisc;
+    
+    const preInvoiceDiscountBase = goodsValue - totalTradeDisc - totalCashDisc;
+    const invoiceDiscount = Number(watchedInvoiceDiscount) || 0;
+    const invoiceDiscountPct = preInvoiceDiscountBase > 0 ? (invoiceDiscount / preInvoiceDiscountBase) : 0;
+    
+    const taxableValue   = preInvoiceDiscountBase - invoiceDiscount;
+    
     const totalGST       = items.reduce((s, it) => {
         const base = it.qty * it.purchaseRate * (1 - it.discountPct / 100) * (1 - it.cashDiscountPct / 100);
-        return s + base * (it.gstRate / 100);
+        const baseAfterInvoiceDisc = base * (1 - invoiceDiscountPct);
+        return s + baseAfterInvoiceDisc * (it.gstRate / 100);
     }, 0);
     const totalCess      = items.reduce((s, it) => {
         const base = it.qty * it.purchaseRate * (1 - it.discountPct / 100) * (1 - it.cashDiscountPct / 100);
-        return s + base * (it.cess / 100);
+        const baseAfterInvoiceDisc = base * (1 - invoiceDiscountPct);
+        return s + baseAfterInvoiceDisc * (it.cess / 100);
     }, 0);
 
     // ── GST mode: interstate if partyLedger.state is set and != outlet state ──
@@ -436,7 +552,7 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
 
     const onSubmit = async (data: FormData) => {
         try {
-            if (invoiceToEdit) {
+            if (invoiceToEdit && invoiceToEdit.status !== 'DRAFT') {
                 if (!revisionReasonCode) {
                     toast({ variant: 'destructive', title: 'Revision reason code is required.' });
                     return;
@@ -465,11 +581,18 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                 invoiceToEdit ? revisionReasonText : undefined
             );
 
-            if (invoiceToEdit) {
+            if (invoiceToEdit && invoiceToEdit.status !== 'DRAFT') {
                 await updatePurchase.mutateAsync({ id: invoiceToEdit.id, payload });
                 toast({
                     title:       'Purchase updated ✓',
                     description: `Invoice ${data.invoiceNo} has been modified successfully.`,
+                });
+            } else if (invoiceToEdit && invoiceToEdit.status === 'DRAFT') {
+                await confirmDraft.mutateAsync({ id: invoiceToEdit.id, payload });
+                if (draftKey) localStorage.removeItem(draftKey);
+                toast({
+                    title:       'Purchase saved ✓',
+                    description: `Invoice ${data.invoiceNo} — ${items.length} item${items.length !== 1 ? 's' : ''}, ${totalUnits} units added to stock.`,
                 });
             } else {
                 await createPurchase.mutateAsync(payload);
@@ -504,19 +627,73 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
         <form 
             ref={formRef}
             onSubmit={handleSubmit(onSubmit, (errors) => {
-            console.error("FORM VALIDATION ERRORS:", errors);
-            let errMsg = "Validation failed";
-            if (errors.items && Array.isArray(errors.items) && errors.items.length > 0) {
-                const firstRowErrors = errors.items[0] || {};
-                errMsg = "Row 1 Failing Fields: " + Object.keys(firstRowErrors).join(", ");
-                alert(errMsg); // FORCE an unignorable popup!
-            }
-            toast({
-                variant: 'destructive',
-                title: 'Validation Error',
-                description: errMsg
-            });
-        })} className="flex flex-col gap-5">
+                console.error("FORM VALIDATION ERRORS:", errors);
+                let errMsg = "Please check required fields in the form";
+                if (errors.partyLedgerId) {
+                    errMsg = errors.partyLedgerId.message || "Select a party ledger";
+                } else if (errors.invoiceNo) {
+                    errMsg = errors.invoiceNo.message || "Invoice No is required";
+                } else if (errors.items && Array.isArray(errors.items) && errors.items.length > 0) {
+                    const firstRowErrors = errors.items[0] || {};
+                    const failingKeys = Object.keys(firstRowErrors);
+                    errMsg = `Item Row 1: Please check ${failingKeys.join(", ")}`;
+                } else if (errors.items?.message) {
+                    errMsg = errors.items.message;
+                }
+                toast({
+                    variant: 'destructive',
+                    title: 'Form Validation Error',
+                    description: errMsg
+                });
+            })} className="flex flex-col gap-5 relative">
+
+            {ocrStatus === 'processing' && (
+                <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm rounded-xl">
+                    <Loader2 className="w-10 h-10 animate-spin text-primary mb-4" />
+                    <h2 className="text-lg font-semibold text-slate-800">Analyzing Scanned Invoice</h2>
+                    <p className="text-sm text-slate-500 mt-2">Extracting items, batches, and prices...</p>
+                </div>
+            )}
+            
+            {ocrStatus === 'error' && (
+                <div className="mb-4 flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+                    <AlertTriangle className="h-4 w-4 shrink-0 text-red-600" />
+                    <p className="flex-1 text-sm text-red-800">
+                        OCR Failed: {ocrError}
+                    </p>
+                    <Button type="button" size="sm" variant="outline" onClick={() => setOcrStatus('idle')}>Dismiss</Button>
+                </div>
+            )}
+            
+            {/* View Image Dialog for Scans */}
+            {scannedImage && (
+                <Dialog open={scannedImageModalOpen} onOpenChange={setScannedImageModalOpen}>
+                    <div className="fixed bottom-6 right-6 z-40">
+                        <Button 
+                            type="button"
+                            size="lg"
+                            className="rounded-full shadow-lg gap-2"
+                            onClick={() => setScannedImageModalOpen(true)}
+                        >
+                            <ImageIcon className="w-5 h-5" />
+                            View Scanned Invoice
+                        </Button>
+                    </div>
+                    <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
+                        <DialogHeader>
+                            <DialogTitle>Scanned Invoice Image</DialogTitle>
+                        </DialogHeader>
+                        <div className="flex-1 overflow-auto bg-slate-100 rounded-md border border-border flex items-center justify-center p-4">
+                            {/* Use standard img tag instead of next/image since the URL is external/django */}
+                            <img 
+                                src={scannedImage} 
+                                alt="Scanned Invoice" 
+                                className="max-w-full max-h-full object-contain"
+                            />
+                        </div>
+                    </DialogContent>
+                </Dialog>
+            )}
 
             {linkedPoNo && (
                 <div className="bg-indigo-50 border border-indigo-100 text-indigo-700 px-4 py-3 rounded-lg flex items-center gap-3">
@@ -566,9 +743,9 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                     
                     {/* Column 1 */}
                     <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                            <Label className="text-sm font-medium text-slate-700 w-1/3">Party <span className="text-red-500">*</span></Label>
-                            <div className="w-2/3" ref={partyRef}>
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0">
+                            <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3">Party <span className="text-red-500">*</span></Label>
+                            <div className="w-full sm:w-2/3" ref={partyRef}>
                                 <LedgerPicker
                                     group="Sundry Creditors"
                                     value={partyLedger}
@@ -582,9 +759,9 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                                 {errors.partyLedgerId && <p className="text-[11px] text-red-500 mt-1">{errors.partyLedgerId.message}</p>}
                             </div>
                         </div>
-                        <div className="flex items-center justify-between">
-                            <Label className="text-sm font-medium text-slate-700 w-1/3">Godown</Label>
-                            <div className="w-2/3">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0">
+                            <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3">Godown</Label>
+                            <div className="w-full sm:w-2/3">
                                 <Select defaultValue="main" onValueChange={(v) => setValue('godown', v)}>
                                     <SelectTrigger className="h-10 text-sm bg-white">
                                         <SelectValue />
@@ -601,9 +778,9 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
 
                     {/* Column 2 */}
                     <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                            <Label className="text-sm font-medium text-slate-700 w-1/3">Invoice No <span className="text-red-500">*</span></Label>
-                            <div className="w-2/3">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0">
+                            <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3">Invoice No <span className="text-red-500">*</span></Label>
+                            <div className="w-full sm:w-2/3">
                                 <Input
                                     ref={(e) => {
                                         invoiceNoRef.current = e;
@@ -626,9 +803,9 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                                 ) : null}
                             </div>
                         </div>
-                        <div className="flex items-center justify-between">
-                            <Label className="text-sm font-medium text-slate-700 w-1/3">Invoice Date</Label>
-                            <div className="w-2/3">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0">
+                            <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3">Invoice Date</Label>
+                            <div className="w-full sm:w-2/3">
                                 <Input 
                                     className="h-10 text-sm bg-white" 
                                     type="date" 
@@ -644,9 +821,9 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                                 />
                             </div>
                         </div>
-                        <div className="flex items-center justify-between">
-                            <Label className="text-sm font-medium text-slate-700 w-1/3">PO Ref</Label>
-                            <div className="w-2/3">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0">
+                            <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3">PO Ref</Label>
+                            <div className="w-full sm:w-2/3">
                                 <Input 
                                     className="h-10 text-sm bg-white" 
                                     ref={(e) => {
@@ -666,9 +843,9 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
 
                     {/* Column 3 */}
                     <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                            <Label className="text-sm font-medium text-slate-700 w-1/3">Type <span className="text-red-500">*</span></Label>
-                            <div className="w-2/3">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0">
+                            <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3">Type <span className="text-red-500">*</span></Label>
+                            <div className="w-full sm:w-2/3">
                                 <Select
                                     defaultValue="credit"
                                     onValueChange={(v) => {
@@ -689,9 +866,9 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                         </div>
                         
                         {watchedPurchaseType !== 'cash' && (
-                            <div className="flex items-center justify-between">
-                                <Label className="text-sm font-medium text-slate-700 w-1/3">Credit Days</Label>
-                                <div className="w-2/3">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0">
+                                <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3">Credit Days</Label>
+                                <div className="w-full sm:w-2/3">
                                     <Select
                                         value={Number.isFinite(creditDays) ? creditDays.toString() : "30"}
                                         onValueChange={(val) => {
@@ -712,9 +889,9 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                                 </div>
                             </div>
                         )}
-                        <div className="flex items-start justify-between">
-                            <Label className="text-sm font-medium text-slate-700 w-1/3 pt-2">Notes</Label>
-                            <div className="w-2/3">
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1.5 sm:gap-0">
+                            <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3 pt-0 sm:pt-2">Notes</Label>
+                            <div className="w-full sm:w-2/3">
                                 <Textarea
                                     className="resize-none text-sm h-10 min-h-[40px] py-2 bg-white"
                                     ref={(e) => {
@@ -805,12 +982,12 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                 </div>
             </div>
 
-            {/* ── Section C: Additional Charges ────────────────────────── */}
+            {/* ── Section C: Additional Charges & Discounts ────────────────────────── */}
             <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50 px-5 py-3">
                     <Truck className="h-4 w-4 text-slate-500" />
                     <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                        Additional Charges
+                        Additional Charges & Invoice Discount
                     </h3>
                 </div>
                 <div className="grid grid-cols-1 gap-4 p-5 md:grid-cols-4">
@@ -823,12 +1000,26 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                             {...register('freight', { valueAsNumber: true })}
                         />
                     </div>
+                    <div className="space-y-1.5">
+                        <Label className="text-xs font-medium text-slate-600 flex justify-between">
+                            <span>Invoice Discount (₹)</span>
+                            {invoiceDiscountPct > 0 && (
+                                <span className="text-emerald-600">{(invoiceDiscountPct * 100).toFixed(2)}%</span>
+                            )}
+                        </Label>
+                        <Input
+                            type="number" step="0.01" min="0"
+                            className="h-9 text-sm text-green-700"
+                            placeholder="0.00"
+                            {...register('invoiceDiscount', { valueAsNumber: true })}
+                        />
+                    </div>
                 </div>
             </div>
 
             {/* ── Section D: Ledger Adjustment ────────────────────────── */}
             <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
                         <p className="text-sm font-semibold text-slate-700">Ledger Adjustment</p>
                         <p className="text-xs text-slate-400">
@@ -883,7 +1074,7 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
             </div>
 
             {/* ── Reason for Modification (Edit Mode Only) ──────────────── */}
-            {invoiceToEdit && (
+            {invoiceToEdit && invoiceToEdit.status !== 'DRAFT' && (
                 <div className="rounded-xl border border-blue-200 bg-blue-50 p-5 mt-4">
                     <h3 className="text-sm font-semibold text-blue-900 mb-3 flex items-center gap-2">
                         <FileText className="h-4 w-4" />
@@ -923,26 +1114,38 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
             )}
 
             {/* ── Zone 3: The Financial HUD (Bottom, Sticky) ───────────────────────────── */}
-            <div className="sticky bottom-0 bg-white border-t border-slate-200 shadow-[0_-4px_6px_-1px_rgb(0,0,0,0.05)] z-40 p-4 mt-4 -mx-1 flex justify-between items-end rounded-t-xl">
+            <div className="sticky bottom-0 bg-white border-t border-slate-200 shadow-[0_-4px_6px_-1px_rgb(0,0,0,0.05)] z-40 p-4 mt-4 -mx-4 md:-mx-1 flex flex-col-reverse md:flex-row justify-between items-stretch md:items-end gap-4 rounded-t-xl">
                 
                 {/* Actions Docked Left */}
-                <div className="flex items-center gap-3 pb-1">
+                <div className="flex items-center gap-3 pb-1 justify-between md:justify-start">
                     <Button
                         type="button" variant="outline" size="sm"
-                        className="gap-1.5 text-slate-500 hover:text-slate-700 h-10"
+                        className="flex-1 md:flex-none gap-1.5 text-slate-500 hover:text-slate-700 h-10"
                         onClick={saveDraft}
                         title="Shortcut: Alt + S"
                     >
                         <Save className="h-4 w-4" /> Save Draft <span className="text-[10px] text-slate-400 ml-1 border rounded px-1 hidden md:inline">Alt+S</span>
                     </Button>
-                    <Button type="button" variant="outline" onClick={onSuccess} className="h-10">
+                    <Button type="button" variant="outline" onClick={onSuccess} className="flex-1 md:flex-none h-10">
                         <X className="mr-1 h-4 w-4" /> Cancel
                     </Button>
                 </div>
 
                 {/* Receipt Summary & Main Save Button Docked Right */}
-                <div className="flex gap-4 items-stretch">
-                    <div className="w-72 flex flex-col gap-1.5 text-sm bg-slate-50 p-3 rounded-lg border border-slate-200">
+                <div className="flex flex-col md:flex-row gap-4 items-stretch">
+                    <div className="w-full md:w-72 flex flex-col gap-1.5 text-sm bg-slate-50 p-3 rounded-lg border border-slate-200">
+                        {totalTradeDisc + totalCashDisc > 0 && (
+                            <div className="flex justify-between text-slate-500 text-xs">
+                                <span>Item Discounts</span>
+                                <span className="font-mono">− {fmt(totalTradeDisc + totalCashDisc)}</span>
+                            </div>
+                        )}
+                        {invoiceDiscount > 0 && (
+                            <div className="flex justify-between text-emerald-600 text-xs">
+                                <span>Invoice Discount ({(invoiceDiscountPct * 100).toFixed(2)}%)</span>
+                                <span className="font-mono">− {fmt(invoiceDiscount)}</span>
+                            </div>
+                        )}
                         <div className="flex justify-between text-slate-600">
                             <span>Taxable Value</span>
                             <span className="font-mono">{fmt(taxableValue)}</span>
@@ -974,11 +1177,11 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                     <Button
                         type="submit"
                         disabled={isSubmitting}
-                        className="h-auto min-h-full w-32 flex flex-col gap-1 justify-center rounded-lg shadow-sm"
+                        className="h-14 md:h-auto min-h-full w-full md:w-32 flex flex-col gap-1 justify-center rounded-lg shadow-sm"
                         title="Shortcut: Ctrl + Enter"
                     >
-                        <span className="text-sm font-semibold">{isSubmitting ? 'Saving...' : invoiceToEdit ? 'Update' : 'Save'}</span>
-                        <span className="text-[10px] font-normal opacity-80 bg-black/20 rounded px-1.5 py-0.5">Ctrl + Enter</span>
+                        <span className="text-sm font-semibold">{isSubmitting ? 'Saving...' : (invoiceToEdit && invoiceToEdit.status !== 'DRAFT') ? 'Update' : 'Save'}</span>
+                        <span className="text-[10px] font-normal opacity-80 bg-black/20 rounded px-1.5 py-0.5 hidden md:inline-block">Ctrl + Enter</span>
                     </Button>
                 </div>
             </div>

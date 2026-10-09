@@ -68,6 +68,10 @@ export const attendanceSettingsSchema = z.object({
     kioskAutoResetSeconds: z.number().int().min(3).max(30),
     enableAttendance: z.boolean(),
     workingHoursPerDay: z.number().min(4).max(12),
+    allowedAttendanceIps: z.string().optional(),
+    attendanceLatitude: z.string().optional(),
+    attendanceLongitude: z.string().optional(),
+    attendanceRadiusMeters: z.number().int().min(10).max(1000).optional(),
 });
 
 export const notificationSettingsSchema = z.object({

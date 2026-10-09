@@ -7,6 +7,7 @@ const withSerwist = require('@serwist/next').default({
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+    optimizeFonts: false,
     distDir: process.env.PLAYWRIGHT_TEST ? '.next-test' : '.next',
     typescript: { ignoreBuildErrors: true },
     eslint: { ignoreDuringBuilds: true },

@@ -1,4 +1,5 @@
 import logging
+import hashlib
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from apps.core.permissions import IsAdminStaff, CanAccessReports, IsAuthenticated
@@ -6,6 +7,7 @@ from rest_framework import status
 from django.db.models import Sum, Count, Q
 from datetime import datetime
 from datetime import datetime, date
+from django.core.cache import cache
 
 from django.db.models import F
 from apps.billing.models import SaleInvoice, SaleItem
@@ -15,6 +17,14 @@ from apps.purchases.models import PurchaseInvoice, Distributor
 from apps.accounts.models import Customer
 
 logger = logging.getLogger(__name__)
+
+
+def make_cache_key(*parts) -> str:
+    """Build a safe Redis cache key from parts, hashing if needed."""
+    raw = ':'.join(str(p) for p in parts if p is not None)
+    if len(raw) > 200:
+        raw = hashlib.md5(raw.encode()).hexdigest()
+    return f"mf:{raw}"
 
 
 def split_gst(gst_amount, outlet_gstin, party_gstin):
@@ -615,6 +625,13 @@ class InventoryValuationView(APIView):
         from apps.inventory.models import Batch, MasterProduct
         outlet_id = request.query_params.get('outletId')
 
+        # ── Redis Cache (10 min) ────────────────────────────────────────────
+        cache_key = make_cache_key('stock_val', outlet_id)
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return Response(cached, status=status.HTTP_200_OK)
+        # ───────────────────────────────────────────────────────────────────
+
         try:
             outlet = Outlet.objects.get(id=outlet_id)
         except Outlet.DoesNotExist:
@@ -624,7 +641,11 @@ class InventoryValuationView(APIView):
             outlet=outlet,
             qty_strips__gt=0,
             is_active=True,
-        ).select_related('product').order_by('product__name', 'expiry_date')
+        ).select_related('product').only(
+            'id', 'batch_no', 'expiry_date', 'mrp', 'purchase_rate', 'landing_rate',
+            'qty_strips', 'qty_loose', 'pack_size',
+            'product__id', 'product__name', 'product__composition', 'product__manufacturer'
+        ).order_by('product__name', 'expiry_date')
 
         # Group by product
         product_map = {}
@@ -670,7 +691,7 @@ class InventoryValuationView(APIView):
                 'valuation_purchase': round(val_purchase, 2),
                 'valuation_landing': round(val_landing, 2),
                 'valuation_mrp': round(val_mrp, 2),
-                'valuation': round(val_purchase, 2), # Legacy fallback
+                'valuation': round(val_purchase, 2),
             })
 
         products = []
@@ -681,23 +702,20 @@ class InventoryValuationView(APIView):
         for p in product_map.values():
             avg_rate = sum(p['purchaseRates']) / len(p['purchaseRates']) if p['purchaseRates'] else 0
             p['avgPurchaseRate'] = round(avg_rate, 2)
-            
-            p['valuationAmount'] = round(p['valuation_purchase'], 2) # Legacy
+            p['valuationAmount'] = round(p['valuation_purchase'], 2)
             p['valuation_purchase'] = round(p['valuation_purchase'], 2)
             p['valuation_landing'] = round(p['valuation_landing'], 2)
             p['valuation_mrp'] = round(p['valuation_mrp'], 2)
-
             total_value_purchase += p['valuation_purchase']
             total_value_landing += p['valuation_landing']
             total_value_mrp += p['valuation_mrp']
-
             del p['purchaseRates']
             products.append(p)
 
-        return Response({
+        response_data = {
             'success': True,
             'data': {
-                'totalValuation': round(total_value_purchase, 2), # Legacy
+                'totalValuation': round(total_value_purchase, 2),
                 'total_value_purchase': round(total_value_purchase, 2),
                 'total_value_landing': round(total_value_landing, 2),
                 'total_value_mrp': round(total_value_mrp, 2),
@@ -708,7 +726,9 @@ class InventoryValuationView(APIView):
                 'generatedAt': date.today().isoformat(),
                 'outletId': outlet_id,
             }
-        }, status=status.HTTP_200_OK)
+        }
+        cache.set(cache_key, response_data, timeout=600)  # 10 min
+        return Response(response_data, status=status.HTTP_200_OK)
 
 
 class InventoryMovementReportView(APIView):
@@ -831,6 +851,13 @@ class ExpiryReportView(APIView):
         outlet_id = request.query_params.get('outletId')
         days = int(request.query_params.get('days', 30))
 
+        # ── Redis Cache (10 min) — includes 'days' in key so filters work ──
+        cache_key = make_cache_key('expiry', outlet_id, days)
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return Response(cached, status=status.HTTP_200_OK)
+        # ───────────────────────────────────────────────────────────────────
+
         try:
             outlet = Outlet.objects.get(id=outlet_id)
         except Outlet.DoesNotExist:
@@ -844,7 +871,10 @@ class ExpiryReportView(APIView):
             qty_strips__gt=0,
             is_active=True,
             expiry_date__lte=cutoff,
-        ).select_related('product').order_by('expiry_date')
+        ).select_related('product').only(
+            'id', 'batch_no', 'expiry_date', 'mrp', 'purchase_rate', 'qty_strips',
+            'product__id', 'product__name', 'product__composition', 'product__manufacturer'
+        ).order_by('expiry_date')
 
         product_map = {}
         total_stock = 0
@@ -874,7 +904,7 @@ class ExpiryReportView(APIView):
         products = list(product_map.values())
         total_batches = sum(len(p['batches']) for p in products)
 
-        return Response({
+        response_data = {
             'success': True,
             'data': {
                 'totalBatches': total_batches,
@@ -883,7 +913,9 @@ class ExpiryReportView(APIView):
                 'products': products,
             },
             'meta': {'generatedAt': today.isoformat(), 'daysFilter': days},
-        }, status=status.HTTP_200_OK)
+        }
+        cache.set(cache_key, response_data, timeout=600)  # 10 min
+        return Response(response_data, status=status.HTTP_200_OK)
 
 
 class StaffPerformanceReportView(APIView):
@@ -896,6 +928,13 @@ class StaffPerformanceReportView(APIView):
         outlet_id = request.query_params.get('outletId')
         from_str = request.query_params.get('from')
         to_str = request.query_params.get('to')
+
+        # ── Redis Cache (2 min — sales data changes frequently) ─────────────
+        cache_key = make_cache_key('staff_perf', outlet_id, from_str, to_str)
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return Response(cached, status=status.HTTP_200_OK)
+        # ───────────────────────────────────────────────────────────────────
 
         try:
             outlet = Outlet.objects.get(id=outlet_id)
@@ -948,11 +987,13 @@ class StaffPerformanceReportView(APIView):
             })
 
         top_performer = max(data, key=lambda x: x['totalSalesAmount'])['staffName'] if data else None
-        return Response({
+        response_data = {
             'success': True,
             'data': data,
             'meta': {'from': from_str, 'to': to_str, 'topPerformer': top_performer},
-        }, status=status.HTTP_200_OK)
+        }
+        cache.set(cache_key, response_data, timeout=120)  # 2 min
+        return Response(response_data, status=status.HTTP_200_OK)
 
 
 class BalanceSheetView(APIView):
@@ -1453,6 +1494,14 @@ class BatchWiseReportView(APIView):
         if not outlet_id:
             return Response({'detail': 'outletId is required'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # ── Redis Cache (5 min) — key includes all filter params for isolation ──
+        cache_key = make_cache_key('batch_wise', outlet_id, report_type,
+                                   date_from_str, date_to_str, search, product_id, expiry_within_days)
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return Response(cached, status=status.HTTP_200_OK)
+        # ────────────────────────────────────────────────────────────────────────
+
         try:
             report_data = BatchWiseReportService.get_batch_wise_report(
                 outlet_id=outlet_id,
@@ -1463,7 +1512,9 @@ class BatchWiseReportView(APIView):
                 product_id=product_id,
                 expiry_within_days=expiry_within_days
             )
-            return Response({'success': True, **report_data}, status=status.HTTP_200_OK)
+            response_data = {'success': True, **report_data}
+            cache.set(cache_key, response_data, timeout=300)  # 5 min
+            return Response(response_data, status=status.HTTP_200_OK)
         except Exception as e:
             logger.exception("Error generating batch-wise report")
             return Response({'detail': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -102,13 +102,12 @@ export const NAV_ITEMS: NavItem[] = [
         icon: UserCog,
         permission: 'manage_staff' as Permission,
     },
-    // Attendance — Phase 2, hidden from nav
-    // {
-    //     label: 'Attendance',
-    //     href: '/dashboard/attendance',
-    //     icon: CalendarCheck,
-    //     permission: 'view_outlet' as Permission,
-    // },
+    {
+        label: 'Attendance',
+        href: '/dashboard/attendance',
+        icon: CalendarCheck,
+        permission: 'view_outlet' as Permission,
+    },
     {
         label: 'Accounts',
         href: '/dashboard/accounts/vouchers',

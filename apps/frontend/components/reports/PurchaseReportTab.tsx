@@ -57,6 +57,17 @@ export function PurchaseReportTab({ dateRange }: PurchaseReportTabProps) {
         return Array.from(map.entries()).map(([name, value]) => ({ name, value }));
     }, [rows]);
 
+    const chartData = useMemo(() => {
+        const map = new Map<string, number>();
+        rows.forEach((r: any) => {
+            if (!r.date) return;
+            map.set(r.date, (map.get(r.date) ?? 0) + (r.grandTotal || 0));
+        });
+        return Array.from(map.entries())
+            .map(([date, grandTotal]) => ({ date, grandTotal }))
+            .sort((a, b) => a.date.localeCompare(b.date));
+    }, [rows]);
+
     const columns = [
         helper.accessor('date', {
             header: 'Date',
@@ -137,36 +148,48 @@ export function PurchaseReportTab({ dateRange }: PurchaseReportTabProps) {
                 <div className="bg-white rounded-xl border p-4">
                     <h3 className="text-sm font-semibold text-slate-700 mb-4">Purchase Trend</h3>
                     <ResponsiveContainer width="100%" height={200}>
-                        <AreaChart
-                            data={[...rows].sort((a, b) => a.date.localeCompare(b.date))}
-                        >
+                        <AreaChart data={chartData}>
                             <defs>
-                                <linearGradient id="purchaseGrad" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2} />
-                                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                                <linearGradient id="purchaseGradArtistic" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.4} />
+                                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
                                 </linearGradient>
+                                <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                                    <feGaussianBlur stdDeviation="4" result="blur" />
+                                    <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                                </filter>
                             </defs>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                             <XAxis
                                 dataKey="date"
                                 tickFormatter={v => format(new Date(v), 'd MMM')}
-                                tick={{ fontSize: 10 }}
+                                tick={{ fontSize: 11, fill: '#64748b' }}
+                                axisLine={false}
+                                tickLine={false}
+                                dy={10}
                             />
                             <YAxis
                                 tickFormatter={v => `₹${(v / 1000).toFixed(0)}k`}
-                                tick={{ fontSize: 10 }}
+                                tick={{ fontSize: 11, fill: '#64748b' }}
+                                axisLine={false}
+                                tickLine={false}
+                                dx={-10}
                             />
                             <Tooltip
+                                cursor={{ stroke: '#6366f1', strokeWidth: 1, strokeDasharray: '4 4' }}
                                 formatter={(v) => formatCurrency(v as number)}
                                 labelFormatter={v => format(new Date(v), 'd MMM yyyy')}
+                                contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                             />
                             <Area
-                                type="monotone"
+                                type="natural"
                                 dataKey="grandTotal"
-                                name="Total"
-                                stroke="#3b82f6"
-                                fill="url(#purchaseGrad)"
-                                strokeWidth={2}
+                                name="Total Purchased"
+                                stroke="#6366f1"
+                                fill="url(#purchaseGradArtistic)"
+                                strokeWidth={3}
+                                activeDot={{ r: 6, fill: '#6366f1', stroke: '#fff', strokeWidth: 2 }}
+                                filter="url(#glow)"
                             />
                         </AreaChart>
                     </ResponsiveContainer>
@@ -175,19 +198,19 @@ export function PurchaseReportTab({ dateRange }: PurchaseReportTabProps) {
                 {/* Distributor Breakup */}
                 <div className="bg-white rounded-xl border p-4">
                     <h3 className="text-sm font-semibold text-slate-700 mb-4">Distributor Breakup</h3>
-                    <ResponsiveContainer width="100%" height={200}>
-                        <PieChart>
+                    <ResponsiveContainer width="100%" height={240}>
+                        <PieChart margin={{ top: 20, right: 30, bottom: 20, left: 30 }}>
                             <Pie
                                 data={distributorPie}
                                 cx="50%"
                                 cy="50%"
-                                innerRadius={45}
-                                outerRadius={75}
+                                innerRadius={40}
+                                outerRadius={65}
                                 dataKey="value"
                                 label={({ name, percent }: { name?: string; percent?: number }) =>
                                     `${(name ?? '').split(' ')[0]} (${((percent ?? 0) * 100).toFixed(0)}%)`
                                 }
-                                labelLine={false}
+                                labelLine={true}
                             >
                                 {distributorPie.map((_: any, idx: number) => (
                                     <Cell key={idx} fill={DIST_COLORS[idx % DIST_COLORS.length]} />

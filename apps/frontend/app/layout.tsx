@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter } from 'next/font/google';
 import './globals.css';
 import { Providers } from './providers';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
@@ -8,8 +7,6 @@ import { CommandMenu } from '@/components/shared/CommandMenu';
 import { GlobalModalManager } from '@/components/shared/GlobalModalManager';
 
 
-
-const inter = Inter({ subsets: ['latin'] });
 
 export const viewport: Viewport = {
     width: 'device-width',

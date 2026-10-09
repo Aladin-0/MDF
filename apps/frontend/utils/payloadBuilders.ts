@@ -172,6 +172,7 @@ export function buildPurchasePayload(
         notes:            formState.notes,
         subtotal:         parseFloat(goodsValue.toFixed(2)),
         discountAmount:   parseFloat((totalTradeDisc + totalCashDisc).toFixed(2)),
+        invoiceDiscount:  parseFloat((Number(formState.invoiceDiscount) || 0).toFixed(2)),
         taxableAmount:    parseFloat(taxableValue.toFixed(2)),
         gstAmount:        parseFloat(totalGST.toFixed(2)),
         cessAmount:       parseFloat(totalCess.toFixed(2)),
@@ -183,8 +184,15 @@ export function buildPurchasePayload(
             const effPkg     = typeof it.pkg === 'number' && it.pkg > 0 ? it.pkg : 1;
             const effQty     = it.qty * effPkg;
             const base       = it.qty * it.purchaseRate * (1 - it.discountPct / 100) * (1 - it.cashDiscountPct / 100);
-            const gstAmount  = base * (it.gstRate / 100);
-            const cessAmount = base * (it.cess / 100);
+            
+            const preInvoiceDiscountBaseTotal = goodsValue - totalTradeDisc - totalCashDisc;
+            const invoiceDiscount = formState.invoiceDiscount || 0;
+            const invoiceDiscountPct = preInvoiceDiscountBaseTotal > 0 ? (invoiceDiscount / preInvoiceDiscountBaseTotal) : 0;
+            
+            const baseAfterInvoiceDisc = base * (1 - invoiceDiscountPct);
+            
+            const gstAmount  = baseAfterInvoiceDisc * (it.gstRate / 100);
+            const cessAmount = baseAfterInvoiceDisc * (it.cess / 100);
             const baseLandingRate = (it.qty + it.freeQty) > 0 ? parseFloat((base / (it.qty + it.freeQty)).toFixed(2)) : 0;
             
             return {

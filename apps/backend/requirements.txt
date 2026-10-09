@@ -17,5 +17,10 @@ weasyprint
 cryptography>=41.0.0
 requests>=2.31.0
 drf-spectacular>=0.27.0
-
 reportlab
+rapidocr-onnxruntime
+opencv-python-headless
+
+rapidfuzz==3.6.1
+google-genai
+pydantic

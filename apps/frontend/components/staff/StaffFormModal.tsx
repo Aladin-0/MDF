@@ -88,6 +88,9 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                 confirmPin: '',
                 joinDate: new Date().toISOString().split('T')[0],
                 salary: '',
+                shiftStartTime: '',
+                shiftEndTime: '',
+                weeklyOffDay: null as number | null,
                 maxDiscount: 0,
                 canEditSales: false,
                 canModifyPaidBill: false,
@@ -130,6 +133,9 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                 confirmPin: '',
                 joinDate: editingStaff.joinDate ?? '',
                 salary: editingStaff.salary ?? '',
+                shiftStartTime: editingStaff.shiftStartTime ?? '',
+                shiftEndTime: editingStaff.shiftEndTime ?? '',
+                weeklyOffDay: editingStaff.weeklyOffDay ?? null,
                 maxDiscount: editingStaff.maxDiscount ?? 0,
                 canEditSales: editingStaff.canEditSales ?? false,
                 canModifyPaidBill: editingStaff.canModifyPaidBill ?? false,
@@ -463,6 +469,44 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                                     type="number"
                                     placeholder="25000"
                                 />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-3 mt-3">
+                            <div className="space-y-1">
+                                <Label>Shift Start Time</Label>
+                                <Input
+                                    {...register('shiftStartTime')}
+                                    type="time"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <Label>Shift End Time</Label>
+                                <Input
+                                    {...register('shiftEndTime')}
+                                    type="time"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <Label>Weekly Off Day</Label>
+                                <Select
+                                    value={watch('weeklyOffDay')?.toString() ?? "none"}
+                                    onValueChange={(val) => setValue('weeklyOffDay', val === "none" ? null : parseInt(val))}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="None" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="none">None</SelectItem>
+                                        <SelectItem value="0">Monday</SelectItem>
+                                        <SelectItem value="1">Tuesday</SelectItem>
+                                        <SelectItem value="2">Wednesday</SelectItem>
+                                        <SelectItem value="3">Thursday</SelectItem>
+                                        <SelectItem value="4">Friday</SelectItem>
+                                        <SelectItem value="5">Saturday</SelectItem>
+                                        <SelectItem value="6">Sunday</SelectItem>
+                                    </SelectContent>
+                                </Select>
                             </div>
                         </div>
                     </div>

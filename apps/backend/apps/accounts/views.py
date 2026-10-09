@@ -1036,6 +1036,9 @@ class StaffListView(APIView):
                 'canCancelAndReissueBill': s.can_cancel_and_reissue_bill,
                 'canViewBillRevisionHistory': s.can_view_bill_revision_history,
                 'canManagePartners': getattr(s, 'can_manage_partners', False),
+                'shiftStartTime': s.shift_start_time.isoformat() if s.shift_start_time else None,
+                'shiftEndTime': s.shift_end_time.isoformat() if s.shift_end_time else None,
+                'weeklyOffDay': s.weekly_off_day,
                 'isActive': s.is_active,
                 'joiningDate': s.joining_date.isoformat() if s.joining_date else None,
                 'lastLogin': s.last_login.isoformat() if s.last_login else None,
@@ -1236,6 +1239,9 @@ def _serialize_staff(s):
         'phone': s.phone,
         'role': s.role,
         'outletId': str(s.outlet_id),
+        'shiftStartTime': s.shift_start_time.isoformat() if s.shift_start_time else None,
+        'shiftEndTime': s.shift_end_time.isoformat() if s.shift_end_time else None,
+        'weeklyOffDay': s.weekly_off_day,
         'avatarUrl': s.avatar_url,
         'maxDiscount': float(s.max_discount),
         'canEditRate': s.can_edit_rate,
@@ -1347,6 +1353,9 @@ class StaffCreateView(APIView):
             can_cancel_and_reissue_bill=request.data.get('canCancelAndReissueBill', False),
             can_view_bill_revision_history=request.data.get('canViewBillRevisionHistory', False),
             can_manage_partners=request.data.get('canManagePartners', False),
+            shift_start_time=request.data.get('shiftStartTime') or None,
+            shift_end_time=request.data.get('shiftEndTime') or None,
+            weekly_off_day=request.data.get('weeklyOffDay'),
             is_active=True,
         )
 
@@ -1401,6 +1410,9 @@ class StaffDetailView(APIView):
             'canModifyPaidBill': 'can_modify_paid_bill',
             'canCancelAndReissueBill': 'can_cancel_and_reissue_bill',
             'canViewBillRevisionHistory': 'can_view_bill_revision_history',
+            'shiftStartTime': 'shift_start_time',
+            'shiftEndTime': 'shift_end_time',
+            'weeklyOffDay': 'weekly_off_day',
             'isActive': 'is_active',
         }
 
@@ -1434,12 +1446,18 @@ class StaffDetailView(APIView):
             'can_modify_paid_bill': staff.can_modify_paid_bill,
             'can_cancel_and_reissue_bill': staff.can_cancel_and_reissue_bill,
             'can_view_bill_revision_history': staff.can_view_bill_revision_history,
+            'shift_start_time': staff.shift_start_time.isoformat() if staff.shift_start_time else None,
+            'shift_end_time': staff.shift_end_time.isoformat() if staff.shift_end_time else None,
+            'weekly_off_day': staff.weekly_off_day,
             'is_active': staff.is_active,
         }
 
         for camel, snake in camel_map.items():
             if camel in request.data:
-                setattr(staff, snake, request.data[camel])
+                val = request.data[camel]
+                if snake in ('shift_start_time', 'shift_end_time') and not val:
+                    val = None
+                setattr(staff, snake, val)
         for field in ('name', 'email', 'role'):
             if field in request.data:
                 setattr(staff, field, request.data[field])
@@ -1487,6 +1505,9 @@ class StaffDetailView(APIView):
             'can_modify_paid_bill': staff.can_modify_paid_bill,
             'can_cancel_and_reissue_bill': staff.can_cancel_and_reissue_bill,
             'can_view_bill_revision_history': staff.can_view_bill_revision_history,
+            'shift_start_time': staff.shift_start_time.isoformat() if staff.shift_start_time else None,
+            'shift_end_time': staff.shift_end_time.isoformat() if staff.shift_end_time else None,
+            'weekly_off_day': staff.weekly_off_day,
             'is_active': staff.is_active,
         }
 

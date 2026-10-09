@@ -40,3 +40,12 @@ urlpatterns = [
     path("api/v1/", include("apps.billing.accounts_urls")),
     path("api/v1/", include("apps.accounts.voucher_urls")),
 ]
+
+from django.conf import settings
+from django.urls import re_path
+from django.views.static import serve
+
+# Serve media files directly from Django (useful when accessed via port 8000 without Nginx)
+urlpatterns += [
+    re_path(r'^media/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT}),
+]

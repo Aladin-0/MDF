@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import {
-    useReactTable, getCoreRowModel, getSortedRowModel,
+    useReactTable, getCoreRowModel, getSortedRowModel, getPaginationRowModel,
     flexRender, createColumnHelper, SortingState,
 } from '@tanstack/react-table';
 import { format } from 'date-fns';
@@ -135,6 +135,8 @@ export function BatchReportTab({ dateRange, filters, onFiltersChange }: BatchRep
         onSortingChange: setSorting,
         getCoreRowModel: getCoreRowModel(),
         getSortedRowModel: getSortedRowModel(),
+        getPaginationRowModel: getPaginationRowModel(),
+        initialState: { pagination: { pageSize: 50 } },
     });
 
     const summaryCards = [
@@ -230,6 +232,31 @@ export function BatchReportTab({ dateRange, filters, onFiltersChange }: BatchRep
                             )}
                         </tbody>
                     </table>
+                )}
+                {rows.length > 0 && !isLoading && (
+                    <div className="p-4 border-t flex items-center justify-between text-sm text-slate-500 bg-white">
+                        <div>
+                            Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount() || 1}
+                        </div>
+                        <div className="flex gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => table.previousPage()}
+                                disabled={!table.getCanPreviousPage()}
+                            >
+                                Previous
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => table.nextPage()}
+                                disabled={!table.getCanNextPage()}
+                            >
+                                Next
+                            </Button>
+                        </div>
+                    </div>
                 )}
             </div>
 
