@@ -301,7 +301,14 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                                         </div>
                                         <div className="mt-auto pt-2 border-t border-slate-200/50 flex items-center">
                                             <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-[10px] font-bold tracking-wider uppercase">
-                                                {batch.qtyStrips} {batch.packUnit}
+                                                {(() => {
+                                                    const isStrip = batch.packType?.toLowerCase() === 'strip' || batch.packType?.toLowerCase() === 'blister';
+                                                    if (!isStrip) return `${batch.qtyStrips} ${batch.packUnit || 'Unit'}`;
+                                                    if (batch.qtyStrips > 0 && batch.qtyLoose > 0) return `${batch.qtyStrips} Str + ${batch.qtyLoose} Ls`;
+                                                    if (batch.qtyStrips > 0) return `${batch.qtyStrips} Strips`;
+                                                    if (batch.qtyLoose > 0) return `${batch.qtyLoose} Loose`;
+                                                    return `0 Strips`;
+                                                })()}
                                             </span>
                                         </div>
                                     </button>
@@ -518,7 +525,17 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                                                     <div className="text-right">
                                                         <div className="text-sm font-bold text-slate-700">₹{product.mrp.toFixed(2)}</div>
                                                         <div className={cn("text-xs font-bold mt-0.5", product.totalStock > 0 ? "text-emerald-600" : "text-red-500")}>
-                                                            {product.totalStock} in stock
+                                                            {(() => {
+                                                                const isStrip = product.packType?.toLowerCase() === 'strip' || product.packType?.toLowerCase() === 'blister';
+                                                                const totalQty = product.totalStock || 0;
+                                                                if (!isStrip) return `${totalQty} in stock`;
+                                                                const strips = Math.floor(totalQty);
+                                                                const loose = Math.round((totalQty - strips) * (product.packSize || 1));
+                                                                if (strips > 0 && loose > 0) return `${strips} strips + ${loose} loose in stock`;
+                                                                if (strips > 0) return `${strips} strips in stock`;
+                                                                if (loose > 0) return `${loose} loose in stock`;
+                                                                return `0 in stock`;
+                                                            })()}
                                                         </div>
                                                     </div>
                                                 </div>
