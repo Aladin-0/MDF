@@ -1163,16 +1163,24 @@ class PurchaseDetailView(APIView):
 
     def delete(self, request, purchase_id, *args, **kwargs):
         outlet_id = request.query_params.get('outletId')
+        logger.info(f"Attempting to delete draft invoice: {purchase_id} for outlet: {outlet_id}")
         try:
             invoice = PurchaseInvoice.objects.get(id=purchase_id, outlet_id=outlet_id)
         except PurchaseInvoice.DoesNotExist:
+            logger.error(f"Invoice {purchase_id} not found for deletion")
             return Response({'error': {'message': 'Purchase invoice not found'}}, status=status.HTTP_404_NOT_FOUND)
 
         if invoice.status != 'SAVED':
+            logger.error(f"Invoice {purchase_id} has status {invoice.status}, cannot delete")
             return Response({'error': {'message': 'Only draft invoices can be deleted'}}, status=status.HTTP_400_BAD_REQUEST)
 
-        invoice.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        try:
+            invoice.delete()
+            logger.info(f"Successfully deleted draft invoice {purchase_id}")
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except Exception as e:
+            logger.error(f"Exception while deleting invoice {purchase_id}: {str(e)}", exc_info=True)
+            return Response({'error': {'message': f'Failed to delete: {str(e)}'}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class PaymentListView(APIView):

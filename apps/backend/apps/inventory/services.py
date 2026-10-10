@@ -220,7 +220,7 @@ def rebuild_stock_ledger(batch_id: str, from_date):
     batch = Batch.objects.filter(pk=batch_id).first()
     if batch:
         pack_size = batch.pack_size or 1
-        total_loose = int(running_qty * pack_size)
+        total_loose = max(0, int(running_qty * pack_size))
         qty_strips = total_loose // pack_size
         qty_loose = total_loose % pack_size
         Batch.objects.filter(pk=batch_id).update(qty_strips=qty_strips, qty_loose=qty_loose)

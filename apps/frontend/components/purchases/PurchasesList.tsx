@@ -299,9 +299,7 @@ export function PurchasesList({
                                                 )} />
                                             </td>
                                             <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
-                                                {inv.status === 'SAVED' 
-                                                    ? (inv.createdAt ? format(new Date(inv.createdAt), 'dd MMM yyyy, hh:mm a') : '—')
-                                                    : (inv.invoiceDate ? format(new Date(inv.invoiceDate), 'dd MMM yyyy') : '—')}
+                                                {inv.invoiceDate ? format(new Date(inv.invoiceDate), 'dd MMM yyyy') : (inv.createdAt ? format(new Date(inv.createdAt), 'dd MMM yyyy') : '—')}
                                             </td>
                                             <td className="px-4 py-3 font-mono text-xs text-foreground whitespace-nowrap">
                                                 {inv.status === 'SAVED' ? '—' : inv.invoiceNo}
@@ -310,16 +308,16 @@ export function PurchasesList({
                                                 {inv.distributor?.name || (inv.status === 'SAVED' && inv.ocrData?.header?.partyName ? `OCR: ${inv.ocrData.header.partyName}` : (inv.status === 'SAVED' ? 'Pending OCR...' : '—'))}
                                             </td>
                                             <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
-                                                {inv.status === 'SAVED' ? (inv.ocrData?.items?.length ?? 0) : (inv.items?.length ?? 0)}
+                                                {inv.status === 'SAVED' && inv.ocrData ? (inv.ocrData?.items?.length ?? 0) : (inv.items?.length ?? 0)}
                                             </td>
                                             <td className="px-4 py-3 text-right tabular-nums text-foreground whitespace-nowrap">
-                                                {formatINR(inv.status === 'SAVED' ? (inv.ocrData?.totals?.subtotal ?? 0) : inv.subtotal)}
+                                                {formatINR(inv.status === 'SAVED' && inv.ocrData ? (inv.ocrData?.totals?.subtotal ?? 0) : (inv.subtotal ?? 0))}
                                             </td>
                                             <td className="px-4 py-3 text-right tabular-nums text-muted-foreground whitespace-nowrap">
-                                                −{formatINR(inv.status === 'SAVED' ? (inv.ocrData?.totals?.discount ?? 0) : inv.discountAmount)}
+                                                −{formatINR(inv.status === 'SAVED' && inv.ocrData ? (inv.ocrData?.totals?.discount ?? 0) : (inv.discountAmount ?? 0))}
                                             </td>
                                             <td className="px-4 py-3 text-right tabular-nums font-semibold text-foreground whitespace-nowrap">
-                                                {formatINR(inv.status === 'SAVED' ? (inv.ocrData?.totals?.grandTotal ?? 0) : inv.grandTotal)}
+                                                {formatINR(inv.status === 'SAVED' && inv.ocrData ? (inv.ocrData?.totals?.grandTotal ?? 0) : (inv.grandTotal ?? 0))}
                                             </td>
                                             <td className="px-4 py-3 text-center">
                                                 <span className={cn(
