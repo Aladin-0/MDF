@@ -48,7 +48,7 @@ const safePositiveNumber = (errMsg: string) =>
     );
 
 const itemSchema = z.object({
-    productId:       z.string().optional().default(''),
+    productId:       z.string().min(1, 'Product selection from catalog is required'),
     isCustom:        z.boolean().default(false),
     productName:     z.string().min(1, 'Product name required'),
     hsnCode:         z.string().optional().default(''),
