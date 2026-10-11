@@ -39,6 +39,7 @@ export function LedgerPicker({
     const [searchQuery, setSearchQuery] = useState('');
     const [debouncedQuery, setDebouncedQuery] = useState('');
     const [isCreateOpen, setIsCreateOpen] = useState(false);
+    const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
     
     const containerRef = useRef<HTMLDivElement>(null);
     const internalInputRef = useRef<HTMLInputElement>(null);
@@ -57,6 +58,7 @@ export function LedgerPicker({
         const handleClickOutside = (event: MouseEvent) => {
             if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
                 setIsOpen(false);
+                setHighlightedIndex(-1);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
@@ -81,9 +83,19 @@ export function LedgerPicker({
 
     const ledgers = data || [];
 
+    // Reset highlighted index when ledgers list updates
+    useEffect(() => {
+        if (ledgers.length > 0) {
+            setHighlightedIndex(0);
+        } else {
+            setHighlightedIndex(-1);
+        }
+    }, [ledgers]);
+
     const handleSelect = (ledger: Ledger | null) => {
         onSelect(ledger);
         setIsOpen(false);
+        setHighlightedIndex(-1);
         setSearchQuery('');
         
         if (nextInputRef?.current) {
@@ -97,17 +109,45 @@ export function LedgerPicker({
         onSelect(ledger);
         setIsCreateOpen(false);
         setIsOpen(false);
+        setHighlightedIndex(-1);
     };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            if (!isOpen) {
+                setIsOpen(true);
+            } else if (ledgers.length > 0) {
+                setHighlightedIndex(prev => (prev < ledgers.length - 1 ? prev + 1 : 0));
+            }
+            return;
+        }
+
+        if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (isOpen && ledgers.length > 0) {
+                setHighlightedIndex(prev => (prev > 0 ? prev - 1 : ledgers.length - 1));
+            }
+            return;
+        }
+
+        if (e.key === 'Enter') {
+            if (isOpen && ledgers.length > 0) {
+                e.preventDefault();
+                e.stopPropagation();
+                const targetIdx = (highlightedIndex >= 0 && highlightedIndex < ledgers.length)
+                    ? highlightedIndex
+                    : 0;
+                handleSelect(ledgers[targetIdx]);
+            }
+            return;
+        }
+
         if (e.key === 'Escape') {
             setIsOpen(false);
+            setHighlightedIndex(-1);
             inputRef.current?.blur();
-        }
-        if (e.key === 'Enter' && ledgers.length > 0) {
-            e.preventDefault();
-            e.stopPropagation();
-            handleSelect(ledgers[0]);
+            return;
         }
     };
 
@@ -177,24 +217,36 @@ export function LedgerPicker({
                                 <Loader2 className="w-5 h-5 animate-spin" />
                             </div>
                         ) : ledgers.length > 0 ? (
-                            ledgers.map(ledger => (
-                                <div 
-                                    key={ledger.id}
-                                    onMouseDown={(e) => {
-                                        e.preventDefault();
-                                        handleSelect(ledger);
-                                    }}
-                                    className="px-3 py-3 min-h-[48px] hover:bg-blue-50 cursor-pointer rounded flex flex-col group"
-                                >
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-sm font-bold text-slate-700 group-hover:text-blue-700">{ledger.name}</span>
-                                        {ledger.phone && <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">{ledger.phone}</span>}
+                            ledgers.map((ledger, idx) => {
+                                const isHighlighted = idx === highlightedIndex;
+                                return (
+                                    <div 
+                                        key={ledger.id}
+                                        onMouseDown={(e) => {
+                                            e.preventDefault();
+                                            handleSelect(ledger);
+                                        }}
+                                        onMouseEnter={() => setHighlightedIndex(idx)}
+                                        className={cn(
+                                            "px-3 py-3 min-h-[48px] cursor-pointer rounded flex flex-col group transition-colors",
+                                            isHighlighted 
+                                                ? "bg-blue-100 ring-1 ring-blue-300" 
+                                                : "hover:bg-blue-50"
+                                        )}
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <span className={cn(
+                                                "text-sm font-bold",
+                                                isHighlighted ? "text-blue-900" : "text-slate-700 group-hover:text-blue-700"
+                                            )}>{ledger.name}</span>
+                                            {ledger.phone && <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">{ledger.phone}</span>}
+                                        </div>
+                                        <div className="text-[10px] text-slate-400 truncate mt-0.5 font-medium">
+                                            {ledger.groupName} {ledger.address && `• ${ledger.address}`}
+                                        </div>
                                     </div>
-                                    <div className="text-[10px] text-slate-400 truncate mt-0.5 font-medium">
-                                        {ledger.groupName} {ledger.address && `• ${ledger.address}`}
-                                    </div>
-                                </div>
-                            ))
+                                );
+                            })
                         ) : (
                             <div className="px-3 py-4 text-center text-sm text-slate-500 font-medium">
                                 No {defaultGroupName || 'records'} found

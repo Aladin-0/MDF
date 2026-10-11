@@ -8,19 +8,39 @@ import {
     TrendingUp, BarChart3, Wallet, CreditCard, Smartphone, Banknote, Tag, ArrowUpRight,
     Download, RefreshCw
 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { useSalesList, useSaleById } from '@/hooks/useSales';
 import { SaleInvoice } from '@/types';
 import { cn } from '@/lib/utils';
 import { InvoicePreviewModal } from '@/components/billing/InvoicePreviewModal';
 import { useBillingStore } from '@/store/billingStore';
 import { useAuthStore } from '@/store/authStore';
+import { SortDropdown, SortOption } from '@/components/ui/SortDropdown';
+import { PaymentBreakdownCell } from '@/components/billing/PaymentBreakdownCell';
 import { getStoredToken } from '@/lib/apiClient';
+
+const PAYMENT_FILTER_OPTIONS = [
+    { label: 'All Payments', value: 'all' },
+    { label: 'Cash', value: 'cash' },
+    { label: 'UPI', value: 'upi' },
+    { label: 'Card', value: 'card' },
+    { label: 'Credit', value: 'credit' },
+    { label: 'Split', value: 'split' },
+    { label: 'Bank Transfer', value: 'bank_transfer' },
+    { label: 'Cheque', value: 'cheque' },
+];
 
 // ── formatters ────────────────────────────────────────────────────────────────
 const fmt = (n: number | undefined) =>
@@ -53,6 +73,14 @@ const DATE_PRESETS = [
     { label: 'Last 30 Days', start: fd(subDays(now, 29)), end: fd(now) },
 ];
 
+const SALES_SORT_OPTIONS: SortOption[] = [
+    { label: 'Latest Date', value: '-invoice_date' },
+    { label: 'Oldest Date', value: 'invoice_date' },
+    { label: 'Highest Amount', value: '-grand_total' },
+    { label: 'Lowest Amount', value: 'grand_total' },
+    { label: 'Customer (A-Z)', value: 'customer__name' },
+];
+
 function SaleInvoiceModal({ invoiceId, onClose, onEdit, onViewHistory }: { invoiceId: string; onClose: () => void; onEdit?: (invoice: SaleInvoice) => void; onViewHistory?: () => void }) {
     const { data: invoice } = useSaleById(invoiceId);
 
@@ -71,13 +99,16 @@ function SaleInvoiceModal({ invoiceId, onClose, onEdit, onViewHistory }: { invoi
 // ── Main Sales Page ───────────────────────────────────────────────────────────
 export default function SalesList() {
     const router = useRouter();
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
+    const currentSort = searchParams.get('sort') || '-invoice_date';
+    const currentPaymentMode = searchParams.get('paymentMode') || 'all';
+
     const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
     const [startDate, setStartDate] = useState(fd(now));
     const [endDate, setEndDate] = useState(fd(now));
     const [activePreset, setActivePreset] = useState('Today');
     const [search, setSearch] = useState('');
-    const [filterDoctorId, setFilterDoctorId] = useState<string>('');
-    const [filterHospital, setFilterHospital] = useState<string>('');
     const [saleType, setSaleType] = useState<'ALL' | 'RETAIL' | 'WHOLESALE'>('ALL');
     const [page, setPage] = useState(1);
     const user = useAuthStore((s) => s.user);
@@ -88,6 +119,18 @@ export default function SalesList() {
         router.push(`/billing?edit=${invoice.id}`);
     };
 
+    const handlePaymentModeChange = (val: string) => {
+        const params = new URLSearchParams(searchParams.toString());
+        if (val === 'all') {
+            params.delete('paymentMode');
+        } else {
+            params.set('paymentMode', val);
+        }
+        params.delete('page');
+        const qs = params.toString();
+        router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+        setPage(1);
+    };
 
     // When search is active: bypass date filters → search ALL dates (newest first)
     // When search is empty: apply selected date range
@@ -98,9 +141,9 @@ export default function SalesList() {
         page,
         pageSize: PAGE_SIZE,
         search: search.trim() || undefined,
-        doctorId: filterDoctorId || undefined,
-        hospitalName: filterHospital.trim() || undefined,
         saleType: saleType === 'ALL' ? undefined : saleType,
+        paymentMode: currentPaymentMode !== 'all' ? currentPaymentMode : undefined,
+        ordering: currentSort,
     });
     const invoices: SaleInvoice[] = data?.data ?? [];
     const pagination = data?.pagination;
@@ -111,10 +154,11 @@ export default function SalesList() {
     // Backend returns analytics object with pre-aggregated numbers for selected date range.
     // client-side search only filters table rows, not the analytics numbers.
     const analytics = (data as any)?.analytics;
-    const totalRevenue    = analytics?.totalRevenue    ?? 0;
+    const totalBills      = analytics?.totalBills      ?? pagination?.totalRecords ?? 0;
+    const totalRevenue    = analytics?.totalSales      ?? analytics?.totalRevenue ?? 0;
+    const avgBillValue    = analytics?.avgBillValue    ?? (totalBills > 0 ? totalRevenue / totalBills : 0);
     const totalCost       = analytics?.totalCost       ?? 0;
     const totalProfit     = analytics?.totalProfit     ?? 0;
-    const totalBills      = analytics?.totalBills      ?? pagination?.totalRecords ?? 0;
     const totalDiscount   = analytics?.totalDiscount   ?? 0;
     const cashTotal       = analytics?.cashCollected   ?? 0;
     const upiTotal        = analytics?.upiCollected    ?? 0;
@@ -122,7 +166,6 @@ export default function SalesList() {
     const creditTotal     = analytics?.creditGiven     ?? 0;
     const totalGst        = invoices.reduce((s, i) => s + ((i.cgstAmount ?? 0) + (i.sgstAmount ?? 0)), 0);
     const collectedTotal  = cashTotal + upiTotal + cardTotal;
-    const avgBillValue    = totalBills > 0 ? totalRevenue / totalBills : 0;
     const profitMarginPct = totalRevenue > 0 ? ((totalProfit / totalRevenue) * 100) : 0;
 
     const applyPreset = (start: string, end: string, label: string) => {
@@ -134,10 +177,12 @@ export default function SalesList() {
 
     const handleDownloadEwb = (saleId: string) => {
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8090/api/v1';
+        const token = getStoredToken();
+        const headers: HeadersInit = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
         const promise = fetch(`${apiUrl}/sales/${saleId}/eway-bill-pdf/`, {
-            headers: {
-                'Authorization': `Bearer ${getStoredToken()}`
-            }
+            headers
         }).then(async (res) => {
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
@@ -163,12 +208,15 @@ export default function SalesList() {
 
     const handleRetryEinvoice = (saleId: string) => {
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8090/api/v1';
+        const token = getStoredToken();
+        const headers: HeadersInit = {
+            'Content-Type': 'application/json'
+        };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
         const promise = fetch(`${apiUrl}/sales/${saleId}/retry-einvoice/`, {
             method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${getStoredToken()}`,
-                'Content-Type': 'application/json'
-            }
+            headers
         }).then(async (res) => {
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
@@ -360,30 +408,61 @@ export default function SalesList() {
 
                 {/* Payment mode breakdown */}
                 <div className="bg-white rounded-xl border border-slate-100 p-4 shadow-sm">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Payment Mode Breakdown</p>
+                    <div className="flex items-center justify-between mb-3">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Payment Mode Breakdown</p>
+                        {currentPaymentMode !== 'all' && (
+                            <button
+                                onClick={() => handlePaymentModeChange('all')}
+                                className="text-xs text-primary hover:underline font-medium"
+                            >
+                                Clear payment filter
+                            </button>
+                        )}
+                    </div>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                         {[
-                            { label: 'Cash', amount: cashTotal, icon: Banknote, color: 'text-emerald-700', bar: 'bg-emerald-500' },
-                            { label: 'UPI', amount: upiTotal, icon: Smartphone, color: 'text-blue-700', bar: 'bg-blue-500' },
-                            { label: 'Card', amount: cardTotal, icon: CreditCard, color: 'text-purple-700', bar: 'bg-purple-500' },
-                            { label: 'Credit', amount: creditTotal, icon: Tag, color: 'text-orange-700', bar: 'bg-orange-500' },
-                        ].map(({ label, amount, icon: Icon, color, bar }) => (
-                            <div key={label} className="space-y-1.5">
-                                <div className="flex items-center gap-1.5">
-                                    <Icon className={cn('w-3.5 h-3.5 shrink-0', color)} />
-                                    <span className="text-xs text-muted-foreground">{label}</span>
-                                </div>
-                                <div className="bg-slate-100 rounded-full h-1.5 overflow-hidden">
-                                    <div
-                                        className={cn(bar, 'h-full rounded-full transition-all duration-700')}
-                                        style={{ width: totalRevenue > 0 ? `${Math.min(100, (amount / totalRevenue) * 100)}%` : '0%' }}
-                                    />
-                                </div>
-                                <p className={cn('text-sm font-bold tabular-nums', color)}>
-                                    {isLoading ? '—' : fmt(amount)}
-                                </p>
-                            </div>
-                        ))}
+                            { label: 'Cash', value: 'cash', amount: cashTotal, icon: Banknote, color: 'text-emerald-700', activeRing: 'ring-2 ring-emerald-500 bg-emerald-50/50', bar: 'bg-emerald-500' },
+                            { label: 'UPI', value: 'upi', amount: upiTotal, icon: Smartphone, color: 'text-blue-700', activeRing: 'ring-2 ring-blue-500 bg-blue-50/50', bar: 'bg-blue-500' },
+                            { label: 'Card', value: 'card', amount: cardTotal, icon: CreditCard, color: 'text-purple-700', activeRing: 'ring-2 ring-purple-500 bg-purple-50/50', bar: 'bg-purple-500' },
+                            { label: 'Credit', value: 'credit', amount: creditTotal, icon: Tag, color: 'text-orange-700', activeRing: 'ring-2 ring-orange-500 bg-orange-50/50', bar: 'bg-orange-500' },
+                        ].map(({ label, value, amount, icon: Icon, color, activeRing, bar }) => {
+                            const isSelected = currentPaymentMode === value;
+                            return (
+                                <button
+                                    key={label}
+                                    type="button"
+                                    onClick={() => handlePaymentModeChange(isSelected ? 'all' : value)}
+                                    className={cn(
+                                        'text-left space-y-1.5 p-2 rounded-xl border transition-all cursor-pointer group',
+                                        isSelected
+                                            ? activeRing
+                                            : 'border-transparent hover:bg-slate-50'
+                                    )}
+                                    title={isSelected ? `Clear ${label} filter` : `Filter table by ${label}`}
+                                >
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-1.5">
+                                            <Icon className={cn('w-3.5 h-3.5 shrink-0', color)} />
+                                            <span className="text-xs font-medium text-muted-foreground group-hover:text-slate-900 transition-colors">{label}</span>
+                                        </div>
+                                        {isSelected && (
+                                            <span className="text-[10px] font-bold text-primary px-1.5 py-0.5 rounded bg-primary/10 uppercase">
+                                                Active
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                                        <div
+                                            className={cn(bar, 'h-full rounded-full transition-all duration-700')}
+                                            style={{ width: totalRevenue > 0 ? `${Math.min(100, (amount / totalRevenue) * 100)}%` : '0%' }}
+                                        />
+                                    </div>
+                                    <p className={cn('text-sm font-bold tabular-nums', color)}>
+                                        {isLoading ? '—' : fmt(amount)}
+                                    </p>
+                                </button>
+                            );
+                        })}
                     </div>
                     {/* GST + Discount info */}
                     <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap gap-4 text-xs text-muted-foreground">
@@ -393,46 +472,103 @@ export default function SalesList() {
                 </div>
             </div>
 
-            {/* ── Search ── */}
-            <div className="flex flex-col gap-2 max-w-3xl">
-                <div className={cn(
-                    'flex items-center gap-2 bg-white border rounded-lg px-3 py-2 transition-colors focus-within:border-primary/50',
-                    isSearching ? 'border-primary/40 bg-primary/5' : 'border-slate-200'
-                )}>
-                    <Search className={cn('w-4 h-4 shrink-0', isSearching ? 'text-primary' : 'text-muted-foreground')} />
-                    <input
-                        type="text"
-                        placeholder="Search invoice, customer, staff... (searches all dates)"
-                        value={search}
-                        onChange={e => { setSearch(e.target.value); setPage(1); }}
-                        className="flex-1 text-sm bg-transparent focus:outline-none placeholder:text-muted-foreground"
-                    />
-                    {search && (
-                        <button onClick={() => setSearch('')} className="text-muted-foreground hover:text-slate-900">
-                            <X className="w-4 h-4" />
+            {/* ── Search, Payment Filter & Sort ── */}
+            <div className="flex flex-col gap-2.5 w-full">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                    {/* Big Prominent Search Bar */}
+                    <div className={cn(
+                        'flex-1 flex items-center gap-3 bg-white border rounded-xl px-4 h-11 transition-all shadow-xs',
+                        isSearching
+                            ? 'border-primary/60 ring-2 ring-primary/10 bg-primary/[0.01]'
+                            : 'border-slate-200/90 hover:border-slate-300 focus-within:border-primary/60 focus-within:ring-2 focus-within:ring-primary/10'
+                    )}>
+                        <Search className={cn('w-4 h-4 shrink-0 transition-colors', isSearching ? 'text-primary' : 'text-slate-400')} />
+                        <input
+                            type="text"
+                            placeholder="Search by invoice #, customer name, mobile number, doctor, hospital, staff..."
+                            value={search}
+                            onChange={e => { setSearch(e.target.value); setPage(1); }}
+                            className="flex-1 text-sm bg-transparent focus:outline-none placeholder:text-slate-400 text-slate-900 font-normal"
+                        />
+                        {search && (
+                            <button
+                                onClick={() => setSearch('')}
+                                className="text-slate-400 hover:text-slate-700 p-1 rounded-md transition-colors"
+                                title="Clear search"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Filter & Sort Controls */}
+                    <div className="flex items-center gap-2.5 shrink-0">
+                        {/* Payment Mode Selector */}
+                        <Select value={currentPaymentMode} onValueChange={handlePaymentModeChange}>
+                            <SelectTrigger className="h-11 min-w-[155px] px-3.5 bg-white text-xs font-medium border border-slate-200/90 rounded-xl shadow-xs hover:bg-slate-50 hover:border-slate-300 focus:ring-2 focus:ring-primary/10 transition-all">
+                                <div className="flex items-center gap-1.5 truncate">
+                                    <span className="text-slate-400 text-xs font-normal shrink-0">Payment:</span>
+                                    <SelectValue placeholder="All Payments" />
+                                </div>
+                            </SelectTrigger>
+                            <SelectContent align="end" className="text-xs rounded-xl border-slate-200 shadow-md py-1 min-w-[160px]">
+                                {PAYMENT_FILTER_OPTIONS.map(opt => (
+                                    <SelectItem key={opt.value} value={opt.value} className="text-xs font-medium cursor-pointer py-1.5">
+                                        {opt.label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+
+                        <SortDropdown
+                            options={SALES_SORT_OPTIONS}
+                            defaultValue="-invoice_date"
+                            onChange={() => setPage(1)}
+                            showIcon={false}
+                            triggerClassName="h-11 min-w-[150px] px-3.5 bg-white text-xs font-medium border border-slate-200/90 rounded-xl shadow-xs hover:bg-slate-50 hover:border-slate-300 focus:ring-2 focus:ring-primary/10 transition-all"
+                            className="shrink-0"
+                        />
+                    </div>
+                </div>
+
+                {/* Active Filter Chips */}
+                {(isSearching || currentPaymentMode !== 'all') && (
+                    <div className="flex flex-wrap items-center gap-2 px-0.5 text-xs">
+                        <span className="text-slate-400 text-xs font-medium">Active filters:</span>
+                        {isSearching && (
+                            <span className="inline-flex items-center gap-1.5 bg-primary/10 text-primary border border-primary/20 px-2.5 py-1 rounded-lg text-xs font-medium">
+                                <span>Search: &ldquo;{search}&rdquo; (all dates)</span>
+                                <button
+                                    onClick={() => setSearch('')}
+                                    className="hover:text-primary/70 p-0.5 rounded transition-colors"
+                                    title="Clear search"
+                                >
+                                    <X className="w-3.5 h-3.5" />
+                                </button>
+                            </span>
+                        )}
+                        {currentPaymentMode !== 'all' && (
+                            <span className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-800 border border-slate-200 px-2.5 py-1 rounded-lg text-xs font-medium capitalize">
+                                <span>Payment: {currentPaymentMode.replace('_', ' ')}</span>
+                                <button
+                                    onClick={() => handlePaymentModeChange('all')}
+                                    className="hover:text-slate-900 p-0.5 rounded transition-colors"
+                                    title="Clear payment filter"
+                                >
+                                    <X className="w-3.5 h-3.5" />
+                                </button>
+                            </span>
+                        )}
+                        <button
+                            onClick={() => {
+                                setSearch('');
+                                handlePaymentModeChange('all');
+                            }}
+                            className="text-xs text-slate-500 hover:text-slate-800 underline underline-offset-2 ml-1 transition-colors"
+                        >
+                            Clear all
                         </button>
-                    )}
-                </div>
-                <div className="flex flex-col sm:flex-row gap-3">
-                    <input
-                        type="text"
-                        placeholder="Filter by Doctor ID/Name..."
-                        value={filterDoctorId}
-                        onChange={e => { setFilterDoctorId(e.target.value); setPage(1); }}
-                        className="flex-1 text-sm bg-white border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:border-primary/50 placeholder:text-muted-foreground"
-                    />
-                    <input
-                        type="text"
-                        placeholder="Filter by Hospital Name..."
-                        value={filterHospital}
-                        onChange={e => { setFilterHospital(e.target.value); setPage(1); }}
-                        className="flex-1 text-sm bg-white border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:border-primary/50 placeholder:text-muted-foreground"
-                    />
-                </div>
-                {isSearching && (
-                    <p className="text-xs text-primary font-medium px-1">
-                        🔍 Searching all dates · date filter paused · latest first
-                    </p>
+                    </div>
                 )}
             </div>
 
@@ -527,9 +663,16 @@ export default function SalesList() {
                                     <td className="px-4 py-3 text-right text-slate-600">{inv.itemsCount ?? inv.items?.length ?? 0}</td>
                                     <td className="px-4 py-3 text-right font-semibold tabular-nums text-slate-900">{fmt(inv.grandTotal)}</td>
                                     <td className="px-4 py-3">
-                                        <span className={cn('px-2 py-0.5 rounded-full text-[10px] font-semibold border uppercase', PAYMENT_COLORS[inv.paymentMode] ?? 'bg-slate-100 text-slate-700 border-slate-200')}>
-                                            {inv.paymentMode}
-                                        </span>
+                                        <PaymentBreakdownCell
+                                            paymentMode={inv.paymentMode}
+                                            cashPaid={inv.cashPaid}
+                                            upiPaid={inv.upiPaid}
+                                            cardPaid={inv.cardPaid}
+                                            creditGiven={inv.creditGiven}
+                                            bankPaid={inv.bankPaid}
+                                            chequePaid={inv.chequePaid}
+                                            payments={inv.payments}
+                                        />
                                     </td>
                                     <td className="px-4 py-3 text-slate-600 text-xs">{inv.billedByName ?? '—'}</td>
                                     <td className="px-4 py-3 text-right">

@@ -21,6 +21,7 @@ interface LedgerPickerProps {
     className?: string;
     showOutstanding?: boolean;
     autoFocus?: boolean;
+    variant?: 'default' | 'ghost';
 }
 
 export function LedgerPicker({
@@ -33,6 +34,7 @@ export function LedgerPicker({
     className,
     showOutstanding,
     autoFocus,
+    variant = 'default',
 }: LedgerPickerProps) {
     const outletId = useOutletId();
     const [open, setOpen] = useState(false);
@@ -43,19 +45,17 @@ export function LedgerPicker({
     const containerRef = useRef<HTMLDivElement>(null);
     const searchRef = useRef<HTMLInputElement>(null);
 
-    // Derive the voucherType filter for cashbank pickers
-    const effectiveVoucherType = filterGroup === 'cashbank' ? 'contra' : voucherType;
-
     useEffect(() => {
         if (!open || !outletId) return;
         let cancelled = false;
         setLoading(true);
 
-        let params: { voucherType?: string; search?: string; type?: string; group?: string } = {};
+        let params: { voucherType?: string; search?: string; type?: string; group?: string; filterGroup?: string } = {};
         if (group) {
             // Direct group filter — used for Sundry Creditors / Sundry Debtors pickers
             params.group = group;
         } else if (filterGroup === 'cashbank') {
+            params.filterGroup = 'cashbank';
             params.voucherType = 'contra';
         } else if (filterGroup === 'party') {
             params.voucherType = voucherType;
@@ -72,7 +72,7 @@ export function LedgerPicker({
             .catch(() => {})
             .finally(() => { if (!cancelled) setLoading(false); });
         return () => { cancelled = true; };
-    }, [open, outletId, voucherType, filterGroup, search]);
+    }, [open, outletId, voucherType, filterGroup, search, group]);
 
     // Handle Alt+C inside the search box
     useEffect(() => {
@@ -131,6 +131,42 @@ export function LedgerPicker({
     };
 
     if (value) {
+        if (variant === 'ghost') {
+            return (
+                <>
+                    <div className={cn(
+                        "relative w-full h-8 px-2 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 focus-within:border-primary bg-transparent rounded-none flex items-center justify-between transition-colors group",
+                        className
+                    )}>
+                        <div className="flex items-center gap-1.5 truncate flex-1 min-w-0">
+                            <span className="font-semibold text-sm text-foreground truncate">{value.name}</span>
+                            <span className="text-[10px] bg-muted/80 text-muted-foreground px-1.5 py-0.5 rounded font-normal shrink-0">
+                                {value.groupName}
+                            </span>
+                        </div>
+                        <button 
+                            type="button"
+                            className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 focus:opacity-100 p-0.5 rounded transition-opacity shrink-0 ml-1.5" 
+                            onClick={clear}
+                            title="Change ledger"
+                        >
+                            <X className="w-3.5 h-3.5" />
+                        </button>
+                    </div>
+                    {showCreateModal && outletId && (
+                        <CreateLedgerModal
+                            initialName={search}
+                            outletId={outletId}
+                            defaultGroupName={group}
+                            isQuickCustomerMode={group === 'Sundry Debtors'}
+                            onSave={handleCreateLedger}
+                            onClose={() => setShowCreateModal(false)}
+                        />
+                    )}
+                </>
+            );
+        }
+
         return (
             <>
                 <div className={cn("relative w-full h-10 pl-8 pr-3 border border-input rounded-md flex items-center justify-between bg-background", className)}>
@@ -149,6 +185,81 @@ export function LedgerPicker({
                         <X className="w-4 h-4" />
                     </button>
                 </div>
+                {showCreateModal && outletId && (
+                    <CreateLedgerModal
+                        initialName={search}
+                        outletId={outletId}
+                        defaultGroupName={group}
+                        isQuickCustomerMode={group === 'Sundry Debtors'}
+                        onSave={handleCreateLedger}
+                        onClose={() => setShowCreateModal(false)}
+                    />
+                )}
+            </>
+        );
+    }
+
+    if (variant === 'ghost') {
+        return (
+            <>
+                <div className={cn('relative w-full', className)} ref={containerRef} onBlur={handleBlur}>
+                    <input
+                        ref={searchRef}
+                        autoFocus={autoFocus}
+                        className="w-full h-8 px-2 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 focus:border-primary focus:bg-background focus:outline-none shadow-none rounded-none bg-transparent text-sm placeholder:text-muted-foreground/60 transition-colors"
+                        placeholder={placeholder}
+                        value={search}
+                        onChange={(e) => {
+                            setSearch(e.target.value);
+                            if (!open) setOpen(true);
+                        }}
+                        onFocus={() => setOpen(true)}
+                        onKeyDown={handleKeyDown}
+                    />
+
+                    {open && (
+                        <div className="absolute z-50 mt-1 min-w-[280px] w-full rounded-md border bg-popover shadow-lg left-0 top-full">
+                            <div className="max-h-60 overflow-y-auto py-1">
+                                {loading && (
+                                    <div className="px-3 py-2 text-sm text-muted-foreground">Loading...</div>
+                                )}
+                                {!loading && ledgers.length === 0 && (
+                                    <div className="px-3 py-4 text-sm text-center">
+                                        <p className="text-muted-foreground">
+                                            No ledger found{search ? ` for "${search}"` : ''}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground mt-1">
+                                            Press <kbd className="px-1 py-0.5 rounded bg-muted text-xs">Alt+C</kbd> to create new ledger
+                                        </p>
+                                    </div>
+                                )}
+                                {!loading && ledgers.map((ledger) => (
+                                    <button
+                                        key={ledger.id}
+                                        type="button"
+                                        onClick={() => select(ledger)}
+                                        className={cn(
+                                            'w-full flex flex-col items-start px-3 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground transition-colors text-left'
+                                        )}
+                                    >
+                                        <span className="font-semibold text-foreground">{ledger.name}</span>
+                                        <span className="text-[11px] text-muted-foreground">{ledger.groupName}</span>
+                                    </button>
+                                ))}
+                            </div>
+                            <div className="border-t px-3 py-1.5 bg-muted/20">
+                                <button
+                                    type="button"
+                                    className="text-xs text-primary hover:underline font-medium"
+                                    onClick={() => { setShowCreateModal(true); setOpen(false); }}
+                                >
+                                    + Create new ledger (Alt+C)
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
                 {showCreateModal && outletId && (
                     <CreateLedgerModal
                         initialName={search}

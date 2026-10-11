@@ -24,7 +24,8 @@ const ONES = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight'
 const TENS = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
 
 function toWords(n: number): string {
-    if (n === 0) return '';
+    if (!n || isNaN(n) || n <= 0) return '';
+    n = Math.floor(n);
     if (n < 20) return ONES[n];
     if (n < 100) return TENS[Math.floor(n / 10)] + (n % 10 ? ' ' + ONES[n % 10] : '');
     if (n < 1000) return ONES[Math.floor(n / 100)] + ' Hundred' + (n % 100 ? ' ' + toWords(n % 100) : '');
@@ -33,9 +34,11 @@ function toWords(n: number): string {
     return toWords(Math.floor(n / 10000000)) + ' Crore' + (n % 10000000 ? ' ' + toWords(n % 10000000) : '');
 }
 
-export function amountInWords(amount: number): string {
-    const intPart = Math.floor(amount);
-    const decPart = Math.round((amount - intPart) * 100);
+export function amountInWords(amount?: number | null): string {
+    const validAmount = Number(amount) || 0;
+    if (validAmount <= 0) return 'Rs. Zero Only';
+    const intPart = Math.floor(validAmount);
+    const decPart = Math.round((validAmount - intPart) * 100);
     let words = toWords(intPart) || 'Zero';
     if (decPart > 0) words += ' and ' + toWords(decPart) + ' Paise';
     return 'Rs. ' + words + ' Only';
@@ -145,7 +148,7 @@ export const ManavataA4Invoice = forwardRef<HTMLDivElement, InvoicePreviewProps>
                 </>
             );
             case 'hsn': return item.hsnCode || '3004';
-            case 'batch': return item.batchNo || item.batch;
+            case 'batch': return <span className="break-words whitespace-normal max-w-[80px] inline-block">{item.batchNo || item.batch}</span>;
             case 'exp': return fmtExpiry(item.expiryDate);
             case 'qty': 
                 if (qtyStrips > 0 || qtyLoose > 0) {
@@ -285,7 +288,7 @@ export const ManavataA4Invoice = forwardRef<HTMLDivElement, InvoicePreviewProps>
                                 {sortedColumns.map((col, idx) => (
                                     <th 
                                         key={col.id} 
-                                        className={`py-0.5 px-1 border-t-0 border-b-[2px] border-gray-900 ${idx === sortedColumns.length - 1 ? 'border-r-0' : 'border-r border-gray-300'} ${['mrp', 'ptr', 'pts', 'amount', 'taxable'].includes(col.id) ? 'text-right' : ['sn', 'qty', 'b_qty', 'f_qty', 'disc', 'gst', 'exp', 'hsn'].includes(col.id) ? 'text-center' : 'text-left'}`}
+                                        className={`py-0.5 px-1 border-t-0 border-b-[2px] border-gray-900 ${col.id === 'batch' ? 'break-words whitespace-normal max-w-[80px]' : ''} ${idx === sortedColumns.length - 1 ? 'border-r-0' : 'border-r border-gray-300'} ${['mrp', 'ptr', 'pts', 'amount', 'taxable'].includes(col.id) ? 'text-right' : ['sn', 'qty', 'b_qty', 'f_qty', 'disc', 'gst', 'exp', 'hsn'].includes(col.id) ? 'text-center' : 'text-left'}`}
                                         style={{ width: col.width }}
                                     >
                                         {col.label}
@@ -299,7 +302,7 @@ export const ManavataA4Invoice = forwardRef<HTMLDivElement, InvoicePreviewProps>
                                     {sortedColumns.map((col, cIdx) => (
                                         <td 
                                             key={col.id} 
-                                            className={`py-0.5 px-1 border-b-0 border-l-0 ${cIdx === sortedColumns.length - 1 ? 'border-r-0' : 'border-r border-gray-300'} ${idx === 0 ? '' : 'border-t border-gray-300'} ${['mrp', 'ptr', 'pts', 'amount', 'taxable'].includes(col.id) ? 'text-right' : ['sn', 'qty', 'b_qty', 'f_qty', 'disc', 'gst', 'exp', 'hsn'].includes(col.id) ? 'text-center' : 'text-left'}`}
+                                            className={`py-0.5 px-1 border-b-0 border-l-0 ${col.id === 'batch' ? 'break-words whitespace-normal max-w-[80px]' : ''} ${cIdx === sortedColumns.length - 1 ? 'border-r-0' : 'border-r border-gray-300'} ${idx === 0 ? '' : 'border-t border-gray-300'} ${['mrp', 'ptr', 'pts', 'amount', 'taxable'].includes(col.id) ? 'text-right' : ['sn', 'qty', 'b_qty', 'f_qty', 'disc', 'gst', 'exp', 'hsn'].includes(col.id) ? 'text-center' : 'text-left'}`}
                                         >
                                             {renderCell(item, col.id, idx)}
                                         </td>

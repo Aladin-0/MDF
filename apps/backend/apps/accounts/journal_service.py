@@ -132,13 +132,19 @@ def _guard_double_posting(outlet, source_type, source_id):
 
 def _create_lines_and_update_balances(je, lines):
     """Create JournalLines and update ledger current_balance for each line."""
-    for line_type, ledger, amount in lines:
+    for item in lines:
+        line_type = item[0]
+        ledger = item[1]
+        amount = item[2]
+        desc = item[3] if len(item) > 3 else ''
+
         if line_type == 'debit':
             JournalLine.objects.create(
                 journal_entry=je,
                 ledger=ledger,
                 debit_amount=amount,
-                credit_amount=Decimal('0')
+                credit_amount=Decimal('0'),
+                description=desc or ''
             )
             LedgerService.update_balance(ledger.id, amount, Decimal('0'))
         else:  # credit
@@ -146,7 +152,8 @@ def _create_lines_and_update_balances(je, lines):
                 journal_entry=je,
                 ledger=ledger,
                 debit_amount=Decimal('0'),
-                credit_amount=amount
+                credit_amount=amount,
+                description=desc or ''
             )
             LedgerService.update_balance(ledger.id, Decimal('0'), amount)
 
@@ -513,45 +520,101 @@ def post_sale_invoice(sale_invoice):
                     f"ledger found. Run sync_customer_ledgers first."
                 )
 
+        # Helper to resolve tender ledger
+        def _resolve_tender_ledger(p):
+            if p.ledger:
+                return p.ledger
+            meth = (p.method or '').lower()
+            if meth == 'cash':
+                return _get_ledger(outlet, 'Cash')
+            elif meth == 'upi':
+                return _get_ledger(outlet, 'UPI Collections')
+            elif meth == 'card':
+                return _get_ledger(outlet, 'Card/POS Settlement')
+            elif meth in ('bank_transfer', 'cheque'):
+                return _get_ledger_safe(outlet, 'Bank Account', fallback_name='Cash')
+            elif meth == 'credit':
+                return None
+            return _get_ledger(outlet, 'Cash')
+
+        invoice_payments = list(sale_invoice.payments.all())
+
+        def _get_method_label(meth_raw):
+            meth = (meth_raw or 'Payment').upper()
+            if meth == 'CASH':
+                return 'Cash'
+            elif meth == 'UPI':
+                return 'UPI'
+            elif meth == 'CARD':
+                return 'Card'
+            elif meth == 'CREDIT':
+                return 'Credit'
+            elif meth == 'CHEQUE':
+                return 'Cheque'
+            elif meth == 'BANK_TRANSFER':
+                return 'Bank Transfer'
+            return meth_raw.title() if meth_raw else 'Payment'
+
         if customer_ledger:
             # 1. Debit the customer for the full grand total
+            invoice_desc = f"Sale Invoice {sale_invoice.invoice_no}"
             if grand_total > 0:
-                lines.append(('debit', customer_ledger, grand_total))
+                lines.append(('debit', customer_ledger, grand_total, invoice_desc))
             elif grand_total < 0:
-                lines.append(('credit', customer_ledger, abs(grand_total)))
+                lines.append(('credit', customer_ledger, abs(grand_total), invoice_desc))
             
             # 2. Credit the customer for instant payments and debit the respective asset accounts
-            if cash_paid > 0:
-                cash_ledger = _get_ledger(outlet, 'Cash')
-                lines.append(('debit', cash_ledger, cash_paid))
-                lines.append(('credit', customer_ledger, cash_paid))
+            if invoice_payments:
+                for p in invoice_payments:
+                    tl = _resolve_tender_ledger(p)
+                    if tl and p.amount > 0:
+                        meth_label = _get_method_label(p.method)
+                        pay_desc = f"Payment ({meth_label}) for {sale_invoice.invoice_no}"
+                        lines.append(('debit', tl, p.amount, pay_desc))
+                        lines.append(('credit', customer_ledger, p.amount, pay_desc))
+            else:
+                if cash_paid > 0:
+                    cash_ledger = _get_ledger(outlet, 'Cash')
+                    c_desc = f"Payment (Cash) for {sale_invoice.invoice_no}"
+                    lines.append(('debit', cash_ledger, cash_paid, c_desc))
+                    lines.append(('credit', customer_ledger, cash_paid, c_desc))
 
-            if upi_paid > 0:
-                upi_ledger = _get_ledger(outlet, 'UPI Collections')
-                lines.append(('debit', upi_ledger, upi_paid))
-                lines.append(('credit', customer_ledger, upi_paid))
+                if upi_paid > 0:
+                    upi_ledger = _get_ledger(outlet, 'UPI Collections')
+                    u_desc = f"Payment (UPI) for {sale_invoice.invoice_no}"
+                    lines.append(('debit', upi_ledger, upi_paid, u_desc))
+                    lines.append(('credit', customer_ledger, upi_paid, u_desc))
 
-            if card_paid > 0:
-                card_ledger = _get_ledger(outlet, 'Card/POS Settlement')
-                lines.append(('debit', card_ledger, card_paid))
-                lines.append(('credit', customer_ledger, card_paid))
+                if card_paid > 0:
+                    card_ledger = _get_ledger(outlet, 'Card/POS Settlement')
+                    card_desc = f"Payment (Card) for {sale_invoice.invoice_no}"
+                    lines.append(('debit', card_ledger, card_paid, card_desc))
+                    lines.append(('credit', customer_ledger, card_paid, card_desc))
         else:
             # Fallback for walk-in (no customer attached)
-            if cash_paid > 0:
-                cash_ledger = _get_ledger(outlet, 'Cash')
-                lines.append(('debit', cash_ledger, cash_paid))
+            if invoice_payments:
+                for p in invoice_payments:
+                    tl = _resolve_tender_ledger(p)
+                    if tl and p.amount > 0:
+                        meth_label = _get_method_label(p.method)
+                        pay_desc = f"Sale ({meth_label}) {sale_invoice.invoice_no}"
+                        lines.append(('debit', tl, p.amount, pay_desc))
+            else:
+                if cash_paid > 0:
+                    cash_ledger = _get_ledger(outlet, 'Cash')
+                    lines.append(('debit', cash_ledger, cash_paid, f"Sale (Cash) {sale_invoice.invoice_no}"))
 
-            if upi_paid > 0:
-                upi_ledger = _get_ledger(outlet, 'UPI Collections')
-                lines.append(('debit', upi_ledger, upi_paid))
+                if upi_paid > 0:
+                    upi_ledger = _get_ledger(outlet, 'UPI Collections')
+                    lines.append(('debit', upi_ledger, upi_paid, f"Sale (UPI) {sale_invoice.invoice_no}"))
 
-            if card_paid > 0:
-                card_ledger = _get_ledger(outlet, 'Card/POS Settlement')
-                lines.append(('debit', card_ledger, card_paid))
+                if card_paid > 0:
+                    card_ledger = _get_ledger(outlet, 'Card/POS Settlement')
+                    lines.append(('debit', card_ledger, card_paid, f"Sale (Card) {sale_invoice.invoice_no}"))
 
         # ── CREDIT side: Sales Account ──
         sales_ledger = _get_ledger(outlet, 'Sales Account')
-        lines.append(('credit', sales_ledger, taxable_amount))
+        lines.append(('credit', sales_ledger, taxable_amount, f"Revenue from {sale_invoice.invoice_no}"))
 
         # ── CREDIT side: GST — rate-specific ledgers with fallback ──
         # _build_sale_gst_lines never raises
@@ -562,32 +625,32 @@ def post_sale_invoice(sale_invoice):
         if round_off > 0:
             # Invoice rounded UP: customer paid more than exact → shop gains → Cr Round Off
             round_off_ledger = _get_ledger(outlet, 'Round Off')
-            lines.append(('credit', round_off_ledger, round_off))
+            lines.append(('credit', round_off_ledger, round_off, f"Round Off {sale_invoice.invoice_no}"))
         elif round_off < 0:
             # Invoice rounded DOWN: customer paid less than exact → shop absorbs → Dr Round Off
             round_off_ledger = _get_ledger(outlet, 'Round Off')
-            lines.append(('debit', round_off_ledger, abs(round_off)))
+            lines.append(('debit', round_off_ledger, abs(round_off), f"Round Off {sale_invoice.invoice_no}"))
 
         # ── Auto-balance: absorb sub-₹0.05 floating-point GST rounding drift ──
         # Item-level gst_amount sums can drift from invoice header cgst/sgst totals
         # by a few paise due to per-item rounding. Absorb this into Round Off so
         # that correctly-computed invoices never raise a false imbalance error.
-        _pre_check_dr = sum(amt for t, _, amt in lines if t == 'debit')
-        _pre_check_cr = sum(amt for t, _, amt in lines if t == 'credit')
+        _pre_check_dr = sum(l[2] for l in lines if l[0] == 'debit')
+        _pre_check_cr = sum(l[2] for l in lines if l[0] == 'credit')
         _drift = _pre_check_cr - _pre_check_dr  # positive = Cr heavy; negative = Dr heavy
         if Decimal('0') < abs(_drift) <= Decimal('0.05'):
             try:
                 _ro_ledger = _get_ledger(outlet, 'Round Off')
                 if _drift > 0:
-                    lines.append(('debit', _ro_ledger, _drift))
+                    lines.append(('debit', _ro_ledger, _drift, 'Round Off Adjustment'))
                 else:
-                    lines.append(('credit', _ro_ledger, abs(_drift)))
+                    lines.append(('credit', _ro_ledger, abs(_drift), 'Round Off Adjustment'))
             except Ledger.DoesNotExist:
                 pass  # Let the balance check below surface the error if Round Off missing
 
         # ── Verify double-entry balance (strict — all amounts must balance) ──
-        total_debit = sum(amt for t, _, amt in lines if t == 'debit')
-        total_credit = sum(amt for t, _, amt in lines if t == 'credit')
+        total_debit = sum(l[2] for l in lines if l[0] == 'debit')
+        total_credit = sum(l[2] for l in lines if l[0] == 'credit')
         if abs(total_debit - total_credit) > Decimal('0.01'):
             raise ValueError(
                 f"Sale {sale_invoice.id}: double-entry imbalance — "

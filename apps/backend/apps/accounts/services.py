@@ -163,16 +163,48 @@ class VoucherService:
     def create_voucher(outlet_id, staff_id, data):
         """Validate and create a voucher, updating ledger balances."""
         voucher_type = data['voucher_type']
-        lines_data = data.get('lines', [])
+        raw_lines = data.get('lines', [])
 
-        if not lines_data:
+        if not raw_lines:
             raise ValidationError('Voucher must have at least one line.')
 
-        total_debit = sum(Decimal(str(l.get('debit', 0))) for l in lines_data)
-        total_credit = sum(Decimal(str(l.get('credit', 0))) for l in lines_data)
+        lines_data = []
+        for l in raw_lines:
+            ledger_id = l.get('ledger_id') or l.get('ledgerId')
+            if not ledger_id:
+                raise ValidationError('Each line must have a valid ledger.')
+
+            side = str(l.get('side', '')).strip().lower()
+            if side in ('debit', 'dr'):
+                debit_val = Decimal(str(l.get('amount') or 0))
+                credit_val = Decimal('0')
+            elif side in ('credit', 'cr'):
+                debit_val = Decimal('0')
+                credit_val = Decimal(str(l.get('amount') or 0))
+            else:
+                debit_val = Decimal(str(l.get('debit', 0)))
+                credit_val = Decimal(str(l.get('credit', 0)))
+
+            if debit_val < 0 or credit_val < 0:
+                raise ValidationError('Line amounts cannot be negative.')
+
+            lines_data.append({
+                'ledger_id': ledger_id,
+                'debit': debit_val,
+                'credit': credit_val,
+                'description': l.get('description', ''),
+            })
+
+        total_debit = sum(Decimal(str(l['debit'])) for l in lines_data)
+        total_credit = sum(Decimal(str(l['credit'])) for l in lines_data)
+
+        if total_debit == 0 and total_credit == 0:
+            raise ValidationError('Voucher total amount cannot be zero.')
 
         if total_debit != total_credit:
-            raise ValidationError(f"Total debit (₹{total_debit}) must equal total credit (₹{total_credit}) for all vouchers.")
+            raise ValidationError(
+                f"Accounting imbalance error: Total Debits (₹{total_debit}) must equal Total Credits (₹{total_credit}). Imbalance of ₹{abs(total_debit - total_credit)} detected."
+            )
 
         # ── Direction guard for Receipt and Payment vouchers ──────────────────
         # Receipt: money comes IN → cash/bank ledger is DEBITED, party (income/customer) is CREDITED.
@@ -223,7 +255,7 @@ class VoucherService:
             voucher_no=voucher_no,
             date=data['date'],
             narration=data.get('narration', ''),
-            total_amount=data['total_amount'],
+            total_amount=Decimal(str(data.get('total_amount') or 0)) if Decimal(str(data.get('total_amount') or 0)) > 0 else total_debit,
             payment_mode=data.get('payment_mode', 'cash'),
             created_by_id=staff_id,
         )

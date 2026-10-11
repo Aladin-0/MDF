@@ -238,5 +238,26 @@ describe('payloadBuilders', () => {
                 { ledger_id: 'cash1', debit: 0, credit: 500, description: '' }
             ]);
         });
+
+        it('should build multi-line voucher with dynamic side and amount rows', () => {
+            const dynamicLines = [
+                { id: '1', ledger: { id: 'l_rent' }, side: 'debit', amount: 500, description: 'Office Rent' },
+                { id: '2', ledger: { id: 'l_cash' }, side: 'credit', amount: 300, description: 'Cash tender' },
+                { id: '3', ledger: { id: 'l_bank' }, side: 'credit', amount: 200, description: 'Bank transfer' },
+            ];
+
+            const result = buildVoucherPayload(
+                'journal', '2026-10-11', 'Split rent payment', 'outlet-1',
+                null, null, 0, [], {}, null, null, 0, dynamicLines
+            );
+
+            expect(result.voucher_type).toBe('journal');
+            expect(result.total_amount).toBe(500);
+            expect(result.lines).toEqual([
+                { ledger_id: 'l_rent', side: 'debit', amount: 500, debit: 500, credit: 0, description: 'Office Rent' },
+                { ledger_id: 'l_cash', side: 'credit', amount: 300, debit: 0, credit: 300, description: 'Cash tender' },
+                { ledger_id: 'l_bank', side: 'credit', amount: 200, debit: 0, credit: 200, description: 'Bank transfer' },
+            ]);
+        });
     });
 });

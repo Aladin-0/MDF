@@ -21,12 +21,22 @@ import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import { Scan, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { SortDropdown, SortOption } from '@/components/ui/SortDropdown';
+import { PaymentBreakdownCell } from '@/components/billing/PaymentBreakdownCell';
 
 /* ─── helpers ─────────────────────────────────────────────── */
 
 const formatINR = (n: number) =>
     '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+const PURCHASES_SORT_OPTIONS: SortOption[] = [
+    { label: 'Latest Date', value: '-invoice_date' },
+    { label: 'Oldest Date', value: 'invoice_date' },
+    { label: 'Highest Amount', value: '-grand_total' },
+    { label: 'Lowest Amount', value: 'grand_total' },
+    { label: 'Distributor (A-Z)', value: 'distributor__name' },
+];
 
 type StatusFilter = 'all' | 'draft' | 'paid' | 'partial' | 'unpaid' | 'overdue';
 type PeriodFilter = 'this_week' | 'this_month' | 'last_month' | 'all';
@@ -76,6 +86,8 @@ export function PurchasesList({
     const outlet = useAuthStore((s) => s.outlet);
     const { toast } = useToast();
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const currentSort = searchParams.get('sort') || '-invoice_date';
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -115,8 +127,9 @@ export function PurchasesList({
             search: search.trim() || undefined,
             startDate: bounds?.start,
             endDate: bounds?.end,
+            ordering: currentSort,
         };
-    }, [page, statusFilter, search, period]);
+    }, [page, statusFilter, search, period, currentSort]);
 
     const { data, isLoading } = usePurchasesList(queryParams);
 
@@ -166,6 +179,13 @@ export function PurchasesList({
                             </button>
                         )}
                     </div>
+
+                    <SortDropdown
+                        options={PURCHASES_SORT_OPTIONS}
+                        defaultValue="-invoice_date"
+                        onChange={resetPage}
+                        className="w-full sm:w-auto"
+                    />
                     
                     <input 
                         type="file" 
@@ -241,6 +261,7 @@ export function PurchasesList({
                                 <th className="text-right px-4 py-3 font-medium text-muted-foreground whitespace-nowrap">Goods Value</th>
                                 <th className="text-right px-4 py-3 font-medium text-muted-foreground whitespace-nowrap">Discount</th>
                                 <th className="text-right px-4 py-3 font-medium text-muted-foreground whitespace-nowrap">Net Amount</th>
+                                <th className="text-left px-4 py-3 font-medium text-muted-foreground whitespace-nowrap">Payment</th>
                                 <th className="text-center px-4 py-3 font-medium text-muted-foreground whitespace-nowrap">Status</th>
                                 <th className="text-right px-4 py-3 font-medium text-muted-foreground whitespace-nowrap">Actions</th>
                             </tr>
@@ -251,7 +272,7 @@ export function PurchasesList({
                                 Array(5).fill(0).map((_, i) => (
                                     <tr key={i}>
                                         <td className="px-4 py-3"><Skeleton className="h-4 w-4 rounded" /></td>
-                                        {[120, 80, 160, 40, 80, 80, 80, 60, 60].map((w, j) => (
+                                        {[120, 80, 160, 40, 80, 80, 80, 80, 60, 60].map((w, j) => (
                                             <td key={j} className="px-4 py-3">
                                                 <Skeleton className={`h-4 w-[${w}px]`} />
                                             </td>
@@ -260,7 +281,7 @@ export function PurchasesList({
                                 ))
                             ) : allInvoices.length === 0 ? (
                                 <tr>
-                                    <td colSpan={10}>
+                                    <td colSpan={11}>
                                         <div className="flex flex-col items-center justify-center gap-3 py-16 text-muted-foreground">
                                             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
                                                 <PackageOpen className="h-6 w-6" />
@@ -318,6 +339,18 @@ export function PurchasesList({
                                             </td>
                                             <td className="px-4 py-3 text-right tabular-nums font-semibold text-foreground whitespace-nowrap">
                                                 {formatINR(inv.status === 'SAVED' && inv.ocrData ? (inv.ocrData?.totals?.grandTotal ?? 0) : (inv.grandTotal ?? 0))}
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <PaymentBreakdownCell
+                                                    paymentMode={inv.paymentMode || inv.purchaseType || 'credit'}
+                                                    cashPaid={inv.cashPaid}
+                                                    upiPaid={inv.upiPaid}
+                                                    cardPaid={inv.cardPaid}
+                                                    bankPaid={inv.bankPaid}
+                                                    chequePaid={inv.chequePaid}
+                                                    creditGiven={inv.creditGiven ?? inv.outstanding}
+                                                    payments={inv.payments}
+                                                />
                                             </td>
                                             <td className="px-4 py-3 text-center">
                                                 <span className={cn(

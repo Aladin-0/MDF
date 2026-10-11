@@ -34,6 +34,8 @@ export interface SalesFilters {
     doctorId?: string;
     hospitalName?: string;
     saleType?: 'ALL' | 'RETAIL' | 'WHOLESALE';
+    paymentMode?: string;
+    ordering?: string;
 }
 
 export function useSalesList(filters?: SalesFilters) {
@@ -49,6 +51,8 @@ export function useSalesList(filters?: SalesFilters) {
             doctorId: filters?.doctorId,
             hospitalName: filters?.hospitalName,
             saleType: filters?.saleType,
+            paymentMode: filters?.paymentMode,
+            ordering: filters?.ordering,
         }),
         enabled: !!outletId,
         staleTime: 30_000,

@@ -65,7 +65,14 @@ class LedgerListView(APIView):
             qs = qs.filter(group__name='Bank Accounts')
         group_name = request.query_params.get('group', '').strip()
         if group_name:
-            qs = qs.filter(group__name__iexact=group_name)
+            if ',' in group_name:
+                groups = [g.strip() for g in group_name.split(',') if g.strip()]
+                qs = qs.filter(group__name__in=groups)
+            else:
+                qs = qs.filter(group__name__iexact=group_name)
+        filter_group = request.query_params.get('filterGroup', '').lower()
+        if filter_group == 'cashbank':
+            qs = qs.filter(group__name__in=['Cash in Hand', 'Bank Accounts'])
         search = request.query_params.get('search', '').strip()
         if search:
             from django.db.models import Q
@@ -294,7 +301,7 @@ class LedgerStatementView(APIView):
                 'date': str(je.date),
                 'voucherNo': '',
                 'voucherType': SOURCE_TYPE_TO_VOUCHER.get(je.source_type, 'journal'),
-                'description': je.narration,
+                'description': line.description or je.narration,
                 'debit': float(line.debit_amount),
                 'credit': float(line.credit_amount),
                 'sourceType': je.source_type,
@@ -345,6 +352,11 @@ class LedgerStatementView(APIView):
                 'sourceType': row['sourceType'],
                 'sourceId': row['sourceId'],
             })
+
+        # Balance-protected ordering: reverse final array for display when Latest First is requested
+        ordering = request.query_params.get('ordering', '').strip().lower()
+        if ordering in ['desc', '-date', '-created_at', 'latest']:
+            transactions.reverse()
 
         return Response({
             'ledger': LedgerSerializer(ledger).data,

@@ -128,7 +128,7 @@ def seed_master_data():
         p = MasterProduct.objects.create(
             name=f"{PREFIX}{name}", composition="Generic", manufacturer="Generic Pharma", category="Tablets",
             drug_type="Allopathic", schedule_type="H1", hsn_code=hsn, gst_rate=rate, pack_size=10 if punit=="Strip" else 1, pack_unit=punit,
-            pack_type=ptype, mrp=mrp, min_qty=5, reorder_qty=10, is_fridge=False, is_discontinued=False
+            pack_type=ptype, mrp=mrp, is_fridge=False, is_discontinued=False
         )
         products.append((p, pur_rate))
 

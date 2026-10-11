@@ -107,6 +107,8 @@ export function buildSalePayload(draft: any, scheduleHData: any, totals: any, ac
                 freeQtyLoose: item.freeQtyLoose || 0,
                 saleMode: item.saleMode,
                 mrp: item.mrp || 0,
+                applied_ptr: item.ptr,
+                applied_pts: item.pts,
                 packSize: item.packSize || 1,
                 rate: item.rate,
                 discountPct: item.discountPct,
@@ -134,6 +136,14 @@ export function buildSalePayload(draft: any, scheduleHData: any, totals: any, ac
         upiPaid: getPaid('upi'),
         cardPaid: getPaid('card'),
         creditGiven: getPaid('credit'),
+        payments: draft.payment.method === 'split' ? [
+            ...(getPaid('cash') > 0 ? [{ method: 'cash', amount: getPaid('cash') }] : []),
+            ...(getPaid('upi') > 0 ? [{ method: 'upi', amount: getPaid('upi') }] : []),
+            ...(getPaid('card') > 0 ? [{ method: 'card', amount: getPaid('card') }] : []),
+            ...(getPaid('credit') > 0 ? [{ method: 'credit', amount: getPaid('credit') }] : []),
+        ] : [
+            { method: draft.payment.method, amount: totals.grandTotal }
+        ],
         scheduleHData,
         revisionAction: draft.revisionAction,
         revisionReasonCode: draft.revisionReasonCode,
@@ -284,7 +294,45 @@ export function buildVoucherPayload(
 ): any {
     const payload: any = { outletId, voucher_type: voucherType, date, narration };
 
-    if (voucherType === 'receipt' || voucherType === 'payment') {
+    const hasDynamicLines = Array.isArray(lines) && lines.length > 0 && lines.some(l => l.ledger || l.ledger_id);
+
+    if (hasDynamicLines) {
+        const validLines = lines.filter(l => l.ledger || l.ledger_id);
+        const td = validLines.reduce((s, l) => {
+            const side = l.side || (parseFloat(String(l.debit)) > 0 ? 'debit' : 'credit');
+            const amt = parseFloat(String(l.amount ?? (side === 'debit' ? l.debit : 0))) || (parseFloat(String(l.debit)) || 0);
+            return side === 'debit' ? s + amt : s;
+        }, 0);
+
+        payload.total_amount = td || totalAmount;
+        payload.payment_mode = cashBankLedger?.groupName === 'Bank Accounts' ? 'bank' : 'cash';
+        payload.lines = validLines.map(l => {
+            const hasSide = l.side !== undefined;
+            const side = l.side || (parseFloat(String(l.debit)) > 0 ? 'debit' : 'credit');
+            const amt = parseFloat(String(l.amount ?? (side === 'debit' ? l.debit : l.credit))) || 0;
+            const res: any = {
+                ledger_id: l.ledger?.id || l.ledger_id,
+                debit: side === 'debit' ? amt : (parseFloat(String(l.debit)) || 0),
+                credit: side === 'credit' ? amt : (parseFloat(String(l.credit)) || 0),
+                description: l.description || '',
+            };
+            if (hasSide) {
+                res.side = side;
+                res.amount = amt;
+            }
+            return res;
+        });
+
+        if (pendingBills && pendingBills.length > 0 && billAmounts) {
+            payload.bill_adjustments = pendingBills
+                .filter(b => (parseFloat(billAmounts[b.id]) || 0) > 0)
+                .map(b => ({
+                    invoice_id: b.id,
+                    invoice_type: b.invoiceType,
+                    adjusted_amount: parseFloat(billAmounts[b.id]) || 0,
+                }));
+        }
+    } else if (voucherType === 'receipt' || voucherType === 'payment') {
         payload.total_amount = totalAmount;
         payload.payment_mode = cashBankLedger?.groupName === 'Bank Accounts' ? 'bank' : 'cash';
 

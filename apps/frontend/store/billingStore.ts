@@ -463,39 +463,45 @@ export const useBillingStore = create<BillingState>((set, get) => ({
         const extraDiscPct = draft.extraDiscountPct || 0;
         const discountFactor = extraDiscPct > 0 ? 1 - extraDiscPct / 100 : 1;
 
-        let subtotal = 0;
-        let totalRateAmount = 0;
-        let taxableAmount = 0;
-        let cgstAmount = 0;
-        let sgstAmount = 0;
+        let totalTaxableValue = 0;
+        let totalCgst = 0;
+        let totalSgst = 0;
+        let totalMrp = 0;
+        let netPayable = 0;
         let totalQtyCount = 0;
         let hasScheduleH = false;
         let requiresDoctorDetails = false;
 
         draft.cart.forEach(item => {
-            const rate = item.rate || 0;
-            const mrp = item.mrp || 0;
+            // 1. Determine the effective rate
+            const effectiveRate = item.rate || (draft.saleType === 'WHOLESALE' ? (item.pts || item.ptr || item.mrp) : item.mrp) || 0;
             const totalQty = item.totalQty || 0;
-            const rawTotal = rate * totalQty;
-            const gstRate = item.gstRate || 0;
-
-            subtotal += mrp * totalQty;
-            totalRateAmount += rawTotal;
             totalQtyCount += totalQty;
 
-            const discountedTotal = rawTotal * discountFactor;
+            let rowNetPayable = 0;
+            let rowTaxable = 0;
+            let rowTotalGst = 0;
+            const gstDecimal = (item.gstPct ?? item.gstRate ?? 0) / 100;
 
-            const itemTaxable = gstRate > 0
-                ? Number((discountedTotal / (1 + gstRate / 100)).toFixed(2))
-                : Number(discountedTotal.toFixed(2));
-            const itemGst = Number((discountedTotal - itemTaxable).toFixed(2));
+            if (draft.saleType === 'WHOLESALE') {
+                // Exclusive Tax
+                rowTaxable = totalQty * effectiveRate * discountFactor;
+                rowTotalGst = rowTaxable * gstDecimal;
+                rowNetPayable = rowTaxable + rowTotalGst;
+            } else {
+                // Inclusive Tax
+                rowNetPayable = totalQty * effectiveRate * discountFactor;
+                rowTaxable = rowNetPayable / (1 + gstDecimal);
+                rowTotalGst = rowNetPayable - rowTaxable;
+            }
 
-            taxableAmount += itemTaxable;
+            netPayable += rowNetPayable;
+            totalTaxableValue += rowTaxable;
+            totalCgst += (rowTotalGst / 2);
+            totalSgst += (rowTotalGst / 2);
 
-            const itemCgst = Math.floor(itemGst * 100 / 2) / 100;
-            const itemSgst = Number((itemGst - itemCgst).toFixed(2));
-            cgstAmount += itemCgst;
-            sgstAmount += itemSgst;
+            // 4. Track MRP for discount display
+            totalMrp += (totalQty * (item.mrp || 0));
 
             if (['G', 'H', 'H1', 'X', 'C', 'Narcotic'].includes(item.scheduleType)) {
                 hasScheduleH = true;
@@ -503,25 +509,35 @@ export const useBillingStore = create<BillingState>((set, get) => ({
             }
         });
 
-        const discountAmount = subtotal - totalRateAmount;
-        const extraDiscountAmount = totalRateAmount * extraDiscPct / 100;
+        // Discount is the difference between what it would cost at MRP vs what is actually being paid
+        const discountAmount = totalMrp - netPayable;
+        
+        let extraDiscountAmount = 0;
+        if (extraDiscPct > 0) {
+            let preExtraNet = 0;
+            draft.cart.forEach(item => {
+                const effRate = item.rate || (draft.saleType === 'WHOLESALE' ? (item.pts || item.ptr || item.mrp) : item.mrp) || 0;
+                preExtraNet += (item.totalQty || 0) * effRate;
+            });
+            extraDiscountAmount = preExtraNet - netPayable;
+        }
 
-        const exactTotal = taxableAmount + cgstAmount + sgstAmount;
-        const grandTotal = Math.round(exactTotal);
+        const exactTotal = totalTaxableValue + totalCgst + totalSgst;
+        const grandTotal = draft.saleType === 'WHOLESALE' ? exactTotal : Math.round(exactTotal);
         const roundOff = grandTotal - exactTotal;
 
         const amountPaid = draft.payment.amount || 0;
         const amountDue = grandTotal - amountPaid;
 
         return {
-            subtotal,
+            subtotal: totalTaxableValue,
             discountAmount,
             extraDiscountAmount,
-            taxableAmount,
-            cgstAmount,
-            sgstAmount,
-            cgst: cgstAmount,
-            sgst: sgstAmount,
+            taxableAmount: totalTaxableValue,
+            cgstAmount: totalCgst,
+            sgstAmount: totalSgst,
+            cgst: totalCgst,
+            sgst: totalSgst,
             igst: 0,
             roundOff,
             grandTotal,

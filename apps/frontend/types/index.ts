@@ -558,9 +558,16 @@ export interface SaleInvoice {
     cashPaid: number;
     upiPaid: number;
     cardPaid: number;
+    bankPaid?: number;
+    chequePaid?: number;
     creditGiven: number;
     amountPaid: number;
     amountDue: number;
+    payments?: Array<{
+        method: string;
+        amount: number;
+        referenceNo?: string;
+    }>;
     isReturn: boolean;
     saleType?: 'RETAIL' | 'WHOLESALE';
     billingBasis?: 'MRP' | 'PTR' | 'PTS';
@@ -850,6 +857,19 @@ export interface PurchaseInvoice {
     // Payment
     amountPaid: number;
     outstanding: number;            // grandTotal − amountPaid
+    paymentMode?: PaymentMode;
+    purchaseType?: 'cash' | 'credit';
+    cashPaid?: number;
+    upiPaid?: number;
+    cardPaid?: number;
+    bankPaid?: number;
+    chequePaid?: number;
+    creditGiven?: number;
+    payments?: Array<{
+        method: string;
+        amount: number;
+        referenceNo?: string;
+    }>;
     
     status: 'DRAFT' | 'POSTED';
 

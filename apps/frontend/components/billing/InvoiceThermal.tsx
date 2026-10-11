@@ -4,7 +4,7 @@ import React, { forwardRef } from 'react';
 import { format } from 'date-fns';
 import { SaleInvoice, PrintSettingsConfig } from '@/types';
 import { useAuthStore } from '@/store/authStore';
-import { formatQty } from '@/lib/utils';
+import { formatQty, cn } from '@/lib/utils';
 
 interface InvoiceThermalProps {
     invoice: SaleInvoice;
@@ -43,7 +43,7 @@ export const InvoiceThermal = forwardRef<HTMLDivElement, InvoiceThermalProps>(({
         switch (columnId) {
             case 'sn': return idx + 1;
             case 'productName': return <div className="font-bold whitespace-normal">{item.name || item.productId} ({(item.batchNo || 'B').slice(0, 8)})</div>;
-            case 'batch': return item.batchNo;
+            case 'batch': return <div className="break-words whitespace-normal max-w-[80px]">{item.batchNo}</div>;
             case 'mrp': return <div className="text-right">{mrp.toFixed(2)}</div>;
             case 'ptr': return <div className="text-right">{ptr.toFixed(2)}</div>;
             case 'pts': return <div className="text-right">{(pts || ptr).toFixed(2)}</div>;
@@ -86,7 +86,7 @@ export const InvoiceThermal = forwardRef<HTMLDivElement, InvoiceThermalProps>(({
                 <thead>
                     <tr className="border-b border-black">
                         {sortedColumns.map((col) => (
-                            <th key={col.id} className="py-1" style={{ width: col.width }}>
+                            <th key={col.id} className={cn("py-1", col.id === 'batch' && "break-words whitespace-normal max-w-[80px]")} style={{ width: col.width }}>
                                 {col.label}
                             </th>
                         ))}
@@ -96,7 +96,7 @@ export const InvoiceThermal = forwardRef<HTMLDivElement, InvoiceThermalProps>(({
                     {(invoice.items ?? []).map((item, index) => (
                         <tr key={index} className="border-b border-gray-200 border-dashed">
                             {sortedColumns.map((col) => (
-                                <td key={col.id} className="py-1 align-top">
+                                <td key={col.id} className={cn("py-1 align-top", col.id === 'batch' && "break-words whitespace-normal max-w-[80px]")}>
                                     {renderCell(item, col.id, index)}
                                 </td>
                             ))}

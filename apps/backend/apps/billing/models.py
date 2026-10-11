@@ -1,6 +1,7 @@
 from django.db import models
 from django.core.exceptions import ValidationError
 import uuid
+from decimal import Decimal
 
 
 class OutletFilteredManager(models.Manager):
@@ -152,8 +153,9 @@ class SaleInvoice(models.Model):
             self.is_interstate = (self.customer.state_code != self.outlet.state_code)
 
         # Validate payment split sums to amount_paid
-        split_total = self.cash_paid + self.upi_paid + self.card_paid
-        if abs(float(split_total) - float(self.amount_paid)) > 0.01:
+        split_total = (self.cash_paid or Decimal('0')) + (self.upi_paid or Decimal('0')) + (self.card_paid or Decimal('0'))
+        amount_paid_val = self.amount_paid if self.amount_paid is not None else split_total
+        if abs(float(split_total) - float(amount_paid_val)) > 0.01:
             raise ValidationError({
                 'amount_paid': f'Amount paid ({self.amount_paid}) must equal sum of payment splits ({split_total})'
             })
@@ -198,6 +200,8 @@ class SaleItem(models.Model):
     batch_no = models.CharField(max_length=100)
     expiry_date = models.DateField()
     mrp = models.DecimalField(max_digits=10, decimal_places=2)
+    applied_ptr = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, help_text='Applied PTR during wholesale')
+    applied_pts = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, help_text='Applied PTS during wholesale')
     sale_rate = models.DecimalField(max_digits=10, decimal_places=2, help_text='Selling price per pack')
     rate = models.DecimalField(max_digits=10, decimal_places=2, help_text='Final charged rate per pack')
 
@@ -238,6 +242,51 @@ class SaleItem(models.Model):
 
     def __str__(self):
         return f"{self.product_name} (Batch: {self.batch_no})"
+
+
+class InvoicePayment(models.Model):
+    """
+    Child entity of SaleInvoice representing an individual payment tender.
+    Supports arbitrary multi-split payments (Cash, UPI, Card, Credit, Cheque, Bank Transfer, etc.).
+    """
+    PAYMENT_METHOD_CHOICES = [
+        ('cash', 'Cash'),
+        ('upi', 'UPI'),
+        ('card', 'Card'),
+        ('credit', 'Credit'),
+        ('cheque', 'Cheque'),
+        ('bank_transfer', 'Bank Transfer'),
+        ('credit_note', 'Credit Note'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    outlet = models.ForeignKey('core.Outlet', on_delete=models.CASCADE, related_name='invoice_payments')
+    invoice = models.ForeignKey(SaleInvoice, on_delete=models.CASCADE, related_name='payments')
+    ledger = models.ForeignKey(
+        'accounts.Ledger',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='invoice_payments',
+        help_text='Optional FK to specific Ledger for bank/asset routing'
+    )
+    method = models.CharField(max_length=30, choices=PAYMENT_METHOD_CHOICES)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    reference_no = models.CharField(max_length=100, null=True, blank=True, help_text='UTR / Auth code / Reference')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    objects = OutletFilteredManager()
+
+    class Meta:
+        db_table = 'billing_invoicepayment'
+        ordering = ['created_at']
+        indexes = [
+            models.Index(fields=['outlet', 'created_at']),
+            models.Index(fields=['invoice', 'method']),
+        ]
+
+    def __str__(self):
+        return f"{self.invoice.invoice_no} - {self.method}: ₹{self.amount}"
 
 
 class ScheduleHRegister(models.Model):

@@ -49,11 +49,23 @@ export function useCheckout() {
     
     const isCreditInvalid = paymentMethod === 'credit' && !hasCustomer;
 
+    const splitBreakdown = draft?.payment?.splitBreakdown || { cash: 0, upi: 0, card: 0, credit: 0 };
+    const splitTotal = Number((
+        (Number(splitBreakdown.cash) || 0) +
+        (Number(splitBreakdown.upi) || 0) +
+        (Number(splitBreakdown.card) || 0) +
+        (Number(splitBreakdown.credit) || 0)
+    ).toFixed(2));
+    const isSplitInvalid = paymentMethod === 'split' && Math.abs(splitTotal - (totals?.grandTotal || 0)) > 0.01;
+    const isSplitCreditInvalid = paymentMethod === 'split' && (Number(splitBreakdown.credit) || 0) > 0 && !hasCustomer;
+
     const canCheckout = Boolean(
         draft &&
         draft.cart.length > 0 && 
         isScheduleHValid && 
         !isTenderInvalid && 
+        !isSplitInvalid &&
+        !isSplitCreditInvalid &&
         !isLoading && 
         !isCreditInvalid &&
         !isSubmitting
@@ -116,6 +128,9 @@ export function useCheckout() {
         balance,
         isScheduleHValid,
         isTenderInvalid,
-        isCreditInvalid
+        isCreditInvalid,
+        splitTotal,
+        isSplitInvalid,
+        isSplitCreditInvalid,
     };
 }

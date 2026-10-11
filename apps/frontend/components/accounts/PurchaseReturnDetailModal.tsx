@@ -13,7 +13,6 @@ import {
 import { DebitNote } from '@/types';
 import { useAuthStore } from '@/store/authStore';
 import { useSettingsStore } from '@/store/settingsStore';
-import { PurchaseReturnEditModal } from './PurchaseReturnEditModal';
 
 interface PurchaseReturnDetailModalProps {
     open: boolean;
@@ -31,14 +30,11 @@ const STATUS_LABELS: Record<string, string> = {
     refunded: 'Refunded',
 };
 
-export function PurchaseReturnDetailModal({ open, onOpenChange, note, onNoteUpdated }: PurchaseReturnDetailModalProps) {
-    const [editOpen, setEditOpen] = useState(false);
-    const [localNote, setLocalNote] = useState<DebitNote | null>(null);
+export function PurchaseReturnDetailModal({ open, onOpenChange, note }: PurchaseReturnDetailModalProps) {
     const { outlet } = useAuthStore();
     const settings = useSettingsStore();
 
-    // Use localNote (after edits) or the original prop
-    const displayNote = localNote || note;
+    const displayNote = note;
 
     if (!displayNote) return null;
 
@@ -47,7 +43,6 @@ export function PurchaseReturnDetailModal({ open, onOpenChange, note, onNoteUpda
     };
 
     return (
-        <>
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="invoice-print-container max-w-4xl max-h-[90vh] overflow-y-auto p-0 print:max-h-none print:overflow-visible print:p-0 print:border-none border-t-4 border-t-blue-500 gap-0">
                 
@@ -94,11 +89,13 @@ export function PurchaseReturnDetailModal({ open, onOpenChange, note, onNoteUpda
                                 <Button
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => setEditOpen(true)}
+                                    asChild
                                     className="border-amber-400 text-amber-700 hover:bg-amber-50"
                                 >
-                                    <Pencil className="w-4 h-4 mr-2" />
-                                    Edit
+                                    <Link href={`/dashboard/accounts/purchase-returns/${displayNote.id}/edit`}>
+                                        <Pencil className="w-4 h-4 mr-2" />
+                                        Edit
+                                    </Link>
                                 </Button>
                                 <Button variant="outline" size="sm" onClick={handlePrint}>
                                     <Printer className="w-4 h-4 mr-2" />
@@ -296,15 +293,5 @@ export function PurchaseReturnDetailModal({ open, onOpenChange, note, onNoteUpda
                 </div>
             </DialogContent>
         </Dialog>
-        <PurchaseReturnEditModal
-            open={editOpen}
-            onOpenChange={setEditOpen}
-            note={displayNote}
-            onSaved={(updated) => {
-                setLocalNote(updated);
-                onNoteUpdated?.(updated);
-            }}
-        />
-        </>
     );
 }

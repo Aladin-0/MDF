@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:15-alpine
+    image: postgres:17-alpine
     container_name: mediflow_postgres
     restart: unless-stopped
     environment:
@@ -47,16 +47,18 @@ services:
     command:
     - sh
     - -c
-    - python manage.py migrate --noinput && python manage.py collectstatic --noinput && gunicorn mediflow.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120 --access-logfile - --error-logfile -
+    - python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000
+    ports:
+    - "8000:8000"
     volumes:
+    - ./apps/backend:/app
     - static_files:/app/staticfiles
     - media_files:/app/media
-    - ./apps/backend/mediflow/settings/base.py:/app/mediflow/settings/base.py:ro
     env_file:
     - ./apps/backend/.env
     environment:
       TZ: Asia/Kolkata
-      DJANGO_SETTINGS_MODULE: mediflow.settings.prod
+      DJANGO_SETTINGS_MODULE: mediflow.settings.dev
     depends_on:
       postgres:
         condition: service_healthy
@@ -71,14 +73,20 @@ services:
     container_name: mediflow_frontend
     restart: unless-stopped
     command:
-    - sh
-    - -c
-    - npm run build && npm start
+    - npm
+    - run
+    - dev
+    ports:
+    - "3000:3000"
     env_file:
     - ./apps/frontend/.env.local
     environment:
       TZ: Asia/Kolkata
-      NODE_ENV: production
+      NODE_ENV: development
+    volumes:
+    - ./apps/frontend:/app/apps/frontend
+    - ./packages:/app/packages
+    - ./node_modules:/app/node_modules
     depends_on:
     - backend
     networks:
@@ -97,12 +105,13 @@ services:
     - --loglevel=info
     - --concurrency=2
     volumes:
+    - ./apps/backend:/app
     - media_files:/app/media
     env_file:
     - ./apps/backend/.env
     environment:
       TZ: Asia/Kolkata
-      DJANGO_SETTINGS_MODULE: mediflow.settings.prod
+      DJANGO_SETTINGS_MODULE: mediflow.settings.dev
     depends_on:
       postgres:
         condition: service_healthy
@@ -128,8 +137,12 @@ services:
     networks:
     - internal
 volumes:
-  postgres_data: null
-  redis_data: null
+  postgres_data:
+    external: true
+    name: mediflow_main_postgres_data
+  redis_data:
+    external: true
+    name: mediflow_main_redis_data
   static_files: null
   media_files: null
 networks:

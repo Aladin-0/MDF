@@ -13,7 +13,6 @@ from django.test import override_settings
 
 import unittest
 
-@unittest.skip("Sales Return modification via PUT is not implemented")
 class SaleReturnModTests(TestCase):
 
     @override_settings(AUDIT_V2_WRITE_ENABLED=True)
@@ -58,3 +57,67 @@ class SaleReturnModTests(TestCase):
         url = reverse('sales-return-detail', kwargs={'pk': self.sale_return.id}) + f'?outletId={self.outlet.id}'
         resp = self.client.put(url, {'outletId': str(self.outlet.id)}, format='json')
         self.assertEqual(resp.status_code, 403)
+
+    @override_settings(AUDIT_V2_WRITE_ENABLED=True)
+    def test_sale_return_ledger_driven_inventory_rebuild(self):
+        from apps.inventory.models import StockLedger
+        from apps.inventory.services import post_stock_ledger_entry
+
+        # Seed initial StockLedger entry for this return (5 units = 0.5 strips)
+        post_stock_ledger_entry(
+            outlet=self.outlet,
+            product=self.product,
+            batch=self.batch,
+            txn_type='SALE_RETURN',
+            txn_date=self.sale_return.return_date,
+            voucher_type='Sale Return',
+            voucher_number=self.sale_return.return_no,
+            party_name='Test Customer',
+            qty_in=Decimal('0.5'),
+            qty_out=0,
+            rate=Decimal('10.00'),
+            source_object=self.sale_return,
+        )
+
+        initial_entries = StockLedger.objects.filter(
+            batch=self.batch, txn_type='SALE_RETURN'
+        )
+        self.assertEqual(initial_entries.count(), 1)
+
+        # Now update the return to 20 loose units (2 strips)
+        self.client.force_authenticate(user=self.admin)
+        url = reverse('sales-return-detail', kwargs={'pk': self.sale_return.id}) + f'?outletId={self.outlet.id}'
+        payload = {
+            'outletId': str(self.outlet.id),
+            'reason': 'Customer requested exchange',
+            'refundMode': 'cash',
+            'totalAmount': '20.00',
+            'revisionReasonCode': 'correction',
+            'revisionReasonText': 'Adjust return items',
+            'items': [{
+                'id': str(self.return_item.id),
+                'originalSaleItemId': str(self.sale_item.id),
+                'batchId': str(self.batch.id),
+                'productName': 'Dolo 650',
+                'qtyReturned': 20,
+                'qtyStripsReturned': 2,
+                'qtyLooseReturned': 0,
+                'returnRate': '10.00',
+                'totalAmount': '20.00'
+            }]
+        }
+        resp = self.client.put(url, payload, format='json')
+        self.assertEqual(resp.status_code, 200, resp.data)
+
+        # Verify old stock ledger entry was reversed and exactly one new entry exists
+        entries = StockLedger.objects.filter(
+            batch=self.batch, txn_type='SALE_RETURN'
+        )
+        self.assertEqual(entries.count(), 1)
+        new_entry = entries.first()
+        self.assertEqual(new_entry.qty_in, Decimal('2.0'))  # 20 loose / pack_size 10 = 2 strips
+
+        # Verify Batch inventory is derived strictly from StockLedger running_qty
+        self.batch.refresh_from_db()
+        self.assertEqual(self.batch.qty_strips, 2)
+        self.assertEqual(self.batch.qty_loose, 0)

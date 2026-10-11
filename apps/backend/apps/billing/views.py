@@ -1,19 +1,22 @@
 import logging
 import re
+import uuid
 from django.db import transaction
-from datetime import datetime
+from datetime import datetime, timedelta, date
+from django.utils import timezone
 from django.db.models import Sum, Count, Q, F
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from apps.core.permissions import IsAuthenticated, IsManagerOrAbove, CanEditSalesInvoice, IsBillingStaffOrAbove
 from rest_framework import status
+from rest_framework.filters import OrderingFilter
 from decimal import Decimal, ROUND_FLOOR
-from datetime import datetime, timedelta, date
 from rest_framework.exceptions import ValidationError
+from django.core.exceptions import ValidationError as DjangoValidationError
 
 from apps.billing.models import (
     SaleInvoice, SaleItem, ScheduleHRegister, CreditTransaction, CreditAccount, LedgerEntry,
-    ReceiptEntry, ReceiptAllocation, ExpenseEntry, SalesReturn, SalesReturnItem,
+    ReceiptEntry, ReceiptAllocation, ExpenseEntry, SalesReturn, SalesReturnItem, InvoicePayment,
 )
 from apps.billing.services import (
     fefo_batch_select,
@@ -218,6 +221,16 @@ def build_sale_response_payload(sale_invoice, message=None, revision_id=None):
         'ewayBillNo': getattr(sale_invoice, 'eway_bill_no', None),
         'billedBy': str(sale_invoice.billed_by.id) if sale_invoice.billed_by else None,
         'billedByName': sale_invoice.billed_by.name if getattr(sale_invoice.billed_by, 'name', None) else None,
+        'payments': [
+            {
+                'id': str(p.id),
+                'method': p.method,
+                'amount': float(p.amount),
+                'referenceNo': p.reference_no,
+                'ledgerId': str(p.ledger_id) if p.ledger_id else None,
+            }
+            for p in sale_invoice.payments.all()
+        ],
         'createdAt': sale_invoice.created_at.isoformat() if sale_invoice.created_at else None,
     }
     if message:
@@ -342,13 +355,99 @@ class SaleCreateView(APIView):
                     status=status.HTTP_404_NOT_FOUND
                 )
 
-            # Resolve customer — ledger-first (Marg-style) or legacy customerId
+            # Resolve customer — prioritize customerId UUID, then partyLedgerId
             party_ledger_id = request.data.get('partyLedgerId')
+            create_new_customer = bool(request.data.get('createNewCustomer', False))
             customer = None
-            if party_ledger_id:
+
+            if customer_id:
                 try:
+                    uuid.UUID(str(customer_id))
+                    customer = Customer.objects.get(id=customer_id, outlet=outlet)
+                except (ValueError, AttributeError):
+                    return Response(
+                        {'detail': f'Invalid customerId UUID format: {customer_id}'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                except Customer.DoesNotExist:
+                    # Fallback lookup: Check if customerId is actually a Ledger UUID
+                    try:
+                        ledger_id_to_check = customer_id
+                        ledger = Ledger.objects.select_related('linked_customer').get(
+                            id=ledger_id_to_check, outlet=outlet
+                        )
+                        if ledger.linked_customer:
+                            customer = ledger.linked_customer
+                            if ledger.gstin and not customer.gstin:
+                                customer.gstin = ledger.gstin
+                                customer.save(update_fields=['gstin'])
+                        else:
+                            phone_number = ledger.phone or f"L-{ledger.id}"[:20]
+                            customer, created = Customer.objects.get_or_create(
+                                outlet=outlet,
+                                phone=phone_number,
+                                defaults={
+                                    'name': ledger.name or 'Walk-in Customer',
+                                    'address': ledger.address or '',
+                                    'gstin': ledger.gstin or None,
+                                }
+                            )
+                            if not created and ledger.gstin and not customer.gstin:
+                                customer.gstin = ledger.gstin
+                                customer.save(update_fields=['gstin'])
+
+                            ledger.linked_customer = customer
+                            ledger.save(update_fields=['linked_customer'])
+                    except Ledger.DoesNotExist:
+                        # Also check if partyLedgerId was provided and can resolve customer
+                        if party_ledger_id and party_ledger_id != customer_id:
+                            try:
+                                uuid.UUID(str(party_ledger_id))
+                                party_ledger = Ledger.objects.select_related('linked_customer').get(
+                                    id=party_ledger_id, outlet=outlet
+                                )
+                                if party_ledger.linked_customer:
+                                    customer = party_ledger.linked_customer
+                                    if party_ledger.gstin and not customer.gstin:
+                                        customer.gstin = party_ledger.gstin
+                                        customer.save(update_fields=['gstin'])
+                                else:
+                                    phone_number = party_ledger.phone or f"L-{party_ledger.id}"[:20]
+                                    customer, created = Customer.objects.get_or_create(
+                                        outlet=outlet,
+                                        phone=phone_number,
+                                        defaults={
+                                            'name': party_ledger.name or 'Walk-in Customer',
+                                            'address': party_ledger.address or '',
+                                            'gstin': party_ledger.gstin or None,
+                                        }
+                                    )
+                                    if not created and party_ledger.gstin and not customer.gstin:
+                                        customer.gstin = party_ledger.gstin
+                                        customer.save(update_fields=['gstin'])
+
+                                    party_ledger.linked_customer = customer
+                                    party_ledger.save(update_fields=['linked_customer'])
+                            except (Ledger.DoesNotExist, ValueError, AttributeError):
+                                return Response(
+                                    {'detail': f'Customer {customer_id} not found'},
+                                    status=status.HTTP_404_NOT_FOUND
+                                )
+                        else:
+                            return Response(
+                                {'detail': f'Customer {customer_id} not found'},
+                                status=status.HTTP_404_NOT_FOUND
+                            )
+            elif party_ledger_id:
+                try:
+                    uuid.UUID(str(party_ledger_id))
                     party_ledger = Ledger.objects.select_related('linked_customer').get(
                         id=party_ledger_id, outlet=outlet
+                    )
+                except (ValueError, AttributeError):
+                    return Response(
+                        {'detail': f'Invalid partyLedgerId UUID format: {party_ledger_id}'},
+                        status=status.HTTP_400_BAD_REQUEST
                     )
                 except Ledger.DoesNotExist:
                     print(f"404 ERROR: Ledger {party_ledger_id} not found")
@@ -361,8 +460,6 @@ class SaleCreateView(APIView):
                         customer.gstin = party_ledger.gstin
                         customer.save(update_fields=['gstin'])
                 else:
-                    # Safely get or create the Customer to avoid duplicate phone crashes
-                    # If phone is missing, generate a unique one for this B2B ledger so we don't map to the generic walk-in customer.
                     phone_number = party_ledger.phone or f"L-{party_ledger.id}"[:20]
                     customer, created = Customer.objects.get_or_create(
                         outlet=outlet,
@@ -380,46 +477,60 @@ class SaleCreateView(APIView):
 
                     party_ledger.linked_customer = customer
                     party_ledger.save(update_fields=['linked_customer'])
-            elif customer_id:
-                try:
-                    customer = Customer.objects.get(id=customer_id, outlet=outlet)
-                except Customer.DoesNotExist:
-                    return Response(
-                        {'detail': f'Customer {customer_id} not found'},
-                        status=status.HTTP_404_NOT_FOUND
-                    )
-                    
-            # Auto-create or fetch customer from Schedule H data if not already provided
-            if not customer and schedule_h_data:
-                patient_name = (schedule_h_data.get('patientName') or '').strip()
-                patient_phone = (schedule_h_data.get('patientPhone') or '').strip()
+
+            # Determine if this sale involves credit tender
+            raw_pm = str(request.data.get('paymentMode') or '').lower()
+            raw_cg = Decimal(str(request.data.get('creditGiven') or 0))
+            raw_payments = request.data.get('payments') or []
+            has_credit_tender = (
+                any(str(p.get('method') or '').lower() == 'credit' and Decimal(str(p.get('amount') or 0)) > 0 for p in raw_payments)
+                if isinstance(raw_payments, list) else False
+            )
+            is_credit_sale = (raw_pm == 'credit' or raw_cg > Decimal('0') or has_credit_tender)
+
+            # Prevent Accidental Creation:
+            # Only create a permanent Customer entity and Sundry Debtors ledger if:
+            # 1. The pharmacist explicitly clicked "Create New Customer" in the UI (createNewCustomer: True), OR
+            # 2. It is an explicit credit sale with provided customer contact info.
+            # Otherwise, non-credit walk-in sales (including cash/UPI Schedule H) remain customer=None (Walk-in).
+            if not customer:
+                if create_new_customer or is_credit_sale:
+                    cand_name = (request.data.get('customerName') or (schedule_h_data or {}).get('patientName') or '').strip()
+                    cand_phone = (request.data.get('customerPhone') or (schedule_h_data or {}).get('patientPhone') or '').strip()
+                    cand_address = (request.data.get('customerAddress') or (schedule_h_data or {}).get('patientAddress') or '').strip()
+
+                    if cand_phone and re.match(r'^[6-9]\d{9}$', cand_phone):
+                        # Match existing customer by phone first to avoid duplicate entities
+                        customer = Customer.objects.filter(outlet=outlet, phone=cand_phone).first()
+                        if not customer:
+                            customer = Customer.objects.create(
+                                outlet=outlet,
+                                phone=cand_phone,
+                                name=cand_name or 'Customer',
+                                address=cand_address,
+                            )
+                            from apps.accounts.models import LedgerGroup
+                            debtor_group, _ = LedgerGroup.objects.get_or_create(
+                                outlet=outlet,
+                                name='Sundry Debtors',
+                                defaults={'nature': 'asset', 'is_system': True}
+                            )
+                            Ledger.objects.create(
+                                outlet=outlet,
+                                name=f"{customer.name} ({customer.phone})",
+                                group=debtor_group,
+                                linked_customer=customer,
+                                phone=customer.phone,
+                                address=customer.address or '',
+                                is_system=True
+                            )
                 
-                if patient_name and patient_phone and re.match(r'^[6-9]\d{9}$', patient_phone):
-                    customer, created = Customer.objects.get_or_create(
-                        outlet=outlet,
-                        phone=patient_phone,
-                        defaults={
-                            'name': patient_name,
-                            'address': (schedule_h_data.get('patientAddress') or '').strip(),
-                        }
+                # If it's a credit sale and we still have no customer, reject
+                if is_credit_sale and not customer:
+                    return Response(
+                        {'detail': 'Credit sales require selecting an existing customer or explicitly creating a new customer.'},
+                        status=status.HTTP_400_BAD_REQUEST
                     )
-                    if created:
-                        # Create Ledger for the auto-created customer
-                        from apps.accounts.models import LedgerGroup
-                        debtor_group, _ = LedgerGroup.objects.get_or_create(
-                            outlet=outlet,
-                            name='Sundry Debtors',
-                            defaults={'nature': 'asset', 'is_system': True}
-                        )
-                        Ledger.objects.create(
-                            outlet=outlet,
-                            name=f"{customer.name} ({customer.phone})",
-                            group=debtor_group,
-                            linked_customer=customer,
-                            phone=customer.phone,
-                            address=customer.address or '',
-                            is_system=True
-                        )
 
             # Get billed_by staff (from request payload if PIN verified, fallback to request user)
             billed_by_id = request.data.get('billedBy')
@@ -475,20 +586,89 @@ class SaleCreateView(APIView):
                     )
 
                 # Step 3 & 5: Create SaleInvoice (GST fields are placeholders — re-derived after items are created)
-                client_grand_total = Decimal(str(request.data.get('grandTotal', 0)))
+                raw_gt = request.data.get('grandTotal') or request.data.get('grand_total') or request.data.get('totalAmount') or 0
+                client_grand_total = Decimal(str(raw_gt))
                 extra_discount_pct = Decimal(str(request.data.get('extraDiscountPct', 0)))
 
-                # M1: Validate payment amounts sum to grandTotal (tolerance ±₹0.01)
-                cash_paid_val = Decimal(str(request.data.get('cashPaid', 0)))
-                upi_paid_val = Decimal(str(request.data.get('upiPaid', 0)))
-                card_paid_val = Decimal(str(request.data.get('cardPaid', 0)))
-                credit_given_val = Decimal(str(request.data.get('creditGiven', 0)))
-                payment_sum = cash_paid_val + upi_paid_val + card_paid_val + credit_given_val
-                if abs(payment_sum - client_grand_total) > Decimal('0.01'):
-                    return Response(
-                        {'detail': f'Payment amounts ({payment_sum}) do not match grand total ({client_grand_total})'},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
+                # Multi-Entry Tender Extraction & Validation
+                payments_data_raw = request.data.get('payments')
+                parsed_payments = []
+                cash_paid_val = Decimal('0')
+                upi_paid_val = Decimal('0')
+                card_paid_val = Decimal('0')
+                credit_given_val = Decimal('0')
+
+                if payments_data_raw and isinstance(payments_data_raw, list) and len(payments_data_raw) > 0:
+                    for p in payments_data_raw:
+                        p_amt = Decimal(str(p.get('amount', 0)))
+                        if p_amt <= Decimal('0'):
+                            continue
+                        p_method = str(p.get('method') or 'cash').lower()
+                        if p_method == 'cash':
+                            cash_paid_val += p_amt
+                        elif p_method == 'upi':
+                            upi_paid_val += p_amt
+                        elif p_method == 'card':
+                            card_paid_val += p_amt
+                        elif p_method == 'credit':
+                            credit_given_val += p_amt
+                        
+                        parsed_payments.append({
+                            'method': p_method,
+                            'amount': p_amt,
+                            'reference_no': p.get('referenceNo') or p.get('reference_no'),
+                            'ledger_id': p.get('ledgerId') or p.get('ledger_id'),
+                        })
+                    
+                    payment_sum = sum(p['amount'] for p in parsed_payments)
+                    if abs(payment_sum - client_grand_total) > Decimal('0.01'):
+                        return Response(
+                            {'detail': f'Payment amounts ({payment_sum}) do not match grand total ({client_grand_total})'},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                    
+                    if len(parsed_payments) > 1 or request.data.get('paymentMode') == 'split':
+                        resolved_payment_mode = 'split'
+                    elif len(parsed_payments) == 1:
+                        resolved_payment_mode = parsed_payments[0]['method']
+                    else:
+                        resolved_payment_mode = 'cash'
+                else:
+                    # Legacy fallback: read scalar fields
+                    cash_paid_val = Decimal(str(request.data.get('cashPaid', 0)))
+                    upi_paid_val = Decimal(str(request.data.get('upiPaid', 0)))
+                    card_paid_val = Decimal(str(request.data.get('cardPaid', 0)))
+                    credit_given_val = Decimal(str(request.data.get('creditGiven', 0)))
+                    payment_sum = cash_paid_val + upi_paid_val + card_paid_val + credit_given_val
+
+                    # If all scalars are zero, fallback to paymentMode for full grand total
+                    if payment_sum == Decimal('0') and client_grand_total > Decimal('0'):
+                        pm = str(request.data.get('paymentMode', 'cash')).lower()
+                        if pm == 'cash':
+                            cash_paid_val = client_grand_total
+                        elif pm == 'upi':
+                            upi_paid_val = client_grand_total
+                        elif pm == 'card':
+                            card_paid_val = client_grand_total
+                        elif pm == 'credit':
+                            credit_given_val = client_grand_total
+                        payment_sum = client_grand_total
+
+                    if abs(payment_sum - client_grand_total) > Decimal('0.01'):
+                        return Response(
+                            {'detail': f'Payment amounts ({payment_sum}) do not match grand total ({client_grand_total})'},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+
+                    resolved_payment_mode = request.data.get('paymentMode', 'cash')
+                    if cash_paid_val > 0:
+                        parsed_payments.append({'method': 'cash', 'amount': cash_paid_val})
+                    if upi_paid_val > 0:
+                        parsed_payments.append({'method': 'upi', 'amount': upi_paid_val})
+                    if card_paid_val > 0:
+                        parsed_payments.append({'method': 'card', 'amount': card_paid_val})
+                    if credit_given_val > 0:
+                        parsed_payments.append({'method': 'credit', 'amount': credit_given_val})
 
                 if credit_given_val > 0 and not customer:
                     return Response(
@@ -535,7 +715,7 @@ class SaleCreateView(APIView):
                     igst=Decimal('0'),
                     round_off=Decimal('0'),
                     grand_total=client_grand_total,
-                    payment_mode=request.data.get('paymentMode', 'cash'),
+                    payment_mode=resolved_payment_mode,
                     cash_paid=cash_paid_val,
                     upi_paid=upi_paid_val,
                     card_paid=card_paid_val,
@@ -554,7 +734,18 @@ class SaleCreateView(APIView):
                     eway_bill_status='PENDING' if (request.data.get('transporterId') or request.data.get('vehicleNo')) else None,
                 )
 
-                logger.info(f"Created SaleInvoice {invoice_no}")
+                # Persist InvoicePayment child records
+                for p in parsed_payments:
+                    InvoicePayment.objects.create(
+                        outlet=outlet,
+                        invoice=sale_invoice,
+                        method=p['method'],
+                        amount=p['amount'],
+                        reference_no=p.get('reference_no'),
+                        ledger_id=p.get('ledger_id'),
+                    )
+
+                logger.info(f"Created SaleInvoice {invoice_no} with {len(parsed_payments)} payment tender(s)")
 
                 # Create SaleItems and deduct stock
                 sale_items = []
@@ -857,21 +1048,41 @@ class SaleCreateView(APIView):
                     )
 
                     # 2. Payment Posting Entry (if any paid immediately)
-                    total_paid = (sale_invoice.cash_paid or Decimal('0')) + (sale_invoice.upi_paid or Decimal('0')) + (sale_invoice.card_paid or Decimal('0'))
-                    if total_paid > Decimal('0'):
-                        running_balance = running_balance - total_paid
-                        LedgerEntry.objects.create(
-                            outlet=outlet,
-                            entity_type='customer',
-                            customer=customer,
-                            date=invoice_d,
-                            entry_type='receipt',
-                            reference_no=sale_invoice.invoice_no,
-                            description=f"Instant Payment against {sale_invoice.invoice_no}",
-                            debit=Decimal('0'),
-                            credit=total_paid,
-                            running_balance=running_balance,
-                        )
+                    if parsed_payments:
+                        for p in parsed_payments:
+                            p_amt = p['amount']
+                            if p_amt > Decimal('0') and p['method'] != 'credit':
+                                running_balance = running_balance - p_amt
+                                meth_raw = p['method'].upper()
+                                meth_lbl = 'Cash' if meth_raw == 'CASH' else ('UPI' if meth_raw == 'UPI' else ('Card' if meth_raw == 'CARD' else p['method'].title()))
+                                LedgerEntry.objects.create(
+                                    outlet=outlet,
+                                    entity_type='customer',
+                                    customer=customer,
+                                    date=invoice_d,
+                                    entry_type='receipt',
+                                    reference_no=sale_invoice.invoice_no,
+                                    description=f"Payment ({meth_lbl}) for {sale_invoice.invoice_no}",
+                                    debit=Decimal('0'),
+                                    credit=p_amt,
+                                    running_balance=running_balance,
+                                )
+                    else:
+                        total_paid = (sale_invoice.cash_paid or Decimal('0')) + (sale_invoice.upi_paid or Decimal('0')) + (sale_invoice.card_paid or Decimal('0'))
+                        if total_paid > Decimal('0'):
+                            running_balance = running_balance - total_paid
+                            LedgerEntry.objects.create(
+                                outlet=outlet,
+                                entity_type='customer',
+                                customer=customer,
+                                date=invoice_d,
+                                entry_type='receipt',
+                                reference_no=sale_invoice.invoice_no,
+                                description=f"Instant Payment against {sale_invoice.invoice_no}",
+                                debit=Decimal('0'),
+                                credit=total_paid,
+                                running_balance=running_balance,
+                            )
 
                 # Post journal entry to general ledger (auto journal posting)
                 try:
@@ -965,6 +1176,14 @@ class SaleListView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
+    filter_backends = [OrderingFilter]
+    ordering_fields = ['created_at', 'invoice_date', 'grand_total', 'customer__name']
+    ordering = ['-invoice_date', '-created_at']
+
+    def filter_queryset(self, queryset):
+        for backend in list(self.filter_backends):
+            queryset = backend().filter_queryset(self.request, queryset, self)
+        return queryset
 
     def get(self, request, *args, **kwargs):
         """
@@ -1000,10 +1219,10 @@ class SaleListView(APIView):
 
         logger.info(f"Fetching sales invoices for outlet: {outlet.name}")
 
-        # Get all invoices for this outlet, ordered by date (newest first)
-        invoices = SaleInvoice.objects.filter(outlet=outlet).prefetch_related('items__batch').annotate(
+        # Get all invoices for this outlet
+        invoices = SaleInvoice.objects.filter(outlet=outlet).prefetch_related('items__batch', 'payments').annotate(
             items_count=Count('items')
-        ).order_by('-invoice_date', '-created_at')
+        )
 
         # ── Date range filter (startDate / endDate) ─────────────────────────
         start_date_str = request.query_params.get('startDate') or request.query_params.get('start_date')
@@ -1033,14 +1252,22 @@ class SaleListView(APIView):
             except Customer.DoesNotExist:
                 pass
 
-        # ── Optional doctor and hospital filter ──────────────────────────────
+        # ── Optional doctor and hospital filter (backwards-compatibility) ────
         doctor_id = request.query_params.get('doctorId')
-        hospital_name = request.query_params.get('hospitalName')
+        hospital_name = request.query_params.get('hospitalName') or request.query_params.get('hospital')
         
         if doctor_id:
-            invoices = invoices.filter(doctor_id=doctor_id)
+            try:
+                import uuid
+                uuid.UUID(str(doctor_id))
+                invoices = invoices.filter(doctor_id=doctor_id)
+            except (ValueError, AttributeError):
+                invoices = invoices.filter(doctor__name__icontains=doctor_id)
         if hospital_name:
-            invoices = invoices.filter(hospital_name__icontains=hospital_name)
+            from django.db.models import Q
+            invoices = invoices.filter(
+                Q(hospital_name__icontains=hospital_name) | Q(doctor__hospital_name__icontains=hospital_name)
+            )
 
         # ── Optional saleType filter ─────────────────────────────────────────
         sale_type_param = request.query_params.get('saleType') or request.query_params.get('sale_type')
@@ -1055,15 +1282,67 @@ class SaleListView(APIView):
                 invoices = invoices.filter(sale_type=sale_type_upper)
                 sale_type_filter = {'sale_type': sale_type_upper}
 
-        # ── Optional search filter ───────────────────────────────────────────
+        # ── Optional omni-search filter (invoice #, customer, doctor, hospital, staff) ───
         search_q = request.query_params.get('search', '').strip()
         if search_q:
             from django.db.models import Q
-            invoices = invoices.filter(
+            search_filter = (
                 Q(invoice_no__icontains=search_q) |
+                Q(prescription_no__icontains=search_q) |
+                Q(irn__icontains=search_q) |
+                Q(eway_bill_no__icontains=search_q) |
                 Q(customer__name__icontains=search_q) |
+                Q(customer__phone__icontains=search_q) |
+                Q(customer__gstin__icontains=search_q) |
+                Q(doctor__name__icontains=search_q) |
+                Q(doctor__phone__icontains=search_q) |
+                Q(doctor__registration_no__icontains=search_q) |
+                Q(hospital_name__icontains=search_q) |
+                Q(doctor__hospital_name__icontains=search_q) |
                 Q(billed_by__name__icontains=search_q)
             )
+            # If search_q looks like a UUID, match exact UUID fields as well
+            try:
+                import uuid
+                uuid_obj = uuid.UUID(search_q)
+                search_filter |= Q(id=uuid_obj) | Q(customer_id=uuid_obj) | Q(doctor_id=uuid_obj)
+            except (ValueError, AttributeError):
+                pass
+
+            invoices = invoices.filter(search_filter)
+
+        # ── Optional payment mode filter ─────────────────────────────────────
+        payment_mode_param = request.query_params.get('paymentMode') or request.query_params.get('payment_mode')
+        if payment_mode_param and payment_mode_param.strip().lower() not in ['all', '']:
+            pm = payment_mode_param.strip().lower()
+            from django.db.models import Q
+            if pm == 'cash':
+                invoices = invoices.filter(
+                    Q(payment_mode__iexact='cash') |
+                    (Q(payment_mode__iexact='split') & (Q(cash_paid__gt=0) | Q(payments__method__iexact='cash', payments__amount__gt=0)))
+                ).distinct()
+            elif pm == 'upi':
+                invoices = invoices.filter(
+                    Q(payment_mode__iexact='upi') |
+                    (Q(payment_mode__iexact='split') & (Q(upi_paid__gt=0) | Q(payments__method__iexact='upi', payments__amount__gt=0)))
+                ).distinct()
+            elif pm == 'card':
+                invoices = invoices.filter(
+                    Q(payment_mode__iexact='card') |
+                    (Q(payment_mode__iexact='split') & (Q(card_paid__gt=0) | Q(payments__method__iexact='card', payments__amount__gt=0)))
+                ).distinct()
+            elif pm == 'credit':
+                invoices = invoices.filter(
+                    Q(payment_mode__iexact='credit') |
+                    (Q(payment_mode__iexact='split') & (Q(credit_given__gt=0) | Q(payments__method__iexact='credit', payments__amount__gt=0)))
+                ).distinct()
+            elif pm == 'split':
+                invoices = invoices.filter(payment_mode__iexact='split')
+            else:
+                invoices = invoices.filter(
+                    Q(payment_mode__iexact=pm) |
+                    (Q(payment_mode__iexact='split') & Q(payments__method__iexact=pm, payments__amount__gt=0))
+                ).distinct()
 
         # ── Profit aggregates for the filtered set (EXCLUDE return invoices) ───
         from django.db.models import Sum as dSum, Count as dCount
@@ -1130,26 +1409,36 @@ class SaleListView(APIView):
             )
         )
 
-        gross_revenue = float(agg.get('total_revenue') or 0)
-        total_revenue = gross_revenue - return_revenue   # Net revenue after returns
+        total_sales = float(agg.get('total_revenue') or 0)
+        total_bills = int(agg.get('total_bills') or 0)
+        avg_bill_value = round(total_sales / total_bills, 2) if total_bills > 0 else 0.0
+
+        gross_revenue = total_sales
+        net_revenue   = total_sales - return_revenue
         total_cost    = float(cost_agg.get('total_cost') or 0)
-        total_profit  = total_revenue - total_cost
+        total_profit  = net_revenue - total_cost
 
         analytics = {
-            'totalRevenue': total_revenue,
+            'totalRevenue': total_sales,
+            'totalSales': total_sales,
             'grossRevenue': gross_revenue,
+            'netRevenue': net_revenue,
+            'avgBillValue': avg_bill_value,
             'salesReturnAmount': return_revenue,
             'salesReturnCount': return_count,
             'totalCost': round(total_cost, 2),
             'totalProfit': round(total_profit, 2),
             'totalDiscount': float(agg.get('total_discount') or 0),
-            'totalBills': agg.get('total_bills') or 0,
+            'totalBills': total_bills,
             'cashCollected': float(agg.get('total_cash') or 0),
             'upiCollected': float(agg.get('total_upi') or 0),
             'cardCollected': float(agg.get('total_card') or 0),
             'creditGiven': float(agg.get('total_credit') or 0),
             'customerOutstanding': float(customer_obj.outstanding_balance) if customer_obj else None,
         }
+
+        # ── Apply Ordering ───────────────────────────────────────────────────
+        invoices = self.filter_queryset(invoices)
 
         # ── Pagination ───────────────────────────────────────────────────────
         page = int(request.query_params.get('page', 1))
@@ -1199,6 +1488,14 @@ class SaleListView(APIView):
                 'creditGiven': float(invoice.credit_given),
                 'amountPaid': float(invoice.amount_paid),
                 'amountDue': float(invoice.amount_due),
+                'payments': [
+                    {
+                        'method': p.method,
+                        'amount': float(p.amount),
+                        'referenceNo': p.reference_no,
+                    }
+                    for p in invoice.payments.all()
+                ],
                 'isReturn': invoice.is_return,
                 'eway_bill_no': invoice.eway_bill_no,
                 'irn': invoice.irn,
@@ -1829,7 +2126,8 @@ class DashboardDailyView(APIView):
             # Calculate days overdue (estimate from last transaction)
             days_overdue = 0
             if account.last_transaction_date:
-                days_overdue = (datetime.now() - account.last_transaction_date).days
+                tx_date = account.last_transaction_date.date() if hasattr(account.last_transaction_date, 'date') else account.last_transaction_date
+                days_overdue = max(0, (timezone.now().date() - tx_date).days)
 
             alerts['overdueAccounts'].append({
                 'customerId': str(account.customer_id),
@@ -2989,28 +3287,69 @@ class SalesReturnDetailView(APIView):
             return Response({'detail': 'Return not found'}, status=status.HTTP_404_NOT_FOUND)
 
         items = [{
+            'id': str(item.id),
+            'saleItemId': str(item.original_sale_item_id) if item.original_sale_item_id else '',
+            'originalSaleItemId': str(item.original_sale_item_id) if item.original_sale_item_id else '',
+            'batchId': str(item.batch_id) if item.batch_id else '',
             'productName': item.product_name,
             'batchNo': item.batch_no,
             'qtyReturned': item.qty_returned,
-            'packSize': item.original_sale_item.pack_size if item.original_sale_item_id else 1,
+            'qtyStrips': item.qty_returned_strips if item.qty_returned_strips else (item.qty_returned // (item.original_sale_item.pack_size if item.original_sale_item_id and item.original_sale_item.pack_size else 1)),
+            'qtyLoose': item.qty_returned_loose if item.qty_returned_loose else (item.qty_returned % (item.original_sale_item.pack_size if item.original_sale_item_id and item.original_sale_item.pack_size else 1)),
+            'packSize': item.original_sale_item.pack_size if item.original_sale_item_id and item.original_sale_item.pack_size else 1,
+            'rate': float(item.return_rate),
             'returnRate': float(item.return_rate),
+            'gstRate': float(item.original_sale_item.gst_rate) if item.original_sale_item_id and hasattr(item.original_sale_item, 'gst_rate') and item.original_sale_item.gst_rate is not None else 0.0,
             'totalAmount': float(item.total_amount),
+            'total': float(item.total_amount),
         } for item in r.items.select_related('original_sale_item').all()]
 
         data = {
             'id': str(r.id),
             'returnNo': r.return_no,
             'returnDate': r.return_date.isoformat(),
-            'originalInvoiceNo': r.original_sale.invoice_no,
-            'customerName': r.original_sale.customer.name if r.original_sale.customer else None,
+            'originalInvoiceNo': r.original_sale.invoice_no if r.original_sale else None,
+            'originalSaleId': str(r.original_sale_id) if r.original_sale_id else None,
+            'customerId': str(r.original_sale.customer_id) if r.original_sale and r.original_sale.customer_id else None,
+            'customerName': r.original_sale.customer.name if r.original_sale and r.original_sale.customer else None,
             'totalAmount': float(r.total_amount),
             'refundMode': r.refund_mode,
             'reason': r.reason,
             'items': items,
             'createdAt': r.created_at.isoformat(),
+            'updatedAt': r.updated_at.isoformat() if r.updated_at else None,
         }
 
         return Response({'success': True, 'data': data}, status=status.HTTP_200_OK)
+
+    def put(self, request, pk, *args, **kwargs):
+        outlet_id = request.data.get('outletId') or request.query_params.get('outletId') or (
+            request.user.outlet_id if hasattr(request.user, 'outlet_id') else None
+        )
+        updated_by_id = request.user.id
+        try:
+            from .sale_return_update_service import atomic_sale_return_update
+            sales_return = atomic_sale_return_update(str(pk), request.data, str(outlet_id), str(updated_by_id))
+            return Response({
+                'success': True,
+                'data': {
+                    'id': str(sales_return.id),
+                    'returnNo': sales_return.return_no,
+                    'totalAmount': float(sales_return.total_amount),
+                    'refundMode': sales_return.refund_mode,
+                    'reason': sales_return.reason,
+                    'updatedAt': sales_return.updated_at.isoformat() if sales_return.updated_at else None,
+                }
+            }, status=status.HTTP_200_OK)
+        except (ValidationError, DjangoValidationError) as e:
+            code = getattr(e, 'code', None)
+            detail = getattr(e, 'message_dict', getattr(e, 'messages', getattr(e, 'detail', str(e))))
+            if code == 'stale_edit_conflict' or (isinstance(detail, dict) and 'stale_edit_conflict' in detail):
+                return Response({'error': detail}, status=status.HTTP_409_CONFLICT)
+            return Response({'error': detail}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.error(f"Error updating sales return: {e}", exc_info=True)
+            return Response({'error': {'code': 'INTERNAL_ERROR', 'message': str(e)}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class SalesReturnPrintView(APIView):

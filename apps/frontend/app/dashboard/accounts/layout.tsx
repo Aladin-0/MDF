@@ -15,7 +15,10 @@ const NAV_LINKS = [
 export default function AccountsLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
 
-    const isDeepPage = pathname.split('/').length > 4; 
+    const isDeepPage = 
+        pathname.split('/').length > 4 ||
+        pathname.startsWith('/dashboard/accounts/sale-returns') ||
+        pathname.startsWith('/dashboard/accounts/purchase-returns'); 
 
     return (
         <div className="space-y-6">

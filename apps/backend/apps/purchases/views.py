@@ -5,6 +5,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from apps.core.permissions import IsAuthenticated, IsManagerOrAbove, CanCreatePurchases, CanEditPurchaseInvoice, CanAccessPurchases
 from rest_framework import status
+from rest_framework.filters import OrderingFilter
 from django.db.models import Q
 from django.db import transaction
 
@@ -678,6 +679,14 @@ class PurchaseListView(APIView):
     """
 
     permission_classes = [CanAccessPurchases]
+    filter_backends = [OrderingFilter]
+    ordering_fields = ['created_at', 'invoice_date', 'grand_total', 'distributor__name']
+    ordering = ['-invoice_date', '-created_at']
+
+    def filter_queryset(self, queryset):
+        for backend in list(self.filter_backends):
+            queryset = backend().filter_queryset(self.request, queryset, self)
+        return queryset
 
     def get(self, request, *args, **kwargs):
         """
@@ -740,7 +749,7 @@ class PurchaseListView(APIView):
             logger.info(f"Fetching purchases for outlet {outlet.name}")
 
             # Start with all invoices for this outlet
-            queryset = PurchaseInvoice.objects.filter(outlet=outlet).select_related('distributor')
+            queryset = PurchaseInvoice.objects.filter(outlet=outlet).select_related('distributor').prefetch_related('payment_allocations__payment')
 
             # Filter by distributor if provided
             distributor_id = request.query_params.get('distributorId')
@@ -802,8 +811,8 @@ class PurchaseListView(APIView):
                     Q(distributor__name__icontains=search_query)
                 )
 
-            # Order by newest first
-            queryset = queryset.order_by('-invoice_date', '-created_at')
+            # Apply Ordering
+            queryset = self.filter_queryset(queryset)
 
             # Pagination
             page = int(request.query_params.get('page', 1))
@@ -860,6 +869,33 @@ class PurchaseListView(APIView):
                 'createdAt': purchase_invoice.distributor.created_at.isoformat(),
             }
 
+        allocations = []
+        try:
+            for alloc in purchase_invoice.payment_allocations.all():
+                allocations.append({
+                    'method': alloc.payment.payment_mode,
+                    'amount': float(alloc.allocated_amount),
+                    'referenceNo': alloc.payment.reference_no,
+                })
+        except Exception:
+            pass
+
+        cash_paid = sum(a['amount'] for a in allocations if a['method'] == 'cash')
+        bank_paid = sum(a['amount'] for a in allocations if a['method'] in ['bank_transfer', 'bank'])
+        cheque_paid = sum(a['amount'] for a in allocations if a['method'] == 'cheque')
+        upi_paid = sum(a['amount'] for a in allocations if a['method'] == 'upi')
+        credit_given = float(purchase_invoice.outstanding)
+
+        distinct_methods = set(a['method'] for a in allocations)
+        if len(distinct_methods) > 1 or (allocations and credit_given > 0):
+            payment_mode = 'split'
+        elif len(distinct_methods) == 1 and credit_given == 0:
+            payment_mode = list(distinct_methods)[0]
+        else:
+            payment_mode = purchase_invoice.purchase_type or 'credit'
+            if payment_mode == 'cash':
+                cash_paid = float(purchase_invoice.amount_paid or purchase_invoice.grand_total)
+
         data = {
             'id': str(purchase_invoice.id),
             'outletId': str(purchase_invoice.outlet_id),
@@ -868,6 +904,14 @@ class PurchaseListView(APIView):
             'invoiceNo': purchase_invoice.invoice_no,
             'invoiceDate': purchase_invoice.invoice_date.isoformat() if purchase_invoice.invoice_date else None,
             'dueDate': purchase_invoice.due_date.isoformat() if purchase_invoice.due_date else None,
+            'purchaseType': purchase_invoice.purchase_type,
+            'paymentMode': payment_mode,
+            'cashPaid': cash_paid,
+            'bankPaid': bank_paid,
+            'chequePaid': cheque_paid,
+            'upiPaid': upi_paid,
+            'creditGiven': credit_given,
+            'payments': allocations,
             'subtotal': float(purchase_invoice.subtotal),
             'discountAmount': float(purchase_invoice.discount_amount),
             'invoiceDiscount': float(purchase_invoice.invoice_discount),
@@ -1384,6 +1428,11 @@ class PurchaseOrderSuggestionsView(APIView):
             s=Sum(F('qty_strips') - F('received_qty'))
         ).values('s')[:1]
         
+        last_lpp_sq = PurchaseItem.objects.filter(
+            invoice__outlet_id=outlet_id,
+            master_product_id=OuterRef('pk')
+        ).order_by('-invoice__invoice_date', '-invoice__created_at').values('purchase_rate')[:1]
+
         last_dist_sq = PurchaseItem.objects.filter(
             invoice__outlet_id=outlet_id,
             master_product_id=OuterRef('pk')
@@ -1423,8 +1472,12 @@ class PurchaseOrderSuggestionsView(APIView):
             outlet_reorder_qty=Coalesce(Subquery(config_sq.values('reorder_qty')[:1]), 0.0, output_field=FloatField()),
             last_dist_id=Subquery(last_dist_sq),
             last_dist_name=Subquery(last_dist_name_sq),
+            last_purchase_rate=Subquery(last_lpp_sq, output_field=FloatField()),
             estimated_ptr=Coalesce(Subquery(
                 Batch.objects.filter(outlet_id=outlet_id, product_id=OuterRef('pk')).order_by('-created_at').values('ptr')[:1]
+            ), 0.0, output_field=FloatField()),
+            batch_purchase_rate=Coalesce(Subquery(
+                Batch.objects.filter(outlet_id=outlet_id, product_id=OuterRef('pk')).order_by('-created_at').values('purchase_rate')[:1]
             ), 0.0, output_field=FloatField())
         )
         
@@ -1439,9 +1492,12 @@ class PurchaseOrderSuggestionsView(APIView):
         
         results = []
         for p in low_stock_products:
-            last_ptr = float(p.estimated_ptr)
-            if last_ptr == 0.0:
-                last_ptr = float(p.mrp) * 0.8 if p.mrp else 0.0
+            # Last Purchase Price (LPP) from PurchaseItem (fallback to Batch purchase_rate, then PTR, then catalog MRP)
+            lpp = float(p.last_purchase_rate) if p.last_purchase_rate is not None and float(p.last_purchase_rate) > 0 else float(p.batch_purchase_rate or 0.0)
+            if lpp <= 0.0:
+                lpp = float(p.estimated_ptr) if p.estimated_ptr is not None and float(p.estimated_ptr) > 0 else 0.0
+            if lpp <= 0.0:
+                lpp = float(p.mrp) if p.mrp else 0.0
                 
             deficit = float(p.outlet_reorder_qty) - float(p.available)
             if deficit <= 0:
@@ -1455,6 +1511,8 @@ class PurchaseOrderSuggestionsView(APIView):
                 'productId': str(p.id),
                 'productName': p.name,
                 'manufacturer': p.manufacturer,
+                'packSize': p.pack_size or 1,
+                'packType': p.pack_type or 'strip',
                 'minQty': p.outlet_min_qty,
                 'reorderQty': p.outlet_reorder_qty,
                 'currentStock': float(p.effective_strips) if p.effective_strips is not None else 0.0,
@@ -1463,7 +1521,8 @@ class PurchaseOrderSuggestionsView(APIView):
                 'deficit': float(deficit),
                 'lastDistributorId': str(p.last_dist_id) if p.last_dist_id else None,
                 'lastDistributorName': p.last_dist_name if p.last_dist_name else None,
-                'estimatedPtr': last_ptr
+                'estimatedPtr': lpp,
+                'lastPurchasePrice': lpp,
             })
             
         return Response({'data': results})
@@ -1720,10 +1779,12 @@ class PurchaseOrderExcelExportView(APIView):
             
         from apps.purchases.models import PurchaseOrder
         try:
-            po = PurchaseOrder.objects.prefetch_related('items', 'items__product').get(id=pk, outlet_id=outlet_id)
+            po = PurchaseOrder.objects.select_related('outlet', 'outlet__organization', 'distributor').prefetch_related('items', 'items__product').get(id=pk, outlet_id=outlet_id)
         except PurchaseOrder.DoesNotExist:
             return Response({'detail': 'PO not found'}, status=status.HTTP_404_NOT_FOUND)
             
+        company_name = (getattr(po.outlet, 'name', '') or (po.outlet.organization.name if hasattr(po.outlet, 'organization') and po.outlet.organization else "MediFlow Pharmacy")).strip()
+
         import openpyxl
         from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
         from django.http import HttpResponse
@@ -1733,22 +1794,29 @@ class PurchaseOrderExcelExportView(APIView):
         ws = wb.active
         ws.title = "Purchase Order"
         
-        # Header Metadata
+        # Header Metadata & Company Branding
         ws.merge_cells('A1:F1')
-        title_cell = ws['A1']
-        title_cell.value = "PURCHASE ORDER"
-        title_cell.font = Font(bold=True, size=16)
-        title_cell.alignment = Alignment(horizontal='center')
+        company_cell = ws['A1']
+        company_cell.value = company_name.upper()
+        company_cell.font = Font(bold=True, size=16, color="1E293B")
+        company_cell.alignment = Alignment(horizontal='center')
+
+        ws.merge_cells('A2:F2')
+        subtitle_cell = ws['A2']
+        subtitle_cell.value = "PURCHASE ORDER"
+        subtitle_cell.font = Font(bold=True, size=12, color="64748B")
+        subtitle_cell.alignment = Alignment(horizontal='center')
         
-        ws['A2'] = f"PO Number: {po.po_number}"
-        ws['A3'] = f"Date: {po.order_date}"
-        ws['A4'] = f"Distributor: {po.distributor.name}"
-        ws['A2'].font = Font(bold=True)
+        ws['A3'] = f"PO Number: {po.po_number}"
+        ws['A4'] = f"Date: {po.order_date}"
+        ws['A5'] = f"Distributor: {po.distributor.name}"
         ws['A3'].font = Font(bold=True)
         ws['A4'].font = Font(bold=True)
+        ws['A5'].font = Font(bold=True)
         
         # Table Styling & Headers
         headers = ['S.No', 'Product Name', 'Pack', 'Order Qty', 'Rate', 'Amount']
+        ws.append([])
         ws.append(headers)
         
         header_row = ws.max_row
@@ -1812,10 +1880,12 @@ class PurchaseOrderPdfExportView(APIView):
             
         from apps.purchases.models import PurchaseOrder
         try:
-            po = PurchaseOrder.objects.prefetch_related('items', 'items__product').get(id=pk, outlet_id=outlet_id)
+            po = PurchaseOrder.objects.select_related('outlet', 'outlet__organization', 'distributor').prefetch_related('items', 'items__product').get(id=pk, outlet_id=outlet_id)
         except PurchaseOrder.DoesNotExist:
             return Response({'detail': 'PO not found'}, status=status.HTTP_404_NOT_FOUND)
             
+        company_name = (getattr(po.outlet, 'name', '') or (po.outlet.organization.name if hasattr(po.outlet, 'organization') and po.outlet.organization else "MediFlow Pharmacy")).strip()
+
         from django.http import HttpResponse
         import io
         from reportlab.lib.pagesizes import letter
@@ -1828,16 +1898,20 @@ class PurchaseOrderPdfExportView(APIView):
         elements = []
         styles = getSampleStyleSheet()
         
+        # Dynamic Company Branding Header
+        elements.append(Paragraph(f"<font size=18 color='#1E293B'><b>{company_name}</b></font>", ParagraphStyle(name='CompanyBrand', parent=styles['Normal'], alignment=1)))
+        elements.append(Spacer(1, 6))
+
         # Header Table
         header_data = [
             [
                 Paragraph(f"<b>Distributor:</b> {po.distributor.name}<br/><b>PO Number:</b> {po.po_number}<br/><b>Date:</b> {po.order_date}", styles['Normal']),
-                Paragraph("<font size=16><b>PURCHASE ORDER</b></font>", ParagraphStyle(name='RightAlign', parent=styles['Normal'], alignment=2))
+                Paragraph("<font size=14 color='#475569'><b>PURCHASE ORDER</b></font>", ParagraphStyle(name='RightAlign', parent=styles['Normal'], alignment=2))
             ]
         ]
         header_table = Table(header_data, colWidths=[300, 240])
         elements.append(header_table)
-        elements.append(Spacer(1, 20))
+        elements.append(Spacer(1, 15))
         
         # Items Table
         table_data = [['S.No', 'Product Name', 'Pack', 'Order Qty', 'Rate', 'Amount']]
