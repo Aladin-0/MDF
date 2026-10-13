@@ -244,7 +244,17 @@ export function GlobalNavigation() {
 
                     {accessibleNavItems.map((item, i) => {
                         const index = hasChainLink ? i + 1 : i;
-                        const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
+                        const isSubItemActive = !!item.subItems?.some(
+                            (sub) => pathname === sub.href || pathname.startsWith(sub.href + '/')
+                        );
+                        const isClaimedByOther = accessibleNavItems.some(
+                            (other) => other !== item && other.subItems?.some(
+                                (sub) => pathname === sub.href || pathname.startsWith(sub.href + '/')
+                            )
+                        );
+                        const isActive = isSubItemActive || (
+                            !isClaimedByOther && (pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href)))
+                        );
                         const hasPopup = !!(item.subItems && item.subItems.length > 0);
                         const isExpanded = openMenuIndex === index;
                         const isTabbable = focusedTopIndex === index && openMenuIndex === -1;
@@ -277,9 +287,6 @@ export function GlobalNavigation() {
                                         className={itemClasses}
                                     >
                                         {item.label}
-                                        {item.badge === 'overdueCreditCount' && (
-                                            <span className="ml-1.5 w-4 h-4 rounded-full bg-red-500 text-white text-[10px] flex items-center justify-center font-bold">2</span>
-                                        )}
                                     </button>
                                     
                                     {/* Anchored Submenu Panel */}
@@ -329,9 +336,6 @@ export function GlobalNavigation() {
                                 className={itemClasses}
                             >
                                 {item.label}
-                                {item.badge === 'overdueCreditCount' && (
-                                    <span className="ml-1.5 w-4 h-4 rounded-full bg-red-500 text-white text-[10px] flex items-center justify-center font-bold">2</span>
-                                )}
                             </Link>
                         );
                     })}

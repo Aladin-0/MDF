@@ -454,7 +454,7 @@ export const useBillingStore = create<BillingState>((set, get) => ({
         const state = get();
         const draft = state.drafts[id];
         if (!draft) return {
-            subtotal: 0, discountAmount: 0, extraDiscountAmount: 0, taxableAmount: 0,
+            subtotal: 0, discountAmount: 0, extraDiscountAmount: 0, preExtraNet: 0, taxableAmount: 0,
             cgstAmount: 0, sgstAmount: 0, cgst: 0, sgst: 0, igst: 0, roundOff: 0,
             grandTotal: 0, amountPaid: 0, amountDue: 0, itemCount: 0, totalQty: 0,
             hasScheduleH: false, requiresDoctorDetails: false
@@ -467,21 +467,34 @@ export const useBillingStore = create<BillingState>((set, get) => ({
         let totalCgst = 0;
         let totalSgst = 0;
         let totalMrp = 0;
-        let netPayable = 0;
+        let preExtraNet = 0;   // net after item-level rate discounts, BEFORE bill-level extra discount
+        let netPayable = 0;   // net after BOTH item discounts AND extra discount
         let totalQtyCount = 0;
         let hasScheduleH = false;
         let requiresDoctorDetails = false;
 
         draft.cart.forEach(item => {
-            // 1. Determine the effective rate
+            // 1. Determine the effective rate (may already include item-level discount via item.rate)
             const effectiveRate = item.rate || (draft.saleType === 'WHOLESALE' ? (item.pts || item.ptr || item.mrp) : item.mrp) || 0;
             const totalQty = item.totalQty || 0;
             totalQtyCount += totalQty;
 
+            const gstDecimal = (item.gstPct ?? item.gstRate ?? 0) / 100;
+
+            // Pre-extra-discount values (item's effective rate, no global bill discount)
+            let rowPreExtraNet = 0;
+            if (draft.saleType === 'WHOLESALE') {
+                const rowTaxablePre = totalQty * effectiveRate;
+                rowPreExtraNet = rowTaxablePre + rowTaxablePre * gstDecimal;
+            } else {
+                rowPreExtraNet = totalQty * effectiveRate;
+            }
+            preExtraNet += rowPreExtraNet;
+
+            // Post-extra-discount values (with global bill discount factor)
             let rowNetPayable = 0;
             let rowTaxable = 0;
             let rowTotalGst = 0;
-            const gstDecimal = (item.gstPct ?? item.gstRate ?? 0) / 100;
 
             if (draft.saleType === 'WHOLESALE') {
                 // Exclusive Tax
@@ -500,7 +513,7 @@ export const useBillingStore = create<BillingState>((set, get) => ({
             totalCgst += (rowTotalGst / 2);
             totalSgst += (rowTotalGst / 2);
 
-            // 4. Track MRP for discount display
+            // Track MRP for item-level discount display
             totalMrp += (totalQty * (item.mrp || 0));
 
             if (['G', 'H', 'H1', 'X', 'C', 'Narcotic'].includes(item.scheduleType)) {
@@ -509,18 +522,14 @@ export const useBillingStore = create<BillingState>((set, get) => ({
             }
         });
 
-        // Discount is the difference between what it would cost at MRP vs what is actually being paid
-        const discountAmount = totalMrp - netPayable;
-        
-        let extraDiscountAmount = 0;
-        if (extraDiscPct > 0) {
-            let preExtraNet = 0;
-            draft.cart.forEach(item => {
-                const effRate = item.rate || (draft.saleType === 'WHOLESALE' ? (item.pts || item.ptr || item.mrp) : item.mrp) || 0;
-                preExtraNet += (item.totalQty || 0) * effRate;
-            });
-            extraDiscountAmount = preExtraNet - netPayable;
-        }
+        // itemDiscountAmount: saving from individual item rates vs MRP (BEFORE any bill-level extra discount)
+        const itemDiscountAmount = Math.max(0, totalMrp - preExtraNet);
+
+        // extraDiscountAmount: saving from the global bill-level extra discount %
+        const extraDiscountAmount = Math.max(0, preExtraNet - netPayable);
+
+        // Legacy alias kept for backward compatibility
+        const discountAmount = itemDiscountAmount;
 
         const exactTotal = totalTaxableValue + totalCgst + totalSgst;
         const grandTotal = draft.saleType === 'WHOLESALE' ? exactTotal : Math.round(exactTotal);
@@ -533,6 +542,7 @@ export const useBillingStore = create<BillingState>((set, get) => ({
             subtotal: totalTaxableValue,
             discountAmount,
             extraDiscountAmount,
+            preExtraNet,
             taxableAmount: totalTaxableValue,
             cgstAmount: totalCgst,
             sgstAmount: totalSgst,

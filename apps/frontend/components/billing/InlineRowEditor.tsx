@@ -201,10 +201,16 @@ export function InlineRowEditor({ item, saleType = 'RETAIL', onSave, onCancel, o
                                     return (
                                         <div 
                                             key={batch.id}
+                                            onPointerDown={(e) => {
+                                                if (!isExpired) {
+                                                    e.preventDefault();
+                                                    setSelectedBatchId(batch.id);
+                                                }
+                                            }}
                                             onClick={() => !isExpired && setSelectedBatchId(batch.id)}
                                             className={cn(
-                                                "p-2 rounded border flex flex-col cursor-pointer transition-all",
-                                                isSelected ? "border-blue-500 bg-blue-100 ring-1 ring-blue-500" : "border-slate-200 bg-white hover:border-blue-300",
+                                                "p-2 rounded border flex flex-col cursor-pointer transition-all select-none",
+                                                isSelected ? "border-blue-500 bg-blue-100 ring-1 ring-blue-500" : "border-slate-200 bg-white hover:border-blue-300 active:bg-blue-50",
                                                 isExpired ? "opacity-50 cursor-not-allowed bg-slate-50" : ""
                                             )}
                                         >

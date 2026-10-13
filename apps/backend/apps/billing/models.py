@@ -153,7 +153,11 @@ class SaleInvoice(models.Model):
             self.is_interstate = (self.customer.state_code != self.outlet.state_code)
 
         # Validate payment split sums to amount_paid
-        split_total = (self.cash_paid or Decimal('0')) + (self.upi_paid or Decimal('0')) + (self.card_paid or Decimal('0'))
+        # Use Decimal(str(...)) coercion so that float, int, or Decimal inputs all work safely.
+        def to_dec(v):
+            return Decimal(str(v)) if v is not None else Decimal('0')
+
+        split_total = to_dec(self.cash_paid) + to_dec(self.upi_paid) + to_dec(self.card_paid)
         amount_paid_val = self.amount_paid if self.amount_paid is not None else split_total
         if abs(float(split_total) - float(amount_paid_val)) > 0.01:
             raise ValidationError({

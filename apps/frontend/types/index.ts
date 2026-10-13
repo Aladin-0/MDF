@@ -97,9 +97,16 @@ export interface Outlet {
     pincode: string;
     gstin: string;
     drugLicenseNo: string;
+    dl20b?: string;
+    dl21b?: string;
+    dl_number_1?: string;
+    dl_number_2?: string;
     phone: string;
     logoUrl?: string;
     invoiceFooter?: string;
+    upiId?: string;
+    bankDetails?: string;
+    terms?: string;
     isActive: boolean;
     createdAt: string;
 }
@@ -463,6 +470,7 @@ export interface BillTotals {
     subtotal: number;
     discountAmount: number;
     extraDiscountAmount: number;
+    preExtraNet: number;        // Net payable before the global bill discount is applied
     taxableAmount: number;
     cgstAmount: number;
     sgstAmount: number;
@@ -593,6 +601,7 @@ export interface SaleInvoice {
     doctorSpecialty?: string;
     patientName?: string;
     patientAddress?: string;
+    outlet?: Outlet;
 }
 
 export interface Quotation {
@@ -1307,11 +1316,17 @@ export interface PrintHeaderConfig {
     showDrugLicense: boolean;
     showGstin: boolean;
     customText: string;
+    phone?: string;
+    address?: string;
+    gstin?: string;
+    dl20b?: string;
+    dl21b?: string;
 }
 
 export interface PrintFooterConfig {
     bankDetails: string;
     terms: string;
+    upiId?: string;
 }
 
 export interface PrintSettingsConfig {

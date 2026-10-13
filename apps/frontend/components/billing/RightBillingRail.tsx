@@ -75,7 +75,8 @@ export function RightBillingRail() {
         return calculateTotalMargin(activeDraft.cart, totals.subtotal);
     }, [activeDraft, totals.subtotal]);
 
-    const base = totals.subtotal - totals.discountAmount;
+
+
 
     const commitPct = (raw: string) => {
         const v = Number(Math.min(100, Math.max(0, parseFloat(raw) || 0)).toFixed(2));
@@ -84,7 +85,13 @@ export function RightBillingRail() {
 
     const commitAmt = (raw: string) => {
         const v = Math.max(0, parseFloat(raw) || 0);
-        const pct = base > 0 ? Number(Math.min(100, (v / base) * 100).toFixed(2)) : 0;
+        // Use preExtraNet (value before the global bill discount) as the base.
+        // IMPORTANT: store 6 decimal places of % precision here so that the
+        // round-trip  ₹ → % → ₹  is lossless to within <₹0.01.
+        // Example: 3432 / 5140 * 100 = 66.770428... stored as 66.7704
+        //          When rendered: 66.7704% of 5140 = ₹3432.00 ✓
+        const base = totals.preExtraNet;
+        const pct = base > 0 ? Number(Math.min(100, (v / base) * 100).toFixed(6)) : 0;
         updateDraftHeader(activeDraftId, { extraDiscountPct: pct });
     };
 
@@ -152,8 +159,8 @@ export function RightBillingRail() {
                                     <input
                                         inputMode="decimal"
                                         placeholder="0"
-                                        value={pctFocused ? pctDraft : (extraDiscountPct === 0 ? '' : String(extraDiscountPct))}
-                                        className="w-10 h-6 text-center text-xs border border-blue-200 rounded px-1 text-blue-700 bg-blue-50 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-300 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none pr-3"
+                                        value={pctFocused ? pctDraft : (extraDiscountPct === 0 ? '' : String(parseFloat(extraDiscountPct.toFixed(2))))}
+                                        className="w-14 h-7 text-center text-xs border border-blue-200 rounded px-1 text-blue-700 bg-blue-50 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-300 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none pr-3"
                                         onFocus={(e) => {
                                             setPctFocused(true);
                                             setPctDraft(extraDiscountPct === 0 ? '' : String(extraDiscountPct));
@@ -181,7 +188,7 @@ export function RightBillingRail() {
                                         inputMode="decimal"
                                         placeholder="0.00"
                                         value={amtFocused ? amtDraft : (totals.extraDiscountAmount === 0 ? '' : totals.extraDiscountAmount.toFixed(2))}
-                                        className="w-14 h-6 text-center text-xs border border-blue-200 rounded px-1 text-blue-700 bg-blue-50 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-300 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none pl-3"
+                                        className="w-20 h-7 text-center text-xs border border-blue-200 rounded px-1 text-blue-700 bg-blue-50 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-300 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none pl-3"
                                         onFocus={(e) => {
                                             setAmtFocused(true);
                                             setAmtDraft(totals.extraDiscountAmount === 0 ? '' : totals.extraDiscountAmount.toFixed(2));
@@ -228,7 +235,13 @@ export function RightBillingRail() {
                     )}
                     <div className="flex justify-between">
                         <span>Round Off</span>
-                        <span>- ₹ {Math.abs(totals.roundOff).toFixed(2)}</span>
+                        <span>
+                            {totals.roundOff > 0
+                                ? `+ ₹ ${totals.roundOff.toFixed(2)}`
+                                : totals.roundOff < 0
+                                ? `- ₹ ${Math.abs(totals.roundOff).toFixed(2)}`
+                                : '₹ 0.00'}
+                        </span>
                     </div>
                 </div>
             </div>

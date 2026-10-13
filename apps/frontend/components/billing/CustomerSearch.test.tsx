@@ -61,4 +61,29 @@ describe('CustomerSearch Keyboard Navigation', () => {
         fireEvent.keyDown(input, { key: 'Escape' });
         expect(screen.queryByText('John Customer')).not.toBeInTheDocument();
     });
+
+    it('selects customer on touch/pointerDown without requiring Enter key', () => {
+        const handleSelect = jest.fn();
+        render(<CustomerSearch onSelect={handleSelect} />);
+
+        const input = screen.getByPlaceholderText('Search Customer...');
+        fireEvent.focus(input);
+        expect(screen.getByText('Jane Customer')).toBeInTheDocument();
+
+        // Tapping / touch on tablet fires pointerdown
+        const customerOption = screen.getByText('Jane Customer');
+        fireEvent.pointerDown(customerOption);
+
+        expect(handleSelect).toHaveBeenCalledWith(mockLedgers[1]);
+    });
+
+    it('allows changing customer via touch/pointerDown on Change button', () => {
+        const handleSelect = jest.fn();
+        render(<CustomerSearch currentLedger={mockLedgers[0]} onSelect={handleSelect} />);
+
+        const changeBtn = screen.getByRole('button', { name: /change/i });
+        fireEvent.pointerDown(changeBtn);
+
+        expect(handleSelect).toHaveBeenCalledWith(null);
+    });
 });

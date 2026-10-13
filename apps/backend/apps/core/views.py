@@ -7,6 +7,26 @@ from apps.core.permissions import IsAdminStaff
 from apps.core.models import Outlet, OutletSettings, default_print_settings_retail, default_print_settings_wholesale
 
 
+def serialize_outlet(outlet):
+    if not outlet:
+        return None
+    return {
+        'id': str(outlet.id),
+        'organizationId': str(outlet.organization_id) if outlet.organization_id else None,
+        'name': outlet.name,
+        'address': outlet.address,
+        'city': outlet.city,
+        'state': outlet.state,
+        'stateCode': outlet.state_code,
+        'pincode': outlet.pincode,
+        'phone': outlet.phone,
+        'gstin': outlet.gstin,
+        'drugLicenseNo': outlet.drug_license_no,
+        'logoUrl': outlet.logo_url,
+        'invoiceFooter': outlet.invoice_footer,
+    }
+
+
 class OutletSettingsView(APIView):
     """GET/PATCH /api/v1/outlet/settings/"""
     permission_classes = [IsAdminStaff]
@@ -55,7 +75,11 @@ class OutletSettingsView(APIView):
             return Response({'detail': 'Outlet not found'}, status=status.HTTP_404_NOT_FOUND)
 
         settings, _ = OutletSettings.objects.get_or_create(outlet=outlet)
-        return Response({'success': True, 'data': self._serialize(settings)}, status=status.HTTP_200_OK)
+        return Response({
+            'success': True,
+            'data': self._serialize(settings),
+            'outlet': serialize_outlet(outlet),
+        }, status=status.HTTP_200_OK)
 
     def patch(self, request, *args, **kwargs):
         outlet_id = request.data.get('outletId') or request.query_params.get('outletId') or getattr(request.user, 'outlet_id', None)
@@ -103,13 +127,78 @@ class OutletSettingsView(APIView):
         if updated_fields:
             settings.save(update_fields=updated_fields)
 
-        # Handle updating the base Outlet model fields (e.g. GSTIN)
+        # Handle updating the base Outlet model fields
         outlet_updated = []
+        if 'outletName' in request.data:
+            outlet.name = (request.data['outletName'] or '').strip()
+            outlet_updated.append('name')
+        elif 'name' in request.data:
+            outlet.name = (request.data['name'] or '').strip()
+            outlet_updated.append('name')
+
+        if 'outletAddress' in request.data:
+            outlet.address = (request.data['outletAddress'] or '').strip()
+            outlet_updated.append('address')
+        elif 'address' in request.data:
+            outlet.address = (request.data['address'] or '').strip()
+            outlet_updated.append('address')
+
+        if 'outletCity' in request.data:
+            outlet.city = (request.data['outletCity'] or '').strip()
+            outlet_updated.append('city')
+        elif 'city' in request.data:
+            outlet.city = (request.data['city'] or '').strip()
+            outlet_updated.append('city')
+
+        if 'outletState' in request.data:
+            outlet.state = (request.data['outletState'] or '').strip()
+            outlet_updated.extend(['state', 'state_code'])
+        elif 'state' in request.data:
+            outlet.state = (request.data['state'] or '').strip()
+            outlet_updated.extend(['state', 'state_code'])
+
+        if 'outletPincode' in request.data:
+            outlet.pincode = (request.data['outletPincode'] or '').strip()
+            outlet_updated.append('pincode')
+        elif 'pincode' in request.data:
+            outlet.pincode = (request.data['pincode'] or '').strip()
+            outlet_updated.append('pincode')
+
+        if 'outletPhone' in request.data:
+            outlet.phone = (request.data['outletPhone'] or '').strip()
+            outlet_updated.append('phone')
+        elif 'phone' in request.data:
+            outlet.phone = (request.data['phone'] or '').strip()
+            outlet_updated.append('phone')
+
         if 'outletGstin' in request.data:
             outlet.gstin = (request.data['outletGstin'] or '').strip().upper()
             outlet_updated.append('gstin')
-        
-        if outlet_updated:
-            outlet.save(update_fields=outlet_updated)
+        elif 'gstin' in request.data:
+            outlet.gstin = (request.data['gstin'] or '').strip().upper()
+            outlet_updated.append('gstin')
 
-        return Response({'success': True, 'data': self._serialize(settings)}, status=status.HTTP_200_OK)
+        if 'outletDrugLicenseNo' in request.data:
+            outlet.drug_license_no = (request.data['outletDrugLicenseNo'] or '').strip()
+            outlet_updated.append('drug_license_no')
+        elif 'drugLicenseNo' in request.data:
+            outlet.drug_license_no = (request.data['drugLicenseNo'] or '').strip()
+            outlet_updated.append('drug_license_no')
+
+        if 'invoiceFooter' in request.data:
+            outlet.invoice_footer = (request.data['invoiceFooter'] or '').strip()
+            outlet_updated.append('invoice_footer')
+
+        if 'outletLogoUrl' in request.data or 'logoUrl' in request.data:
+            outlet.logo_url = request.data.get('outletLogoUrl') or request.data.get('logoUrl')
+            outlet_updated.append('logo_url')
+
+        if outlet_updated:
+            outlet.save(update_fields=list(set(outlet_updated)))
+
+        return Response({
+            'success': True,
+            'data': self._serialize(settings),
+            'outlet': serialize_outlet(outlet),
+        }, status=status.HTTP_200_OK)
+

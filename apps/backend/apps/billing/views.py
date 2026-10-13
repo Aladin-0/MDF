@@ -150,6 +150,19 @@ def build_sale_response_payload(sale_invoice, message=None, revision_id=None):
     response_data = {
         'id': str(sale_invoice.id),
         'outletId': str(sale_invoice.outlet.id),
+        'outlet': {
+            'id': str(sale_invoice.outlet.id),
+            'name': sale_invoice.outlet.name,
+            'address': sale_invoice.outlet.address,
+            'city': sale_invoice.outlet.city,
+            'state': sale_invoice.outlet.state,
+            'pincode': sale_invoice.outlet.pincode,
+            'phone': sale_invoice.outlet.phone,
+            'gstin': sale_invoice.outlet.gstin,
+            'drugLicenseNo': sale_invoice.outlet.drug_license_no,
+            'invoiceFooter': sale_invoice.outlet.invoice_footer,
+            'logoUrl': sale_invoice.outlet.logo_url,
+        } if sale_invoice.outlet else None,
         'invoiceNo': sale_invoice.invoice_no,
         'invoiceDate': sale_invoice.invoice_date.isoformat() if sale_invoice.invoice_date else None,
         'customerId': str(sale_invoice.customer.id) if sale_invoice.customer else None,
@@ -2392,10 +2405,10 @@ class SaleDetailView(APIView):
             if outlet_id:
                 # Filter by outlet if provided (stricter security)
                 outlet = Outlet.objects.get(id=outlet_id)
-                invoice = SaleInvoice.objects.select_related('customer', 'billed_by').get(id=sale_id, outlet=outlet)
+                invoice = SaleInvoice.objects.select_related('customer', 'billed_by', 'outlet').get(id=sale_id, outlet=outlet)
             else:
                 # Fetch by ID only — used by billing detail page which doesn't pass outletId
-                invoice = SaleInvoice.objects.select_related('customer', 'billed_by').get(id=sale_id)
+                invoice = SaleInvoice.objects.select_related('customer', 'billed_by', 'outlet').get(id=sale_id)
         except (Outlet.DoesNotExist, SaleInvoice.DoesNotExist):
             return Response(
                 {'detail': f'Sale {sale_id} not found'},
@@ -2458,6 +2471,19 @@ class SaleDetailView(APIView):
         result = {
             'id': str(invoice.id),
             'outletId': str(invoice.outlet_id),
+            'outlet': {
+                'id': str(invoice.outlet.id),
+                'name': invoice.outlet.name,
+                'address': invoice.outlet.address,
+                'city': invoice.outlet.city,
+                'state': invoice.outlet.state,
+                'pincode': invoice.outlet.pincode,
+                'phone': invoice.outlet.phone,
+                'gstin': invoice.outlet.gstin,
+                'drugLicenseNo': invoice.outlet.drug_license_no,
+                'invoiceFooter': invoice.outlet.invoice_footer,
+                'logoUrl': invoice.outlet.logo_url,
+            } if invoice.outlet else None,
             'invoiceNo': invoice.invoice_no,
             'invoiceDate': invoice.invoice_date.isoformat(),
             'saleType': invoice.sale_type,

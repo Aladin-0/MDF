@@ -63,4 +63,29 @@ describe('DoctorPicker Keyboard Navigation', () => {
         fireEvent.keyDown(input, { key: 'Escape' });
         expect(screen.queryByText('Dr. John Doe')).not.toBeInTheDocument();
     });
+
+    it('selects doctor on touch/pointerDown without requiring Enter key', () => {
+        const handleSelect = jest.fn();
+        render(<DoctorPicker currentDoctor={null} onSelect={handleSelect} />);
+
+        const input = screen.getByPlaceholderText('Dr. Name / Reg No...');
+        fireEvent.focus(input);
+        expect(screen.getByText('Dr. Jane Smith')).toBeInTheDocument();
+
+        // Tapping / touch on tablet fires pointerdown
+        const doctorOption = screen.getByText('Dr. Jane Smith');
+        fireEvent.pointerDown(doctorOption);
+
+        expect(handleSelect).toHaveBeenCalledWith(mockDoctors[1]);
+    });
+
+    it('allows changing doctor via touch/pointerDown on Change button', () => {
+        const handleSelect = jest.fn();
+        render(<DoctorPicker currentDoctor={mockDoctors[0]} onSelect={handleSelect} />);
+
+        const changeBtn = screen.getByRole('button', { name: /change/i });
+        fireEvent.pointerDown(changeBtn);
+
+        expect(handleSelect).toHaveBeenCalledWith(null);
+    });
 });

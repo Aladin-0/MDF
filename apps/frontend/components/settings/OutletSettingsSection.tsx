@@ -98,7 +98,18 @@ export function OutletSettingsSection({ onDirty, onSaved, discardKey }: OutletSe
     async function onSubmit(data: OutletSettingsFormValues) {
         if (outlet) {
             try {
-                await settingsApi.updateSettings(outlet.id, { outletGstin: data.outletGstin });
+                await settingsApi.updateSettings(outlet.id, {
+                    outletName: data.outletName,
+                    outletAddress: data.outletAddress,
+                    outletCity: data.outletCity,
+                    outletState: data.outletState,
+                    outletPincode: data.outletPincode,
+                    outletPhone: data.outletPhone,
+                    outletGstin: data.outletGstin,
+                    outletDrugLicenseNo: data.outletDrugLicenseNo,
+                    invoiceFooter: data.invoiceFooter,
+                    outletLogoUrl: logoPreview ?? outlet.logoUrl,
+                });
             } catch (error) {
                 toast({ variant: 'destructive', title: 'Failed to sync outlet settings with server' });
                 return;

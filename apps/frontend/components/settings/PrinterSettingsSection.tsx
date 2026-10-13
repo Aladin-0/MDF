@@ -31,7 +31,7 @@ const DEFAULT_RETAIL: PrintSettingsConfig = {
         { id: "disc", label: "Disc", isVisible: true, order: 8, width: "7%" },
         { id: "amount", label: "Amount(₹)", isVisible: true, order: 9, width: "12%" }
     ],
-    header: { showLogo: true, showDrugLicense: true, showGstin: true, customText: "S.P.S MANAVATA PHARMA" },
+    header: { showLogo: true, showDrugLicense: true, showGstin: true, customText: "" },
     footer: { bankDetails: "", terms: "1. Goods once sold will not be taken back." }
 };
 
@@ -52,8 +52,8 @@ const DEFAULT_WHOLESALE: PrintSettingsConfig = {
         { id: "taxable", label: "Taxable", isVisible: true, order: 12, width: "8%" },
         { id: "amount", label: "Amount(₹)", isVisible: true, order: 13, width: "12%" }
     ],
-    header: { showLogo: true, showDrugLicense: true, showGstin: true, customText: "S.P.S MANAVATA PHARMA" },
-    footer: { bankDetails: "Bank: HDFC, A/C: 1234...", terms: "1. Goods once sold will not be taken back." }
+    header: { showLogo: true, showDrugLicense: true, showGstin: true, customText: "" },
+    footer: { bankDetails: "", terms: "1. Goods once sold will not be taken back." }
 };
 
 export function PrinterSettingsSection({ onDirty, onSaved, discardKey }: PrinterSettingsSectionProps) {
@@ -250,6 +250,15 @@ export function PrinterSettingsSection({ onDirty, onSaved, discardKey }: Printer
                 <div className="border rounded-xl p-4 bg-white shadow-sm space-y-4">
                     <h3 className="font-semibold text-lg text-slate-800">Footer Details</h3>
                     <div className="space-y-4">
+                        <div>
+                            <Label className="text-slate-700">UPI ID (e.g. for QR Code / Payment)</Label>
+                            <Input 
+                                className="mt-2"
+                                value={activeConfig.footer.upiId || ''}
+                                onChange={(e) => setConfig({ ...activeConfig, footer: { ...activeConfig.footer, upiId: e.target.value } })}
+                                placeholder="Enter UPI ID (e.g. store@upi)..."
+                            />
+                        </div>
                         <div>
                             <Label className="text-slate-700">Bank Details</Label>
                             <Textarea 

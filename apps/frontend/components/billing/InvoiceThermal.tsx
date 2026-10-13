@@ -4,6 +4,7 @@ import React, { forwardRef } from 'react';
 import { format } from 'date-fns';
 import { SaleInvoice, PrintSettingsConfig } from '@/types';
 import { useAuthStore } from '@/store/authStore';
+import { useSettingsStore } from '@/store/settingsStore';
 import { formatQty, cn } from '@/lib/utils';
 
 interface InvoiceThermalProps {
@@ -26,6 +27,7 @@ const DEFAULT_RETAIL: PrintSettingsConfig = {
 
 export const InvoiceThermal = forwardRef<HTMLDivElement, InvoiceThermalProps>(({ invoice, config }, ref) => {
     const { outlet, user } = useAuthStore();
+    const settingsState = typeof useSettingsStore === 'function' ? useSettingsStore() : undefined;
     
     const isQuotation = invoice.invoiceNo?.startsWith('QT-');
 
@@ -58,11 +60,27 @@ export const InvoiceThermal = forwardRef<HTMLDivElement, InvoiceThermalProps>(({
         <div ref={ref} className="bg-white text-black w-[80mm] mx-auto p-4 font-mono text-[11px] leading-snug print:m-0 print:p-2 shadow max-w-[80mm]">
             
             <div className="text-center mb-4">
-                <h1 className="font-bold text-[14px] uppercase">{activeConfig.header.customText || outlet?.name || 'MediFlow Pharmacy'}</h1>
-                <p>{outlet?.address || '123 Health St, City'}</p>
-                <p>Ph: {outlet?.phone || '+91 0000000000'}</p>
-                {activeConfig.header.showGstin && <p>GSTIN: {outlet?.gstin || ''}</p>}
-                {activeConfig.header.showDrugLicense && <p>DL: MH-MZ3-315174</p>}
+                {(() => {
+                    const customText = (activeConfig.header.customText || '').trim();
+                    const isLegacy = customText.toLowerCase() === 's.p.s manavata pharma' || customText.toLowerCase() === 'sps manavata pharma';
+                    const storeName = (!isLegacy && customText) || outlet?.name || settingsState?.outletName || 'MediFlow Pharmacy';
+                    const address = outlet?.address || settingsState?.outletAddress || '';
+                    const phone = outlet?.phone || settingsState?.outletPhone || '';
+                    const gstin = outlet?.gstin || settingsState?.outletGstin || '';
+                    const dl = outlet?.drugLicenseNo || settingsState?.outletDrugLicenseNo || (outlet as any)?.dl20b || '';
+                    const tagline = (outlet as any)?.invoiceHeader || settingsState?.invoiceHeader;
+
+                    return (
+                        <>
+                            <h1 className="font-bold text-[14px] uppercase">{storeName}</h1>
+                            {tagline && <p className="text-[10px] text-gray-600">{tagline}</p>}
+                            {address && <p>{address}</p>}
+                            {phone && <p>Ph: {phone}</p>}
+                            {activeConfig.header.showGstin && gstin && <p>GSTIN: {gstin}</p>}
+                            {activeConfig.header.showDrugLicense && dl && <p>DL: {dl}</p>}
+                        </>
+                    );
+                })()}
             </div>
 
             {isQuotation && (
@@ -153,9 +171,11 @@ export const InvoiceThermal = forwardRef<HTMLDivElement, InvoiceThermalProps>(({
             </div>
 
             <div className="text-center mt-6">
-                {activeConfig.footer.bankDetails && <p className="mb-2 whitespace-pre-wrap">{activeConfig.footer.bankDetails}</p>}
+                {activeConfig.footer.bankDetails && !activeConfig.footer.bankDetails.includes('Bank: HDFC, A/C: 1234') && (
+                    <p className="mb-2 whitespace-pre-wrap">{activeConfig.footer.bankDetails}</p>
+                )}
                 {activeConfig.footer.terms && <p className="mb-2 whitespace-pre-wrap">{activeConfig.footer.terms}</p>}
-                <p>*** Thank You / Get Well Soon ***</p>
+                <p>{outlet?.invoiceFooter || settingsState?.invoiceFooter || '*** Thank You / Get Well Soon ***'}</p>
                 <p className="mt-4">Software by MediFlow</p>
             </div>
             

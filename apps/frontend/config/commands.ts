@@ -107,15 +107,6 @@ export const COMMAND_SCHEMA: CommandItem[] = [
       "payload": "/dashboard/reports"
     },
     {
-      "id": "nav.reports.reorder",
-      "label": "Reports: Reorder Planning",
-      "category": "System & Audit",
-      "routeContext": "*",
-      "requiredRole": ["view_reports"],
-      "actionType": "navigate",
-      "payload": "/dashboard/reports/reorder"
-    },
-    {
       "id": "nav.reports.daily",
       "label": "Reports: Daily Report",
       "category": "System & Audit",
@@ -125,40 +116,31 @@ export const COMMAND_SCHEMA: CommandItem[] = [
       "payload": "/dashboard/reports/daily"
     },
     {
-      "id": "nav.reports.trial_balance",
-      "label": "Reports: Trial Balance",
-      "category": "System & Audit",
+      "id": "nav.accounts.trial_balance",
+      "label": "Accounts: Trial Balance",
+      "category": "Accounts & Vouchers",
       "routeContext": "*",
       "requiredRole": ["view_reports"],
       "actionType": "navigate",
       "payload": "/dashboard/reports/trial-balance"
     },
     {
-      "id": "nav.reports.balance_sheet",
-      "label": "Reports: Balance Sheet",
-      "category": "System & Audit",
+      "id": "nav.accounts.balance_sheet",
+      "label": "Accounts: Balance Sheet",
+      "category": "Accounts & Vouchers",
       "routeContext": "*",
       "requiredRole": ["view_reports"],
       "actionType": "navigate",
       "payload": "/dashboard/reports/balance-sheet"
     },
     {
-      "id": "nav.reports.pnl",
-      "label": "Reports: Profit & Loss",
-      "category": "System & Audit",
+      "id": "nav.accounts.pnl",
+      "label": "Accounts: Profit & Loss",
+      "category": "Accounts & Vouchers",
       "routeContext": "*",
       "requiredRole": ["view_reports"],
       "actionType": "navigate",
       "payload": "/dashboard/reports/profit-loss"
-    },
-    {
-      "id": "nav.reports.gstr2a",
-      "label": "Reports: GSTR-2A Recon",
-      "category": "System & Audit",
-      "routeContext": "*",
-      "requiredRole": ["view_reports"],
-      "actionType": "navigate",
-      "payload": "/dashboard/reports/gstr2a"
     },
     {
       "id": "nav.accounts.dashboard",

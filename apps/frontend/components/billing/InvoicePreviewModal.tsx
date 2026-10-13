@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import { SaleInvoice } from '@/types';
 import { useSettingsStore } from '@/store/settingsStore';
+import { useAuthStore } from '@/store/authStore';
 import { InvoiceThermal } from './InvoiceThermal';
 import { ManavataA4Invoice } from '@/components/print/ManavataA4Invoice';
 import { cn } from '@/lib/utils';
@@ -27,6 +28,7 @@ const A4_LANDSCAPE_WIDTH_PX = 1123;
 export function InvoicePreviewModal({ isOpen, onClose, invoice, onNewBill, onEdit, onViewHistory }: InvoicePreviewModalProps) {
     const { printerType } = useSettingsStore();
     const { settings } = useOutletSettings();
+    const authOutlet = useAuthStore((s) => s.outlet || s.user?.outlet);
     const printRef = useRef<HTMLDivElement>(null);
     const router = useRouter();
 
@@ -197,7 +199,7 @@ export function InvoicePreviewModal({ isOpen, onClose, invoice, onNewBill, onEdi
                                 }}
                             >
                                 <div id="print-section" className="w-full bg-white text-black">
-                                    <ManavataA4Invoice ref={printRef as any} invoice={invoice} config={activeConfig} />
+                                    <ManavataA4Invoice ref={printRef as any} invoice={invoice} config={activeConfig} outlet={invoice?.outlet || authOutlet || undefined} />
                                 </div>
                             </div>
                         </div>

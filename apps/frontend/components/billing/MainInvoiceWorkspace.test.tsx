@@ -9,18 +9,29 @@ jest.mock('../../store/billingStore', () => ({
     useBillingStore: jest.fn(),
 }));
 
+jest.mock('@/hooks/useProductSearch', () => ({
+    useProductSearch: () => ({ data: [], isFetching: false }),
+}));
+
 describe('MainInvoiceWorkspace', () => {
     it('renders without crashing when cart item expiryDate is null', () => {
         (useBillingStore as unknown as jest.Mock).mockReturnValue({
-            cart: [{
-                batchId: '1',
-                name: 'Test Item',
-                expiryDate: null,
-                mrp: 100,
-                qtyStrips: 1,
-                qtyLoose: 0,
-                totalAmount: 100,
-            }],
+            activeDraftId: 'draft-1',
+            drafts: {
+                'draft-1': {
+                    cart: [{
+                        batchId: '1',
+                        name: 'Test Item',
+                        expiryDate: null,
+                        mrp: 100,
+                        qtyStrips: 1,
+                        qtyLoose: 0,
+                        totalAmount: 100,
+                    }],
+                    documentMode: 'invoice',
+                    saleType: 'RETAIL',
+                }
+            },
             patientInfo: null,
             doctorInfo: null,
             subtotal: 100,
@@ -42,15 +53,22 @@ describe('MainInvoiceWorkspace', () => {
 
     it('renders without crashing when cart item expiryDate is malformed', () => {
         (useBillingStore as unknown as jest.Mock).mockReturnValue({
-            cart: [{
-                batchId: '2',
-                name: 'Test Item 2',
-                expiryDate: 'invalid-date',
-                mrp: 100,
-                qtyStrips: 1,
-                qtyLoose: 0,
-                totalAmount: 100,
-            }],
+            activeDraftId: 'draft-1',
+            drafts: {
+                'draft-1': {
+                    cart: [{
+                        batchId: '2',
+                        name: 'Test Item 2',
+                        expiryDate: 'invalid-date',
+                        mrp: 100,
+                        qtyStrips: 1,
+                        qtyLoose: 0,
+                        totalAmount: 100,
+                    }],
+                    documentMode: 'invoice',
+                    saleType: 'RETAIL',
+                }
+            },
             patientInfo: null,
             doctorInfo: null,
             subtotal: 100,
