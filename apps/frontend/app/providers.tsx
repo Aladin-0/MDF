@@ -34,6 +34,22 @@ export function Providers({ children }: { children: React.ReactNode }) {
             useSettingsStore.persist.rehydrate();
             useSettingsStore.getState().setHasHydrated(true);
         }
+
+        // Proactive Service Worker cleanup to eliminate stale PWA/Workbox caching
+        if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then((registrations) => {
+                for (const registration of registrations) {
+                    registration.unregister().catch(() => {});
+                }
+            }).catch(() => {});
+            if ('caches' in window) {
+                caches.keys().then((keys) => {
+                    for (const key of keys) {
+                        caches.delete(key).catch(() => {});
+                    }
+                }).catch(() => {});
+            }
+        }
     }, []);
 
     return (

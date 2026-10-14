@@ -100,7 +100,17 @@ export function Sidebar({ isCollapsed, onToggle, isMobile = false }: SidebarProp
                     {NAV_ITEMS.map((item) => {
                         if (item.permission && !hasPermission(item.permission)) return null;
 
-                        const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
+                        const isSubItemActive = !!item.subItems?.some(
+                            (sub) => pathname === sub.href || pathname.startsWith(sub.href + '/')
+                        );
+                        const isClaimedByOther = NAV_ITEMS.some(
+                            (other) => other !== item && other.subItems?.some(
+                                (sub) => pathname === sub.href || pathname.startsWith(sub.href + '/')
+                            )
+                        );
+                        const isActive = isSubItemActive || (
+                            !isClaimedByOther && (pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href)))
+                        );
                         const Icon = item.icon;
 
                         const content = (
@@ -122,11 +132,6 @@ export function Sidebar({ isCollapsed, onToggle, isMobile = false }: SidebarProp
                                         {isActive && item.shortcut && (
                                             <span className="text-xs bg-white/20 px-1.5 py-0.5 rounded text-white font-mono">
                                                 {item.shortcut}
-                                            </span>
-                                        )}
-                                        {item.badge === 'overdueCreditCount' && ( // Placeholder logic for now
-                                            <span className="ml-auto bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                                                2
                                             </span>
                                         )}
                                     </>

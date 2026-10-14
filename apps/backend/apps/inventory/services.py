@@ -174,34 +174,54 @@ def _auto_create_stock_adjustment(entry):
 
 
 
-def rebuild_stock_ledger(batch_id: str, from_date):
+@transaction.atomic
+def rebuild_stock_ledger(batch_or_id=None, from_date=None, batch_id=None, batch=None):
     """
     Recalculate running_qty and running_value for a batch from a specific date forward.
     This is necessary when historical stock ledger entries are deleted or modified.
+    Uses select_for_update() on Batch to lock the row during calculation, preventing race conditions.
+    Accepts either a Batch model instance or batch_id (UUID/string), and optional from_date.
     """
+    target = batch if batch is not None else (batch_id if batch_id is not None else batch_or_id)
+    if hasattr(target, 'id'):
+        target_id = str(target.id)
+    elif target is not None:
+        target_id = str(target)
+    else:
+        return
+
+    try:
+        batch_obj = Batch.objects.select_for_update().get(id=target_id)
+    except Batch.DoesNotExist:
+        return
+
+    filter_kwargs = {'batch_id': target_id}
+    if from_date is not None:
+        filter_kwargs['txn_date__gte'] = from_date
+
     entries = StockLedger.objects.filter(
-        batch_id=batch_id,
-        txn_date__gte=from_date
-    ).order_by('txn_date', 'created_at')
+        **filter_kwargs
+    ).select_for_update().order_by('txn_date', 'created_at')
 
     # Get the last entry before the from_date
-    prev = StockLedger.objects.filter(
-        batch_id=batch_id,
-        txn_date__lt=from_date
-    ).order_by('-txn_date', '-created_at').first()
+    if from_date is not None:
+        prev = StockLedger.objects.filter(
+            batch_id=target_id,
+            txn_date__lt=from_date
+        ).order_by('-txn_date', '-created_at').first()
+    else:
+        prev = None
 
-    batch = Batch.objects.filter(pk=batch_id).first()
-    
     if prev:
         running_qty = prev.running_qty
         running_value = prev.running_value
     else:
         # Fallback to batch's opening_qty if no prior ledger entries exist
-        running_qty = batch.opening_qty if (batch and batch.opening_qty) else Decimal('0')
-        if batch and batch.opening_qty and batch.purchase_rate:
-             running_value = batch.opening_qty * batch.purchase_rate
+        running_qty = batch_obj.opening_qty if batch_obj.opening_qty else Decimal('0')
+        if batch_obj.opening_qty and batch_obj.purchase_rate:
+            running_value = batch_obj.opening_qty * batch_obj.purchase_rate
         else:
-             running_value = Decimal('0')
+            running_value = Decimal('0')
 
     for entry in entries:
         running_qty = running_qty + entry.qty_in - entry.qty_out
@@ -210,20 +230,13 @@ def rebuild_stock_ledger(batch_id: str, from_date):
             running_qty=running_qty,
             running_value=running_value
         )
-    
-    print(f"DEBUG rebuild_stock_ledger: batch_id={batch_id}, from_date={from_date}")
-    print(f"DEBUG prev={prev.pk if prev else None}, prev_qty={prev.running_qty if prev else 'N/A'}")
-    print(f"DEBUG entries={[f'{e.pk}:{e.txn_type}:in={e.qty_in}:out={e.qty_out}' for e in entries]}")
-    print(f"DEBUG final running_qty={running_qty}")
 
     # Step 3: Update Batch master
-    batch = Batch.objects.filter(pk=batch_id).first()
-    if batch:
-        pack_size = batch.pack_size or 1
-        total_loose = max(0, int(running_qty * pack_size))
-        qty_strips = total_loose // pack_size
-        qty_loose = total_loose % pack_size
-        Batch.objects.filter(pk=batch_id).update(qty_strips=qty_strips, qty_loose=qty_loose)
+    pack_size = batch_obj.pack_size or 1
+    total_loose = max(0, int(running_qty * pack_size))
+    qty_strips = total_loose // pack_size
+    qty_loose = total_loose % pack_size
+    Batch.objects.filter(pk=target_id).update(qty_strips=qty_strips, qty_loose=qty_loose)
 
 def reverse_stock_ledger_entry(outlet, txn_type, source_object, product=None, batch=None):
     """
@@ -245,7 +258,7 @@ def reverse_stock_ledger_entry(outlet, txn_type, source_object, product=None, ba
         
     entries_to_delete = list(entries)
     if not entries_to_delete:
-        return
+        return False
         
     # Get the earliest date and batch to rebuild
     min_date = min(e.txn_date for e in entries_to_delete)
@@ -255,3 +268,5 @@ def reverse_stock_ledger_entry(outlet, txn_type, source_object, product=None, ba
     
     for b_id in batch_ids:
         rebuild_stock_ledger(b_id, min_date)
+
+    return True

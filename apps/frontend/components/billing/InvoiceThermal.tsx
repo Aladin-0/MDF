@@ -4,7 +4,8 @@ import React, { forwardRef } from 'react';
 import { format } from 'date-fns';
 import { SaleInvoice, PrintSettingsConfig } from '@/types';
 import { useAuthStore } from '@/store/authStore';
-import { formatQty } from '@/lib/utils';
+import { useSettingsStore } from '@/store/settingsStore';
+import { formatQty, cn } from '@/lib/utils';
 
 interface InvoiceThermalProps {
     invoice: SaleInvoice;
@@ -26,6 +27,7 @@ const DEFAULT_RETAIL: PrintSettingsConfig = {
 
 export const InvoiceThermal = forwardRef<HTMLDivElement, InvoiceThermalProps>(({ invoice, config }, ref) => {
     const { outlet, user } = useAuthStore();
+    const settingsState = typeof useSettingsStore === 'function' ? useSettingsStore() : undefined;
     
     const isQuotation = invoice.invoiceNo?.startsWith('QT-');
 
@@ -43,7 +45,7 @@ export const InvoiceThermal = forwardRef<HTMLDivElement, InvoiceThermalProps>(({
         switch (columnId) {
             case 'sn': return idx + 1;
             case 'productName': return <div className="font-bold whitespace-normal">{item.name || item.productId} ({(item.batchNo || 'B').slice(0, 8)})</div>;
-            case 'batch': return item.batchNo;
+            case 'batch': return <div className="break-words whitespace-normal max-w-[80px]">{item.batchNo}</div>;
             case 'mrp': return <div className="text-right">{mrp.toFixed(2)}</div>;
             case 'ptr': return <div className="text-right">{ptr.toFixed(2)}</div>;
             case 'pts': return <div className="text-right">{(pts || ptr).toFixed(2)}</div>;
@@ -58,11 +60,27 @@ export const InvoiceThermal = forwardRef<HTMLDivElement, InvoiceThermalProps>(({
         <div ref={ref} className="bg-white text-black w-[80mm] mx-auto p-4 font-mono text-[11px] leading-snug print:m-0 print:p-2 shadow max-w-[80mm]">
             
             <div className="text-center mb-4">
-                <h1 className="font-bold text-[14px] uppercase">{activeConfig.header.customText || outlet?.name || 'MediFlow Pharmacy'}</h1>
-                <p>{outlet?.address || '123 Health St, City'}</p>
-                <p>Ph: {outlet?.phone || '+91 0000000000'}</p>
-                {activeConfig.header.showGstin && <p>GSTIN: {outlet?.gstin || ''}</p>}
-                {activeConfig.header.showDrugLicense && <p>DL: MH-MZ3-315174</p>}
+                {(() => {
+                    const customText = (activeConfig.header.customText || '').trim();
+                    const isLegacy = customText.toLowerCase() === 's.p.s manavata pharma' || customText.toLowerCase() === 'sps manavata pharma';
+                    const storeName = (!isLegacy && customText) || outlet?.name || settingsState?.outletName || 'MediFlow Pharmacy';
+                    const address = outlet?.address || settingsState?.outletAddress || '';
+                    const phone = outlet?.phone || settingsState?.outletPhone || '';
+                    const gstin = outlet?.gstin || settingsState?.outletGstin || '';
+                    const dl = outlet?.drugLicenseNo || settingsState?.outletDrugLicenseNo || (outlet as any)?.dl20b || '';
+                    const tagline = (outlet as any)?.invoiceHeader || settingsState?.invoiceHeader;
+
+                    return (
+                        <>
+                            <h1 className="font-bold text-[14px] uppercase">{storeName}</h1>
+                            {tagline && <p className="text-[10px] text-gray-600">{tagline}</p>}
+                            {address && <p>{address}</p>}
+                            {phone && <p>Ph: {phone}</p>}
+                            {activeConfig.header.showGstin && gstin && <p>GSTIN: {gstin}</p>}
+                            {activeConfig.header.showDrugLicense && dl && <p>DL: {dl}</p>}
+                        </>
+                    );
+                })()}
             </div>
 
             {isQuotation && (
@@ -86,7 +104,7 @@ export const InvoiceThermal = forwardRef<HTMLDivElement, InvoiceThermalProps>(({
                 <thead>
                     <tr className="border-b border-black">
                         {sortedColumns.map((col) => (
-                            <th key={col.id} className="py-1" style={{ width: col.width }}>
+                            <th key={col.id} className={cn("py-1", col.id === 'batch' && "break-words whitespace-normal max-w-[80px]")} style={{ width: col.width }}>
                                 {col.label}
                             </th>
                         ))}
@@ -96,7 +114,7 @@ export const InvoiceThermal = forwardRef<HTMLDivElement, InvoiceThermalProps>(({
                     {(invoice.items ?? []).map((item, index) => (
                         <tr key={index} className="border-b border-gray-200 border-dashed">
                             {sortedColumns.map((col) => (
-                                <td key={col.id} className="py-1 align-top">
+                                <td key={col.id} className={cn("py-1 align-top", col.id === 'batch' && "break-words whitespace-normal max-w-[80px]")}>
                                     {renderCell(item, col.id, index)}
                                 </td>
                             ))}
@@ -153,9 +171,11 @@ export const InvoiceThermal = forwardRef<HTMLDivElement, InvoiceThermalProps>(({
             </div>
 
             <div className="text-center mt-6">
-                {activeConfig.footer.bankDetails && <p className="mb-2 whitespace-pre-wrap">{activeConfig.footer.bankDetails}</p>}
+                {activeConfig.footer.bankDetails && !activeConfig.footer.bankDetails.includes('Bank: HDFC, A/C: 1234') && (
+                    <p className="mb-2 whitespace-pre-wrap">{activeConfig.footer.bankDetails}</p>
+                )}
                 {activeConfig.footer.terms && <p className="mb-2 whitespace-pre-wrap">{activeConfig.footer.terms}</p>}
-                <p>*** Thank You / Get Well Soon ***</p>
+                <p>{outlet?.invoiceFooter || settingsState?.invoiceFooter || '*** Thank You / Get Well Soon ***'}</p>
                 <p className="mt-4">Software by MediFlow</p>
             </div>
             

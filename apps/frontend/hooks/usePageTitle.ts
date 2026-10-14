@@ -10,7 +10,7 @@ export function usePageTitle(): string {
         '/dashboard/inventory': 'Inventory',
         '/dashboard/purchases': 'Purchases',
         '/dashboard/customers': 'Customers',
-        '/dashboard/credit': 'Credit / Udhari',
+        '/dashboard/credit': 'Credit',
         '/dashboard/staff': 'Staff Management',
         '/dashboard/attendance': 'Attendance',
         '/dashboard/reports': 'Reports',

@@ -160,10 +160,10 @@ def default_print_settings_wholesale():
             "showLogo": True,
             "showDrugLicense": True,
             "showGstin": True,
-            "customText": "S.P.S MANAVATA PHARMA"
+            "customText": ""
         },
         "footer": {
-            "bankDetails": "Bank: HDFC, A/C: 1234...",
+            "bankDetails": "",
             "terms": "1. Goods once sold will not be taken back."
         }
     }

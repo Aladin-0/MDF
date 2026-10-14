@@ -94,7 +94,7 @@ export default function CreditPage() {
             {/* Page header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-900">Credit / Udhari</h1>
+                    <h1 className="text-2xl font-bold text-slate-900">Credit</h1>
                     <p className="text-muted-foreground text-sm mt-1">
                         Track outstanding balances and collect payments
                     </p>

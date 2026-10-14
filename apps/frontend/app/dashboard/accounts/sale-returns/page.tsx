@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { format } from 'date-fns';
-import { ArrowDownLeft, Plus } from 'lucide-react';
+import { ArrowDownLeft, Plus, Eye, Pencil } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -78,6 +78,7 @@ export default function SaleReturnsPage() {
                                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Customer</th>
                                 <th className="px-4 py-3 text-right font-medium text-muted-foreground">Amount</th>
                                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Refund Mode</th>
+                                <th className="px-4 py-3 text-right font-medium text-muted-foreground w-28">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y">
@@ -87,19 +88,43 @@ export default function SaleReturnsPage() {
                                     className="hover:bg-muted/50 transition-colors cursor-pointer group"
                                     onClick={() => setSelectedReturnId(r.id)}
                                 >
-                                    <td className="px-4 py-3 font-mono text-xs">{r.returnNo}</td>
+                                    <td className="px-4 py-3 font-mono text-xs font-semibold text-primary">{r.returnNo}</td>
                                     <td className="px-4 py-3 text-muted-foreground">
                                         {format(new Date(r.returnDate), 'dd MMM yyyy')}
                                     </td>
                                     <td className="px-4 py-3 font-mono text-xs">{r.originalInvoiceNo}</td>
                                     <td className="px-4 py-3">{r.customerName || '—'}</td>
-                                    <td className="px-4 py-3 text-right font-medium">
+                                    <td className="px-4 py-3 text-right font-semibold">
                                         ₹{Number(r.totalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                     </td>
                                     <td className="px-4 py-3">
                                         <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                                             {REFUND_MODE_LABELS[r.refundMode] ?? r.refundMode}
                                         </span>
+                                    </td>
+                                    <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                                        <div className="flex items-center justify-end gap-1.5">
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => setSelectedReturnId(r.id)}
+                                                className="h-8 px-2 text-xs"
+                                                title="View return details"
+                                            >
+                                                <Eye className="w-3.5 h-3.5 mr-1" /> View
+                                            </Button>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                asChild
+                                                className="h-8 px-2 text-xs border-amber-300 text-amber-700 hover:bg-amber-50"
+                                                title="Edit return"
+                                            >
+                                                <Link href={`/dashboard/accounts/sale-returns/${r.id}/edit`}>
+                                                    <Pencil className="w-3.5 h-3.5 mr-1" /> Edit
+                                                </Link>
+                                            </Button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}

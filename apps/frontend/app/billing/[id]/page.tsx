@@ -9,6 +9,7 @@ import { salesApi } from '@/lib/apiClient'
 import { ManavataA4Invoice } from '@/components/print/ManavataA4Invoice'
 import { InvoiceThermal } from '@/components/billing/InvoiceThermal'
 import { useSettingsStore } from '@/store/settingsStore'
+import { useAuthStore } from '@/store/authStore'
 import { useOutletSettings } from '@/hooks/useOutletSettings'
 
 // Loading Skeleton
@@ -49,6 +50,7 @@ export default function PastInvoicePage() {
     const router = useRouter()
     const { printerType } = useSettingsStore()
     const { settings } = useOutletSettings()
+    const authOutlet = useAuthStore((s) => s.outlet || s.user?.outlet)
     const invoiceId = params.id as string
     const [copied, setCopied] = useState(false)
 
@@ -178,7 +180,7 @@ export default function PastInvoicePage() {
                 {isThermal ? (
                     <InvoiceThermal ref={printRef} invoice={invoice} config={activeConfig} />
                 ) : (
-                    <ManavataA4Invoice ref={printRef as any} invoice={invoice} config={activeConfig} />
+                    <ManavataA4Invoice ref={printRef as any} invoice={invoice} config={activeConfig} outlet={invoice?.outlet || authOutlet || undefined} />
                 )}
             </div>
         </div>

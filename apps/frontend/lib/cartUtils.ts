@@ -28,7 +28,8 @@ export function calculateRowTotals(
     discountType: 'percentage' | 'amount',
     discountValueRaw: string,
     gstRate: number,
-    historicalBaseRate?: number
+    historicalBaseRate?: number,
+    saleType: 'RETAIL' | 'WHOLESALE' = 'RETAIL'
 ): RowTotals {
     const s = parseInt(qtyStripsRaw) || 0;
     const l = parseInt(qtyLooseRaw) || 0;
@@ -50,13 +51,27 @@ export function calculateRowTotals(
     }
 
     const rate = baseRate * (1 - (dPct / 100));
-    const sellAmount = rate * tQtyFractional;
+    
+    let taxableAmount = 0;
+    let gstAmount = 0;
+    let sellAmount = 0;
+
+    if (saleType === 'WHOLESALE') {
+        taxableAmount = rate * tQtyFractional;
+        gstAmount = taxableAmount * (gstRate / 100);
+        sellAmount = taxableAmount + gstAmount;
+    } else {
+        sellAmount = rate * tQtyFractional;
+        taxableAmount = sellAmount / (1 + gstRate / 100);
+        gstAmount = sellAmount - taxableAmount;
+    }
     
     // Purchase rate per pack
     const totalCost = (currentBatch.purchaseRate || 0) * tQtyFractional;
     
-    const marginAmount = sellAmount - totalCost;
-    const marginPct = sellAmount > 0 ? (marginAmount / sellAmount) * 100 : 0;
+    // Calculate margin on pre-tax amount for accuracy, though maintaining backward compat structure
+    const marginAmount = taxableAmount - totalCost;
+    const marginPct = taxableAmount > 0 ? (marginAmount / taxableAmount) * 100 : 0;
 
     const isLowMargin = marginPct < 10 && marginPct >= 0;
     const isNegativeMargin = marginPct < 0;
@@ -67,9 +82,6 @@ export function calculateRowTotals(
     const isQtyZero = tQtyFractional === 0;
 
     const isValid = !isDiscountInvalid && !isQtyZero && !isNegativeMargin;
-
-    const taxableAmount = bankersRound((rate * tQtyFractional) / (1 + gstRate / 100));
-    const gstAmount = bankersRound((rate * tQtyFractional) - taxableAmount);
 
     return {
         tQtyFractional,
@@ -87,7 +99,7 @@ export function calculateRowTotals(
         isDiscountInvalid,
         isQtyZero,
         isValid,
-        taxableAmount,
-        gstAmount
+        taxableAmount: bankersRound(taxableAmount),
+        gstAmount: bankersRound(gstAmount)
     };
 }

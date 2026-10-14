@@ -88,11 +88,10 @@ export const NAV_ITEMS: NavItem[] = [
         sequence: 'g c',
     },
     {
-        label: 'Credit / Udhari',
+        label: 'Credit',
         href: '/dashboard/credit',
         icon: CreditCard,
         permission: 'view_outlet' as Permission,
-        badge: 'overdueCreditCount',
         shortcut: 'Alt+7',
         sequence: 'g u',
     },
@@ -120,6 +119,9 @@ export const NAV_ITEMS: NavItem[] = [
             { label: 'New Voucher', href: '/dashboard/accounts/voucher-entry', icon: BookOpen },
             { label: 'All Vouchers', href: '/dashboard/accounts/vouchers', icon: List },
             { label: 'Ledgers', href: '/dashboard/accounts/ledgers', icon: List },
+            { label: 'Trial Balance', href: '/dashboard/reports/trial-balance', icon: Scale },
+            { label: 'Balance Sheet', href: '/dashboard/reports/balance-sheet', icon: PieChart },
+            { label: 'Profit & Loss', href: '/dashboard/reports/profit-loss', icon: TrendingUp },
         ],
     },
     {
@@ -139,12 +141,7 @@ export const NAV_ITEMS: NavItem[] = [
         sequence: 'g r',
         subItems: [
             { label: 'Reports Dashboard', href: '/dashboard/reports', icon: LayoutDashboard },
-            { label: 'Reorder Planning', href: '/dashboard/reports/reorder', icon: ClipboardList },
             { label: 'Daily Report', href: '/dashboard/reports/daily', icon: ClipboardList },
-            { label: 'Trial Balance', href: '/dashboard/reports/trial-balance', icon: Scale },
-            { label: 'Balance Sheet', href: '/dashboard/reports/balance-sheet', icon: PieChart },
-            { label: 'Profit & Loss', href: '/dashboard/reports/profit-loss', icon: TrendingUp },
-            { label: 'GSTR-2A Recon', href: '/dashboard/reports/gstr2a', icon: FileSearch },
         ],
     },
     {

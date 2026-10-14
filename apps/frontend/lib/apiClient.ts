@@ -42,6 +42,7 @@ function handle401() {
     authToken = null;
     if (typeof document !== 'undefined') {
         document.cookie = 'access_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+        document.cookie = 'mediflow_mock_auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
     }
     if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
         window.location.href = '/login';
@@ -500,7 +501,11 @@ const realSalesApi = {
         if (params?.startDate) url += `&startDate=${params.startDate}`;
         if (params?.endDate) url += `&endDate=${params.endDate}`;
         if (params?.search) url += `&search=${encodeURIComponent(params.search)}`;
+        if (params?.doctorId) url += `&doctorId=${encodeURIComponent(params.doctorId)}`;
+        if (params?.hospitalName) url += `&hospitalName=${encodeURIComponent(params.hospitalName)}`;
         if (params?.saleType && params.saleType !== 'ALL') url += `&saleType=${params.saleType}`;
+        if (params?.paymentMode && params.paymentMode.toLowerCase() !== 'all') url += `&paymentMode=${encodeURIComponent(params.paymentMode)}`;
+        if (params?.ordering) url += `&ordering=${encodeURIComponent(params.ordering)}`;
 
         const response = await fetch(url, { headers: getHeaders() });
         await assertOk(response);
@@ -865,6 +870,7 @@ const realPurchasesApi = {
         if (filters?.search) url += `&search=${encodeURIComponent(filters.search)}`;
         if (filters?.page) url += `&page=${filters.page}`;
         if (filters?.pageSize) url += `&pageSize=${filters.pageSize}`;
+        if (filters?.ordering) url += `&ordering=${encodeURIComponent(filters.ordering)}`;
 
         const response = await fetch(url, { headers: getHeaders() });
         await assertOk(response);
@@ -1636,10 +1642,11 @@ const realVoucherApi = {
         const data = await response.json();
         return data.data || [];
     },
-    getLedgers: async (outletId: string, params?: { type?: string; voucherType?: string; search?: string; group?: string }) => {
+    getLedgers: async (outletId: string, params?: { type?: string; voucherType?: string; search?: string; group?: string; filterGroup?: string }) => {
         let url = `${API_URL}/ledgers/?outletId=${outletId}`;
         if (params?.type) url += `&type=${params.type}`;
         if (params?.voucherType) url += `&voucherType=${params.voucherType}`;
+        if (params?.filterGroup) url += `&filterGroup=${params.filterGroup}`;
         if (params?.search) url += `&search=${encodeURIComponent(params.search)}`;
         if (params?.group) url += `&group=${encodeURIComponent(params.group)}`;
         const response = await fetch(url, { headers: getHeaders() });
@@ -1647,11 +1654,12 @@ const realVoucherApi = {
         const data = await response.json();
         return data.data || [];
     },
-    getLedgerStatement: async (ledgerId: string, from?: string, to?: string) => {
+    getLedgerStatement: async (ledgerId: string, from?: string, to?: string, ordering?: string) => {
         let url = `${API_URL}/ledgers/${ledgerId}/statement/`;
         const params: string[] = [];
         if (from) params.push(`from=${from}`);
         if (to) params.push(`to=${to}`);
+        if (ordering) params.push(`ordering=${encodeURIComponent(ordering)}`);
         if (params.length) url += '?' + params.join('&');
         const response = await fetch(url, { headers: getHeaders() });
         await assertOk(response);

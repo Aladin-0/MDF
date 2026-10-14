@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { format } from 'date-fns';
+import { SortDropdown, SortOption } from '@/components/ui/SortDropdown';
 import {
     ArrowLeft, Search, X, Eye, ShoppingCart, Receipt,
     CreditCard, FileText, RefreshCw, TrendingUp, TrendingDown, Minus, History, List
@@ -76,9 +77,16 @@ function txIcon(sourceType: SourceType) {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
+const LEDGER_SORT_OPTIONS: SortOption[] = [
+    { label: 'Latest First', value: 'desc' },
+    { label: 'Oldest First', value: 'asc' },
+];
+
 export default function LedgerStatementPage() {
     const { id } = useParams<{ id: string }>();
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const currentSort = searchParams.get('sort') || 'desc';
     const outletId = useOutletId();
     const { toast } = useToast();
 
@@ -105,17 +113,18 @@ export default function LedgerStatementPage() {
     const [voucherModalOpen, setVoucherModalOpen] = useState(false);
     const [previewVoucherId, setPreviewVoucherId] = useState('');
 
-    function load() {
+    function load(sortVal?: string) {
         if (!id) return;
         setLoading(true);
+        const sortToUse = sortVal || currentSort;
         voucherApi
-            .getLedgerStatement(id, from, to)
+            .getLedgerStatement(id, from, to, sortToUse)
             .then(setStatement)
             .catch(() => toast({ variant: 'destructive', title: 'Failed to load statement' }))
             .finally(() => setLoading(false));
     }
 
-    useEffect(() => { load(); }, [id]);
+    useEffect(() => { load(currentSort); }, [id, currentSort]);
 
     // ── Filtered transactions ─────────────────────────────────────────────────
     const filtered = useMemo(() => {
@@ -202,28 +211,37 @@ export default function LedgerStatementPage() {
                     <Label className="text-xs text-slate-500">To</Label>
                     <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-9 w-40 text-sm" />
                 </div>
-                <Button onClick={load} disabled={loading} variant="outline" className="h-9">
+                <Button onClick={() => load()} disabled={loading} variant="outline" className="h-9">
                     {loading ? <RefreshCw className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
                     Apply Filter
                 </Button>
 
-                {/* Search */}
-                <div className="relative ml-auto w-64">
-                    <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-                    <Input
-                        className="h-9 pl-9 pr-8 text-sm"
-                        placeholder="Search entries…"
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
+                <div className="ml-auto flex items-center gap-2.5">
+                    <SortDropdown
+                        options={LEDGER_SORT_OPTIONS}
+                        defaultValue="desc"
+                        paramKey="sort"
+                        className="w-36 h-9"
                     />
-                    {search && (
-                        <button
-                            onClick={() => setSearch('')}
-                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                        >
-                            <X className="h-3.5 w-3.5" />
-                        </button>
-                    )}
+
+                    {/* Search */}
+                    <div className="relative w-64">
+                        <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                        <Input
+                            className="h-9 pl-9 pr-8 text-sm"
+                            placeholder="Search entries…"
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                        />
+                        {search && (
+                            <button
+                                onClick={() => setSearch('')}
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                            >
+                                <X className="h-3.5 w-3.5" />
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
 

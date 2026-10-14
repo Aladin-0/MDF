@@ -36,6 +36,11 @@ interface SaleReturnEditModalProps {
     onSaved: (updated: any) => void;
 }
 
+/**
+ * @deprecated Deprecated in favor of unified full-page route at
+ * `/dashboard/accounts/sale-returns/[id]/edit`.
+ * Kept for legacy compatibility only.
+ */
 export function SaleReturnEditModal({
     open,
     onOpenChange,

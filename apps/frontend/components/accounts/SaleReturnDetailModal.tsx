@@ -16,7 +16,7 @@ import { Separator } from '@/components/ui/separator';
 import { salesApi } from '@/lib/apiClient';
 import { useAuthStore } from '@/store/authStore';
 import { useSettingsStore } from '@/store/settingsStore';
-import { SaleReturnEditModal } from './SaleReturnEditModal';
+
 
 interface SaleReturnDetailModalProps {
     open: boolean;
@@ -36,7 +36,6 @@ const REFUND_MODE_LABELS: Record<string, string> = {
 export function SaleReturnDetailModal({ open, onOpenChange, returnId }: SaleReturnDetailModalProps) {
     const [data, setData] = useState<any>(null);
     const [loading, setLoading] = useState(false);
-    const [editOpen, setEditOpen] = useState(false);
     const { outlet, user } = useAuthStore();
     const settings = useSettingsStore();
 
@@ -70,7 +69,6 @@ export function SaleReturnDetailModal({ open, onOpenChange, returnId }: SaleRetu
     };
 
     return (
-        <>
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="invoice-print-container max-w-4xl max-h-[90vh] overflow-y-auto p-0 print:max-h-none print:overflow-visible print:p-0 print:border-none border-t-4 border-t-red-500 gap-0">
                 
@@ -117,11 +115,13 @@ export function SaleReturnDetailModal({ open, onOpenChange, returnId }: SaleRetu
                                 <Button
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => setEditOpen(true)}
+                                    asChild
                                     className="border-amber-400 text-amber-700 hover:bg-amber-50"
                                 >
-                                    <Pencil className="w-4 h-4 mr-2" />
-                                    Edit
+                                    <Link href={`/dashboard/accounts/sale-returns/${data.id}/edit`}>
+                                        <Pencil className="w-4 h-4 mr-2" />
+                                        Edit
+                                    </Link>
                                 </Button>
                                 <Button variant="outline" size="sm" onClick={handlePrint} disabled={!data}>
                                     <Printer className="w-4 h-4 mr-2" />
@@ -333,12 +333,5 @@ export function SaleReturnDetailModal({ open, onOpenChange, returnId }: SaleRetu
 
             </DialogContent>
         </Dialog>
-        <SaleReturnEditModal
-            open={editOpen}
-            onOpenChange={setEditOpen}
-            returnData={data}
-            onSaved={(updated) => setData(updated)}
-        />
-        </>
     );
 }

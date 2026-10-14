@@ -26,6 +26,11 @@ interface PurchaseReturnEditModalProps {
     onSaved: (updated: DebitNote) => void;
 }
 
+/**
+ * @deprecated Deprecated in favor of unified full-page route at
+ * `/dashboard/accounts/purchase-returns/[id]/edit`.
+ * Kept for legacy compatibility only.
+ */
 export function PurchaseReturnEditModal({
     open,
     onOpenChange,

@@ -39,8 +39,8 @@ export function InlineRowEditor({ item, saleType = 'RETAIL', onSave, onCancel, o
 
     const isSameBatch = selectedBatchId === item.batchId;
     const historicalBaseRate = isSameBatch ? (item.saleRate || item.mrp) : undefined;
-    const [customRate, setCustomRate] = useState(historicalBaseRate?.toString() || '');
-    
+    const [customPtr, setCustomPtr] = useState(item.ptr?.toString() || historicalBaseRate?.toString() || '');
+    const [customPts, setCustomPts] = useState(item.pts?.toString() || historicalBaseRate?.toString() || '');
     const qtyInputRef = useRef<HTMLInputElement>(null);
 
     // Fetch the product details to get all available batches
@@ -87,7 +87,8 @@ export function InlineRowEditor({ item, saleType = 'RETAIL', onSave, onCancel, o
 
     useEffect(() => {
         if (selectedBatchId !== item.batchId) {
-            setCustomRate(saleType === 'WHOLESALE' ? (currentBatch.pts || currentBatch.ptr || currentBatch.mrp).toString() : currentBatch.mrp.toString());
+            setCustomPtr(saleType === 'WHOLESALE' ? (currentBatch.ptr || currentBatch.mrp).toString() : currentBatch.mrp.toString());
+            setCustomPts(saleType === 'WHOLESALE' ? (currentBatch.pts || currentBatch.mrp).toString() : currentBatch.mrp.toString());
         }
     }, [selectedBatchId, currentBatch.mrp, currentBatch.pts, currentBatch.ptr, item.batchId, saleType]);
     
@@ -97,7 +98,7 @@ export function InlineRowEditor({ item, saleType = 'RETAIL', onSave, onCancel, o
     const effectiveQtyLoose = isStripBased ? qtyLoose : '0';
     const effectiveFreeLoose = isStripBased ? freeQtyLoose : '0';
 
-    const currentBaseRate = saleType === 'WHOLESALE' ? (parseFloat(customRate) || currentBatch.pts || currentBatch.ptr || currentBatch.mrp) : (historicalBaseRate ?? currentBatch.mrp);
+    const currentBaseRate = saleType === 'WHOLESALE' ? (parseFloat(customPts) || parseFloat(customPtr) || currentBatch.pts || currentBatch.ptr || currentBatch.mrp) : (historicalBaseRate ?? currentBatch.mrp);
 
     const {
         tQtyFractional, tQtyLoose, rate, sellAmount, dPct, dAmount,
@@ -111,7 +112,8 @@ export function InlineRowEditor({ item, saleType = 'RETAIL', onSave, onCancel, o
         discountType,
         discountValue,
         item.gstRate,
-        currentBaseRate
+        currentBaseRate,
+        saleType
     );
 
     const commitSave = () => {
@@ -141,7 +143,9 @@ export function InlineRowEditor({ item, saleType = 'RETAIL', onSave, onCancel, o
             packSize: currentBatch.packSize,
             packUnit: currentBatch.packUnit,
             taxableAmount,
-            gstAmount
+            gstAmount,
+            ptr: saleType === 'WHOLESALE' ? (parseFloat(customPtr) || undefined) : undefined,
+            pts: saleType === 'WHOLESALE' ? (parseFloat(customPts) || undefined) : undefined
         });
     };
 
@@ -197,10 +201,16 @@ export function InlineRowEditor({ item, saleType = 'RETAIL', onSave, onCancel, o
                                     return (
                                         <div 
                                             key={batch.id}
+                                            onPointerDown={(e) => {
+                                                if (!isExpired) {
+                                                    e.preventDefault();
+                                                    setSelectedBatchId(batch.id);
+                                                }
+                                            }}
                                             onClick={() => !isExpired && setSelectedBatchId(batch.id)}
                                             className={cn(
-                                                "p-2 rounded border flex flex-col cursor-pointer transition-all",
-                                                isSelected ? "border-blue-500 bg-blue-100 ring-1 ring-blue-500" : "border-slate-200 bg-white hover:border-blue-300",
+                                                "p-2 rounded border flex flex-col cursor-pointer transition-all select-none",
+                                                isSelected ? "border-blue-500 bg-blue-100 ring-1 ring-blue-500" : "border-slate-200 bg-white hover:border-blue-300 active:bg-blue-50",
                                                 isExpired ? "opacity-50 cursor-not-allowed bg-slate-50" : ""
                                             )}
                                         >
@@ -295,21 +305,56 @@ export function InlineRowEditor({ item, saleType = 'RETAIL', onSave, onCancel, o
                                                 />
                                             </div>
                                         )}
-                                        <div>
-                                            <label className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider block mb-1">
-                                                {saleType === 'WHOLESALE' ? 'PTS (₹)' : 'Rate (₹)'}
-                                            </label>
-                                            <Input 
-                                                type="number" 
-                                                min="0"
-                                                step="0.01"
-                                                value={customRate}
-                                                onChange={(e) => setCustomRate(e.target.value)}
-                                                onKeyDown={handleKeyDown}
-                                                onFocus={(e) => e.target.select()}
-                                                className="w-20 border-indigo-300 focus-visible:ring-indigo-500 font-bold text-center"
-                                            />
-                                        </div>
+                                        {saleType === 'WHOLESALE' ? (
+                                            <>
+                                                <div>
+                                                    <label className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider block mb-1">
+                                                        PTR (₹)
+                                                    </label>
+                                                    <Input 
+                                                        type="number" 
+                                                        min="0"
+                                                        step="0.01"
+                                                        value={customPtr}
+                                                        onChange={(e) => setCustomPtr(e.target.value)}
+                                                        onKeyDown={handleKeyDown}
+                                                        onFocus={(e) => e.target.select()}
+                                                        className="w-20 border-indigo-300 focus-visible:ring-indigo-500 font-bold text-center"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider block mb-1">
+                                                        PTS (₹)
+                                                    </label>
+                                                    <Input 
+                                                        type="number" 
+                                                        min="0"
+                                                        step="0.01"
+                                                        value={customPts}
+                                                        onChange={(e) => setCustomPts(e.target.value)}
+                                                        onKeyDown={handleKeyDown}
+                                                        onFocus={(e) => e.target.select()}
+                                                        className="w-20 border-indigo-300 focus-visible:ring-indigo-500 font-bold text-center"
+                                                    />
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <div>
+                                                <label className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider block mb-1">
+                                                    Rate (₹)
+                                                </label>
+                                                <Input 
+                                                    type="number" 
+                                                    min="0"
+                                                    step="0.01"
+                                                    value={customPtr}
+                                                    onChange={(e) => setCustomPtr(e.target.value)}
+                                                    onKeyDown={handleKeyDown}
+                                                    onFocus={(e) => e.target.select()}
+                                                    className="w-20 border-indigo-300 focus-visible:ring-indigo-500 font-bold text-center"
+                                                />
+                                            </div>
+                                        )}
                                     </>
                                 )}
                                 <div>

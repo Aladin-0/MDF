@@ -276,7 +276,7 @@ def create_sales_return(payload: Dict[str, Any], outlet_id: str, created_by_id: 
     except Staff.DoesNotExist:
         raise ReturnServiceError(f"Staff {created_by_id} not found")
 
-    original_sale_id = payload.get('originalSaleId')
+    original_sale_id = payload.get('originalSaleId') or payload.get('original_sale_id')
     manual_override = False
     if original_sale_id:
         try:
@@ -296,25 +296,38 @@ def create_sales_return(payload: Dict[str, Any], outlet_id: str, created_by_id: 
         if created_by.role not in ['admin', 'manager']:
             raise ReturnServiceError("Permission denied: Only managers or admins can create manual override returns.")
             
-        if not payload.get('overrideReason'):
+        override_reason = payload.get('overrideReason') or payload.get('override_reason') or payload.get('reason')
+        if not override_reason:
             raise ReturnServiceError("Standalone returns require an explicit override reason.")
 
     items_payload = payload.get('items', [])
     if not items_payload:
         raise ReturnServiceError("Return must have at least one item")
 
-    return_date = datetime.fromisoformat(payload['returnDate'].rstrip('Z').split('+')[0]).date()
-    refund_mode = payload.get('refundMode', 'cash')
+    return_date_raw = payload.get('returnDate') or payload.get('return_date') or timezone.now().isoformat()
+    if isinstance(return_date_raw, str):
+        return_date = datetime.fromisoformat(return_date_raw.rstrip('Z').split('+')[0]).date()
+    elif isinstance(return_date_raw, date):
+        return_date = return_date_raw
+    else:
+        return_date = timezone.now().date()
+
+    refund_mode = payload.get('refundMode') or payload.get('refund_mode') or 'cash'
 
     # Validate each item and collect data
     items_to_create = []
     total_amount = Decimal('0')
 
     for item_data in items_payload:
-        sale_item_id = item_data.get('saleItemId')
-        batch_id = item_data.get('batchId')
-        qty_returned = int(item_data.get('qtyReturned', item_data.get('qty', 0)))
-        return_rate = Decimal(str(item_data.get('returnRate', 0)))
+        sale_item_id = item_data.get('saleItemId') or item_data.get('sale_item_id')
+        batch_id = item_data.get('batchId') or item_data.get('batch_id')
+        pack_size_hint = item_data.get('packSize') or item_data.get('pack_size') or 1
+        strips = int(item_data.get('qtyStrips') or item_data.get('qty_strips') or 0)
+        loose = int(item_data.get('qtyLoose') or item_data.get('qty_loose') or 0)
+        units_from_strips = (strips * pack_size_hint) + loose
+
+        qty_returned = int(item_data.get('qtyReturned') or item_data.get('qty_returned') or item_data.get('qty') or units_from_strips)
+        return_rate = Decimal(str(item_data.get('returnRate') or item_data.get('return_rate') or item_data.get('rate', 0)))
 
         sale_item = None
         if original_sale:
@@ -382,7 +395,7 @@ def create_sales_return(payload: Dict[str, Any], outlet_id: str, created_by_id: 
     return_no = generate_return_number(outlet)
 
     # Create SalesReturn
-    reason = payload.get('overrideReason') if manual_override else payload.get('reason', '')
+    reason = override_reason if manual_override else (payload.get('reason') or payload.get('overrideReason') or '')
     sales_return = SalesReturn.objects.create(
         outlet=outlet,
         original_sale=original_sale,

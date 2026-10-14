@@ -172,7 +172,7 @@ export function PODetailWorkspace({ poId, distributorId }: { poId: string, distr
                             <th className="px-4 py-3">Product</th>
                             <th className="px-4 py-3">Pack</th>
                             <th className="px-4 py-3 text-right">Current Stock</th>
-                            <th className="px-4 py-3 text-right">Rate</th>
+                            <th className="px-4 py-3 text-right w-32">Est. Rate</th>
                             <th className="px-4 py-3 text-right w-32">Order Qty</th>
                         </tr>
                     </thead>
@@ -186,7 +186,23 @@ export function PODetailWorkspace({ poId, distributorId }: { poId: string, distr
                                 <td className="px-4 py-3 text-right text-gray-600 font-medium">
                                     {item.currentStock ?? 0}
                                 </td>
-                                <td className="px-4 py-3 text-right text-gray-600 font-medium">₹{item.lastRate.toFixed(2)}</td>
+                                <td className="px-4 py-3 text-right">
+                                    <Input 
+                                        type="number" 
+                                        step="0.01"
+                                        min={0} 
+                                        className="w-28 text-right ml-auto h-8 bg-white" 
+                                        value={item.lastRate} 
+                                        onChange={(e) => {
+                                            const newRate = parseFloat(e.target.value) || 0;
+                                            setPoItems(prev => {
+                                                const next = [...prev];
+                                                next[i].lastRate = newRate;
+                                                return next;
+                                            });
+                                        }} 
+                                    />
+                                </td>
                                 <td className="px-4 py-3 text-right">
                                     <Input 
                                         type="number" 

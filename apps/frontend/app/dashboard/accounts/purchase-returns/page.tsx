@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { format } from 'date-fns';
-import { ArrowUpLeft, Plus } from 'lucide-react';
+import { ArrowUpLeft, Plus, Eye, Pencil } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -79,27 +79,52 @@ export default function PurchaseReturnsPage() {
                                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Distributor</th>
                                 <th className="px-4 py-3 text-right font-medium text-muted-foreground">Amount</th>
                                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
+                                <th className="px-4 py-3 text-right font-medium text-muted-foreground w-28">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y">
                             {notes.map((note) => (
                                 <tr 
                                     key={note.id} 
-                                    className="hover:bg-muted/30 transition-colors cursor-pointer"
+                                    className="hover:bg-muted/30 transition-colors cursor-pointer group"
                                     onClick={() => setSelectedNote(note)}
                                 >
-                                    <td className="px-4 py-3 font-mono text-xs">{note.debitNoteNo}</td>
+                                    <td className="px-4 py-3 font-mono text-xs font-semibold text-primary">{note.debitNoteNo}</td>
                                     <td className="px-4 py-3 text-muted-foreground">
                                         {format(new Date(note.date), 'dd MMM yyyy')}
                                     </td>
                                     <td className="px-4 py-3">{note.distributorName}</td>
-                                    <td className="px-4 py-3 text-right font-medium">
+                                    <td className="px-4 py-3 text-right font-semibold">
                                         ₹{note.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                     </td>
                                     <td className="px-4 py-3">
                                         <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium', STATUS_COLORS[note.status])}>
                                             {note.status.charAt(0).toUpperCase() + note.status.slice(1)}
                                         </span>
+                                    </td>
+                                    <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                                        <div className="flex items-center justify-end gap-1.5">
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => setSelectedNote(note)}
+                                                className="h-8 px-2 text-xs"
+                                                title="View return details"
+                                            >
+                                                <Eye className="w-3.5 h-3.5 mr-1" /> View
+                                            </Button>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                asChild
+                                                className="h-8 px-2 text-xs border-amber-300 text-amber-700 hover:bg-amber-50"
+                                                title="Edit debit note"
+                                            >
+                                                <Link href={`/dashboard/accounts/purchase-returns/${note.id}/edit`}>
+                                                    <Pencil className="w-3.5 h-3.5 mr-1" /> Edit
+                                                </Link>
+                                            </Button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}

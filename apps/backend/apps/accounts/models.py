@@ -663,6 +663,12 @@ class JournalLine(models.Model):
         default=0,
         help_text='Amount credited to this ledger (if any)'
     )
+    description = models.CharField(
+        max_length=255,
+        blank=True,
+        default='',
+        help_text='Line-specific description or narration'
+    )
 
     class Meta:
         db_table = 'accounts_journalline'

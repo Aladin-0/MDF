@@ -95,8 +95,8 @@ export function PODetailView({ orderId }: { orderId: string }) {
                 productName: it.productName,
                 packSize: it.packSize,
                 packType: it.packType,
-                available: it.currentStock,
-                minQty: it.minQty,
+                available: (it as any).currentStock ?? (it as any).available ?? 0,
+                minQty: (it as any).minQty ?? 0,
                 orderQty: (it as any).qtyStrips || 0,
                 receivedQty: it.receivedQty || 0,
                 lastRate: it.lastRate || 0,
@@ -364,7 +364,23 @@ export function PODetailView({ orderId }: { orderId: string }) {
                                             }} 
                                         />
                                     </TableCell>
-                                    <TableCell className="text-right text-slate-600">₹{item.lastRate.toFixed(2)}</TableCell>
+                                    <TableCell className="text-right">
+                                        <Input 
+                                            type="number" 
+                                            step="0.01"
+                                            min={0} 
+                                            className="w-24 text-right ml-auto h-8 bg-white" 
+                                            value={item.lastRate} 
+                                            onChange={(e) => {
+                                                const newRate = parseFloat(e.target.value) || 0;
+                                                setPoItems(prev => {
+                                                    const next = [...prev];
+                                                    next[i].lastRate = newRate;
+                                                    return next;
+                                                });
+                                            }} 
+                                        />
+                                    </TableCell>
                                     <TableCell className="text-right font-semibold">
                                         ₹{(item.orderQty * item.lastRate).toFixed(2)}
                                     </TableCell>

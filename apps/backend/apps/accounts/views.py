@@ -18,6 +18,26 @@ from apps.audit.services import log_activity
 logger = logging.getLogger(__name__)
 
 
+def serialize_outlet_data(outlet):
+    if not outlet:
+        return None
+    return {
+        'id': str(outlet.id),
+        'organizationId': str(outlet.organization_id) if outlet.organization_id else None,
+        'name': outlet.name,
+        'address': outlet.address,
+        'city': outlet.city,
+        'state': outlet.state,
+        'stateCode': outlet.state_code,
+        'pincode': outlet.pincode,
+        'phone': outlet.phone,
+        'gstin': outlet.gstin,
+        'drugLicenseNo': outlet.drug_license_no,
+        'logoUrl': outlet.logo_url,
+        'invoiceFooter': outlet.invoice_footer,
+    }
+
+
 class LoginView(APIView):
     """
     POST /api/v1/auth/login/
@@ -126,12 +146,7 @@ class LoginView(APIView):
             'outletId': str(staff.outlet.id),
             'organizationId': str(org.id) if org else None,
             'isSuperAdmin': staff.role == 'super_admin',
-            'outlet': {
-                'id': str(staff.outlet.id),
-                'name': staff.outlet.name,
-                'city': staff.outlet.city,
-                'state': staff.outlet.state,
-            },
+            'outlet': serialize_outlet_data(staff.outlet),
             'avatarUrl': staff.avatar_url,
             'maxDiscount': float(staff.max_discount),
             'canEditRate': staff.can_edit_rate,
@@ -299,12 +314,7 @@ class StaffMeView(APIView):
             'outletId': str(staff.outlet.id),
             'organizationId': str(org.id) if org else None,
             'isSuperAdmin': staff.role == 'super_admin',
-            'outlet': {
-                'id': str(staff.outlet.id),
-                'name': staff.outlet.name,
-                'city': staff.outlet.city,
-                'state': staff.outlet.state,
-            },
+            'outlet': serialize_outlet_data(staff.outlet),
             'avatarUrl': staff.avatar_url,
             'maxDiscount': float(staff.max_discount),
             'canEditRate': staff.can_edit_rate,

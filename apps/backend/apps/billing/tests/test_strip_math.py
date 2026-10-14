@@ -147,3 +147,32 @@ class StripMathTestCase(APITestCase):
         self.assertEqual(s, 9)
         self.assertEqual(l, 1)
         self.assert_ledger_parity(batch)
+
+    def test_snake_case_and_camel_case_return_payload(self):
+        """Test that create_sales_return works with snake_case and camelCase payloads interchangeably"""
+        idx = 0
+        batch = self.batches[idx]
+        request_data = {'grandTotal': '100.00', 'cashPaid': '100.00'}
+        items_data = [{'productId': self.products[idx].id, 'batchId': batch.id, 'qtyStrips': 2, 'qtyLoose': 0, 'scheduleType': 'OTC'}]
+        inv = atomic_sale_save(request_data, self.outlet, self.customer, self.staff, items_data, {}, '', '')
+        si = SaleItem.objects.get(invoice=inv)
+
+        # Payload sending snake_case with qty_strips and rate
+        snake_payload = {
+            'original_sale_id': str(inv.id),
+            'return_date': '2026-10-11',
+            'refund_mode': 'cash',
+            'reason': 'Customer returned unopened pack',
+            'items': [{
+                'sale_item_id': str(si.id),
+                'batch_id': str(batch.id),
+                'qty_strips': 1,
+                'qty_loose': 0,
+                'rate': 50.0,
+                'pack_size': batch.pack_size
+            }]
+        }
+        ret = create_sales_return(snake_payload, str(self.outlet.id), str(self.staff.id))
+        self.assertIsNotNone(ret)
+        self.assertEqual(ret.original_sale, inv)
+        self.assertEqual(ret.reason, 'Customer returned unopened pack')

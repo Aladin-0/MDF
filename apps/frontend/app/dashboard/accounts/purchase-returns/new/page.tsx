@@ -1,44 +1,22 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { format } from 'date-fns';
-import { ArrowLeft, Plus, Trash2, Loader2, Search } from 'lucide-react';
+import { ArrowLeft, Loader2, Search, Save, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { useOutletId } from '@/hooks/useOutletId';
 import { voucherApi, distributorsApi } from '@/lib/apiClient';
 import { Distributor } from '@/types';
+import { usePurchaseReturnCart, PurchaseReturnItemRow } from '@/hooks/usePurchaseReturnCart';
+import { PurchaseReturnItemsGrid } from '@/components/accounts/PurchaseReturnItemsGrid';
 
-interface ItemRow {
-    id: string;
-    batchId: string;
-    productName: string;
-    qty: string;
-    rate: string;
-    gstRate: string;
-    total: number;
-    maxQty?: number;
-}
-
-function newItem(): ItemRow {
-    return { id: Math.random().toString(36).slice(2), batchId: '', productName: '', qty: '', rate: '', gstRate: '12', total: 0 };
-}
-
-function calcTotal(qty: string, rate: string, gstRate: string) {
-    const q = parseFloat(qty) || 0;
-    const r = parseFloat(rate) || 0;
-    const g = parseFloat(gstRate) || 0;
-    const base = q * r;
-    return base + (base * g) / 100;
-}
-
-export default function NewDebitNotePage() {
+function NewDebitNoteContent() {
     const outletId = useOutletId();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -50,9 +28,20 @@ export default function NewDebitNotePage() {
     const [reason, setReason] = useState('');
     const [revisionReasonCode, setRevisionReasonCode] = useState('');
     const [revisionReasonText, setRevisionReasonText] = useState('');
-    const [items, setItems] = useState<ItemRow[]>([newItem()]);
     const [saving, setSaving] = useState(false);
     const [existingReturnId, setExistingReturnId] = useState<string | undefined>();
+    const [purchaseInvoiceId, setPurchaseInvoiceId] = useState<string | undefined>();
+
+    const {
+        items,
+        setItems,
+        updateItem: updateCartItem,
+        addItem,
+        removeItem,
+        subtotal,
+        gstAmount,
+        totalAmount,
+    } = usePurchaseReturnCart();
 
     // Invoice search state
     const [invoiceSearch, setInvoiceSearch] = useState('');
@@ -82,35 +71,23 @@ export default function NewDebitNotePage() {
         const urlInvoiceNo = searchParams.get('invoiceNo');
         const editId = searchParams.get('editId');
         
+        // If an editId was passed, redirect directly to the new full-page edit route!
         if (editId) {
-            voucherApi.getDebitNote(editId).then(note => {
-                setExistingReturnId(note.id);
-                setDate(note.date);
-                setDistributorId(note.distributorId);
-                setReason(note.reason || '');
-                if (note.items && note.items.length > 0) {
-                    setItems(note.items.map((i: any) => ({
-                        id: Math.random().toString(36).slice(2),
-                        batchId: i.batchId,
-                        productName: i.productName,
-                        qty: String(i.qty),
-                        rate: String(i.rate),
-                        gstRate: String(i.gstRate || 0),
-                        total: parseFloat(i.totalAmount || i.total || 0),
-                    })));
-                }
-            }).catch(err => {
-                toast({ variant: 'destructive', title: 'Failed to load return', description: String(err) });
-            });
-        } else if (urlInvoiceNo && outletId) {
-            // Wait slightly for distributors to be loaded or just search
-            handleInvoiceSearch(urlInvoiceNo).then(results => {
+            router.replace(`/dashboard/accounts/purchase-returns/${editId}/edit`);
+            return;
+        }
+
+        if (urlInvoiceNo && outletId) {
+            handleInvoiceSearch(urlInvoiceNo).then((results) => {
                 if (results && results.length > 0) {
-                    // Exact match or first match
                     const match = results.find((r: any) => r.invoiceNo === urlInvoiceNo) || results[0];
                     handleSelectInvoice(match);
                 } else {
-                    toast({ variant: 'destructive', title: 'Invoice not found', description: `Could not find invoice ${urlInvoiceNo}.` });
+                    toast({
+                        variant: 'destructive',
+                        title: 'Invoice not found',
+                        description: `Could not find invoice ${urlInvoiceNo}.`,
+                    });
                 }
             });
         }
@@ -140,59 +117,48 @@ export default function NewDebitNotePage() {
 
     function handleSelectInvoice(inv: any) {
         setDistributorId(inv.distributorId);
+        setPurchaseInvoiceId(inv.id);
         setInvoiceSearch(`${inv.invoiceNo} — ${inv.distributorName}`);
         setShowInvoiceDropdown(false);
+
         if (inv.items && inv.items.length > 0) {
-            setItems(inv.items.map((item: any) => {
-                const maxAllowed = item.availableQty !== undefined 
-                    ? Math.min(Number(item.qty), Number(item.availableQty)) 
-                    : Number(item.qty);
-                    
-                return {
-                    id: Math.random().toString(36).slice(2),
-                    batchId: item.batchId || '',
-                    productName: item.productName,
-                    qty: String(maxAllowed),
-                    rate: String(item.rate),
-                    gstRate: String(item.gstRate),
-                    maxQty: maxAllowed,
-                    total: calcTotal(String(maxAllowed), String(item.rate), String(item.gstRate)),
-                };
-            }));
+            setItems(
+                inv.items.map((item: any) => {
+                    const packSize = item.packSize || 1;
+                    const maxAllowed = item.availableQty !== undefined 
+                        ? Math.min(Number(item.qty), Number(item.availableQty)) 
+                        : Number(item.qty);
+
+                    return {
+                        id: Math.random().toString(36).slice(2),
+                        batchId: item.batchId || '',
+                        productName: item.productName,
+                        batchNo: item.batchNo || '',
+                        expiryDate: item.expiryDate || '',
+                        packSize,
+                        qtyStrips: String(maxAllowed),
+                        qtyLoose: '0',
+                        rate: String(item.rate),
+                        gstRate: String(item.gstRate || 0),
+                        maxTotalUnits: maxAllowed * packSize,
+                        total: 0,
+                        reason: 'damaged',
+                    };
+                })
+            );
             setExistingReturnId(inv.existingReturnId);
         }
     }
 
-    function updateItem(id: string, field: keyof ItemRow, value: string) {
-        setItems((prev) =>
-            prev.map((item) => {
-                if (item.id !== id) return item;
-                const updated = { ...item, [field]: value };
-                // Enforce max qty from original invoice
-                if (field === 'qty' && item.maxQty !== undefined) {
-                    const entered = parseFloat(value) || 0;
-                    if (entered > item.maxQty) updated.qty = String(item.maxQty);
-                }
-                updated.total = calcTotal(
-                    field === 'qty' ? updated.qty : updated.qty,
-                    field === 'rate' ? value : updated.rate,
-                    field === 'gstRate' ? value : updated.gstRate
-                );
-                return updated;
-            })
-        );
-    }
-
-    const subtotal = items.reduce((s, i) => {
-        const q = parseFloat(i.qty) || 0;
-        const r = parseFloat(i.rate) || 0;
-        return s + q * r;
-    }, 0);
-    const gstAmount = items.reduce((s, i) => {
-        const base = (parseFloat(i.qty) || 0) * (parseFloat(i.rate) || 0);
-        return s + base * ((parseFloat(i.gstRate) || 0) / 100);
-    }, 0);
-    const totalAmount = subtotal + gstAmount;
+    const handleUpdateItem = (id: string, field: keyof PurchaseReturnItemRow, value: string) => {
+        updateCartItem(id, field, value, (maxUnits, enteredUnits) => {
+            toast({
+                variant: 'destructive',
+                title: 'Quantity Exceeded',
+                description: `Entered quantity (${enteredUnits} units) exceeds available maximum (${maxUnits} units).`,
+            });
+        });
+    };
 
     async function handleSave() {
         if (!outletId || !distributorId) {
@@ -200,301 +166,318 @@ export default function NewDebitNotePage() {
             return;
         }
         if (!reason.trim()) {
-            toast({ variant: 'destructive', title: 'Enter a reason' });
+            toast({ variant: 'destructive', title: 'Enter a reason for return' });
             return;
         }
-        const validItems = items.filter((i) => i.productName && i.qty && i.rate);
+
+        const validItems = items.filter((i) => {
+            const qs = parseFloat(i.qtyStrips) || 0;
+            const ql = parseFloat(i.qtyLoose) || 0;
+            return i.productName && (qs > 0 || ql > 0) && parseFloat(i.rate) >= 0;
+        });
+
         if (validItems.length === 0) {
-            toast({ variant: 'destructive', title: 'Add at least one item' });
+            toast({ variant: 'destructive', title: 'Add at least one item with valid quantity' });
             return;
-        }
-        
-        if (existingReturnId) {
-            if (!revisionReasonCode) {
-                toast({ variant: 'destructive', title: 'Select a reason for modification' });
-                return;
-            }
-            if (!revisionReasonText || revisionReasonText.length < 5) {
-                toast({ variant: 'destructive', title: 'Provide details for modification (min 5 characters)' });
-                return;
-            }
         }
 
         setSaving(true);
         try {
             if (existingReturnId) {
-                // If a return already exists, submit a revision to append items
+                if (!revisionReasonCode) {
+                    toast({ variant: 'destructive', title: 'Select a reason for modification' });
+                    setSaving(false);
+                    return;
+                }
+                if (!revisionReasonText || revisionReasonText.length < 5) {
+                    toast({ variant: 'destructive', title: 'Provide details for modification (min 5 characters)' });
+                    setSaving(false);
+                    return;
+                }
+
                 await voucherApi.updateDebitNote(existingReturnId, {
                     outletId,
                     date,
                     distributor_id: distributorId,
+                    purchase_invoice_id: purchaseInvoiceId,
                     reason,
                     subtotal,
                     gst_amount: gstAmount,
                     total_amount: totalAmount,
-                    revisionReasonCode: revisionReasonCode,
-                    revisionReasonText: revisionReasonText,
-                    items: validItems.map((i) => ({
-                        batch_id: i.batchId || '00000000-0000-0000-0000-000000000000',
-                        product_name: i.productName,
-                        qty: parseFloat(i.qty),
-                        rate: parseFloat(i.rate),
-                        gst_rate: parseFloat(i.gstRate) || 0,
-                        total: i.total,
-                    })),
+                    revisionReasonCode,
+                    revisionReasonText,
+                    items: validItems.map((i) => {
+                        const qs = parseFloat(i.qtyStrips) || 0;
+                        const ql = parseFloat(i.qtyLoose) || 0;
+                        const ps = i.packSize || 1;
+                        return {
+                            batch_id: i.batchId || '00000000-0000-0000-0000-000000000000',
+                            product_name: i.productName,
+                            qty: qs + (ql / ps),
+                            rate: parseFloat(i.rate),
+                            gst_rate: parseFloat(i.gstRate) || 0,
+                            total: i.total,
+                        };
+                    }),
                 });
-                toast({ title: 'Return Appended', description: 'Stock has been updated successfully' });
-                router.push(`/dashboard/accounts/purchase-returns/revisions/${existingReturnId}`);
+                toast({ title: 'Return Appended', description: 'Stock has been adjusted successfully' });
+                router.push('/dashboard/accounts/purchase-returns');
             } else {
                 await voucherApi.createDebitNote({
                     outletId,
                     date,
                     distributor_id: distributorId,
+                    purchase_invoice_id: purchaseInvoiceId,
                     reason,
                     subtotal,
                     gst_amount: gstAmount,
                     total_amount: totalAmount,
-                    items: validItems.map((i) => ({
-                        batch_id: i.batchId || '00000000-0000-0000-0000-000000000000',
-                        product_name: i.productName,
-                        qty: parseFloat(i.qty),
-                        rate: parseFloat(i.rate),
-                        gst_rate: parseFloat(i.gstRate) || 0,
-                        total: i.total,
-                    })),
+                    items: validItems.map((i) => {
+                        const qs = parseFloat(i.qtyStrips) || 0;
+                        const ql = parseFloat(i.qtyLoose) || 0;
+                        const ps = i.packSize || 1;
+                        return {
+                            batch_id: i.batchId || '00000000-0000-0000-0000-000000000000',
+                            product_name: i.productName,
+                            qty: qs + (ql / ps),
+                            rate: parseFloat(i.rate),
+                            gst_rate: parseFloat(i.gstRate) || 0,
+                            total: i.total,
+                        };
+                    }),
                 });
-                toast({ title: 'Debit note created', description: 'Stock has been restored' });
+                toast({ title: 'Debit note created', description: 'Debit note created and stock updated' });
                 router.push('/dashboard/accounts/purchase-returns');
             }
         } catch (err: any) {
-            toast({ variant: 'destructive', title: 'Failed to save', description: err?.detail || String(err) });
+            toast({
+                variant: 'destructive',
+                title: 'Failed to save debit note',
+                description: err?.detail || err?.message || String(err),
+            });
         } finally {
             setSaving(false);
         }
     }
 
     return (
-        <div className="space-y-6 max-w-4xl">
-            <div className="flex items-center gap-3">
-                <Button variant="ghost" size="icon" asChild>
-                    <Link href="/dashboard/accounts/purchase-returns">
-                        <ArrowLeft className="h-4 w-4" />
-                    </Link>
-                </Button>
-                <div>
-                    <h1 className="text-xl font-bold">New Purchase Return</h1>
-                    <p className="text-sm text-muted-foreground">Create a debit note to return goods to supplier</p>
-                </div>
-            </div>
-
-            <Separator />
-
-            {/* Invoice Search */}
-            <div className="space-y-1.5" ref={dropdownRef}>
-                <Label>Search Original Purchase Invoice (optional)</Label>
-                <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                        className="pl-9"
-                        placeholder="Search Purchase Invoice No. or Distributor name..."
-                        value={invoiceSearch}
-                        onChange={(e) => handleInvoiceSearch(e.target.value)}
-                        onFocus={() => invoiceResults.length > 0 && setShowInvoiceDropdown(true)}
-                    />
-                    {searchLoading && (
-                        <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
-                    )}
-                    {showInvoiceDropdown && invoiceResults.length > 0 && (
-                        <div className="absolute z-50 mt-1 w-full rounded-md border bg-background shadow-lg max-h-60 overflow-y-auto">
-                            {invoiceResults.map((inv: any) => (
-                                <button
-                                    key={inv.id}
-                                    type="button"
-                                    className="w-full text-left px-4 py-2 hover:bg-muted focus:bg-muted outline-none transition-colors"
-                                    onClick={() => handleSelectInvoice(inv)}
-                                >
-                                    <div className="font-medium text-sm flex items-center justify-between">
-                                        <span>{inv.invoiceNo}</span>
-                                        <span className="text-muted-foreground text-xs">{inv.date}</span>
-                                    </div>
-                                    <div className="text-xs text-muted-foreground mt-0.5">{inv.distributorName}</div>
-                                    {inv.existingReturnId && (
-                                        <div className="text-xs text-amber-600 font-medium mt-1">
-                                            Warning: A return document already exists for this invoice. Submitting this form will append items to it.
-                                        </div>
-                                    )}
-                                </button>
-                            ))}
+        <div className="w-full max-w-[1800px] mx-auto px-4 md:px-6 lg:px-8 py-6 space-y-4">
+            {/* Compressed Top Navigation Bar with Inline Primary Actions */}
+            <div className="w-full flex items-center justify-between pb-2 border-b border-slate-200">
+                <div className="flex items-center gap-2.5">
+                    <Button variant="ghost" size="icon" asChild className="h-8 w-8">
+                        <Link href="/dashboard/accounts/purchase-returns">
+                            <ArrowLeft className="h-4 w-4" />
+                        </Link>
+                    </Button>
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <h1 className="text-lg font-bold text-slate-800 leading-none">New Purchase Return</h1>
+                            <span className="text-[10px] font-bold uppercase tracking-wider bg-purple-100 text-purple-700 px-2 py-0.5 rounded">
+                                Debit Note
+                            </span>
                         </div>
-                    )}
-                </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-1.5">
-                    <Label>Date</Label>
-                    <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-                </div>
-                <div className="space-y-1.5">
-                    <Label>Distributor / Supplier</Label>
-                    <select
-                        value={distributorId}
-                        onChange={(e) => setDistributorId(e.target.value)}
-                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    >
-                        <option value="">Select distributor...</option>
-                        {distributors.map((d) => (
-                            <option key={d.id} value={d.id}>{d.name}</option>
-                        ))}
-                    </select>
-                </div>
-            </div>
-
-            {/* Items Table */}
-            <div className="space-y-2">
-                <Label>Items</Label>
-                <div className="rounded-md border overflow-hidden">
-                    <table className="w-full text-sm">
-                        <thead className="bg-muted/50">
-                            <tr>
-                                <th className="px-3 py-2 text-left font-medium text-muted-foreground">Product Name</th>
-                                <th className="px-3 py-2 text-right font-medium text-muted-foreground w-20">Qty</th>
-                                <th className="px-3 py-2 text-right font-medium text-muted-foreground w-24">Rate ₹</th>
-                                <th className="px-3 py-2 text-right font-medium text-muted-foreground w-20">GST %</th>
-                                <th className="px-3 py-2 text-right font-medium text-muted-foreground w-28">Total ₹</th>
-                                <th className="px-3 py-2 w-10" />
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y">
-                            {items.map((item) => (
-                                <tr key={item.id}>
-                                    <td className="px-2 py-1">
-                                        <Input
-                                            placeholder="Product name"
-                                            value={item.productName}
-                                            onChange={(e) => updateItem(item.id, 'productName', e.target.value)}
-                                            className="border-0 shadow-none focus-visible:ring-0"
-                                        />
-                                    </td>
-                                    <td className="px-2 py-1">
-                                        <Input
-                                            type="number" min="0" step="1"
-                                            placeholder={item.maxQty ? `max ${item.maxQty}` : '0'}
-                                            value={item.qty}
-                                            onChange={(e) => updateItem(item.id, 'qty', e.target.value)}
-                                            className="text-right border-0 shadow-none focus-visible:ring-0"
-                                        />
-                                    </td>
-                                    <td className="px-2 py-1">
-                                        <Input
-                                            type="number" min="0" step="0.01" placeholder="0.00"
-                                            value={item.rate}
-                                            onChange={(e) => updateItem(item.id, 'rate', e.target.value)}
-                                            className="text-right border-0 shadow-none focus-visible:ring-0"
-                                        />
-                                    </td>
-                                    <td className="px-2 py-1">
-                                        <Input
-                                            type="number" min="0" step="1" placeholder="0"
-                                            value={item.gstRate}
-                                            onChange={(e) => updateItem(item.id, 'gstRate', e.target.value)}
-                                            className="text-right border-0 shadow-none focus-visible:ring-0"
-                                        />
-                                    </td>
-                                    <td className="px-3 py-2 text-right font-medium">
-                                        ₹{item.total.toFixed(2)}
-                                    </td>
-                                    <td className="px-2 py-1">
-                                        <button
-                                            type="button"
-                                            onClick={() => setItems((p) => p.filter((i) => i.id !== item.id))}
-                                            className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
-                                        >
-                                            <Trash2 className="h-4 w-4" />
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-                <button
-                    type="button"
-                    onClick={() => setItems((p) => [...p, newItem()])}
-                    className="flex items-center gap-1.5 text-xs text-primary hover:underline"
-                >
-                    <Plus className="h-3.5 w-3.5" /> Add item
-                </button>
-            </div>
-
-            {/* Reason */}
-            <div className="space-y-1.5">
-                <Label>Reason for Return</Label>
-                <Textarea
-                    rows={2}
-                    placeholder="e.g. Damaged packaging, expired batch, wrong product..."
-                    value={reason}
-                    onChange={(e) => setReason(e.target.value)}
-                />
-            </div>
-
-            {existingReturnId && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-amber-50/50 p-4 rounded-lg border border-amber-100">
-                    <div className="space-y-2">
-                        <Label>Reason for Modification <span className="text-red-500">*</span></Label>
-                        <select
-                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                            value={revisionReasonCode}
-                            onChange={(e) => setRevisionReasonCode(e.target.value)}
-                        >
-                            <option value="">Select a reason...</option>
-                            <option value="ENTRY_MISTAKE">Entry Mistake</option>
-                            <option value="RATE_CORRECTION">Rate Correction</option>
-                            <option value="QTY_CORRECTION">Quantity Correction</option>
-                            <option value="DATE_CORRECTION">Date Correction</option>
-                            <option value="ITEM_ADDED">Added Missing Item</option>
-                            <option value="ITEM_REMOVED">Removed Wrong Item</option>
-                            <option value="OTHER">Other</option>
-                        </select>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                            Create a debit note to return goods to distributor
+                        </p>
                     </div>
-                    <div className="space-y-2">
-                        <Label>Modification Details <span className="text-red-500">*</span></Label>
-                        <Textarea
-                            placeholder="Briefly explain what you changed and why..."
-                            value={revisionReasonText}
-                            onChange={(e) => setRevisionReasonText(e.target.value)}
-                            rows={2}
+                </div>
+
+                <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" asChild disabled={saving} className="h-8 text-xs">
+                        <Link href="/dashboard/accounts/purchase-returns">Cancel</Link>
+                    </Button>
+                    <Button onClick={handleSave} disabled={saving} size="sm" className="h-8 text-xs min-w-[140px] font-semibold gap-1.5 bg-purple-700 hover:bg-purple-800 text-white">
+                        {saving ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                            <Save className="h-3.5 w-3.5" />
+                        )}
+                        Create Return
+                    </Button>
+                </div>
+            </div>
+
+            {/* Compressed Context Strip (Receipt Header) */}
+            <div className="w-full rounded-lg border border-slate-200 bg-white p-3 shadow-xs">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3" ref={dropdownRef}>
+                    {/* Field 1: Invoice Search Bar */}
+                    <div className="space-y-1 relative">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                            Link Purchase Invoice
+                        </label>
+                        <div className="relative">
+                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                            <Input
+                                className="pl-8 h-8 text-xs bg-slate-50/70 border-slate-200 focus-visible:bg-white"
+                                placeholder="Search Invoice No. or Distributor..."
+                                value={invoiceSearch}
+                                onChange={(e) => handleInvoiceSearch(e.target.value)}
+                                onFocus={() => invoiceResults.length > 0 && setShowInvoiceDropdown(true)}
+                            />
+                            {searchLoading && (
+                                <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 animate-spin text-slate-400" />
+                            )}
+                        </div>
+
+                        {showInvoiceDropdown && invoiceResults.length > 0 && (
+                            <div className="absolute z-50 mt-1 w-full rounded-md border border-slate-200 bg-white shadow-lg max-h-56 overflow-y-auto left-0">
+                                {invoiceResults.map((inv: any) => (
+                                    <button
+                                        key={inv.id}
+                                        type="button"
+                                        onClick={() => handleSelectInvoice(inv)}
+                                        className="w-full text-left px-3 py-2 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0"
+                                    >
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <span className="font-semibold text-xs text-slate-800">Invoice #{inv.invoiceNo}</span>
+                                                <span className="text-[11px] text-slate-500 ml-2">{inv.distributorName}</span>
+                                            </div>
+                                            <div className="text-right text-[11px] font-mono text-slate-500">
+                                                {inv.date}
+                                            </div>
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Field 2: Date */}
+                    <div className="space-y-1">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                            Debit Note Date
+                        </label>
+                        <Input
+                            type="date"
+                            value={date}
+                            onChange={(e) => setDate(e.target.value)}
+                            className="h-8 text-xs bg-slate-50/70 border-slate-200 focus-visible:bg-white"
                         />
                     </div>
-                </div>
-            )}
 
-            {/* Summary */}
-            <div className="rounded-lg bg-muted/30 p-4 space-y-2 text-sm max-w-xs ml-auto">
-                <div className="flex justify-between">
-                    <span className="text-muted-foreground">Subtotal</span>
-                    <span>₹{subtotal.toFixed(2)}</span>
+                    {/* Field 3: Distributor */}
+                    <div className="space-y-1">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                            Distributor / Supplier <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                            value={distributorId}
+                            onChange={(e) => setDistributorId(e.target.value)}
+                            className="w-full h-8 rounded-md border border-slate-200 bg-slate-50/70 px-2.5 text-xs text-slate-800 focus:bg-white focus:outline-none focus:ring-1 focus:ring-purple-500"
+                        >
+                            <option value="">Select distributor...</option>
+                            {distributors.map((d) => (
+                                <option key={d.id} value={d.id}>{d.name}</option>
+                            ))}
+                        </select>
+                    </div>
                 </div>
-                <div className="flex justify-between">
-                    <span className="text-muted-foreground">GST</span>
-                    <span>₹{gstAmount.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between font-semibold text-base border-t pt-2">
-                    <span>Total</span>
-                    <span>₹{totalAmount.toFixed(2)}</span>
-                </div>
+
+                {existingReturnId && (
+                    <div className="mt-2.5 p-3 rounded-md border border-amber-200 bg-amber-50/50 space-y-2">
+                        <div className="flex items-center gap-1.5 text-amber-900 font-bold text-xs uppercase tracking-wider">
+                            <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
+                            <span>Modification for Existing Return Linked</span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div className="space-y-1">
+                                <Label className="text-[10px] font-bold uppercase tracking-wider text-amber-950">
+                                    Reason Code <span className="text-red-600">*</span>
+                                </Label>
+                                <select
+                                    className="w-full h-8 rounded-md border border-amber-200 bg-white px-2.5 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500"
+                                    value={revisionReasonCode}
+                                    onChange={(e) => setRevisionReasonCode(e.target.value)}
+                                >
+                                    <option value="">Select a reason...</option>
+                                    <option value="defective">Defective / Damaged</option>
+                                    <option value="wrong_item">Wrong Item</option>
+                                    <option value="pricing_error">Pricing Error</option>
+                                    <option value="quantity_correction">Quantity Correction</option>
+                                    <option value="other">Other</option>
+                                </select>
+                            </div>
+                            <div className="sm:col-span-2 space-y-1">
+                                <Label className="text-[10px] font-bold uppercase tracking-wider text-amber-950">
+                                    Modification Details <span className="text-red-600">*</span>
+                                </Label>
+                                <Input
+                                    placeholder="Explain why this return is being appended..."
+                                    value={revisionReasonText}
+                                    onChange={(e) => setRevisionReasonText(e.target.value)}
+                                    className="h-8 bg-white text-xs border-amber-200 focus-visible:ring-amber-500"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
 
-            {/* Actions */}
-            <div className="flex gap-3">
-                <Button onClick={handleSave} disabled={saving}>
-                    {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Save &amp; Return Stock
-                </Button>
-                <Button variant="outline" asChild disabled={saving}>
-                    <Link href="/dashboard/accounts/purchase-returns">Cancel</Link>
-                </Button>
+            {/* High-Density POS Returns Items Matrix */}
+            <PurchaseReturnItemsGrid
+                items={items}
+                onUpdateItem={handleUpdateItem}
+                onAddItem={() => addItem()}
+                onRemoveItem={removeItem}
+                mode="new"
+                readOnlyProductInfo={false}
+                allowAddItem={true}
+            />
+
+            {/* Footer Operations & Formal Ledger Summary */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 pt-2">
+                {/* Left Rail: Reason for Return */}
+                <div className="lg:col-span-7 space-y-1">
+                    <Label className="text-xs font-semibold text-slate-700">Reason for Return <span className="text-red-500">*</span></Label>
+                    <Textarea
+                        rows={3}
+                        placeholder="e.g. Damaged packaging, expired batch, wrong item delivered..."
+                        value={reason}
+                        onChange={(e) => setReason(e.target.value)}
+                        className="text-xs resize-none bg-white border-slate-200 focus-visible:ring-purple-500"
+                    />
+                </div>
+
+                {/* Right Rail: Formal Accounting Ledger Summary Card */}
+                <div className="lg:col-span-5 flex justify-end">
+                    <div className="rounded-lg border border-slate-200 bg-white overflow-hidden shadow-xs w-full max-w-sm">
+                        <div className="px-3.5 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600">Debit Note Ledger</span>
+                            <span className="text-[10px] font-mono font-medium text-slate-500">
+                                {items.length} {items.length === 1 ? 'Line Item' : 'Line Items'}
+                            </span>
+                        </div>
+                        <div className="p-3 space-y-2 text-xs">
+                            <div className="flex justify-between text-slate-600">
+                                <span>Subtotal (Taxable Value)</span>
+                                <span className="font-mono font-semibold text-slate-800">₹{subtotal.toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between text-slate-600">
+                                <span>GST Value (Exclusive)</span>
+                                <span className="font-mono font-semibold text-slate-800">₹{gstAmount.toFixed(2)}</span>
+                            </div>
+                        </div>
+                        <div className="px-3.5 py-2.5 bg-slate-100 border-t-2 border-slate-300 flex justify-between items-baseline">
+                            <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Total Debit Amount</span>
+                            <span className="font-mono text-base font-black text-slate-900">₹{totalAmount.toFixed(2)}</span>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
+    );
+}
+
+export default function NewDebitNotePage() {
+    return (
+        <Suspense fallback={
+            <div className="flex items-center justify-center p-12">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+        }>
+            <NewDebitNoteContent />
+        </Suspense>
     );
 }

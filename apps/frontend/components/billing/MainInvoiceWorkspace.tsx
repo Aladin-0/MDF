@@ -57,15 +57,19 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
         setSelectedIndex(0);
     }, [searchResults]);
 
-    // Close search dropdown when clicking outside
+    // Close search dropdown when clicking/tapping outside
     useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
+        const handleClickOutside = (event: Event) => {
             if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
                 setIsSearchFocused(false);
             }
         };
+        document.addEventListener('pointerdown', handleClickOutside);
         document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('pointerdown', handleClickOutside);
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
     }, []);
 
     // Close search popover when row editor opens
@@ -289,10 +293,17 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                                 return (
                                     <button 
                                         key={batch.id}
+                                        type="button"
+                                        onPointerDown={(e) => {
+                                            if (!isExpired) {
+                                                e.preventDefault();
+                                                handleSelectBatch(batch);
+                                            }
+                                        }}
                                         onClick={() => !isExpired && handleSelectBatch(batch)}
                                         className={cn(
-                                            "flex-shrink-0 flex flex-col p-3 rounded-md border text-left transition-all focus:ring-2 focus:ring-blue-500 focus:outline-none min-w-[140px]",
-                                            isExpired ? "opacity-50 border-red-200 bg-red-50 cursor-not-allowed" : "border-slate-200 bg-slate-50 hover:border-blue-400 hover:bg-blue-50/50"
+                                            "flex-shrink-0 flex flex-col p-3 rounded-md border text-left transition-all focus:ring-2 focus:ring-blue-500 focus:outline-none min-w-[140px] select-none",
+                                            isExpired ? "opacity-50 border-red-200 bg-red-50 cursor-not-allowed" : "border-slate-200 bg-slate-50 hover:border-blue-400 hover:bg-blue-50/50 active:bg-blue-100"
                                         )}
                                     >
                                         <span className="font-mono font-bold text-slate-800 text-sm mb-1">{batch.batchNo}</span>
@@ -506,9 +517,13 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                                             <div 
                                                 key={product.id} 
                                                 className={cn(
-                                                    "p-2 px-3 cursor-pointer border-l-4 transition-colors",
-                                                    isSelected ? "bg-blue-50 border-blue-500" : "bg-white border-transparent hover:bg-slate-50"
+                                                    "p-2.5 px-3 min-h-[48px] cursor-pointer border-l-4 transition-colors select-none",
+                                                    isSelected ? "bg-blue-50 border-blue-500" : "bg-white border-transparent hover:bg-slate-50 active:bg-blue-50"
                                                 )}
+                                                onPointerDown={(e) => {
+                                                    e.preventDefault();
+                                                    handleSelectProduct(product);
+                                                }}
                                                 onClick={() => handleSelectProduct(product)}
                                                 onMouseEnter={() => setSelectedIndex(idx)}
                                             >

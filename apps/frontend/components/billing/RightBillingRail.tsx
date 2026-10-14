@@ -18,9 +18,28 @@ export function RightBillingRail() {
     const draft = activeDraftId ? drafts[activeDraftId] : null;
     const isQuotation = draft?.documentMode === 'quotation';
     const paymentMethod = draft?.payment?.method || 'cash';
+    const splitBreakdown = draft?.payment?.splitBreakdown || { cash: 0, upi: 0, card: 0, credit: 0 };
 
     const setPaymentMethod = (mode: any) => {
-        useBillingStore.getState().setPayment({ method: mode });
+        const currentBreakdown = draft?.payment?.splitBreakdown || { cash: 0, upi: 0, card: 0, credit: 0 };
+        const isCurrentEmpty = !currentBreakdown.cash && !currentBreakdown.upi && !currentBreakdown.card && !currentBreakdown.credit;
+        useBillingStore.getState().setPayment({ 
+            method: mode,
+            splitBreakdown: mode === 'split' && isCurrentEmpty
+                ? { cash: totals.grandTotal, upi: 0, card: 0, credit: 0 }
+                : currentBreakdown
+        });
+    };
+
+    const updateSplitTender = (tender: 'cash' | 'upi' | 'card' | 'credit', value: number) => {
+        const current = draft?.payment?.splitBreakdown || { cash: 0, upi: 0, card: 0, credit: 0 };
+        useBillingStore.getState().setPayment({
+            method: 'split',
+            splitBreakdown: {
+                ...current,
+                [tender]: Number(value) || 0
+            }
+        });
     };
 
     useEffect(() => {
@@ -56,7 +75,8 @@ export function RightBillingRail() {
         return calculateTotalMargin(activeDraft.cart, totals.subtotal);
     }, [activeDraft, totals.subtotal]);
 
-    const base = totals.subtotal - totals.discountAmount;
+
+
 
     const commitPct = (raw: string) => {
         const v = Number(Math.min(100, Math.max(0, parseFloat(raw) || 0)).toFixed(2));
@@ -65,7 +85,13 @@ export function RightBillingRail() {
 
     const commitAmt = (raw: string) => {
         const v = Math.max(0, parseFloat(raw) || 0);
-        const pct = base > 0 ? Number(Math.min(100, (v / base) * 100).toFixed(2)) : 0;
+        // Use preExtraNet (value before the global bill discount) as the base.
+        // IMPORTANT: store 6 decimal places of % precision here so that the
+        // round-trip  ₹ → % → ₹  is lossless to within <₹0.01.
+        // Example: 3432 / 5140 * 100 = 66.770428... stored as 66.7704
+        //          When rendered: 66.7704% of 5140 = ₹3432.00 ✓
+        const base = totals.preExtraNet;
+        const pct = base > 0 ? Number(Math.min(100, (v / base) * 100).toFixed(6)) : 0;
         updateDraftHeader(activeDraftId, { extraDiscountPct: pct });
     };
 
@@ -82,7 +108,10 @@ export function RightBillingRail() {
         setReasonModalOpen,
         isLoading,
         isScheduleHValid,
-        isCreditInvalid
+        isCreditInvalid,
+        splitTotal,
+        isSplitInvalid,
+        isSplitCreditInvalid,
     } = useCheckout();
 
     useMagicSubmit(null, () => {
@@ -130,8 +159,8 @@ export function RightBillingRail() {
                                     <input
                                         inputMode="decimal"
                                         placeholder="0"
-                                        value={pctFocused ? pctDraft : (extraDiscountPct === 0 ? '' : String(extraDiscountPct))}
-                                        className="w-10 h-6 text-center text-xs border border-blue-200 rounded px-1 text-blue-700 bg-blue-50 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-300 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none pr-3"
+                                        value={pctFocused ? pctDraft : (extraDiscountPct === 0 ? '' : String(parseFloat(extraDiscountPct.toFixed(2))))}
+                                        className="w-14 h-7 text-center text-xs border border-blue-200 rounded px-1 text-blue-700 bg-blue-50 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-300 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none pr-3"
                                         onFocus={(e) => {
                                             setPctFocused(true);
                                             setPctDraft(extraDiscountPct === 0 ? '' : String(extraDiscountPct));
@@ -159,7 +188,7 @@ export function RightBillingRail() {
                                         inputMode="decimal"
                                         placeholder="0.00"
                                         value={amtFocused ? amtDraft : (totals.extraDiscountAmount === 0 ? '' : totals.extraDiscountAmount.toFixed(2))}
-                                        className="w-14 h-6 text-center text-xs border border-blue-200 rounded px-1 text-blue-700 bg-blue-50 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-300 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none pl-3"
+                                        className="w-20 h-7 text-center text-xs border border-blue-200 rounded px-1 text-blue-700 bg-blue-50 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-300 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none pl-3"
                                         onFocus={(e) => {
                                             setAmtFocused(true);
                                             setAmtDraft(totals.extraDiscountAmount === 0 ? '' : totals.extraDiscountAmount.toFixed(2));
@@ -185,7 +214,7 @@ export function RightBillingRail() {
                     </div>
                     <div className="flex justify-between text-slate-800">
                         <span>Gross Amount</span>
-                        <span>₹ {(totals.subtotal + totals.discountAmount).toFixed(2)}</span>
+                        <span>₹ {totals.taxableAmount.toFixed(2)}</span>
                     </div>
                     {isInterstate ? (
                         <div className="flex justify-between">
@@ -206,7 +235,13 @@ export function RightBillingRail() {
                     )}
                     <div className="flex justify-between">
                         <span>Round Off</span>
-                        <span>- ₹ {Math.abs(totals.roundOff).toFixed(2)}</span>
+                        <span>
+                            {totals.roundOff > 0
+                                ? `+ ₹ ${totals.roundOff.toFixed(2)}`
+                                : totals.roundOff < 0
+                                ? `- ₹ ${Math.abs(totals.roundOff).toFixed(2)}`
+                                : '₹ 0.00'}
+                        </span>
                     </div>
                 </div>
             </div>
@@ -254,7 +289,7 @@ export function RightBillingRail() {
                         }}>
                             <span className="text-xs font-semibold text-slate-400 block mb-2">Payment Mode</span>
                             <div className="flex gap-2">
-                                {['cash', 'upi', 'card', 'credit'].map((mode) => (
+                                {['cash', 'upi', 'card', 'credit', 'split'].map((mode) => (
                                     <button
                                         key={mode}
                                         type="button"
@@ -268,7 +303,7 @@ export function RightBillingRail() {
                                             }
                                         }}
                                         className={cn(
-                                            "flex-1 py-1.5 border rounded text-sm font-bold capitalize transition-colors",
+                                            "flex-1 py-1.5 border rounded text-xs font-bold capitalize transition-colors",
                                             paymentMethod === mode 
                                                 ? "bg-[#0EA5E9] border-[#0EA5E9] text-white" 
                                                 : "bg-transparent border-slate-600 text-slate-300 hover:border-slate-400"
@@ -278,6 +313,142 @@ export function RightBillingRail() {
                                     </button>
                                 ))}
                             </div>
+
+                            {/* Split Payment Breakdown Grid */}
+                            {paymentMethod === 'split' && (
+                                <div className="mt-3 p-3 bg-slate-800/90 rounded-lg border border-slate-700 space-y-2">
+                                    <div className="flex justify-between items-center text-xs font-semibold text-slate-300 pb-1.5 border-b border-slate-700">
+                                        <span>Split Breakdown</span>
+                                        <span className={cn(
+                                            "font-mono text-xs font-bold",
+                                            Math.abs(splitTotal - totals.grandTotal) < 0.01 ? "text-emerald-400" : "text-amber-400"
+                                        )}>
+                                            ₹{splitTotal.toFixed(2)} / ₹{totals.grandTotal.toFixed(2)}
+                                        </span>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-2 text-xs">
+                                        {/* Cash */}
+                                        <div>
+                                            <div className="flex justify-between items-center mb-1">
+                                                <span className="text-[11px] font-semibold text-slate-300">Cash</span>
+                                                <button
+                                                    type="button"
+                                                    tabIndex={-1}
+                                                    onClick={() => updateSplitTender('cash', Math.max(0, totals.grandTotal - (splitTotal - (splitBreakdown.cash || 0))))}
+                                                    className="text-[10px] text-sky-400 hover:underline font-bold"
+                                                >
+                                                    Fill
+                                                </button>
+                                            </div>
+                                            <div className="relative flex items-center">
+                                                <span className="absolute left-2 text-slate-500 text-xs">₹</span>
+                                                <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0"
+                                                    value={splitBreakdown.cash !== undefined && splitBreakdown.cash !== 0 ? splitBreakdown.cash : ''}
+                                                    onChange={(e) => updateSplitTender('cash', parseFloat(e.target.value) || 0)}
+                                                    placeholder="0.00"
+                                                    className="w-full bg-slate-900 border border-slate-600 rounded px-2 pl-5 py-1 text-white text-xs font-mono focus:border-sky-400 focus:outline-none"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* UPI */}
+                                        <div>
+                                            <div className="flex justify-between items-center mb-1">
+                                                <span className="text-[11px] font-semibold text-slate-300">UPI</span>
+                                                <button
+                                                    type="button"
+                                                    tabIndex={-1}
+                                                    onClick={() => updateSplitTender('upi', Math.max(0, totals.grandTotal - (splitTotal - (splitBreakdown.upi || 0))))}
+                                                    className="text-[10px] text-sky-400 hover:underline font-bold"
+                                                >
+                                                    Fill
+                                                </button>
+                                            </div>
+                                            <div className="relative flex items-center">
+                                                <span className="absolute left-2 text-slate-500 text-xs">₹</span>
+                                                <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0"
+                                                    value={splitBreakdown.upi !== undefined && splitBreakdown.upi !== 0 ? splitBreakdown.upi : ''}
+                                                    onChange={(e) => updateSplitTender('upi', parseFloat(e.target.value) || 0)}
+                                                    placeholder="0.00"
+                                                    className="w-full bg-slate-900 border border-slate-600 rounded px-2 pl-5 py-1 text-white text-xs font-mono focus:border-sky-400 focus:outline-none"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* Card */}
+                                        <div>
+                                            <div className="flex justify-between items-center mb-1">
+                                                <span className="text-[11px] font-semibold text-slate-300">Card</span>
+                                                <button
+                                                    type="button"
+                                                    tabIndex={-1}
+                                                    onClick={() => updateSplitTender('card', Math.max(0, totals.grandTotal - (splitTotal - (splitBreakdown.card || 0))))}
+                                                    className="text-[10px] text-sky-400 hover:underline font-bold"
+                                                >
+                                                    Fill
+                                                </button>
+                                            </div>
+                                            <div className="relative flex items-center">
+                                                <span className="absolute left-2 text-slate-500 text-xs">₹</span>
+                                                <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0"
+                                                    value={splitBreakdown.card !== undefined && splitBreakdown.card !== 0 ? splitBreakdown.card : ''}
+                                                    onChange={(e) => updateSplitTender('card', parseFloat(e.target.value) || 0)}
+                                                    placeholder="0.00"
+                                                    className="w-full bg-slate-900 border border-slate-600 rounded px-2 pl-5 py-1 text-white text-xs font-mono focus:border-sky-400 focus:outline-none"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* Credit */}
+                                        <div>
+                                            <div className="flex justify-between items-center mb-1">
+                                                <span className="text-[11px] font-semibold text-slate-300">Credit</span>
+                                                <button
+                                                    type="button"
+                                                    tabIndex={-1}
+                                                    onClick={() => updateSplitTender('credit', Math.max(0, totals.grandTotal - (splitTotal - (splitBreakdown.credit || 0))))}
+                                                    className="text-[10px] text-sky-400 hover:underline font-bold"
+                                                >
+                                                    Fill
+                                                </button>
+                                            </div>
+                                            <div className="relative flex items-center">
+                                                <span className="absolute left-2 text-slate-500 text-xs">₹</span>
+                                                <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0"
+                                                    value={splitBreakdown.credit !== undefined && splitBreakdown.credit !== 0 ? splitBreakdown.credit : ''}
+                                                    onChange={(e) => updateSplitTender('credit', parseFloat(e.target.value) || 0)}
+                                                    placeholder="0.00"
+                                                    className="w-full bg-slate-900 border border-slate-600 rounded px-2 pl-5 py-1 text-white text-xs font-mono focus:border-sky-400 focus:outline-none"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Match / Difference status indicator */}
+                                    <div className="text-[11px] pt-1 flex justify-between font-medium">
+                                        {Math.abs(splitTotal - totals.grandTotal) < 0.01 ? (
+                                            <span className="text-emerald-400 font-semibold flex items-center gap-1">✓ Exact match (₹{totals.grandTotal.toFixed(2)})</span>
+                                        ) : splitTotal < totals.grandTotal ? (
+                                            <span className="text-amber-300">Remaining: ₹{(totals.grandTotal - splitTotal).toFixed(2)}</span>
+                                        ) : (
+                                            <span className="text-red-400">Overpaid by: ₹{(splitTotal - totals.grandTotal).toFixed(2)}</span>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
 
@@ -331,6 +502,14 @@ export function RightBillingRail() {
                     )}
                     {paymentMethod === 'credit' && isCreditBlocked && !checkoutError && (
                         <span className="text-xs font-bold text-red-400">Credit limit exceeded for this customer</span>
+                    )}
+                    {paymentMethod === 'split' && isSplitInvalid && !checkoutError && (
+                        <span className="text-xs font-bold text-amber-400">
+                            Split total (₹{splitTotal.toFixed(2)}) must equal net payable (₹{totals.grandTotal.toFixed(2)})
+                        </span>
+                    )}
+                    {paymentMethod === 'split' && isSplitCreditInvalid && !checkoutError && (
+                        <span className="text-xs font-bold text-red-400">Customer is required for credit tender in split payment</span>
                     )}
                 </div>
             </div>

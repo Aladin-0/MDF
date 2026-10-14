@@ -33,6 +33,7 @@ export function DoctorPicker({
     const [searchQuery, setSearchQuery] = useState('');
     const [debouncedQuery, setDebouncedQuery] = useState('');
     const [isCreateOpen, setIsCreateOpen] = useState(false);
+    const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
     
     const containerRef = useRef<HTMLDivElement>(null);
     const internalInputRef = useRef<HTMLInputElement>(null);
@@ -46,15 +47,20 @@ export function DoctorPicker({
         return () => clearTimeout(timer);
     }, [searchQuery]);
 
-    // Close on click outside
+    // Close on click/tap outside (handles both touch and mouse events)
     useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
+        const handleClickOutside = (event: Event) => {
             if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
                 setIsOpen(false);
+                setHighlightedIndex(-1);
             }
         };
+        document.addEventListener('pointerdown', handleClickOutside);
         document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('pointerdown', handleClickOutside);
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
     }, []);
 
     // Fetch doctors
@@ -70,9 +76,19 @@ export function DoctorPicker({
 
     const doctors = data || [];
 
+    // Reset highlighted index when doctors list updates
+    useEffect(() => {
+        if (doctors.length > 0) {
+            setHighlightedIndex(0);
+        } else {
+            setHighlightedIndex(-1);
+        }
+    }, [doctors]);
+
     const handleSelect = (doctor: Doctor | null) => {
         onSelect(doctor);
         setIsOpen(false);
+        setHighlightedIndex(-1);
         setSearchQuery('');
         
         if (nextInputRef?.current) {
@@ -86,17 +102,45 @@ export function DoctorPicker({
         onSelect(doctor);
         setIsCreateOpen(false);
         setIsOpen(false);
+        setHighlightedIndex(-1);
     };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            if (!isOpen) {
+                setIsOpen(true);
+            } else if (doctors.length > 0) {
+                setHighlightedIndex(prev => (prev < doctors.length - 1 ? prev + 1 : 0));
+            }
+            return;
+        }
+
+        if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (isOpen && doctors.length > 0) {
+                setHighlightedIndex(prev => (prev > 0 ? prev - 1 : doctors.length - 1));
+            }
+            return;
+        }
+
+        if (e.key === 'Enter') {
+            if (isOpen && doctors.length > 0) {
+                e.preventDefault();
+                e.stopPropagation();
+                const targetIdx = (highlightedIndex >= 0 && highlightedIndex < doctors.length)
+                    ? highlightedIndex
+                    : 0;
+                handleSelect(doctors[targetIdx]);
+            }
+            return;
+        }
+
         if (e.key === 'Escape') {
             setIsOpen(false);
+            setHighlightedIndex(-1);
             inputRef.current?.blur();
-        }
-        if (e.key === 'Enter' && doctors.length > 0) {
-            e.preventDefault();
-            e.stopPropagation();
-            handleSelect(doctors[0]);
+            return;
         }
     };
 
@@ -124,7 +168,12 @@ export function DoctorPicker({
                     }}
                 />
                 <button 
-                    className="text-[10px] text-purple-600 hover:text-purple-800 font-bold uppercase tracking-wider ml-2 shrink-0" 
+                    type="button"
+                    className="text-xs text-purple-700 hover:text-purple-900 font-bold uppercase tracking-wider ml-2 shrink-0 px-2 py-1 rounded bg-purple-100 hover:bg-purple-200 active:bg-purple-300 transition-colors" 
+                    onPointerDown={(e) => {
+                        e.preventDefault();
+                        handleSelect(null);
+                    }}
                     onClick={() => handleSelect(null)}
                 >
                     Change
@@ -134,9 +183,16 @@ export function DoctorPicker({
     }
 
     const handleBlur = (e: React.FocusEvent) => {
-        if (!containerRef.current?.contains(e.relatedTarget as Node)) {
-            setIsOpen(false);
+        // If focus moved to an element inside container, don't close
+        if (e.relatedTarget && containerRef.current?.contains(e.relatedTarget as Node)) {
+            return;
         }
+        // Small timeout so tap/touch events on dropdown items can register before closing
+        setTimeout(() => {
+            if (!containerRef.current?.contains(document.activeElement)) {
+                setIsOpen(false);
+            }
+        }, 150);
     };
 
     return (
@@ -165,23 +221,42 @@ export function DoctorPicker({
                                 <Loader2 className="w-5 h-5 animate-spin" />
                             </div>
                         ) : doctors.length > 0 ? (
-                            doctors.map(doctor => (
-                                <div 
-                                    key={doctor.id}
-                                    onClick={() => handleSelect(doctor)}
-                                    className="px-3 py-2 hover:bg-purple-50 cursor-pointer rounded flex flex-col group"
-                                >
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-sm font-bold text-slate-700 group-hover:text-purple-700">{doctor.name}</span>
-                                        {doctor.regNo && <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">{doctor.regNo}</span>}
+                            doctors.map((doctor, idx) => {
+                                const isHighlighted = idx === highlightedIndex;
+                                return (
+                                    <div 
+                                        key={doctor.id}
+                                        onPointerDown={(e) => {
+                                            e.preventDefault();
+                                            handleSelect(doctor);
+                                        }}
+                                        onMouseDown={(e) => {
+                                            e.preventDefault();
+                                        }}
+                                        onClick={() => handleSelect(doctor)}
+                                        onMouseEnter={() => setHighlightedIndex(idx)}
+                                        className={cn(
+                                            "px-3 py-2.5 min-h-[44px] cursor-pointer rounded flex flex-col group transition-colors select-none",
+                                            isHighlighted 
+                                                ? "bg-purple-100 ring-1 ring-purple-300" 
+                                                : "hover:bg-purple-50 active:bg-purple-100"
+                                        )}
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <span className={cn(
+                                                "text-sm font-bold",
+                                                isHighlighted ? "text-purple-900" : "text-slate-700 group-hover:text-purple-700"
+                                            )}>{doctor.name}</span>
+                                            {doctor.regNo && <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">{doctor.regNo}</span>}
+                                        </div>
+                                        <div className="text-[10px] text-slate-400 truncate mt-0.5 font-medium flex gap-1 items-center">
+                                            {doctor.specialty && <span>{doctor.specialty}</span>}
+                                            {doctor.specialty && doctor.hospitalName && <span>•</span>}
+                                            {doctor.hospitalName && <span>{doctor.hospitalName}</span>}
+                                        </div>
                                     </div>
-                                    <div className="text-[10px] text-slate-400 truncate mt-0.5 font-medium flex gap-1 items-center">
-                                        {doctor.specialty && <span>{doctor.specialty}</span>}
-                                        {doctor.specialty && doctor.hospitalName && <span>•</span>}
-                                        {doctor.hospitalName && <span>{doctor.hospitalName}</span>}
-                                    </div>
-                                </div>
-                            ))
+                                );
+                            })
                         ) : (
                             <div className="px-3 py-4 text-center text-sm text-slate-500 font-medium">
                                 No doctors found
@@ -191,7 +266,13 @@ export function DoctorPicker({
 
                     <div className="p-2 bg-slate-50 border-t border-slate-100">
                         <button 
-                            className="w-full flex items-center justify-center gap-2 py-2 text-xs font-bold text-purple-600 bg-purple-50 hover:bg-purple-100 rounded transition-colors border border-purple-100"
+                            type="button"
+                            className="w-full flex items-center justify-center gap-2 py-2.5 min-h-[40px] text-xs font-bold text-purple-600 bg-purple-50 hover:bg-purple-100 active:bg-purple-200 rounded transition-colors border border-purple-100 select-none"
+                            onPointerDown={(e) => {
+                                e.preventDefault();
+                                setIsOpen(false);
+                                setIsCreateOpen(true);
+                            }}
                             onClick={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
