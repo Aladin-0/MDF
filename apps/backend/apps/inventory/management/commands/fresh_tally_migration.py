@@ -90,14 +90,50 @@ _UNIT_MAP = {
 VALID_PACK_TYPES = {'strip', 'bottle', 'vial', 'box', 'blister', 'tube', 'packet', 'other'}
 
 
-def parse_pack_info(base_unit_raw, denom_raw):
-    """Derive (pack_size, pack_unit, pack_type) from Tally units and denominator."""
+def parse_pack_info(base_unit_raw, denom_raw, product_name=''):
+    """Derive (pack_size, pack_unit, pack_type) from Tally units, denominator, and product name heuristics."""
     u_clean = (base_unit_raw or '').strip().upper()
-    unit_tuple = _UNIT_MAP.get(u_clean, ('piece', 'other'))
-    pack_unit, pack_type = unit_tuple[0], unit_tuple[1]
+    unit_tuple = _UNIT_MAP.get(u_clean, None)
 
-    if pack_type not in VALID_PACK_TYPES:
-        pack_type = 'other'
+    if unit_tuple:
+        pack_unit, pack_type = unit_tuple[0], unit_tuple[1]
+    else:
+        pack_unit, pack_type = 'piece', 'other'
+
+    # Smart fallback from product name if pack_type is other or generic
+    if pack_type in ['other', 'piece'] and product_name:
+        n = product_name.upper()
+        if re.search(r'\b(TAB|TABS|TABLET|TABLETS|LOZENGES|PIL)\b', n) or ' TAB' in n:
+            pack_type, pack_unit = 'strip', 'tablet'
+        elif re.search(r'\b(CAP|CAPS|CAPSULE|CAPSULES)\b', n) or ' CAP' in n:
+            pack_type, pack_unit = 'strip', 'capsule'
+        elif re.search(r'\b(SYP|SYRP|SYRUP|SUSP|SUSPENSION|SOLN|SOLUTION|LIQUID|DROPS|DROP|EYE DROP|EAR DROP|NASAL DROP)\b', n):
+            pack_type, pack_unit = 'bottle', 'syrup' if 'SYP' in n or 'SYRUP' in n else 'bottle'
+        elif re.search(r'\b(CREAM|CRM|CREM|OINT|OINTMENT|OIMT|GEL|PASTE|JELLY)\b', n):
+            pack_type, pack_unit = 'tube', 'tube'
+        elif re.search(r'\b(INJ|INJECTION|VIAL|IV|INFUSION)\b', n):
+            pack_type, pack_unit = 'vial', 'vial'
+        elif re.search(r'\b(AMP|AMPOULE)\b', n):
+            pack_type, pack_unit = 'ampoule', 'ampoule'
+        elif re.search(r'\b(SPRAY|INHALER|AEROSOL)\b', n):
+            pack_type, pack_unit = 'bottle', 'spray'
+        elif re.search(r'\b(LOTION|LOTO|OIL|BALM|WASH|MOUTHWASH|SANITIZER|HANDWASH|RUB)\b', n):
+            pack_type, pack_unit = 'bottle', 'bottle'
+        elif re.search(r'\b(CERELAC|LACTOGEN|NAN|POWDER|PWD|GRANULES|SACHET|SACH)\b', n):
+            pack_type, pack_unit = 'box', 'box'
+        elif re.search(r'\b(WHISPER|WHISHPER|STAYFREE|SOFY|PAD|PADS|DIAPER|PANTS)\b', n):
+            pack_type, pack_unit = 'pack', 'pack'
+        elif re.search(r'\b(SPLINT|KNEE|BELT|COLLAR|BANDAGE|GAUZE|COTTON|SOAP|KIT|DEVICE|THERMOMETER|MASK|GLOVES)\b', n):
+            pack_type, pack_unit = 'piece', 'piece'
+        elif re.search(r'\d+\s*(GM|G)\b', n):
+            pack_type, pack_unit = 'box', 'box'
+        elif re.search(r'\d+\s*(ML|LTR)\b', n):
+            pack_type, pack_unit = 'bottle', 'bottle'
+        else:
+            pack_type, pack_unit = 'piece', 'piece'
+
+    if pack_type not in VALID_PACK_TYPES or pack_type == 'other':
+        pack_type = 'piece'
 
     # Parse numeric pack size from denominator
     pack_size = 1
@@ -482,7 +518,7 @@ class Command(BaseCommand):
                             except:
                                 pass
 
-                    pack_size, pack_unit, pack_type = parse_pack_info(base_unit, denom)
+                    pack_size, pack_unit, pack_type = parse_pack_info(base_unit, denom, name)
 
                     # Rates & Stock
                     op_bal_raw = elem.findtext('OPENINGBALANCE')

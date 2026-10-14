@@ -6,6 +6,7 @@ import { RefreshCw, Scale, Printer, Download, ChevronDown, ChevronRight, FileTex
 import { accountsApi, voucherApi } from '@/lib/apiClient';
 import { useAuthStore } from '@/store/authStore';
 import { useSettingsStore } from '@/store/settingsStore';
+import { useOutletId } from '@/hooks/useOutletId';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -69,9 +70,7 @@ interface TrialBalanceResponse {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function TrialBalancePage() {
-    const { outlet } = useAuthStore();
-    const { selectedOutletId } = useSettingsStore();
-    const outletId = selectedOutletId ?? outlet?.id ?? '';
+    const outletId = useOutletId();
 
     // ── Date state — computed once at mount, NOT on every render ──────────────
     const [fromDate, setFromDate] = useState<string>(() => {

@@ -12,6 +12,7 @@ import {
 import { accountsApi, voucherApi } from '@/lib/apiClient';
 import { useAuthStore } from '@/store/authStore';
 import { useSettingsStore } from '@/store/settingsStore';
+import { useOutletId } from '@/hooks/useOutletId';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
@@ -664,9 +665,8 @@ function LedgerDrilldown({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function BalanceSheetPage() {
     const router = useRouter();
-    const { outlet } = useAuthStore();
-    const { selectedOutletId } = useSettingsStore();
-    const outletId = selectedOutletId ?? outlet?.id ?? '';
+    const outlet = useAuthStore(s => s.outlet);
+    const outletId = useOutletId();
     const outletName = outlet?.name ?? 'MediFlow';
 
     // ── Date state (Feature 4) ─────────────────────────────────────────────

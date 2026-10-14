@@ -26,7 +26,7 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
     const [isOnline, setIsOnline] = useState(true);
     const [isSwitching, setIsSwitching] = useState(false);
 
-    const currentOutletId = selectedOutletId || user?.outlet?.id || '';
+    const currentOutletId = (user?.role === 'super_admin' ? selectedOutletId : null) || user?.outlet?.id || '';
 
     // Fetch all outlets in the organization for super admins
     const { data: orgOutlets } = useQuery({
