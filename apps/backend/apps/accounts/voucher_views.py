@@ -1256,9 +1256,9 @@ class ProfitLossView(APIView):
         def ledger_rows_for_group(group_name, side='dr'):
             """Returns list of {id, name, value} for the group in the period."""
             rows = []
-            try:
-                grp = LedgerGroup.objects.get(outlet=outlet, name=group_name)
-            except LedgerGroup.DoesNotExist:
+            candidates = [group_name, group_name + 's', group_name.rstrip('s')]
+            grp = LedgerGroup.objects.filter(outlet=outlet, name__in=candidates).first()
+            if not grp:
                 return rows
 
             for ledger in grp.ledger_set.all():
@@ -1275,9 +1275,9 @@ class ProfitLossView(APIView):
 
         # ── Helper — total for a named group ──────────────────────────────────
         def group_total(group_name, side='dr'):
-            try:
-                grp = LedgerGroup.objects.get(outlet=outlet, name=group_name)
-            except LedgerGroup.DoesNotExist:
+            candidates = [group_name, group_name + 's', group_name.rstrip('s')]
+            grp = LedgerGroup.objects.filter(outlet=outlet, name__in=candidates).first()
+            if not grp:
                 return Decimal('0')
 
             ledger_ids = list(grp.ledger_set.values_list('id', flat=True))
