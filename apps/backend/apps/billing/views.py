@@ -29,7 +29,7 @@ from apps.billing.services import (
 from apps.billing.utils.pricing import validate_sale_price
 from apps.inventory.models import Batch, MasterProduct
 from apps.accounts.models import Staff, Customer, Ledger
-from apps.accounts.journal_service import post_sale_invoice
+from apps.accounts.journal_service import post_sale_invoice, _get_ledger
 from apps.core.models import Outlet
 from apps.billing.payment_services import (
     create_receipt_payment, create_expense_entry, create_sales_return,
@@ -1943,11 +1943,11 @@ class CustomerCreditPaymentView(APIView):
                 # Resolve payment mode ledger
                 mode = (payment_mode or 'cash').lower()
                 if mode in ('upi', 'upi_transfer', 'phonepe', 'gpay', 'paytm', 'neft', 'imps'):
-                    collection_ledger = Ledger.objects.filter(name='UPI Collections', outlet=outlet).first()
+                    collection_ledger = _get_ledger(outlet, 'UPI Collections')
                 elif mode in ('card', 'pos', 'swipe', 'credit_card', 'debit_card'):
-                    collection_ledger = Ledger.objects.filter(name='Card/POS Settlement', outlet=outlet).first()
+                    collection_ledger = _get_ledger(outlet, 'Card/POS Settlement')
                 else:
-                    collection_ledger = Ledger.objects.filter(name='Cash', outlet=outlet).first()
+                    collection_ledger = _get_ledger(outlet, 'Cash')
 
                 if not collection_ledger:
                     return Response(

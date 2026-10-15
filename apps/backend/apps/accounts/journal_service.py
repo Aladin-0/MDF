@@ -8,9 +8,9 @@ All functions use transaction.atomic() for all-or-nothing consistency.
 import logging
 from decimal import Decimal
 
-from django.db import transaction
+from django.db import models, transaction
 
-from apps.accounts.models import JournalEntry, JournalLine, Ledger
+from apps.accounts.models import JournalEntry, JournalLine, Ledger, LedgerGroup
 from apps.accounts.services import LedgerService
 
 logger = logging.getLogger(__name__)
@@ -49,42 +49,196 @@ def _is_interstate(party_state: str, outlet_state: str) -> bool:
     return party_state.strip().lower() != outlet_state.strip().lower()
 
 
+def _normalize_ledger_name(s: str) -> str:
+    import re
+    return re.sub(r'[^A-Z0-9%]', '', (s or '').upper())
+
+
+def _resolve_system_ledger(outlet, name: str):
+    """
+    Robust resolver for system ledgers that handles:
+    1. Case-insensitive exact match (e.g. 'Cash' -> 'CASH', 'Round Off' -> 'ROUND OFF')
+    2. Normalized alphanumeric match (e.g. 'GST Payable CGST' -> 'GST PAYABLE (CGST)')
+    3. Context-aware alias fallback:
+       - 'Cash': any ledger under 'Cash-in-hand' / 'Cash in Hand'
+       - 'Sales Account': 'Sales', 'SALE A/C', or created in 'Sales Accounts' group
+       - 'Purchase Account': 'PURCHASE A/C', 'Purchase', or created in 'Purchase Accounts' group
+       - 'Purchase Returns': 'PURCHASE RETURN ENTRY...', or fallback to Purchase Account
+       - 'UPI Collections': 'PAYTM PHONE PAY', or any bank account, or fallback to Cash
+       - 'Card/POS Settlement': 'SWIPE CARD', or any bank account, or fallback to Cash
+       - 'Round Off': 'ROUND OFF', 'SHORT & EXESS', or created in 'Direct Expenses'
+       - Rate-specific GST (e.g. 'CGST Payable 2.5%'): 'CGST SALES TAX 2.5 %', etc.
+    """
+    if not name or not outlet:
+        return None
+
+    qs = Ledger.objects.filter(outlet=outlet)
+
+    # 1. Exact case-insensitive match
+    match = qs.filter(name__iexact=name).first()
+    if match:
+        return match
+
+    # 2. Normalized alphanumeric match
+    target_norm = _normalize_ledger_name(name)
+    if target_norm:
+        for l in qs:
+            if _normalize_ledger_name(l.name) == target_norm:
+                return l
+
+    # 3. Role-based alias heuristics
+    name_upper = name.upper()
+
+    # Cash
+    if 'CASH' in name_upper:
+        cash_l = qs.filter(group__name__in=['Cash-in-hand', 'Cash in Hand', 'Cash in hand']).first()
+        if cash_l:
+            return cash_l
+
+    # Sales Account
+    if 'SALES' in name_upper:
+        sales_l = qs.filter(name__iexact='Sales Account').first() or qs.filter(name__iexact='Sales').first()
+        if not sales_l:
+            sales_grp = LedgerGroup.objects.filter(outlet=outlet, name__in=['Sales Accounts', 'Sales Account']).first()
+            if not sales_grp:
+                sales_grp = LedgerGroup.objects.create(outlet=outlet, name='Sales Accounts', nature='income', is_system=True)
+            sales_l, _ = Ledger.objects.get_or_create(
+                outlet=outlet,
+                name='Sales Account',
+                defaults={'group': sales_grp, 'balance_type': 'Cr', 'is_system': True}
+            )
+        return sales_l
+
+    # Purchase Account
+    if 'PURCHASE' in name_upper and 'RETURN' not in name_upper:
+        pur_l = qs.filter(name__iexact='PURCHASE A/C').first() or qs.filter(name__iexact='Purchase Account').first() or qs.filter(name__iexact='Purchase').first()
+        if not pur_l:
+            pur_l = qs.filter(group__name__in=['Purchase Accounts', 'Purchase Account', 'Purchase']).first()
+        if not pur_l:
+            pur_grp = LedgerGroup.objects.filter(outlet=outlet, name__in=['Purchase Accounts', 'Purchase Account']).first()
+            if not pur_grp:
+                pur_grp = LedgerGroup.objects.create(outlet=outlet, name='Purchase Accounts', nature='expense', is_system=True)
+            pur_l, _ = Ledger.objects.get_or_create(
+                outlet=outlet,
+                name='Purchase Account',
+                defaults={'group': pur_grp, 'balance_type': 'Dr', 'is_system': True}
+            )
+        return pur_l
+
+    # Purchase Returns
+    if 'PURCHASE' in name_upper and 'RETURN' in name_upper:
+        ret_l = qs.filter(name__icontains='PURCHASE RETURN').first()
+        if ret_l:
+            return ret_l
+        return _resolve_system_ledger(outlet, 'Purchase Account')
+
+    # UPI Collections
+    if 'UPI' in name_upper or 'ONLINE' in name_upper:
+        upi_l = (
+            qs.filter(group__name__in=['Bank Accounts', 'Bank Account'], name__icontains='PHONE PAY').first() or
+            qs.filter(group__name__in=['Bank Accounts', 'Bank Account'], name__icontains='PAYTM').first() or
+            qs.filter(group__name__in=['Bank Accounts', 'Bank Account'], name__icontains='UPI').first() or
+            qs.filter(group__name__in=['Bank Accounts', 'Bank Account']).first()
+        )
+        if upi_l:
+            return upi_l
+        return _resolve_system_ledger(outlet, 'Cash')
+
+    # Card / POS Settlement
+    if 'CARD' in name_upper or 'POS' in name_upper or 'SWIPE' in name_upper:
+        card_l = qs.filter(group__name__in=['Bank Accounts', 'Bank Account']).filter(
+            models.Q(name__icontains='SWIPE') | models.Q(name__icontains='CARD') | models.Q(name__icontains='POS')
+        ).first()
+        if not card_l:
+            card_l = qs.filter(group__name__in=['Bank Accounts', 'Bank Account']).first()
+        if card_l:
+            return card_l
+        return _resolve_system_ledger(outlet, 'Cash')
+
+    # Round Off
+    if 'ROUND' in name_upper:
+        ro_l = qs.filter(name__icontains='ROUND').first()
+        if not ro_l:
+            ro_l = qs.filter(name__iexact='SHORT & EXESS').first()
+        if not ro_l:
+            exp_grp = LedgerGroup.objects.filter(outlet=outlet, name__in=['Direct Expenses', 'Indirect Incomes', 'Indirect Expenses']).first()
+            if not exp_grp:
+                exp_grp = LedgerGroup.objects.create(outlet=outlet, name='Direct Expenses', nature='expense', is_system=True)
+            ro_l, _ = Ledger.objects.get_or_create(
+                outlet=outlet,
+                name='Round Off',
+                defaults={'group': exp_grp, 'balance_type': 'Cr', 'is_system': True}
+            )
+        return ro_l
+
+    # GST Payables (Rate specific or generic)
+    if 'CGST' in name_upper or 'SGST' in name_upper or 'IGST' in name_upper:
+        tax_type = 'CGST' if 'CGST' in name_upper else ('SGST' if 'SGST' in name_upper else 'IGST')
+        import re
+        rate_match = re.search(r'(\d+(?:\.\d+)?)', name)
+        rate_str = rate_match.group(1) if rate_match else None
+
+        if rate_str:
+            gst_rate_l = qs.filter(name__icontains=tax_type).filter(name__icontains='SALES').filter(name__icontains=rate_str).first()
+            if not gst_rate_l:
+                gst_rate_l = qs.filter(name__icontains=tax_type).filter(name__icontains=rate_str).first()
+            if gst_rate_l:
+                return gst_rate_l
+
+        # Generic GST fallback e.g. 'GST PAYABLE (CGST)'
+        generic_l = qs.filter(name__icontains=tax_type).filter(name__icontains='PAYABLE').first()
+        if not generic_l:
+            generic_l = qs.filter(group__name__in=['Duties & Taxes', 'Duties and Taxes']).filter(name__icontains=tax_type).first()
+        if generic_l:
+            return generic_l
+
+        dt_grp = LedgerGroup.objects.filter(outlet=outlet, name__in=['Duties & Taxes', 'Duties and Taxes']).first()
+        if not dt_grp:
+            dt_grp = LedgerGroup.objects.create(outlet=outlet, name='Duties & Taxes', nature='liability', is_system=True)
+        gen_name = f"GST Payable ({tax_type})"
+        created_l, _ = Ledger.objects.get_or_create(
+            outlet=outlet,
+            name=gen_name,
+            defaults={'group': dt_grp, 'balance_type': 'Cr', 'is_system': True}
+        )
+        return created_l
+
+    return None
+
+
 def _get_ledger(outlet, name):
     """
-    Fetch a system ledger by name within an outlet.
+    Fetch a system ledger by name within an outlet with smart alias matching.
     Raises Ledger.DoesNotExist with a clear message if not found.
     """
-    try:
-        return Ledger.objects.select_for_update().get(outlet=outlet, name=name)
-    except Ledger.DoesNotExist:
-        raise Ledger.DoesNotExist(
-            f"Ledger '{name}' not found for outlet '{outlet.name}' ({outlet.id}). "
-            f"Run: python manage.py seed_ledgers"
-        )
+    ledger = _resolve_system_ledger(outlet, name)
+    if ledger:
+        return ledger
+    raise Ledger.DoesNotExist(
+        f"Ledger '{name}' not found for outlet '{outlet.name}' ({outlet.id}). "
+        f"Run: python manage.py seed_ledgers"
+    )
 
 
 def _get_ledger_safe(outlet, name, fallback_name=None):
     """
-    Fetch a ledger by name, returning fallback or raising ValueError on failure.
-    Used for rate-specific GST ledger lookups where a missing ledger should fail
-    the save rather than causing a silent double-entry imbalance.
+    Fetch a ledger by name, returning fallback or auto-creating before raising.
+    Used for rate-specific GST and system accounts.
     """
-    try:
-        return Ledger.objects.select_for_update().get(outlet=outlet, name=name)
-    except Ledger.DoesNotExist:
-        if fallback_name:
-            try:
-                return Ledger.objects.select_for_update().get(outlet=outlet, name=fallback_name)
-            except Ledger.DoesNotExist:
-                logger.warning(
-                    f"GST ledger '{name}' AND fallback '{fallback_name}' both not found "
-                    f"for outlet '{outlet.name}'. Run seed_ledgers."
-                )
-                raise ValueError('Required GST ledgers not found')
-        logger.warning(
-            f"GST ledger '{name}' not found for outlet '{outlet.name}'. Run seed_ledgers."
-        )
-        raise ValueError('Required GST ledgers not found')
+    ledger = _resolve_system_ledger(outlet, name)
+    if ledger:
+        return ledger
+
+    if fallback_name:
+        fallback_l = _resolve_system_ledger(outlet, fallback_name)
+        if fallback_l:
+            return fallback_l
+
+    logger.warning(
+        f"GST/System ledger '{name}' (fallback: '{fallback_name}') not found "
+        f"for outlet '{outlet.name}'."
+    )
+    raise ValueError(f"Required GST/System ledger '{name}' not found")
 
 
 def _snap_to_standard_rate(rate):
@@ -103,21 +257,31 @@ def _snap_to_standard_rate(rate):
 
 
 def _get_customer_ledger(outlet, customer):
-    """Fetch the Sundry Debtors ledger for a customer (via linked_customer FK)."""
+    """Fetch the Sundry Debtors ledger for a customer (via linked_customer FK or exact name)."""
     if not customer:
         return None
-    return Ledger.objects.select_for_update().filter(
+    l = Ledger.objects.filter(
         outlet=outlet, linked_customer=customer
     ).first()
+    if not l and hasattr(customer, 'name') and customer.name:
+        l = Ledger.objects.filter(
+            outlet=outlet, name__iexact=customer.name
+        ).first()
+    return l
 
 
 def _get_distributor_ledger(outlet, distributor):
-    """Fetch the Sundry Creditors ledger for a distributor (via linked_distributor FK)."""
+    """Fetch the Sundry Creditors ledger for a distributor (via linked_distributor FK or exact name)."""
     if not distributor:
         return None
-    return Ledger.objects.select_for_update().filter(
+    l = Ledger.objects.filter(
         outlet=outlet, linked_distributor=distributor
     ).first()
+    if not l and hasattr(distributor, 'name') and distributor.name:
+        l = Ledger.objects.filter(
+            outlet=outlet, name__iexact=distributor.name
+        ).first()
+    return l
 
 
 def _guard_double_posting(outlet, source_type, source_id):
