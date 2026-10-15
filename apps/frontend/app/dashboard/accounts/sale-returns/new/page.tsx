@@ -31,6 +31,7 @@ function NewCreditNoteContent() {
         items,
         setItems,
         updateItem: updateCartItem,
+        updateItemMultiple,
         addItem,
         removeItem,
         subtotal,
@@ -138,6 +139,26 @@ function NewCreditNoteContent() {
             });
             setItems(newItems);
             setExistingReturnId(inv.existingReturnId);
+        } else if (inv.isDaybook || !inv.items || inv.items.length === 0) {
+            setItems([{
+                id: Math.random().toString(36).slice(2),
+                saleItemId: '',
+                batchId: '',
+                alreadyReturned: 0,
+                productName: '',
+                batchNo: '',
+                qtyStrips: '1',
+                qtyLoose: '0',
+                packSize: 1,
+                rate: '',
+                gstRate: String(inv.defaultGstRate || '18'),
+                maxTotalUnits: 999999,
+                invoiceTotal: 0,
+                total: 0,
+            }]);
+            if (!reason) {
+                setReason(`Return against Daybook Bill #${inv.invoiceNo}`);
+            }
         }
     }
 
@@ -303,6 +324,11 @@ function NewCreditNoteContent() {
                                         <div className="flex justify-between items-start">
                                             <div>
                                                 <span className="font-semibold text-xs text-slate-800">{inv.invoiceNo}</span>
+                                                {inv.isDaybook && (
+                                                    <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded border border-amber-200">
+                                                        Daybook
+                                                    </span>
+                                                )}
                                                 <span className="text-[11px] text-slate-500 ml-2">{inv.customerName}</span>
                                             </div>
                                             <div className="text-right text-[11px] font-mono font-medium text-slate-700">
@@ -357,6 +383,7 @@ function NewCreditNoteContent() {
             <SaleReturnItemsGrid
                 items={items}
                 onUpdateItem={updateItem}
+                onUpdateItemMultiple={updateItemMultiple}
                 onAddItem={addItem}
                 onRemoveItem={removeItem}
                 mode="new"

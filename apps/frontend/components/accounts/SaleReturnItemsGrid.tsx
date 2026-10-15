@@ -1,12 +1,15 @@
 'use client';
 
-import React from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Plus, Trash2, Loader2, Search } from 'lucide-react';
 import { ReturnItemRow } from '@/hooks/useSaleReturnCart';
+import { useProductSearch } from '@/hooks/useProductSearch';
+import { ProductSearchResult } from '@/types';
 
 export interface SaleReturnItemsGridProps {
     items: ReturnItemRow[];
     onUpdateItem: (id: string, field: keyof ReturnItemRow, value: string) => void;
+    onUpdateItemMultiple?: (id: string, updates: Partial<ReturnItemRow>) => void;
     onAddItem?: () => void;
     onRemoveItem: (id: string) => void;
     mode?: 'new' | 'edit';
@@ -14,9 +17,140 @@ export interface SaleReturnItemsGridProps {
     allowAddItem?: boolean;
 }
 
+function RowProductSearch({
+    item,
+    onUpdateItem,
+    onUpdateItemMultiple,
+}: {
+    item: ReturnItemRow;
+    onUpdateItem: (id: string, field: keyof ReturnItemRow, value: string) => void;
+    onUpdateItemMultiple?: (id: string, updates: Partial<ReturnItemRow>) => void;
+}) {
+    const [open, setOpen] = useState(false);
+    const [query, setQuery] = useState(item.productName || '');
+    const { data: searchResults = [], isFetching } = useProductSearch(query, 'purchase');
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        setQuery(item.productName || '');
+    }, [item.productName]);
+
+    useEffect(() => {
+        function handleClickOutside(e: MouseEvent) {
+            if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+                setOpen(false);
+            }
+        }
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const handleSelectProduct = (product: ProductSearchResult, batch?: any) => {
+        const chosenBatch = batch || (product.batches && product.batches.length > 0 ? product.batches[0] : null);
+        const updates: Partial<ReturnItemRow> = {
+            productName: product.name,
+            packSize: product.packSize || 1,
+            gstRate: String(product.gstRate ?? 12),
+            batchId: chosenBatch ? chosenBatch.id : '',
+            batchNo: chosenBatch ? chosenBatch.batchNo : '',
+            rate: chosenBatch && (chosenBatch.saleRate || chosenBatch.mrp)
+                ? String(chosenBatch.saleRate || chosenBatch.mrp)
+                : String(product.saleRate || product.mrp || ''),
+            maxTotalUnits: 999999,
+        };
+
+        if (onUpdateItemMultiple) {
+            onUpdateItemMultiple(item.id, updates);
+        } else {
+            Object.entries(updates).forEach(([k, v]) => onUpdateItem(item.id, k as any, String(v)));
+        }
+        setQuery(product.name);
+        setOpen(false);
+    };
+
+    return (
+        <div ref={containerRef} className="relative w-full">
+            <div className="relative flex items-center">
+                <input
+                    placeholder="Search medicine (e.g. Paracetamol)..."
+                    value={query}
+                    onFocus={() => { if (query.trim().length >= 2) setOpen(true); }}
+                    onChange={(e) => {
+                        const val = e.target.value;
+                        setQuery(val);
+                        onUpdateItem(item.id, 'productName', val);
+                        if (val.trim().length >= 2) setOpen(true);
+                        else setOpen(false);
+                    }}
+                    className="h-7 w-full text-xs font-semibold text-slate-800 bg-transparent border border-transparent hover:border-slate-300 focus:border-blue-500 focus:bg-white rounded px-1.5 transition-colors shadow-none outline-none pr-6"
+                />
+                {isFetching && (
+                    <Loader2 className="h-3 w-3 animate-spin text-blue-500 absolute right-1.5" />
+                )}
+            </div>
+
+            {item.packSize > 1 && (
+                <span className="inline-block text-[10px] text-slate-400 font-mono px-1.5">
+                    Pack of {item.packSize}
+                </span>
+            )}
+
+            {open && searchResults.length > 0 && (
+                <div className="absolute left-0 top-full mt-1 w-96 max-h-64 overflow-y-auto bg-white border border-slate-200 rounded-md shadow-2xl z-50 divide-y divide-slate-100">
+                    {searchResults.map((product) => (
+                        <div key={product.id} className="p-2.5 hover:bg-blue-50/70 transition-colors text-left cursor-pointer">
+                            <div 
+                                onClick={() => handleSelectProduct(product)}
+                                className="font-semibold text-xs text-slate-900 flex justify-between items-center"
+                            >
+                                <span className="hover:text-blue-600 transition-colors">{product.name}</span>
+                                <span className="text-[10px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                                    Pack {product.packSize || 1}
+                                </span>
+                            </div>
+                            {product.composition && (
+                                <p className="text-[11px] text-slate-500 truncate mt-0.5">{product.composition}</p>
+                            )}
+                            <div className="flex items-center justify-between text-[11px] text-slate-500 mt-1">
+                                <span>{product.manufacturer || 'General'}</span>
+                                <span className="font-semibold text-slate-700">MRP: ₹{product.mrp || 0}</span>
+                            </div>
+
+                            {/* Batches available */}
+                            {product.batches && product.batches.length > 0 && (
+                                <div className="mt-1.5 pt-1.5 border-t border-slate-100 space-y-1">
+                                    <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                                        Batches:
+                                    </div>
+                                    <div className="flex flex-wrap gap-1">
+                                        {product.batches.slice(0, 5).map((b) => (
+                                            <button
+                                                key={b.id}
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleSelectProduct(product, b);
+                                                }}
+                                                className="text-[10px] font-mono bg-slate-100 hover:bg-blue-600 hover:text-white text-slate-700 px-1.5 py-0.5 rounded border border-slate-200 transition-colors"
+                                            >
+                                                {b.batchNo} · ₹{b.saleRate || b.mrp}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
 export function SaleReturnItemsGrid({
     items,
     onUpdateItem,
+    onUpdateItemMultiple,
     onAddItem,
     onRemoveItem,
     mode = 'new',
@@ -50,7 +184,7 @@ export function SaleReturnItemsGrid({
                             <th className="px-3 py-1.5 text-[11px] font-bold text-slate-600 uppercase tracking-wider border-r border-slate-300 w-full min-w-[260px]">
                                 Product &amp; Pack Details
                             </th>
-                            <th className="px-2 py-1.5 text-[11px] font-bold text-slate-600 uppercase tracking-wider w-24 text-center border-r border-slate-300">
+                            <th className="px-2 py-1.5 text-[11px] font-bold text-slate-600 uppercase tracking-wider w-28 text-center border-r border-slate-300">
                                 Batch
                             </th>
                             <th className="px-2 py-1.5 text-[11px] font-bold text-slate-600 uppercase tracking-wider w-20 text-right border-r border-slate-300">
@@ -102,27 +236,28 @@ export function SaleReturnItemsGrid({
                                                 )}
                                             </div>
                                         ) : (
-                                            <div className="space-y-0.5">
-                                                <input
-                                                    placeholder="Product name"
-                                                    value={item.productName}
-                                                    onChange={(e) => onUpdateItem(item.id, 'productName', e.target.value)}
-                                                    className="h-7 w-full text-xs font-semibold text-slate-800 bg-transparent border border-transparent hover:border-slate-300 focus:border-blue-500 focus:bg-white rounded px-1.5 transition-colors shadow-none outline-none"
-                                                />
-                                                {item.packSize > 1 && (
-                                                    <span className="inline-block text-[10px] text-slate-400 font-mono px-1.5">
-                                                        Pack of {item.packSize}
-                                                    </span>
-                                                )}
-                                            </div>
+                                            <RowProductSearch
+                                                item={item}
+                                                onUpdateItem={onUpdateItem}
+                                                onUpdateItemMultiple={onUpdateItemMultiple}
+                                            />
                                         )}
                                     </td>
 
                                     {/* Batch */}
                                     <td className="px-2 py-1.5 text-center border-r border-slate-100">
-                                        <span className="text-[11px] font-mono font-bold text-slate-600 bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded">
-                                            {item.batchNo || '—'}
-                                        </span>
+                                        {readOnlyProductInfo ? (
+                                            <span className="text-[11px] font-mono font-bold text-slate-600 bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded">
+                                                {item.batchNo || '—'}
+                                            </span>
+                                        ) : (
+                                            <input
+                                                placeholder="Batch #"
+                                                value={item.batchNo || ''}
+                                                onChange={(e) => onUpdateItem(item.id, 'batchNo', e.target.value)}
+                                                className="h-7 w-24 text-center font-mono text-[11px] font-bold text-slate-700 bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-blue-500 focus:bg-white rounded px-1 transition-colors outline-none"
+                                            />
+                                        )}
                                     </td>
 
                                     {/* Strips Input */}

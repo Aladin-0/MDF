@@ -240,6 +240,7 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
             gstAmount,
             totalAmount: discountedRate * totalQtyFractional,
             purchaseRate: quickAddBatch.purchaseRate,
+            landingRate: quickAddBatch.landingRate ?? quickAddBatch.purchaseRate,
         });
 
         // Reset

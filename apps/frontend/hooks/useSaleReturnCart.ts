@@ -102,6 +102,22 @@ export function useSaleReturnCart(initialItems?: ReturnItemRow[]) {
         );
     }, []);
 
+    const updateItemMultiple = useCallback((id: string, updates: Partial<ReturnItemRow>) => {
+        setItems((prev) =>
+            prev.map((item) => {
+                if (item.id !== id) return item;
+                const updated = { ...item, ...updates };
+                updated.total = calcItemTotal(
+                    updated.qtyStrips,
+                    updated.qtyLoose,
+                    updated.rate,
+                    updated.packSize
+                );
+                return updated;
+            })
+        );
+    }, []);
+
     const addItem = useCallback((item?: Partial<ReturnItemRow>) => {
         setItems((prev) => [...prev, { ...newItem(), ...item }]);
     }, []);
@@ -143,6 +159,7 @@ export function useSaleReturnCart(initialItems?: ReturnItemRow[]) {
         items,
         setItems,
         updateItem,
+        updateItemMultiple,
         addItem,
         removeItem,
         subtotal,

@@ -514,6 +514,7 @@ const realSalesApi = {
     getById: async (id: string, outletId?: string): Promise<SaleInvoice> => {
         const url = outletId ? `${API_URL}/sales/${id}/?outletId=${outletId}` : `${API_URL}/sales/${id}/`;
         const response = await fetch(url, { headers: getHeaders() });
+        await assertOk(response); // Ensure 404/500 throws cleanly instead of crashing the invoice renderer
         const data = await response.json();
         return {
             ...data,
@@ -625,11 +626,15 @@ const realSalesApi = {
 
 const realCreditApi = {
     getAccountsList: async (outletId: string, filters?: any) => {
-        const response = await fetch(`${API_URL}/credit/?outletId=${outletId}`, {
+        let url = `${API_URL}/credit/?outletId=${outletId}&pageSize=500`;
+        if (filters?.status && filters.status !== 'all') url += `&status=${filters.status}`;
+        if (filters?.search) url += `&search=${encodeURIComponent(filters.search)}`;
+        const response = await fetch(url, {
             headers: getHeaders(),
         });
         await assertOk(response);
-        return response.json();
+        const data = await response.json();
+        return Array.isArray(data) ? data : (data.data || []);
     },
     list: async (outletId: string) => {
         const response = await fetch(`${API_URL}/credit/?outletId=${outletId}`, {
@@ -1654,12 +1659,14 @@ const realVoucherApi = {
         const data = await response.json();
         return data.data || [];
     },
-    getLedgerStatement: async (ledgerId: string, from?: string, to?: string, ordering?: string) => {
+    getLedgerStatement: async (ledgerId: string, from?: string, to?: string, ordering?: string, page?: number, pageSize?: number) => {
         let url = `${API_URL}/ledgers/${ledgerId}/statement/`;
         const params: string[] = [];
         if (from) params.push(`from=${from}`);
         if (to) params.push(`to=${to}`);
         if (ordering) params.push(`ordering=${encodeURIComponent(ordering)}`);
+        if (page && page > 1) params.push(`page=${page}`);
+        if (pageSize) params.push(`page_size=${pageSize}`);
         if (params.length) url += '?' + params.join('&');
         const response = await fetch(url, { headers: getHeaders() });
         await assertOk(response);

@@ -282,9 +282,16 @@ def create_sales_return(payload: Dict[str, Any], outlet_id: str, created_by_id: 
         try:
             original_sale = SaleInvoice.objects.get(id=original_sale_id, outlet=outlet)
         except SaleInvoice.DoesNotExist:
-            raise ReturnServiceError(f"Sale invoice {original_sale_id} not found for this outlet")
+            from apps.accounts.models import JournalEntry
+            je = JournalEntry.objects.filter(id=original_sale_id, outlet=outlet).first()
+            if je:
+                original_sale = None
+                manual_override = True
+                override_reason = payload.get('overrideReason') or payload.get('override_reason') or payload.get('reason') or f"Return against Daybook Bill ({je.narration})"
+            else:
+                raise ReturnServiceError(f"Sale invoice {original_sale_id} not found for this outlet")
 
-        if SalesReturn.objects.filter(original_sale=original_sale).exists():
+        if original_sale and SalesReturn.objects.filter(original_sale=original_sale).exists():
             raise ReturnServiceError(
                 "This invoice already has an active return. Please modify the existing return instead."
             )
@@ -358,10 +365,36 @@ def create_sales_return(payload: Dict[str, Any], outlet_id: str, created_by_id: 
                     f"Original qty: {original_total_units}, already returned: {already_returned}."
                 )
 
-        try:
-            batch = Batch.objects.get(id=batch_id, outlet=outlet)
-        except Batch.DoesNotExist:
-            raise ReturnServiceError(f"Batch {batch_id} not found")
+        batch = None
+        if batch_id:
+            batch = Batch.objects.filter(id=batch_id, outlet=outlet).first()
+        if not batch:
+            product_id = item_data.get('productId') or item_data.get('product_id')
+            from apps.inventory.models import Product
+            product = None
+            if product_id:
+                product = Product.objects.filter(id=product_id).first()
+            if not product and item_data.get('productName'):
+                product = Product.objects.filter(name__iexact=item_data.get('productName'), outlet_products__outlet=outlet).first()
+                if not product:
+                    product = Product.objects.filter(name__icontains=item_data.get('productName')).first()
+            if product:
+                batch = Batch.objects.filter(product=product, outlet=outlet).first()
+                if not batch:
+                    batch_no_val = item_data.get('batchNo') or f"RET-{datetime.now().strftime('%y%m%d')}"
+                    batch = Batch.objects.create(
+                        outlet=outlet,
+                        product=product,
+                        batch_no=batch_no_val,
+                        expiry_date=datetime.now().date().replace(year=datetime.now().year + 2),
+                        pack_size=pack_size_hint,
+                        mrp=return_rate,
+                        sale_rate=return_rate,
+                        qty_strips=0,
+                        qty_loose=0,
+                    )
+        if not batch:
+            raise ReturnServiceError(f"Batch {batch_id or 'for item'} not found in inventory. Please select a valid product.")
 
         if original_sale:
             # Security: ensure the return batch_id matches the batch on the original SaleItem.

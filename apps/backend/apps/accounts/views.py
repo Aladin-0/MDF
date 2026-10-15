@@ -502,6 +502,7 @@ class CustomerDetailView(APIView):
             'isChronic': customer.is_chronic,
             'isActive': customer.is_active,
             'createdAt': customer.created_at.isoformat(),
+            'ledgerId': str(customer.ledgers.filter(group__name='Sundry Debtors').first().id) if customer.ledgers.filter(group__name='Sundry Debtors').exists() else None,
         }
 
         return Response(result, status=status.HTTP_200_OK)

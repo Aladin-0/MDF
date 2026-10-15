@@ -342,6 +342,7 @@ export interface Customer {
     totalPurchases: number;
     isChronic: boolean;
     isActive?: boolean;
+    ledgerId?: string;
     createdAt: string;
 }
 
@@ -682,6 +683,7 @@ export interface SaleItemDetail {
     totalAmount: number;
     packSize?: number;
     packUnit?: string;
+    packType?: string;
     batchNo?: string;
     expiryDate?: string;
     gstRate?: number;
@@ -1759,6 +1761,19 @@ export interface LedgerStatement {
     ledger: Ledger;
     openingBalance: number;
     closingBalance: number;
+    balanceType?: 'Cr' | 'Dr' | string;
+    isCreditNature?: boolean;
+    totalDebit?: number;
+    totalCredit?: number;
+    pageDebit?: number;
+    pageCredit?: number;
+    pagination?: {
+        page: number;
+        page_size: number;
+        total_count: number;
+        total_pages: number;
+        has_more: boolean;
+    };
     transactions: LedgerTransaction[];
 }
 
@@ -1772,4 +1787,5 @@ export interface LedgerTransaction {
     balance: number;
     sourceType: string;  // 'PURCHASE' | 'SALE' | 'VOUCHER' | 'RETURN' | 'CREDIT_PAYMENT' | ...
     sourceId: string;    // UUID of the source document
+    journalEntryId?: string;
 }

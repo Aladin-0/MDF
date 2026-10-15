@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, Fragment } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
     ArrowLeft, Pencil, Heart, Phone,
     Building2, Receipt,
@@ -142,7 +143,7 @@ function InvoiceHistory({ customerId }: { customerId: string }) {
     const router = useRouter();
     const { data, isLoading } = useCustomerInvoices(customerId);
     const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-    const [period, setPeriod] = useState<PeriodFilter>('this_month');
+    const [period, setPeriod] = useState<PeriodFilter>('all');
     const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
     const [autoExpandedKey, setAutoExpandedKey] = useState<string>('');
     const [page, setPage] = useState(1);
@@ -680,6 +681,13 @@ export default function CustomerDetailPage() {
                     </div>
                 </div>
                 <div className="flex gap-2">
+                    {customer.ledgerId && (
+                        <Button variant="outline" size="sm" asChild>
+                            <Link href={`/dashboard/accounts/ledgers/${customer.ledgerId}`}>
+                                <FileText className="w-3.5 h-3.5 mr-2" /> View Ledger
+                            </Link>
+                        </Button>
+                    )}
                     <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
                         <Pencil className="w-3.5 h-3.5 mr-2" /> Edit
                     </Button>

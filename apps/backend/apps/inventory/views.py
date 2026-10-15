@@ -101,6 +101,20 @@ class BatchDetailUpdateView(APIView):
             except (InvalidOperation, TypeError):
                 errors['purchaseRate'] = 'Invalid purchase rate'
 
+        if 'landingRate' in data or 'landing_rate' in data:
+            val = data.get('landingRate') if 'landingRate' in data else data.get('landing_rate')
+            if val is None or val == '':
+                batch.landing_rate = None
+            else:
+                try:
+                    lr = Decimal(str(val))
+                    if lr < 0:
+                        errors['landingRate'] = 'Landing rate cannot be negative'
+                    else:
+                        batch.landing_rate = lr
+                except (InvalidOperation, TypeError):
+                    errors['landingRate'] = 'Invalid landing rate'
+
         if 'packSize' in data:
             try:
                 ps = int(data['packSize'])
