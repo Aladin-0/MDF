@@ -108,8 +108,39 @@ export const emptyItem = (): PurchaseItemFormData => ({
 const fmt = (n: number) =>
     '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-const isNearExpiry = (exp: string) =>
-    exp ? differenceInDays(new Date(exp), new Date()) < 90 : false;
+const isNearExpiry = (exp: string) => {
+    const norm = normalizeExpiry(exp);
+    return norm ? differenceInDays(new Date(norm), new Date()) < 90 : false;
+};
+
+export const normalizeExpiry = (exp?: string): string => {
+    if (!exp) return '';
+    const raw = exp.trim();
+    // MM/YY e.g. 12/26 or 12-26
+    const mShort = raw.match(/^(\d{1,2})[/\-](\d{2})$/);
+    if (mShort) {
+        const m = parseInt(mShort[1], 10);
+        const y = parseInt(mShort[2], 10) + 2000;
+        if (m >= 1 && m <= 12) {
+            return `${y}-${String(m).padStart(2, '0')}-01`;
+        }
+    }
+    // MM/YYYY e.g. 12/2026 or 12-2026
+    const mLong = raw.match(/^(\d{1,2})[/\-](\d{4})$/);
+    if (mLong) {
+        const m = parseInt(mLong[1], 10);
+        const y = parseInt(mLong[2], 10);
+        if (m >= 1 && m <= 12) {
+            return `${y}-${String(m).padStart(2, '0')}-01`;
+        }
+    }
+    // YYYY-MM
+    const mIso = raw.match(/^(\d{4})-(\d{1,2})$/);
+    if (mIso) {
+        return `${mIso[1]}-${mIso[2].padStart(2, '0')}-01`;
+    }
+    return raw;
+};
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -301,7 +332,7 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                             isCustom: !item.medicineMatch?.productId,
                             hsnCode: item.medicineMatch?.hsnCode || item.medicineMatch?.hsn_code || item.hsnCode || '',
                             batchNo: item.batchNo || '',
-                            expiryDate: item.expiry || '',
+                            expiryDate: normalizeExpiry(item.expiry || ''),
                             pkg: item.medicineMatch?.packSize || item.medicineMatch?.pack_size || item.packSize || 1,
                             packUnitLabel: item.medicineMatch?.packUnit || item.medicineMatch?.pack_unit || '',
                             qty: item.qty || 0,
@@ -362,7 +393,7 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
             isCustom: it.isCustomProduct,
             hsnCode: it.hsnCode || '',
             batchNo: it.batchNo,
-            expiryDate: it.expiryDate || '',
+            expiryDate: normalizeExpiry(it.expiryDate || ''),
             pkg: (it.pkg === 1 && it.product?.packSize) ? it.product.packSize : it.pkg,
             packUnitLabel: it.packUnitLabel || it.product?.packUnit || '',
             qty: it.qty,

@@ -2133,13 +2133,32 @@ class InvoiceOCRStatusView(APIView):
         totals = ocr.get('totals', {})
 
         # Serialize items for review screen
+        import re as _re
         items_serialized = []
         for item in items_raw:
             med_match = item.get('_medicine_match', {})
+            raw_exp = item.get('expiry', '')
+            norm_exp = raw_exp
+            if raw_exp:
+                s_exp = str(raw_exp).strip()
+                m_short = _re.match(r'^(\d{1,2})[/\-.](\d{2})$', s_exp)
+                m_long = _re.match(r'^(\d{1,2})[/\-.](\d{4})$', s_exp)
+                m_iso = _re.match(r'^(\d{4})-(\d{1,2})$', s_exp)
+                if m_short:
+                    m_val, y_val = int(m_short.group(1)), int(m_short.group(2)) + 2000
+                    if 1 <= m_val <= 12:
+                        norm_exp = f"{y_val}-{str(m_val).zfill(2)}-01"
+                elif m_long:
+                    m_val, y_val = int(m_long.group(1)), int(m_long.group(2))
+                    if 1 <= m_val <= 12:
+                        norm_exp = f"{y_val}-{str(m_val).zfill(2)}-01"
+                elif m_iso:
+                    norm_exp = f"{m_iso.group(1)}-{m_iso.group(2).zfill(2)}-01"
+
             items_serialized.append({
                 'name': item.get('name', ''),
                 'batchNo': item.get('batch_no', ''),
-                'expiry': item.get('expiry', ''),
+                'expiry': norm_exp,
                 'qty': item.get('qty', ''),
                 'freeQty': item.get('free_qty', 0),
                 'mrp': item.get('mrp', ''),

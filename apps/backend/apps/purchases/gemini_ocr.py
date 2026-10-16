@@ -85,7 +85,7 @@ def process_with_gemini(image_path: str, outlet_id: str, api_key: str, match_dis
     Return perfectly structured JSON matching the requested schema.
     IMPORTANT: 
     1. The pharmacy's (buyer's) own GSTIN is {outlet_gstin}. DO NOT extract this as the distributor's GSTIN. Only extract the distributor's (seller's) GSTIN.
-    2. Convert all dates to YYYY-MM-DD format if possible.
+    2. Convert all dates to YYYY-MM-DD format if possible. For expiry dates (which are often printed as MM/YY e.g. 12/26 or 05/28), always convert them to standard YYYY-MM-01 format (e.g. 2026-12-01 or 2028-05-01).
     3. Ensure QTY (quantity), FREE QTY, MRP, and RATE are extracted as numbers.
     4. CRITICAL: You MUST extract the discount percentage (DISC%) for every line item if it exists on the invoice. Do not skip the discount column.
     """
@@ -108,12 +108,41 @@ def process_with_gemini(image_path: str, outlet_id: str, api_key: str, match_dis
     # Run Distributor Match
     dist_match = match_distributor_fn(outlet_id, header)
     
+    import re
+
+    def _normalize_expiry(exp_str):
+        if not exp_str:
+            return None
+        s = str(exp_str).strip()
+        # Already YYYY-MM-DD
+        if re.match(r'^\d{4}-\d{2}-\d{2}$', s):
+            return s
+        # YYYY-MM
+        m_iso = re.match(r'^(\d{4})-(\d{1,2})$', s)
+        if m_iso:
+            return f"{m_iso.group(1)}-{m_iso.group(2).zfill(2)}-01"
+        # MM/YY, MM-YY, MM.YY
+        m_short = re.match(r'^(\d{1,2})[/\-.](\d{2})$', s)
+        if m_short:
+            m, y = int(m_short.group(1)), int(m_short.group(2)) + 2000
+            if 1 <= m <= 12:
+                return f"{y}-{str(m).zfill(2)}-01"
+        # MM/YYYY, MM-YYYY, MM.YYYY
+        m_long = re.match(r'^(\d{1,2})[/\-.](\d{4})$', s)
+        if m_long:
+            m, y = int(m_long.group(1)), int(m_long.group(2))
+            if 1 <= m <= 12:
+                return f"{y}-{str(m).zfill(2)}-01"
+        return s
+
     # Format Items and Run Medicine Match
     items = data.get('items', [])
     clean_items = []
     for item in items:
         # Convert Pydantic output to flat dict
         item_dict = {k: v for k, v in item.items() if v is not None}
+        if item_dict.get('expiry'):
+            item_dict['expiry'] = _normalize_expiry(item_dict['expiry'])
         if item_dict.get('name'):
             med_match = match_medicine_fn(item_dict['name'], outlet_id)
             item_dict['_medicine_match'] = med_match
