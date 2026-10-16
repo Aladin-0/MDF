@@ -5,6 +5,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from apps.core.permissions import IsAuthenticated, IsManagerOrAbove, CanCreatePurchases, CanEditPurchaseInvoice, CanAccessPurchases
 from rest_framework import status
+from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.filters import OrderingFilter
 from django.db.models import Q
 from django.db import transaction
@@ -1984,20 +1985,32 @@ class InvoiceScanUploadView(APIView):
         "message": "Invoice uploaded. OCR analysis in progress..."
     }
     """
+    parser_classes = [MultiPartParser, FormParser]
     permission_classes = [CanCreatePurchases]
 
     def post(self, request, *args, **kwargs):
         from apps.purchases.tasks import process_invoice_ocr
 
-        outlet_id = request.data.get('outletId')
-        image_file = request.FILES.get('image')
+        outlet_id = (
+            request.data.get('outletId')
+            or request.data.get('outlet_id')
+            or request.query_params.get('outletId')
+            or request.query_params.get('outlet_id')
+        )
+        image_file = (
+            request.FILES.get('image')
+            or request.FILES.get('file')
+            or request.FILES.get('invoice_image')
+        )
 
         if not outlet_id:
+            logger.warning(f"Scan upload missing outletId. Keys: data={list(request.data.keys())}, query={dict(request.query_params)}")
             return Response(
                 {'error': {'code': 'MISSING_OUTLET', 'message': 'outletId is required'}},
                 status=status.HTTP_400_BAD_REQUEST
             )
         if not image_file:
+            logger.warning(f"Scan upload missing image. Keys: files={list(request.FILES.keys())}, data={list(request.data.keys())}")
             return Response(
                 {'error': {'code': 'MISSING_IMAGE', 'message': 'image file is required'}},
                 status=status.HTTP_400_BAD_REQUEST

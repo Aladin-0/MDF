@@ -15,6 +15,17 @@ export const api = axios.create({
 // Request Interceptor: forward cookies for cookie-based auth and attach Bearer token
 api.interceptors.request.use(
     (config) => {
+        // If data is FormData, remove Content-Type so Axios/browser automatically sets multipart/form-data with proper boundary
+        if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+            if (config.headers) {
+                if (typeof (config.headers as any).delete === 'function') {
+                    (config.headers as any).delete('Content-Type');
+                } else {
+                    delete (config.headers as Record<string, any>)['Content-Type'];
+                }
+            }
+        }
+
         if (typeof document !== 'undefined') {
             const row = document.cookie.split('; ').find(r => r.startsWith('access_token='));
             const token = row ? row.substring('access_token='.length) : null;

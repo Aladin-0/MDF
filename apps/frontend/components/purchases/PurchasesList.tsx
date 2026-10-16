@@ -100,17 +100,23 @@ export function PurchasesList({
 
         try {
             const res = await api.post('/purchases/scan/upload/', formData, {
-                headers: { 'Content-Type': 'multipart/form-data' }
+                params: { outletId: outlet.id },
+                timeout: 120000, // 2 minutes for high-res camera photos
             });
             toast({ title: 'Upload Successful', description: 'Opening OCR analysis...' });
             if (res.data.draftId && onScanSuccess) {
                 onScanSuccess(res.data.draftId);
             }
         } catch (err: any) {
+            console.error('OCR Upload Error:', err);
+            const msg =
+                err.response?.data?.error?.message ||
+                err.response?.data?.message ||
+                (err.code === 'ECONNABORTED' ? 'Upload timed out. Please check your internet connection and try again.' : err.message);
             toast({
                 variant: 'destructive',
                 title: 'Upload Failed',
-                description: err.response?.data?.error?.message || err.message,
+                description: msg,
             });
         } finally {
             setIsUploading(false);
