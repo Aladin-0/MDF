@@ -135,6 +135,7 @@ export function PurchaseItemRow({
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const [dropdownStyle, setDropdownStyle] = useState<{ top: number; left: number } | null>(null);
     const debounceRef                     = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const abortControllerRef              = useRef<AbortController | null>(null);
     const wrapperRef                      = useRef<HTMLDivElement>(null);
     const inputRef                        = useRef<HTMLInputElement>(null);
     const portalRef                       = useRef<HTMLDivElement>(null);
@@ -207,6 +208,10 @@ export function PurchaseItemRow({
         onChange(index, 'isCustom', false as unknown as number);
 
         if (debounceRef.current) clearTimeout(debounceRef.current);
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+            abortControllerRef.current = null;
+        }
 
         if (raw.length < 2) {
             setResults([]);
@@ -223,10 +228,14 @@ export function PurchaseItemRow({
                 return;
             }
             try {
-                const found = await productsApi.search(raw, outletId);
+                const controller = new AbortController();
+                abortControllerRef.current = controller;
+                const found = await productsApi.search(raw, outletId, 'purchase', controller.signal);
                 setResults(found);
-            } catch {
-                setResults([]);
+            } catch (err: any) {
+                if (err?.name !== 'AbortError') {
+                    setResults([]);
+                }
             } finally {
                 setSearching(false);
             }

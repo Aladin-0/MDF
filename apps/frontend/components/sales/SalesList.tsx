@@ -109,10 +109,18 @@ export default function SalesList() {
     const [endDate, setEndDate] = useState(fd(now));
     const [activePreset, setActivePreset] = useState('Today');
     const [search, setSearch] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
     const [saleType, setSaleType] = useState<'ALL' | 'RETAIL' | 'WHOLESALE'>('ALL');
     const [page, setPage] = useState(1);
     const user = useAuthStore((s) => s.user);
     const canEdit = user?.role === 'super_admin' || user?.role === 'admin' || !!user?.canEditSales || !!user?.canModifyDraftBill || !!user?.canModifyUnpaidBill || !!user?.canModifyPaidBill;
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearch(search);
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [search]);
 
     const handleEditSale = (invoice: SaleInvoice) => {
         setSelectedInvoiceId(null);
@@ -134,13 +142,13 @@ export default function SalesList() {
 
     // When search is active: bypass date filters → search ALL dates (newest first)
     // When search is empty: apply selected date range
-    const isSearching = search.trim().length > 0;
+    const isSearching = debouncedSearch.trim().length > 0;
     const { data, isLoading } = useSalesList({
         startDate: isSearching ? undefined : startDate,
         endDate:   isSearching ? undefined : endDate,
         page,
         pageSize: PAGE_SIZE,
-        search: search.trim() || undefined,
+        search: debouncedSearch.trim() || undefined,
         saleType: saleType === 'ALL' ? undefined : saleType,
         paymentMode: currentPaymentMode !== 'all' ? currentPaymentMode : undefined,
         ordering: currentSort,

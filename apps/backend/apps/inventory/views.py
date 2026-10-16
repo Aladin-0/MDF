@@ -594,108 +594,68 @@ class ProductSearchView(APIView):
             )
 
         logger.info(f"Searching products for: '{query}' (outlet: {outlet.name}, context: {context or 'default'})")
-
         today = datetime.now().date()
         query_lower = query.lower()
 
-        from django.db.models import Sum, F, Case, When, Value, BooleanField, IntegerField, Subquery, OuterRef, Q, FloatField
-        from django.db.models.functions import Coalesce
-        from django.contrib.postgres.search import SearchVector, SearchQuery, SearchRank, TrigramSimilarity
+        # ── 1. Fast Cache Check (60s TTL) ──────────────────────────────
+        from django.core.cache import cache
+        cache_key = f"prod_search:v2:{outlet_id}:{context}:{query_lower}"
+        cached_result = cache.get(cache_key)
+        if cached_result is not None:
+            return Response({'data': cached_result}, status=status.HTTP_200_OK)
 
-        # Prepare the search query
-        search_query = SearchQuery(query, search_type='websearch')
+        from django.db.models import Case, When, Value, IntegerField, Q
 
-        # Construct SearchVector with weights
-        vector = (
-            SearchVector('name', weight='A') +
-            SearchVector('composition', weight='A') +
-            SearchVector('manufacturer', weight='B')
-        )
-
-        # Base query with active products
-        products_query = MasterProduct.objects.filter(is_discontinued=False)
-
-        # Annotate full-text search rank and trigram similarities
-        products_query = products_query.annotate(
-            fts_rank=SearchRank(vector, search_query),
-            name_sim=TrigramSimilarity('name', query),
-            comp_sim=TrigramSimilarity('composition', query),
+        # ── 2. GIN Trigram Indexed Search ──────────────────────────────
+        # Use existing pg_trgm GIN indexes on name, composition, manufacturer.
+        # Filter first so Postgres performs a fast Bitmap Index Scan instead of full Seq Scan.
+        matched_qs = MasterProduct.objects.filter(is_discontinued=False).filter(
+            Q(name__icontains=query) |
+            Q(composition__icontains=query) |
+            Q(manufacturer__icontains=query)
         ).annotate(
-            score=(Coalesce('fts_rank', Value(0.0), output_field=FloatField()) * 2.0) +
-                  (Coalesce('name_sim', Value(0.0), output_field=FloatField()) * 1.5) +
-                  Coalesce('comp_sim', Value(0.0), output_field=FloatField())
-        )
-
-        # Filter candidates based on hybrid criteria
-        products_query = products_query.filter(
-            Q(fts_rank__gte=0.1) |
-            Q(name_sim__gte=0.2) |
-            Q(comp_sim__gte=0.2) |
-            Q(name__icontains=query_lower)
-        )
-
-        # Build subquery to compute stock per product
-        active_batches_sq = Batch.objects.filter(
-            outlet_id=outlet_id,
-            is_active=True,
-            product_id=OuterRef('pk')
-        )
-        if not is_purchase_context:
-            active_batches_sq = active_batches_sq.filter(expiry_date__gt=today)
-
-        # Annotate total stock and has_stock
-        products_query = products_query.annotate(
-            total_strips=Coalesce(
-                Subquery(
-                    active_batches_sq.values('product_id')
-                    .annotate(s=Sum('qty_strips')).values('s')[:1],
-                    output_field=IntegerField()
-                ),
-                0
-            ),
-            total_loose=Coalesce(
-                Subquery(
-                    active_batches_sq.values('product_id')
-                    .annotate(s=Sum('qty_loose')).values('s')[:1],
-                    output_field=IntegerField()
-                ),
-                0
+            match_priority=Case(
+                When(name__istartswith=query, then=Value(3)),
+                When(name__icontains=query, then=Value(2)),
+                When(composition__icontains=query, then=Value(1)),
+                default=Value(0),
+                output_field=IntegerField()
             )
-        )
+        ).order_by('-match_priority', 'name')
+
+        candidate_products = list(matched_qs[:40])
+        if not candidate_products:
+            cache.set(cache_key, [], 60)
+            return Response({'data': []}, status=status.HTTP_200_OK)
+
+        candidate_ids = [p.id for p in candidate_products]
+
+        # ── 3. Single Batch Query (Eliminate N+1) ──────────────────────
+        batch_filter = Q(outlet=outlet, is_active=True, product_id__in=candidate_ids)
+        if not is_purchase_context:
+            batch_filter &= Q(expiry_date__gt=today)
+
+        batches_qs = Batch.objects.filter(batch_filter).order_by('expiry_date')
+        batches_by_product = {}
+        for b in batches_qs:
+            batches_by_product.setdefault(b.product_id, []).append(b)
+
+        # ── 4. Single Config Query ─────────────────────────────────────
         from apps.inventory.models import OutletProductConfig
-        config_sq = OutletProductConfig.objects.filter(
-            outlet_id=outlet_id,
-            product_id=OuterRef('pk')
-        )
+        configs_by_product = {
+            cfg.product_id: cfg
+            for cfg in OutletProductConfig.objects.filter(outlet=outlet, product_id__in=candidate_ids)
+        }
 
-        products_query = products_query.annotate(
-            total_qty=F('total_strips') + F('total_loose'),
-            has_stock=Case(
-                When(total_qty__gt=0, then=Value(True)),
-                default=Value(False),
-                output_field=BooleanField()
-            ),
-            outlet_min_qty=Coalesce(Subquery(config_sq.values('min_qty')[:1], output_field=FloatField()), 0.0),
-            outlet_reorder_qty=Coalesce(Subquery(config_sq.values('reorder_qty')[:1], output_field=FloatField()), 0.0)
-        ).order_by('-has_stock', '-score')
+        # ── 5. Assemble and Sort In-Stock vs Zero-Stock ────────────────
+        in_stock = []
+        zero_stock = []
 
-        # Limit to 10 in-stock and 5 zero-stock
-        all_matched_products = list(products_query[:50])
-        in_stock_products = [p for p in all_matched_products if p.has_stock][:10]
-        no_stock_products = [p for p in all_matched_products if not p.has_stock][:5]
-
-        final_products = in_stock_products + no_stock_products
-
-        logger.info(f"Found {len(all_matched_products)} products matching: '{query}'. Returning {len(final_products)}.")
-
-        results = []
-
-        for product in final_products:
-            batch_filter = dict(product=product, outlet=outlet, is_active=True)
-            if not is_purchase_context:
-                batch_filter['expiry_date__gt'] = today
-
-            batches = list(Batch.objects.filter(**batch_filter).order_by('expiry_date'))
+        for product in candidate_products:
+            batches = batches_by_product.get(product.id, [])
+            cfg = configs_by_product.get(product.id)
+            outlet_min_qty = float(cfg.min_qty) if cfg else 0.0
+            outlet_reorder_qty = float(cfg.reorder_qty) if cfg else 0.0
 
             non_expired = [b for b in batches if b.expiry_date > today]
             nearest_expiry = (
@@ -703,22 +663,17 @@ class ProductSearchView(APIView):
                 if non_expired
                 else (batches[0].expiry_date.isoformat() if batches else "2099-12-31")
             )
-            
-            total_stock_strips = getattr(product, 'total_strips', 0)
-            total_stock_loose = getattr(product, 'total_loose', 0)
-            total_stock_fractional = total_stock_strips + (total_stock_loose / (product.pack_size or 1))
-
-            is_low_stock = total_stock_fractional < 10
 
             available_batches = [b for b in batches if (b.qty_strips > 0 or b.qty_loose > 0)]
+            total_stock_strips = sum(b.qty_strips for b in available_batches)
+            total_stock_loose = sum(b.qty_loose for b in available_batches)
+            has_stock = total_stock_strips > 0 or total_stock_loose > 0
 
-            if not product.has_stock:
-                available_batches = []
-                total_stock_strips = 0
-                total_stock_loose = 0
-                total_stock_fractional = 0.0
+            pack_sz = product.pack_size or 1
+            total_stock_fractional = total_stock_strips + (total_stock_loose / pack_sz)
+            is_low_stock = total_stock_fractional < 10
 
-            batch_list = [serialize_batch(batch) for batch in available_batches]
+            batch_list = [serialize_batch(b) for b in available_batches]
 
             result = {
                 'id': str(product.id),
@@ -740,10 +695,9 @@ class ProductSearchView(APIView):
                 'mrp': float(product.mrp),
                 'saleRate': float(product.mrp),
                 'outletProductId': str(product.id),
-                'minQty': product.outlet_min_qty,
-                'reorderQty': product.outlet_reorder_qty,
-                
-                'has_stock': product.has_stock,
+                'minQty': outlet_min_qty,
+                'reorderQty': outlet_reorder_qty,
+                'has_stock': has_stock,
                 'total_qty_strips': total_stock_strips,
                 'total_qty_loose': total_stock_loose,
                 'totalStock': total_stock_fractional,
@@ -753,9 +707,15 @@ class ProductSearchView(APIView):
                 'available_batches': batch_list,
             }
 
-            results.append(result)
+            if has_stock:
+                in_stock.append(result)
+            else:
+                zero_stock.append(result)
 
-        logger.info(f"Returning {len(results)} products with stock data")
+        results = in_stock[:15] + zero_stock[:10]
+        cache.set(cache_key, results, 60)
+
+        logger.info(f"Returning {len(results)} products for '{query}' (in_stock: {len(in_stock[:15])}, zero: {len(zero_stock[:10])})")
         return Response({'data': results}, status=status.HTTP_200_OK)
 
 
@@ -783,70 +743,59 @@ class MasterCatalogSearchView(APIView):
 
         query_lower = query.lower()
 
-        from django.db.models import Sum, F, FloatField, IntegerField, Subquery, OuterRef, Q, Value
-        from django.db.models.functions import Coalesce
-        from django.contrib.postgres.search import SearchVector, SearchQuery, SearchRank, TrigramSimilarity
+        # Fast cache check (60s TTL)
+        from django.core.cache import cache
+        cache_key = f"prod_catalog_search:v2:{outlet_id}:{query_lower}"
+        cached_result = cache.get(cache_key)
+        if cached_result is not None:
+            return Response({'data': cached_result}, status=status.HTTP_200_OK)
 
-        search_query = SearchQuery(query, search_type='websearch')
-        vector = (
-            SearchVector('name', weight='A') +
-            SearchVector('composition', weight='A') +
-            SearchVector('manufacturer', weight='B')
-        )
+        from django.db.models import Case, When, Value, IntegerField, Q
 
-        products = MasterProduct.objects.filter(is_discontinued=False).annotate(
-            fts_rank=SearchRank(vector, search_query),
-            name_sim=TrigramSimilarity('name', query),
-            comp_sim=TrigramSimilarity('composition', query),
+        matched_qs = MasterProduct.objects.filter(is_discontinued=False).filter(
+            Q(name__icontains=query) |
+            Q(composition__icontains=query) |
+            Q(manufacturer__icontains=query)
         ).annotate(
-            score=(Coalesce('fts_rank', Value(0.0), output_field=FloatField()) * 2.0) +
-                  (Coalesce('name_sim', Value(0.0), output_field=FloatField()) * 1.5) +
-                  Coalesce('comp_sim', Value(0.0), output_field=FloatField())
-        ).filter(
-            Q(fts_rank__gte=0.1) |
-            Q(name_sim__gte=0.2) |
-            Q(comp_sim__gte=0.2) |
-            Q(name__icontains=query_lower)
-        )
+            match_priority=Case(
+                When(name__istartswith=query, then=Value(3)),
+                When(name__icontains=query, then=Value(2)),
+                When(composition__icontains=query, then=Value(1)),
+                default=Value(0),
+                output_field=IntegerField()
+            )
+        ).order_by('-match_priority', 'name')
 
-        # Annotate current stock across all batches
-        active_batches_sq = Batch.objects.filter(
+        products = list(matched_qs[:30])
+        if not products:
+            cache.set(cache_key, [], 60)
+            return Response({'data': []}, status=status.HTTP_200_OK)
+
+        candidate_ids = [p.id for p in products]
+
+        # Single Batch Query for stock
+        batches_qs = Batch.objects.filter(
             outlet_id=outlet_id,
             is_active=True,
-            product_id=OuterRef('pk')
+            product_id__in=candidate_ids
         )
-        
-        from apps.inventory.models import OutletProductConfig
-        config_sq = OutletProductConfig.objects.filter(
-            outlet_id=outlet_id,
-            product_id=OuterRef('pk')
-        )
+        stock_by_product = {}
+        for b in batches_qs:
+            stock = stock_by_product.setdefault(b.product_id, {'strips': 0, 'loose': 0})
+            stock['strips'] += b.qty_strips
+            stock['loose'] += b.qty_loose
 
-        products = products.annotate(
-            total_strips=Coalesce(
-                Subquery(
-                    active_batches_sq.values('product_id')
-                    .annotate(s=Sum('qty_strips')).values('s')[:1],
-                    output_field=IntegerField()
-                ),
-                0
-            ),
-            total_loose=Coalesce(
-                Subquery(
-                    active_batches_sq.values('product_id')
-                    .annotate(s=Sum('qty_loose')).values('s')[:1],
-                    output_field=IntegerField()
-                ),
-                0
-            ),
-            outlet_min_qty=Coalesce(Subquery(config_sq.values('min_qty')[:1], output_field=FloatField()), 0.0),
-        ).order_by('-score')[:50]
+        # Single Config Query
+        from apps.inventory.models import OutletProductConfig
+        configs = {
+            c.product_id: c.min_qty
+            for c in OutletProductConfig.objects.filter(outlet_id=outlet_id, product_id__in=candidate_ids)
+        }
 
         results = []
         for p in products:
-            strips = p.total_strips
-            loose = p.total_loose
-            effective_stock = strips + (loose / (p.pack_size or 1))
+            stk = stock_by_product.get(p.id, {'strips': 0, 'loose': 0})
+            effective_stock = stk['strips'] + (stk['loose'] / (p.pack_size or 1))
             
             results.append({
                 'id': str(p.id),
@@ -856,12 +805,13 @@ class MasterCatalogSearchView(APIView):
                 'packSize': p.pack_size,
                 'packUnit': p.pack_unit,
                 'packType': p.pack_type,
-                'minQty': p.outlet_min_qty,
+                'minQty': float(configs.get(p.id, 0.0)),
                 'currentStock': effective_stock,
                 'mrp': float(p.mrp),
-                'purchaseRate': float(p.mrp) * 0.8, # fallback logic
+                'purchaseRate': float(p.mrp) * 0.8,
             })
 
+        cache.set(cache_key, results, 60)
         return Response({'data': results}, status=status.HTTP_200_OK)
 
 

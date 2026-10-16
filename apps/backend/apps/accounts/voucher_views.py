@@ -84,9 +84,24 @@ class LedgerListView(APIView):
             qs = qs.filter(group__nature__in=['liability', 'expense'])
         elif voucher_type == 'contra':
             qs = qs.filter(group__name__in=['Cash in Hand', 'Bank Accounts'])
+
+        total_count = qs.count()
+        limit_param = request.query_params.get('limit')
+        if limit_param:
+            try:
+                limit_val = max(1, min(200, int(limit_param)))
+                qs = qs.order_by('name')[:limit_val]
+            except ValueError:
+                qs = qs.order_by('name')
+        elif search:
+            # Default to top 50 matches for fast, low-load search responses
+            qs = qs.order_by('name')[:50]
+        else:
+            qs = qs.order_by('name')
+
         return Response({
             'data': LedgerSerializer(qs, many=True).data,
-            'meta': {'total': qs.count()},
+            'meta': {'total': total_count},
         })
 
     def post(self, request):

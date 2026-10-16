@@ -1846,6 +1846,19 @@ class DoctorListCreateView(APIView):
         if search:
             qs = qs.filter(Q(name__icontains=search) | Q(registration_no__icontains=search))
 
+        total_count = qs.count()
+        limit_param = request.query_params.get('limit')
+        if limit_param:
+            try:
+                limit_val = max(1, min(200, int(limit_param)))
+                qs = qs.order_by('name')[:limit_val]
+            except ValueError:
+                qs = qs.order_by('name')
+        elif search:
+            qs = qs.order_by('name')[:50]
+        else:
+            qs = qs.order_by('name')
+
         data = [{
             'id': str(d.id),
             'name': d.name,
@@ -1858,9 +1871,9 @@ class DoctorListCreateView(APIView):
             'specialization': d.specialty,
             'hospitalName': d.hospital_name,
             'address': d.address,
-        } for d in qs.order_by('name')]
+        } for d in qs]
 
-        return Response({'success': True, 'data': data, 'meta': {'total': len(data)}}, status=status.HTTP_200_OK)
+        return Response({'success': True, 'data': data, 'meta': {'total': total_count}}, status=status.HTTP_200_OK)
 
     def post(self, request, *args, **kwargs):
         from apps.accounts.models import Doctor

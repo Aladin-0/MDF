@@ -239,13 +239,13 @@ const realSettingsApi = {
 };
 
 const realProductsApi = {
-    search: async (q: string, outletId: string, context: 'purchase' | 'billing' | '' = 'purchase'): Promise<ProductSearchResult[]> => {
+    search: async (q: string, outletId: string, context: 'purchase' | 'billing' | '' = 'purchase', signal?: AbortSignal): Promise<ProductSearchResult[]> => {
         // context=purchase → backend shows all active batches regardless of expiry
         // context=billing  → backend only shows non-expired batches (safe for selling)
         const contextParam = context ? `&context=${context}` : '';
         const response = await fetch(
             `${API_URL}/products/search/?q=${encodeURIComponent(q)}&outletId=${outletId}${contextParam}`,
-            { headers: getHeaders() }
+            { headers: getHeaders(), signal }
         );
         await assertOk(response);
         const data = await response.json();
@@ -287,10 +287,10 @@ const realProductsApi = {
             }),
         }));
     },
-    catalogSearch: async (q: string, outletId: string): Promise<ProductSearchResult[]> => {
+    catalogSearch: async (q: string, outletId: string, signal?: AbortSignal): Promise<ProductSearchResult[]> => {
         const response = await fetch(
             `${API_URL}/products/catalog/search/?q=${encodeURIComponent(q)}&outletId=${outletId}`,
-            { headers: getHeaders() }
+            { headers: getHeaders(), signal }
         );
         await assertOk(response);
         const data = await response.json();
@@ -1647,13 +1647,14 @@ const realVoucherApi = {
         const data = await response.json();
         return data.data || [];
     },
-    getLedgers: async (outletId: string, params?: { type?: string; voucherType?: string; search?: string; group?: string; filterGroup?: string }) => {
+    getLedgers: async (outletId: string, params?: { type?: string; voucherType?: string; search?: string; group?: string; filterGroup?: string; limit?: number }) => {
         let url = `${API_URL}/ledgers/?outletId=${outletId}`;
         if (params?.type) url += `&type=${params.type}`;
         if (params?.voucherType) url += `&voucherType=${params.voucherType}`;
         if (params?.filterGroup) url += `&filterGroup=${params.filterGroup}`;
         if (params?.search) url += `&search=${encodeURIComponent(params.search)}`;
         if (params?.group) url += `&group=${encodeURIComponent(params.group)}`;
+        if (params?.limit) url += `&limit=${params.limit}`;
         const response = await fetch(url, { headers: getHeaders() });
         await assertOk(response);
         const data = await response.json();
@@ -1845,9 +1846,10 @@ const realVoucherApi = {
 };
 
 const realDoctorsApi = {
-    search: async (outletId: string, search?: string): Promise<any[]> => {
+    search: async (outletId: string, search?: string, limit?: number): Promise<any[]> => {
         let url = `${API_URL}/doctors/?outletId=${outletId}`;
         if (search) url += `&search=${encodeURIComponent(search)}`;
+        if (limit) url += `&limit=${limit}`;
         const response = await fetch(url, { headers: getHeaders() });
         await assertOk(response);
         const data = await response.json();

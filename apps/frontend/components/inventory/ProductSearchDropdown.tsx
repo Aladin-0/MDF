@@ -54,14 +54,14 @@ export function ProductSearchDropdown({ onSelect, context = 'purchase', placehol
                         onValueChange={setQuery} 
                     />
                     <CommandList>
-                        {isFetching ? (
+                        {isFetching && searchResults.length === 0 ? (
                             <div className="flex items-center justify-center p-4 text-sm text-muted-foreground">
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                 Searching...
                             </div>
                         ) : (
                             <>
-                                {query.length >= 2 && searchResults.length === 0 && (
+                                {query.trim().length >= 2 && searchResults.length === 0 && !isFetching && (
                                     <CommandEmpty>No products found.</CommandEmpty>
                                 )}
                                 {searchResults.length > 0 && (

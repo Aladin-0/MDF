@@ -68,8 +68,8 @@ export function DoctorPicker({
         queryKey: ['doctors', 'search', debouncedQuery, outletId],
         queryFn: async () => {
             if (!outletId) return [];
-            const res = await doctorsApi.search(outletId, debouncedQuery || undefined);
-            return (res as Doctor[]).slice(0, 10);
+            const res = await doctorsApi.search(outletId, debouncedQuery || undefined, 50);
+            return res as Doctor[];
         },
         enabled: isOpen && !!outletId,
     });

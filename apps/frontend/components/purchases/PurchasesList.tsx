@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { format } from 'date-fns';
 import {
     ChevronDown, ChevronRight, Search, X,
@@ -75,6 +75,7 @@ export function PurchasesList({
     onScanSuccess?: (draftId: string) => void;
 }) {
     const [search, setSearch] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
     const [period, setPeriod] = useState<PeriodFilter>('all');
     const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -88,6 +89,13 @@ export function PurchasesList({
     const router = useRouter();
     const searchParams = useSearchParams();
     const currentSort = searchParams.get('sort') || '-invoice_date';
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearch(search);
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [search]);
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -130,12 +138,12 @@ export function PurchasesList({
             page,
             pageSize: PAGE_SIZE,
             status: statusFilter === 'all' ? undefined : statusFilter,
-            search: search.trim() || undefined,
+            search: debouncedSearch.trim() || undefined,
             startDate: bounds?.start,
             endDate: bounds?.end,
             ordering: currentSort,
         };
-    }, [page, statusFilter, search, period, currentSort]);
+    }, [page, statusFilter, debouncedSearch, period, currentSort]);
 
     const { data, isLoading } = usePurchasesList(queryParams);
 

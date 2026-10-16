@@ -50,7 +50,7 @@ export function LedgerPicker({
         let cancelled = false;
         setLoading(true);
 
-        let params: { voucherType?: string; search?: string; type?: string; group?: string; filterGroup?: string } = {};
+        let params: { voucherType?: string; search?: string; type?: string; group?: string; filterGroup?: string; limit?: number } = { limit: 50 };
         if (group) {
             // Direct group filter — used for Sundry Creditors / Sundry Debtors pickers
             params.group = group;
