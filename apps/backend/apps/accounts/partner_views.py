@@ -32,7 +32,7 @@ class PartnerListCreateView(APIView):
         except Outlet.DoesNotExist:
             return Response({'detail': f'Outlet {outlet_id} not found'}, status=status.HTTP_404_NOT_FOUND)
             
-        if not request.user.can_manage_partners and request.user.role != 'super_admin':
+        if not (request.user.role in ('super_admin', 'admin') or getattr(request.user, 'can_manage_partners', False)):
             return Response({'detail': 'You do not have permission to manage partners.'}, status=status.HTTP_403_FORBIDDEN)
 
         serializer = PartnerSerializer(data=request.data, context={'outlet': outlet})
@@ -72,7 +72,7 @@ class PartnerDetailView(APIView):
         if not partner:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
             
-        if not request.user.can_manage_partners and request.user.role != 'super_admin':
+        if not (request.user.role in ('super_admin', 'admin') or getattr(request.user, 'can_manage_partners', False)):
             return Response({'detail': 'You do not have permission to manage partners.'}, status=status.HTTP_403_FORBIDDEN)
 
         old_percentage = partner.profit_percentage
@@ -114,7 +114,7 @@ class PartnerDetailView(APIView):
         if not partner:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
             
-        if not request.user.can_manage_partners and request.user.role != 'super_admin':
+        if not (request.user.role in ('super_admin', 'admin') or getattr(request.user, 'can_manage_partners', False)):
             return Response({'detail': 'You do not have permission to manage partners.'}, status=status.HTTP_403_FORBIDDEN)
             
         partner.is_active = False

@@ -99,14 +99,19 @@ class VoucherLineSerializer(serializers.ModelSerializer):
         fields = ['id', 'ledger', 'debit', 'credit', 'description']
 
     def to_representation(self, instance):
+        ledger_inst = instance.ledger
+        group = getattr(ledger_inst, 'group', None)
         return {
             'id': str(instance.id),
             'ledgerId': str(instance.ledger_id),
-            'ledgerName': instance.ledger.name,
+            'ledgerName': ledger_inst.name if ledger_inst else '',
             'ledger': {
                 'id': str(instance.ledger_id),
-                'name': instance.ledger.name,
-                'groupName': instance.ledger.group.name if getattr(instance.ledger, 'group', None) else None,
+                'name': ledger_inst.name if ledger_inst else '',
+                'groupName': group.name if group else None,
+                'nature': group.nature if group else 'asset',
+                'currentBalance': float(ledger_inst.current_balance) if ledger_inst else 0.0,
+                'balanceType': ledger_inst.balance_type if ledger_inst else 'Dr',
             },
             'debit': float(instance.debit),
             'credit': float(instance.credit),

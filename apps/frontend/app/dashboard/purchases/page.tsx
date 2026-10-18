@@ -24,6 +24,7 @@ const tabs = [
 export default function PurchasesPage() {
     const [activeTab, setActiveTab] = useState('invoices');
     const [editingInvoice, setEditingInvoice] = useState<PurchaseInvoiceFull | null>(null);
+    const [lastModifiedInvoiceId, setLastModifiedInvoiceId] = useState<string | null>(null);
 
     const user = useAuthStore((s) => s.user);
     const canEdit = user?.role === 'super_admin' || user?.role === 'admin' || !!user?.canEditPurchases;
@@ -39,7 +40,7 @@ export default function PurchasesPage() {
     };
 
     const handleScanSuccess = (draftId: string) => {
-        setEditingInvoice({ id: draftId, status: 'SAVED' } as PurchaseInvoiceFull);
+        setEditingInvoice({ id: draftId, status: 'SAVED' } as unknown as PurchaseInvoiceFull);
         setActiveTab('new');
     };
 
@@ -108,10 +109,12 @@ export default function PurchasesPage() {
                 {/* ── Tab Content ── */}
                 <div className="pt-6">
 
-                    <TabsContent value="invoices" className="mt-0 outline-none">
+                    <TabsContent value="invoices" forceMount className={cn("mt-0 outline-none", activeTab !== 'invoices' && "hidden")}>
                         <PurchasesList 
                             onEditInvoice={canEdit ? handleEditInvoice : undefined} 
                             onScanSuccess={canEdit ? handleScanSuccess : undefined}
+                            highlightInvoiceId={lastModifiedInvoiceId}
+                            onClearHighlight={() => setLastModifiedInvoiceId(null)}
                         />
                     </TabsContent>
 
@@ -139,7 +142,12 @@ export default function PurchasesPage() {
                                 </div>
                             )}
                             <NewPurchaseForm
-                                onSuccess={() => { setEditingInvoice(null); setActiveTab('invoices'); }}
+                                onSuccess={(updatedId) => {
+                                    const targetId = updatedId || editingInvoice?.id || null;
+                                    setLastModifiedInvoiceId(targetId);
+                                    setEditingInvoice(null);
+                                    setActiveTab('invoices');
+                                }}
                                 invoiceToEdit={editingInvoice}
                             />
                         </div>

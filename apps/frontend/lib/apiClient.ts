@@ -505,6 +505,7 @@ const realSalesApi = {
         if (params?.hospitalName) url += `&hospitalName=${encodeURIComponent(params.hospitalName)}`;
         if (params?.saleType && params.saleType !== 'ALL') url += `&saleType=${params.saleType}`;
         if (params?.paymentMode && params.paymentMode.toLowerCase() !== 'all') url += `&paymentMode=${encodeURIComponent(params.paymentMode)}`;
+        if (params?.isModified) url += `&isModified=true`;
         if (params?.ordering) url += `&ordering=${encodeURIComponent(params.ordering)}`;
 
         const response = await fetch(url, { headers: getHeaders() });
@@ -872,6 +873,7 @@ const realPurchasesApi = {
         if (filters?.startDate) url += `&startDate=${filters.startDate}`;
         if (filters?.endDate) url += `&endDate=${filters.endDate}`;
         if (filters?.status) url += `&status=${filters.status}`;
+        if (filters?.isModified) url += `&isModified=true`;
         if (filters?.search) url += `&search=${encodeURIComponent(filters.search)}`;
         if (filters?.page) url += `&page=${filters.page}`;
         if (filters?.pageSize) url += `&pageSize=${filters.pageSize}`;

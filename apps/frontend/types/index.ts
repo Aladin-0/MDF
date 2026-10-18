@@ -149,6 +149,7 @@ export interface AuthUser {
     canModifyPaidBill?: boolean;
     canCancelAndReissueBill?: boolean;
     canViewBillRevisionHistory?: boolean;
+    canManagePartners?: boolean;
 }
 
 export interface LoginPayload {
@@ -593,6 +594,8 @@ export interface SaleInvoice {
     billedByName: string;
     itemsCount?: number;
     items: CartItem[];
+    isModified?: boolean;
+    revisionCount?: number;
     createdAt: string;
     doctorHospitalName?: string;
     doctorAddress?: string;
@@ -882,7 +885,10 @@ export interface PurchaseInvoice {
         referenceNo?: string;
     }>;
     
-    status: 'DRAFT' | 'POSTED';
+    status: 'DRAFT' | 'POSTED' | 'SAVED';
+
+    isModified?: boolean;
+    revisionCount?: number;
 
     createdAt: string;
 }

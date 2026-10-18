@@ -336,6 +336,9 @@ def seed_outlet_ledgers(outlet):
         group = group_map.get(group_name)
         if not group:
             continue
+        existing = Ledger.objects.filter(outlet=outlet, name__iexact=name).first()
+        if existing:
+            continue
         _, created = Ledger.objects.get_or_create(
             outlet=outlet,
             name=name,

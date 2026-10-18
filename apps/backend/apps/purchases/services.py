@@ -938,8 +938,16 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
                     new_pkg = int(item_payload.get('pkg') or 1)
                     if new_pkg and new_pkg != batch.pack_size:
                         batch.pack_size = new_pkg
-                    batch.save(update_fields=['mrp', 'ptr', 'pts', 'purchase_rate', 'pack_size'])
-                    logger.info(f"[EDIT] Batch {batch_no} updated: mrp={batch.mrp}, mrp={batch.mrp}")
+                    update_fields = ['mrp', 'ptr', 'pts', 'purchase_rate', 'pack_size']
+                    if master_product and batch.product_id != master_product.id:
+                        batch.product = master_product
+                        if master_product.pack_unit:
+                            batch.pack_unit = master_product.pack_unit
+                        if master_product.pack_type:
+                            batch.pack_type = master_product.pack_type
+                        update_fields.extend(['product', 'pack_unit', 'pack_type'])
+                    batch.save(update_fields=update_fields)
+                    logger.info(f"[EDIT] Batch {batch_no} updated: mrp={batch.mrp}, product={batch.product_id}")
                 else:
                     # Create a new batch — this item is for a truly new batch
                     batch = Batch.objects.create(
@@ -1043,7 +1051,7 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
         for pi in purchase_items:
             post_stock_ledger_entry(
                 outlet         = purchase_invoice.outlet,
-                product        = pi.batch.product,
+                product        = pi.master_product or pi.batch.product,
                 batch          = pi.batch,
                 txn_type       = 'PURCHASE_IN',
                 txn_date       = purchase_invoice.invoice_date,

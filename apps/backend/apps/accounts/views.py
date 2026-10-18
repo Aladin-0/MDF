@@ -1243,6 +1243,13 @@ class CustomerPurchaseHistoryView(APIView):
 
 # ─── Phase 2 Batch 2 Views ────────────────────────────────────────────────────
 
+def _format_time_safe(t):
+    if not t:
+        return None
+    if hasattr(t, 'isoformat'):
+        return t.isoformat()
+    return str(t)
+
 def _serialize_staff(s):
     return {
         'id': str(s.id),
@@ -1250,8 +1257,8 @@ def _serialize_staff(s):
         'phone': s.phone,
         'role': s.role,
         'outletId': str(s.outlet_id),
-        'shiftStartTime': s.shift_start_time.isoformat() if s.shift_start_time else None,
-        'shiftEndTime': s.shift_end_time.isoformat() if s.shift_end_time else None,
+        'shiftStartTime': _format_time_safe(s.shift_start_time),
+        'shiftEndTime': _format_time_safe(s.shift_end_time),
         'weeklyOffDay': s.weekly_off_day,
         'avatarUrl': s.avatar_url,
         'maxDiscount': float(s.max_discount),
@@ -1421,6 +1428,7 @@ class StaffDetailView(APIView):
             'canModifyPaidBill': 'can_modify_paid_bill',
             'canCancelAndReissueBill': 'can_cancel_and_reissue_bill',
             'canViewBillRevisionHistory': 'can_view_bill_revision_history',
+            'canManagePartners': 'can_manage_partners',
             'shiftStartTime': 'shift_start_time',
             'shiftEndTime': 'shift_end_time',
             'weeklyOffDay': 'weekly_off_day',
@@ -1457,8 +1465,9 @@ class StaffDetailView(APIView):
             'can_modify_paid_bill': staff.can_modify_paid_bill,
             'can_cancel_and_reissue_bill': staff.can_cancel_and_reissue_bill,
             'can_view_bill_revision_history': staff.can_view_bill_revision_history,
-            'shift_start_time': staff.shift_start_time.isoformat() if staff.shift_start_time else None,
-            'shift_end_time': staff.shift_end_time.isoformat() if staff.shift_end_time else None,
+            'can_manage_partners': staff.can_manage_partners,
+            'shift_start_time': _format_time_safe(staff.shift_start_time),
+            'shift_end_time': _format_time_safe(staff.shift_end_time),
             'weekly_off_day': staff.weekly_off_day,
             'is_active': staff.is_active,
         }
@@ -1466,8 +1475,16 @@ class StaffDetailView(APIView):
         for camel, snake in camel_map.items():
             if camel in request.data:
                 val = request.data[camel]
-                if snake in ('shift_start_time', 'shift_end_time') and not val:
-                    val = None
+                if snake in ('shift_start_time', 'shift_end_time'):
+                    if not val:
+                        val = None
+                    elif isinstance(val, str):
+                        try:
+                            parts = val.split(':')
+                            import datetime
+                            val = datetime.time(int(parts[0]), int(parts[1]), int(parts[2]) if len(parts) > 2 else 0)
+                        except Exception:
+                            val = None
                 setattr(staff, snake, val)
         for field in ('name', 'email', 'role'):
             if field in request.data:
@@ -1485,6 +1502,7 @@ class StaffDetailView(APIView):
             staff.staff_pin = make_password(raw_pin)
 
         staff.save()
+        staff.refresh_from_db()
 
         # Snapshot new state
         new_state = {
@@ -1516,8 +1534,9 @@ class StaffDetailView(APIView):
             'can_modify_paid_bill': staff.can_modify_paid_bill,
             'can_cancel_and_reissue_bill': staff.can_cancel_and_reissue_bill,
             'can_view_bill_revision_history': staff.can_view_bill_revision_history,
-            'shift_start_time': staff.shift_start_time.isoformat() if staff.shift_start_time else None,
-            'shift_end_time': staff.shift_end_time.isoformat() if staff.shift_end_time else None,
+            'can_manage_partners': staff.can_manage_partners,
+            'shift_start_time': _format_time_safe(staff.shift_start_time),
+            'shift_end_time': _format_time_safe(staff.shift_end_time),
             'weekly_off_day': staff.weekly_off_day,
             'is_active': staff.is_active,
         }

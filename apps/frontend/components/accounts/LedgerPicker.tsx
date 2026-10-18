@@ -10,6 +10,36 @@ import { CreateLedgerModal } from './CreateLedgerModal';
 
 type FilterGroup = 'cashbank' | 'party' | undefined;
 
+export function formatLedgerBalance(bal?: number, nature?: string): string {
+    const num = Number(bal) || 0;
+    if (Math.abs(num) < 0.005) {
+        return '₹0.00';
+    }
+    const formatted = '₹' + Math.abs(num).toLocaleString('en-IN', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    });
+    // In standard accounting:
+    // If nature is liability or income: positive is Credit, negative is Debit
+    // If nature is asset or expense: positive is Debit, negative is Credit
+    const nat = (nature || '').toLowerCase();
+    const isCredit = (nat === 'liability' || nat === 'income') ? num >= 0 : num < 0;
+    return isCredit ? `${formatted} Cr` : `${formatted} Dr`;
+}
+
+export function getBalBadgeColor(bal?: number, nature?: string): string {
+    const num = Number(bal) || 0;
+    if (Math.abs(num) < 0.005) {
+        return "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700";
+    }
+    const nat = (nature || '').toLowerCase();
+    const isCredit = (nat === 'liability' || nat === 'income') ? num >= 0 : num < 0;
+    if (isCredit) {
+        return "bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800";
+    }
+    return "bg-blue-50 text-blue-800 border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800";
+}
+
 interface LedgerPickerProps {
     voucherType?: 'receipt' | 'payment' | 'contra' | 'journal';
     filterGroup?: FilterGroup;
@@ -138,10 +168,17 @@ export function LedgerPicker({
                         "relative w-full h-8 px-2 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 focus-within:border-primary bg-transparent rounded-none flex items-center justify-between transition-colors group",
                         className
                     )}>
-                        <div className="flex items-center gap-1.5 truncate flex-1 min-w-0">
+                        <div className="flex items-center gap-2 truncate flex-1 min-w-0">
                             <span className="font-semibold text-sm text-foreground truncate">{value.name}</span>
                             <span className="text-[10px] bg-muted/80 text-muted-foreground px-1.5 py-0.5 rounded font-normal shrink-0">
                                 {value.groupName}
+                            </span>
+                            <span className={cn(
+                                "text-xs font-mono font-medium px-2 py-0.5 rounded border shrink-0 inline-flex items-center gap-1",
+                                getBalBadgeColor(value.currentBalance, value.nature)
+                            )}>
+                                <span className="text-[10px] uppercase font-sans tracking-wide opacity-75 font-normal">Bal:</span>
+                                <span>{formatLedgerBalance(value.currentBalance, value.nature)}</span>
                             </span>
                         </div>
                         <button 
@@ -173,9 +210,16 @@ export function LedgerPicker({
                     <div className="absolute left-2.5 top-2.5 text-muted-foreground">
                         <Search className="w-4 h-4 shrink-0 mt-0.5" />
                     </div>
-                    <div className="flex items-center gap-2 truncate flex-1">
+                    <div className="flex items-center gap-2 truncate flex-1 min-w-0">
                         <span className="font-medium text-sm truncate">{value.name}</span>
                         <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded font-bold shrink-0">{value.groupName}</span>
+                        <span className={cn(
+                            "text-xs font-mono font-medium px-2 py-0.5 rounded border shrink-0 inline-flex items-center gap-1 ml-auto mr-2",
+                            getBalBadgeColor(value.currentBalance, value.nature)
+                        )}>
+                            <span className="text-[10px] uppercase font-sans tracking-wide opacity-75 font-normal">Bal:</span>
+                            <span>{formatLedgerBalance(value.currentBalance, value.nature)}</span>
+                        </span>
                     </div>
                     <button 
                         type="button"
@@ -218,7 +262,7 @@ export function LedgerPicker({
                     />
 
                     {open && (
-                        <div className="absolute z-50 mt-1 min-w-[280px] w-full rounded-md border bg-popover shadow-lg left-0 top-full">
+                        <div className="absolute z-50 mt-1 min-w-[340px] max-w-[480px] w-full rounded-md border bg-popover shadow-lg left-0 top-full">
                             <div className="max-h-60 overflow-y-auto py-1">
                                 {loading && (
                                     <div className="px-3 py-2 text-sm text-muted-foreground">Loading...</div>
@@ -239,11 +283,26 @@ export function LedgerPicker({
                                         type="button"
                                         onClick={() => select(ledger)}
                                         className={cn(
-                                            'w-full flex flex-col items-start px-3 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground transition-colors text-left'
+                                            'w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground transition-colors text-left group'
                                         )}
                                     >
-                                        <span className="font-semibold text-foreground">{ledger.name}</span>
-                                        <span className="text-[11px] text-muted-foreground">{ledger.groupName}</span>
+                                        <div className="flex flex-col items-start min-w-0 pr-3">
+                                            <span className="font-semibold text-foreground group-hover:text-primary transition-colors truncate">
+                                                {ledger.name}
+                                            </span>
+                                            <span className="text-[11px] text-muted-foreground">
+                                                {ledger.groupName}
+                                            </span>
+                                        </div>
+                                        <div className="text-right shrink-0">
+                                            <span className={cn(
+                                                "text-xs font-mono font-medium px-2 py-0.5 rounded border inline-flex items-center gap-1",
+                                                getBalBadgeColor(ledger.currentBalance, ledger.nature)
+                                            )}>
+                                                <span className="text-[10px] uppercase font-sans tracking-wide opacity-75 font-normal">Bal:</span>
+                                                <span>{formatLedgerBalance(ledger.currentBalance, ledger.nature)}</span>
+                                            </span>
+                                        </div>
                                     </button>
                                 ))}
                             </div>
@@ -295,7 +354,7 @@ export function LedgerPicker({
                 />
 
                 {open && (
-                    <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-md left-0 right-0 top-full">
+                    <div className="absolute z-50 mt-1 min-w-[340px] w-full rounded-md border bg-popover shadow-md left-0 right-0 top-full">
                         <div className="max-h-60 overflow-y-auto py-1">
                             {loading && (
                                 <div className="px-3 py-2 text-sm text-muted-foreground">Loading...</div>
@@ -316,11 +375,22 @@ export function LedgerPicker({
                                     type="button"
                                     onClick={() => select(ledger)}
                                     className={cn(
-                                        'w-full flex flex-col items-start px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground transition-colors'
+                                        'w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground transition-colors text-left group'
                                     )}
                                 >
-                                    <span className="font-medium">{ledger.name}</span>
-                                    <span className="text-xs text-muted-foreground">{ledger.groupName}</span>
+                                    <div className="flex flex-col items-start min-w-0 pr-3">
+                                        <span className="font-medium truncate">{ledger.name}</span>
+                                        <span className="text-xs text-muted-foreground">{ledger.groupName}</span>
+                                    </div>
+                                    <div className="text-right shrink-0">
+                                        <span className={cn(
+                                            "text-xs font-mono font-medium px-2 py-0.5 rounded border inline-flex items-center gap-1",
+                                            getBalBadgeColor(ledger.currentBalance, ledger.nature)
+                                        )}>
+                                            <span className="text-[10px] uppercase font-sans tracking-wide opacity-75 font-normal">Bal:</span>
+                                            <span>{formatLedgerBalance(ledger.currentBalance, ledger.nature)}</span>
+                                        </span>
+                                    </div>
                                 </button>
                             ))}
                         </div>

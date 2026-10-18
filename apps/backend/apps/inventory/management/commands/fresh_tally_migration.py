@@ -305,7 +305,7 @@ class Command(BaseCommand):
             # Nature: Asset
             ('Current Assets', 'asset', None),
             ('Bank Accounts', 'asset', 'Current Assets'),
-            ('Cash-in-hand', 'asset', 'Current Assets'),
+            ('Cash in Hand', 'asset', 'Current Assets'),
             ('Sundry Debtors', 'asset', 'Current Assets'),
             ('Stock-in-hand', 'asset', 'Current Assets'),
             ('Loans & Advances (Asset)', 'asset', 'Current Assets'),
@@ -463,7 +463,7 @@ class Command(BaseCommand):
                             if 'BANK' in p_up:
                                 target_group = group_map.get('Bank Accounts')
                             elif 'CASH' in p_up:
-                                target_group = group_map.get('Cash-in-hand')
+                                target_group = group_map.get('Cash in Hand')
                             elif 'DUTIES' in p_up or 'TAX' in p_up:
                                 target_group = group_map.get('Duties & Taxes')
                             elif 'PURCHASE' in p_up:

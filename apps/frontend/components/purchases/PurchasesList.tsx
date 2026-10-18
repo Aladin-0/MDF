@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { format } from 'date-fns';
 import {
     ChevronDown, ChevronRight, Search, X,
-    PackageOpen, FileText,
+    PackageOpen, FileText, History, Sparkles,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,7 +38,7 @@ const PURCHASES_SORT_OPTIONS: SortOption[] = [
     { label: 'Distributor (A-Z)', value: 'distributor__name' },
 ];
 
-type StatusFilter = 'all' | 'draft' | 'paid' | 'partial' | 'unpaid' | 'overdue';
+type StatusFilter = 'all' | 'modified' | 'draft' | 'paid' | 'partial' | 'unpaid' | 'overdue';
 type PeriodFilter = 'this_week' | 'this_month' | 'last_month' | 'all';
 
 const PAGE_SIZE = 10;
@@ -69,26 +69,39 @@ function getPeriodBounds(period: PeriodFilter): { start: string; end: string } |
 
 export function PurchasesList({ 
     onEditInvoice,
-    onScanSuccess 
+    onScanSuccess,
+    highlightInvoiceId,
+    onClearHighlight,
 }: { 
     onEditInvoice?: (invoice: PurchaseInvoiceFull) => void;
     onScanSuccess?: (draftId: string) => void;
+    highlightInvoiceId?: string | null;
+    onClearHighlight?: () => void;
 }) {
     const [search, setSearch] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
-    const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+    const searchParams = useSearchParams();
+    const urlModified = searchParams.get('modified') === 'true';
+    const urlHighlight = searchParams.get('highlight');
+    const [statusFilter, setStatusFilter] = useState<StatusFilter>(urlModified ? 'modified' : 'all');
     const [period, setPeriod] = useState<PeriodFilter>('all');
     const [expandedId, setExpandedId] = useState<string | null>(null);
     const [page, setPage] = useState(1);
     const [selectedInvoice, setSelectedInvoice] = useState<PurchaseInvoiceFull | null>(null);
     const [isUploading, setIsUploading] = useState(false);
+    const [activeHighlightId, setActiveHighlightId] = useState<string | null>(highlightInvoiceId || urlHighlight || null);
     
     const fileInputRef = useRef<HTMLInputElement>(null);
     const outlet = useAuthStore((s) => s.outlet);
     const { toast } = useToast();
     const router = useRouter();
-    const searchParams = useSearchParams();
     const currentSort = searchParams.get('sort') || '-invoice_date';
+
+    useEffect(() => {
+        if (highlightInvoiceId) {
+            setActiveHighlightId(highlightInvoiceId);
+        }
+    }, [highlightInvoiceId]);
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -137,7 +150,8 @@ export function PurchasesList({
         return {
             page,
             pageSize: PAGE_SIZE,
-            status: statusFilter === 'all' ? undefined : statusFilter,
+            status: statusFilter === 'all' ? undefined : (statusFilter === 'modified' ? undefined : statusFilter),
+            isModified: statusFilter === 'modified' ? true : undefined,
             search: debouncedSearch.trim() || undefined,
             startDate: bounds?.start,
             endDate: bounds?.end,
@@ -152,6 +166,17 @@ export function PurchasesList({
     const totalPages = data?.pagination?.totalPages ?? 1;
 
     const resetPage = () => setPage(1);
+
+    useEffect(() => {
+        if (!activeHighlightId || isLoading) return;
+        const timer = setTimeout(() => {
+            const el = document.getElementById(`purchase-row-${activeHighlightId}`);
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }, 200);
+        return () => clearTimeout(timer);
+    }, [activeHighlightId, isLoading, allInvoices]);
 
     const deleteDraft = useDeleteDraft();
     const handleDeleteDraft = async (id: string) => {
@@ -170,6 +195,57 @@ export function PurchasesList({
     return (
         <div className="space-y-6">
             <PurchaseSummaryCards invoices={allInvoices} />
+
+            {/* ── Active Highlight Alert Banner ── */}
+            {activeHighlightId && (
+                <div className="flex items-center justify-between gap-3 p-3.5 rounded-xl border border-amber-300 bg-amber-50/90 text-amber-900 text-sm shadow-sm animate-in fade-in slide-in-from-top-2">
+                    <div className="flex items-center gap-2.5">
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-200 text-amber-800">
+                            <Sparkles className="w-3.5 h-3.5 animate-pulse" />
+                        </span>
+                        <div>
+                            <span className="font-semibold">
+                                Purchase bill modified successfully!
+                            </span>
+                            {allInvoices.some((inv) => inv.id === activeHighlightId) ? (
+                                <span className="ml-1 text-xs text-amber-700">
+                                    Highlighted below in the list.
+                                </span>
+                            ) : (
+                                <span className="ml-1 text-xs text-amber-700">
+                                    (The bill may be on another page or filtered out by current search/dates)
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        {statusFilter !== 'modified' && (
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs border-amber-300 bg-white hover:bg-amber-100 text-amber-900 font-medium"
+                                onClick={() => {
+                                    setStatusFilter('modified');
+                                    setPage(1);
+                                }}
+                            >
+                                <History className="w-3 h-3 mr-1 text-amber-700" />
+                                Filter Modified Bills
+                            </Button>
+                        )}
+                        <button
+                            onClick={() => {
+                                setActiveHighlightId(null);
+                                onClearHighlight?.();
+                            }}
+                            className="text-amber-700 hover:text-amber-950 p-1 rounded-md hover:bg-amber-100 transition-colors"
+                            title="Dismiss highlight"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* ── Controls ── */}
             <div className="flex flex-wrap gap-3 items-center justify-between">
@@ -223,9 +299,10 @@ export function PurchasesList({
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap">
-                    {/* Status pills without live counts (moved to server-side) */}
-                    {(['all', 'draft', 'paid', 'partial', 'unpaid', 'overdue'] as StatusFilter[]).map((s) => {
+                    {/* Status pills with Modified status filter */}
+                    {(['all', 'modified', 'draft', 'paid', 'partial', 'unpaid', 'overdue'] as StatusFilter[]).map((s) => {
                         const isActive = statusFilter === s;
+                        const isMod = s === 'modified';
                         return (
                             <button
                                 key={s}
@@ -233,10 +310,15 @@ export function PurchasesList({
                                 className={cn(
                                     'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all duration-150',
                                     isActive
-                                        ? 'bg-foreground text-background border-foreground shadow-sm'
-                                        : 'bg-background text-muted-foreground border-border hover:text-foreground hover:border-foreground/40'
+                                        ? (isMod
+                                            ? 'bg-amber-600 text-white border-amber-600 shadow-sm'
+                                            : 'bg-foreground text-background border-foreground shadow-sm')
+                                        : (isMod
+                                            ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 hover:border-amber-300'
+                                            : 'bg-background text-muted-foreground border-border hover:text-foreground hover:border-foreground/40')
                                 )}
                             >
+                                {isMod && <History className="w-3 h-3" />}
                                 {s.charAt(0).toUpperCase() + s.slice(1)}
                             </button>
                         );
@@ -316,14 +398,17 @@ export function PurchasesList({
                                     const status = getPurchaseStatus(inv);
                                     const isExpanded = expandedId === inv.id;
                                     const cfg = STATUS_CONFIG[status];
+                                    const isHighlighted = inv.id === activeHighlightId;
 
                                     return (
-                                        /* ✅ fixed: key on fragment */
                                         <tr
                                             key={inv.id}
+                                            id={`purchase-row-${inv.id}`}
                                             className={cn(
-                                                'group cursor-pointer transition-colors hover:bg-muted/40',
-                                                isExpanded && 'bg-muted/30'
+                                                'group cursor-pointer transition-all duration-300',
+                                                isHighlighted
+                                                    ? 'bg-amber-100/70 dark:bg-amber-950/40 ring-2 ring-amber-400 border-amber-300 shadow-sm'
+                                                    : isExpanded ? 'bg-muted/30' : 'hover:bg-muted/40'
                                             )}
                                             onClick={() => setExpandedId(isExpanded ? null : inv.id)}
                                         >
@@ -337,7 +422,31 @@ export function PurchasesList({
                                                 {inv.invoiceDate ? format(new Date(inv.invoiceDate), 'dd MMM yyyy') : (inv.createdAt ? format(new Date(inv.createdAt), 'dd MMM yyyy') : '—')}
                                             </td>
                                             <td className="px-4 py-3 font-mono text-xs text-foreground whitespace-nowrap">
-                                                {inv.status === 'SAVED' ? '—' : inv.invoiceNo}
+                                                <div className="flex items-center gap-1.5 flex-wrap">
+                                                    <span>{inv.status === 'SAVED' ? '—' : inv.invoiceNo}</span>
+                                                    {isHighlighted && (
+                                                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-200 text-amber-900 border border-amber-300 shadow-xs animate-pulse">
+                                                            <Sparkles className="w-2.5 h-2.5 text-amber-700" /> Just Modified
+                                                        </span>
+                                                    )}
+                                                    {inv.isModified && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                router.push(`/dashboard/purchases/revisions/${inv.id}`);
+                                                            }}
+                                                            title={`Modified bill${inv.revisionCount ? ` (${inv.revisionCount} revisions)` : ''} - Click to view revision history`}
+                                                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 transition-colors"
+                                                        >
+                                                            <History className="w-2.5 h-2.5 text-amber-600" />
+                                                            Modified
+                                                            {inv.revisionCount && inv.revisionCount > 1 ? (
+                                                                <span className="text-[9px] text-amber-600 font-bold">v{inv.revisionCount}</span>
+                                                            ) : null}
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </td>
                                             <td className="px-4 py-3 text-foreground max-w-[180px] truncate">
                                                 {inv.distributor?.name || (inv.status === 'SAVED' && inv.ocrData?.header?.partyName ? `OCR: ${inv.ocrData.header.partyName}` : (inv.status === 'SAVED' ? 'Pending OCR...' : '—'))}

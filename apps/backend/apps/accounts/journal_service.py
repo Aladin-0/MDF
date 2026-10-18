@@ -60,7 +60,7 @@ def _resolve_system_ledger(outlet, name: str):
     1. Case-insensitive exact match (e.g. 'Cash' -> 'CASH', 'Round Off' -> 'ROUND OFF')
     2. Normalized alphanumeric match (e.g. 'GST Payable CGST' -> 'GST PAYABLE (CGST)')
     3. Context-aware alias fallback:
-       - 'Cash': any ledger under 'Cash-in-hand' / 'Cash in Hand'
+       - 'Cash': any ledger under 'Cash in Hand'
        - 'Sales Account': 'Sales', 'SALE A/C', or created in 'Sales Accounts' group
        - 'Purchase Account': 'PURCHASE A/C', 'Purchase', or created in 'Purchase Accounts' group
        - 'Purchase Returns': 'PURCHASE RETURN ENTRY...', or fallback to Purchase Account
@@ -91,7 +91,7 @@ def _resolve_system_ledger(outlet, name: str):
 
     # Cash
     if 'CASH' in name_upper:
-        cash_l = qs.filter(group__name__in=['Cash-in-hand', 'Cash in Hand', 'Cash in hand']).first()
+        cash_l = qs.filter(group__name='Cash in Hand').first()
         if cash_l:
             return cash_l
 

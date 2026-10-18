@@ -96,11 +96,16 @@ export function VoucherForm({ initialType = 'receipt', voucherId, onSuccess }: V
     const canSave = isBalanced && hasMinLedgers && !saving;
 
     // Detect party ledger among lines for bill adjustments
-    const partyLedger = lines.find(l => {
+    const partyLine = lines.find(l => {
         if (!l.ledger) return false;
         const grp = (l.ledger as any)?.groupName || (l.ledger as any)?.group?.name || '';
         return grp.includes('Debtor') || grp.includes('Creditor') || grp.includes('Customer') || grp.includes('Supplier');
-    })?.ledger || lines.find(l => l.ledger && !['Cash in Hand', 'Bank Accounts'].includes((l.ledger as any)?.groupName || ''))?.ledger || null;
+    }) || lines.find(l => l.ledger && !['Cash in Hand', 'Bank Accounts'].includes((l.ledger as any)?.groupName || '')) || null;
+    const partyLedger = partyLine?.ledger || null;
+    const partyAmount = parseFloat(partyLine?.amount || '') || 0;
+    const targetAdjustAmount = partyAmount > 0
+        ? partyAmount
+        : (voucherType === 'payment' ? totalDebits || totalCredits : totalCredits || totalDebits);
 
     // Load voucher number
     useEffect(() => {
@@ -210,10 +215,60 @@ export function VoucherForm({ initialType = 'receipt', voucherId, onSuccess }: V
         setGlobalError(null);
     }
 
-    function toggleBillFull(billId: string, outstanding: number) {
-        const cur = parseFloat(billAmounts[billId]) || 0;
-        const isFull = Math.abs(cur - outstanding) < 0.01;
-        setBillAmounts(prev => ({ ...prev, [billId]: isFull ? '' : outstanding.toFixed(2) }));
+    function toggleBillSmart(billId: string, outstanding: number) {
+        setBillAmounts(prev => {
+            const cur = parseFloat(prev[billId]) || 0;
+            // If already allocated, clicking it deselects / clears it
+            if (cur > 0) {
+                return { ...prev, [billId]: '' };
+            }
+
+            // Calculate current total allocated excluding this bill
+            const currentAllocated = Object.entries(prev)
+                .filter(([id]) => id !== billId)
+                .reduce((sum, [, val]) => sum + (parseFloat(val) || 0), 0);
+
+            if (targetAdjustAmount > 0) {
+                const remaining = Math.max(0, Math.round((targetAdjustAmount - currentAllocated) * 100) / 100);
+                if (remaining <= 0) {
+                    toast({
+                        title: 'Amount fully adjusted',
+                        description: `The voucher amount of ${fmt(targetAdjustAmount)} is already fully allocated.`,
+                    });
+                    return prev;
+                }
+                const toFill = Math.min(outstanding, remaining);
+                return { ...prev, [billId]: toFill.toFixed(2) };
+            } else {
+                return { ...prev, [billId]: outstanding.toFixed(2) };
+            }
+        });
+    }
+
+    function autoAllocate() {
+        if (targetAdjustAmount <= 0) {
+            toast({
+                title: 'Enter Amount First',
+                description: 'Please enter an amount in the party row to auto-adjust bills.',
+            });
+            return;
+        }
+        let remaining = targetAdjustAmount;
+        const next: Record<string, string> = {};
+        for (const bill of visibleBills) {
+            if (remaining <= 0) {
+                next[bill.id] = '';
+                continue;
+            }
+            const toFill = Math.min(bill.outstanding, remaining);
+            next[bill.id] = toFill > 0 ? toFill.toFixed(2) : '';
+            remaining = Math.round((remaining - toFill) * 100) / 100;
+        }
+        setBillAmounts(next);
+        toast({
+            title: 'Bills Auto-Adjusted',
+            description: `Allocated ${fmt(targetAdjustAmount)} across bills.`,
+        });
     }
 
     function selectAll() {
@@ -323,7 +378,12 @@ export function VoucherForm({ initialType = 'receipt', voucherId, onSuccess }: V
         ? pendingBills
         : pendingBills.filter(b => voucherId ? parseFloat(billAmounts[b.id]) > 0 : true);
 
-    const billTotal = Object.values(billAmounts).reduce((s, v) => s + (parseFloat(v) || 0), 0);
+    const billTotal = Math.round(Object.values(billAmounts).reduce((s, v) => s + (parseFloat(v) || 0), 0) * 100) / 100;
+    const remainingToAdjust = targetAdjustAmount > 0
+        ? Math.max(0, Math.round((targetAdjustAmount - billTotal) * 100) / 100)
+        : 0;
+    const isFullyAdjusted = targetAdjustAmount > 0 && Math.abs(targetAdjustAmount - billTotal) < 0.01;
+    const isOverAllocated = targetAdjustAmount > 0 && billTotal > targetAdjustAmount + 0.009;
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -408,13 +468,44 @@ export function VoucherForm({ initialType = 'receipt', voucherId, onSuccess }: V
                     {/* ── Bill-by-Bill Allocation (if receipt/payment has outstanding bills for party) ── */}
                     {(voucherType === 'receipt' || voucherType === 'payment') && partyLedger && pendingBills.length > 0 && (
                         <div className="space-y-3 pt-2">
-                            <div className="border rounded-lg overflow-hidden">
-                                <div className="flex items-center justify-between px-4 py-2.5 bg-muted/60 border-b">
-                                    <span className="text-sm font-semibold text-foreground">
-                                        {loadingBills ? 'Loading bills...' : `Outstanding Bills for ${partyLedger.name} (${visibleBills.length})`}
-                                    </span>
+                            <div className="border rounded-lg overflow-hidden shadow-sm">
+                                <div className="flex flex-wrap items-center justify-between px-4 py-2.5 bg-muted/60 border-b gap-2">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <span className="text-sm font-semibold text-foreground">
+                                            {loadingBills ? 'Loading bills...' : `Outstanding Bills for ${partyLedger.name} (${visibleBills.length})`}
+                                        </span>
+                                        {targetAdjustAmount > 0 && (
+                                            <div className="flex items-center gap-1.5 text-xs">
+                                                <span className="px-2 py-0.5 rounded bg-muted font-medium text-muted-foreground border">
+                                                    Target: {fmt(targetAdjustAmount)}
+                                                </span>
+                                                {isFullyAdjusted ? (
+                                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300">
+                                                        <CheckCircle2 className="w-3.5 h-3.5" /> Fully Adjusted (Remaining: {fmt(0)})
+                                                    </span>
+                                                ) : isOverAllocated ? (
+                                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-semibold bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300 border border-red-300">
+                                                        Over-allocated by {fmt(billTotal - targetAdjustAmount)}
+                                                    </span>
+                                                ) : (
+                                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-semibold bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300 border border-amber-300">
+                                                        Remaining to Adjust: {fmt(remainingToAdjust)}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
                                     {visibleBills.length > 0 && !loadingBills && (
-                                        <div className="flex gap-2">
+                                        <div className="flex items-center gap-2">
+                                            {targetAdjustAmount > 0 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={autoAllocate}
+                                                    className="text-xs bg-primary/10 text-primary hover:bg-primary/20 px-2.5 py-1 rounded font-medium transition-colors border border-primary/20"
+                                                >
+                                                    Auto-Adjust ({fmt(targetAdjustAmount)})
+                                                </button>
+                                            )}
                                             <button
                                                 type="button"
                                                 onClick={selectAll}
@@ -466,16 +557,17 @@ export function VoucherForm({ initialType = 'receipt', voucherId, onSuccess }: V
                                                         <td className="px-4 py-2.5">
                                                             <button
                                                                 type="button"
-                                                                onClick={() => toggleBillFull(bill.id, bill.outstanding)}
+                                                                onClick={() => toggleBillSmart(bill.id, bill.outstanding)}
                                                                 className={cn(
                                                                     'text-primary transition-colors',
                                                                     !isSelected && 'text-muted-foreground'
                                                                 )}
+                                                                title={isSelected ? "Click to clear this bill" : "Click to auto-adjust against remaining amount"}
                                                             >
                                                                 {isFull ? (
-                                                                    <CheckSquare className="w-4 h-4" />
+                                                                    <CheckSquare className="w-4 h-4 text-emerald-600" />
                                                                 ) : isSelected ? (
-                                                                    <MinusSquare className="w-4 h-4" />
+                                                                    <MinusSquare className="w-4 h-4 text-primary" />
                                                                 ) : (
                                                                     <Square className="w-4 h-4" />
                                                                 )}
@@ -500,7 +592,7 @@ export function VoucherForm({ initialType = 'receipt', voucherId, onSuccess }: V
                                                                 placeholder="0.00"
                                                                 className={cn(
                                                                     'text-right w-28 ml-auto h-8 text-sm',
-                                                                    isSelected && 'border-primary ring-1 ring-primary/30'
+                                                                    isSelected && (isFull ? 'border-emerald-500 ring-1 ring-emerald-500/30' : 'border-primary ring-1 ring-primary/30')
                                                                 )}
                                                                 value={billAmounts[bill.id] ?? ''}
                                                                 onChange={(e) =>
@@ -515,7 +607,17 @@ export function VoucherForm({ initialType = 'receipt', voucherId, onSuccess }: V
                                         <tfoot className="bg-muted/30 border-t-2">
                                             <tr>
                                                 <td colSpan={4} className="px-4 py-2.5 text-sm font-semibold text-right text-muted-foreground">
-                                                    Allocated Bills Total:
+                                                    {targetAdjustAmount > 0 ? (
+                                                        <div className="flex justify-end items-center gap-3 text-xs">
+                                                            <span>Voucher Target: <strong className="text-foreground">{fmt(targetAdjustAmount)}</strong></span>
+                                                            <span>·</span>
+                                                            <span>Remaining: <strong className={remainingToAdjust > 0 ? "text-amber-700 font-bold" : "text-emerald-600 font-bold"}>{fmt(remainingToAdjust)}</strong></span>
+                                                            <span>·</span>
+                                                            <span className="text-foreground font-semibold">Allocated Total:</span>
+                                                        </div>
+                                                    ) : (
+                                                        "Allocated Bills Total:"
+                                                    )}
                                                 </td>
                                                 <td className="px-4 py-2.5 text-right font-bold text-orange-600">
                                                     {fmt(visibleBills.reduce((s, b) => s + b.outstanding, 0))}

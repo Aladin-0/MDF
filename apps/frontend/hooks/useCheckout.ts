@@ -1,10 +1,12 @@
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useBillingStore } from '@/store/billingStore';
 import { useSaveBill } from '@/hooks/useSaveBill';
 import { useToast } from '@/hooks/use-toast';
 import { logger } from '@/lib/logger';
 
 export function useCheckout() {
+    const router = useRouter();
     const { drafts, activeDraftId, getDraftTotals } = useBillingStore();
     const { saveBill, isLoading } = useSaveBill();
     const { toast } = useToast();
@@ -76,7 +78,7 @@ export function useCheckout() {
         setCheckoutError(null);
         setIsSubmitting(true);
 
-
+        const wasEditingId = draft?.editingSaleId;
 
         try {
             // Ensure final grandTotal is updated before saving
@@ -86,12 +88,14 @@ export function useCheckout() {
             });
             await saveBill();
 
-
-
             toast({
                 title: 'Success',
-                description: 'Bill Saved Successfully!',
+                description: wasEditingId ? 'Sale Bill Modified Successfully!' : 'Bill Saved Successfully!',
             });
+
+            if (wasEditingId) {
+                router.push(`/dashboard/sales?highlight=${wasEditingId}`);
+            }
         } catch (error: any) {
 
             logger.error('CHECKOUT_FAILED', error);

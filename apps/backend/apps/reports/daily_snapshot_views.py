@@ -28,24 +28,145 @@ def get_daily_snapshot_data(outlet_id, start_date_str, end_date_str=None):
     start_dt = make_aware(datetime.datetime.combine(start_date, datetime.time.min))
     end_dt = make_aware(datetime.datetime.combine(end_date, datetime.time.max))
 
-    # --- Sales & Breakdown ---
-    sales = SaleInvoice.objects.filter(outlet_id=outlet_id, invoice_date__range=(start_dt, end_dt), is_cancelled=False)
-    total_sales = float(sales.aggregate(total=Sum('grand_total'))['total'] or 0.0)
-    
-    # Cumulative Sale Upto (End of the range)
+    # --- Opening Cash ---
+    is_single_day = start_date == end_date
+    cash_state = None
+    def _get_prev_opening_cash(target_date):
+        prev_reports = DailyCashReport.objects.filter(
+            outlet_id=outlet_id, 
+            date__lt=target_date
+        ).order_by('-date')[:5]
+        for prev_report in prev_reports:
+            if float(prev_report.next_day_opening) > 0:
+                return float(prev_report.next_day_opening)
+            if float(prev_report.actual_cash) > 0:
+                return float(prev_report.actual_cash)
+            if float(prev_report.opening_cash) > 0:
+                return float(prev_report.opening_cash)
+        return 0.0
+
+    if is_single_day:
+        cash_state, _ = DailyCashReport.objects.get_or_create(outlet_id=outlet_id, date=start_date)
+        opening_cash = float(cash_state.opening_cash)
+        if opening_cash == 0.0:
+            opening_cash = _get_prev_opening_cash(start_date)
+        carton_sale_manual = float(cash_state.carton_sale)
+    else:
+        first_report = DailyCashReport.objects.filter(outlet_id=outlet_id, date=start_date).first()
+        opening_cash = float(first_report.opening_cash) if first_report else 0.0
+        if opening_cash == 0.0:
+            opening_cash = _get_prev_opening_cash(start_date)
+        cash_reports = DailyCashReport.objects.filter(outlet_id=outlet_id, date__range=(start_date, end_date))
+        carton_sale_manual = float(cash_reports.aggregate(total=Sum('carton_sale'))['total'] or 0.0)
+        cash_state = DailyCashReport.objects.filter(outlet_id=outlet_id, date=end_date).first()
+        if not cash_state:
+            cash_state = DailyCashReport.objects.filter(outlet_id=outlet_id, date__lte=end_date).order_by('-date').first()
+
+    # --- Sales & Detailed Payment Split Breakdown ---
+    sales = SaleInvoice.objects.filter(outlet_id=outlet_id, invoice_date__range=(start_dt, end_dt), is_cancelled=False).select_related('customer').order_by('invoice_date')
+    total_sales = 0.0
+    total_credit_sales = 0.0
+    total_upi_sales = 0.0
+    total_card_sales = 0.0
+    total_cash_sales = 0.0
+
+    gross_sales_items = []
+    credit_sales_items = []
+    upi_sales_items = []
+    card_sales_items = []
+
+    for s in sales:
+        gt = float(s.grand_total)
+        total_sales += gt
+
+        # Extract payment splits properly even for split/mixed payments
+        if s.payment_mode == 'split' or s.cash_paid > 0 or s.upi_paid > 0 or s.card_paid > 0 or s.credit_given > 0:
+            c_amt = float(s.cash_paid)
+            u_amt = float(s.upi_paid)
+            cd_amt = float(s.card_paid)
+            cr_amt = float(s.credit_given)
+        elif s.payment_mode == 'upi':
+            c_amt, u_amt, cd_amt, cr_amt = 0.0, gt, 0.0, 0.0
+        elif s.payment_mode == 'card':
+            c_amt, u_amt, cd_amt, cr_amt = 0.0, 0.0, gt, 0.0
+        elif s.payment_mode == 'credit':
+            c_amt, u_amt, cd_amt, cr_amt = 0.0, 0.0, 0.0, gt
+        else:
+            c_amt, u_amt, cd_amt, cr_amt = gt, 0.0, 0.0, 0.0
+
+        total_cash_sales += c_amt
+        total_credit_sales += cr_amt
+        total_upi_sales += u_amt
+        total_card_sales += cd_amt
+
+        cust_name = s.customer.name if s.customer else 'Walk-in Customer'
+        dt_str = s.invoice_date.strftime("%d-%m-%Y %I:%M %p")
+
+        gross_sales_items.append({
+            'id': str(s.id),
+            'no': s.invoice_no,
+            'date': dt_str,
+            'customer': cust_name,
+            'paymentMode': s.payment_mode,
+            'grandTotal': round(gt, 2),
+            'cashAmt': round(c_amt, 2),
+            'upiAmt': round(u_amt, 2),
+            'cardAmt': round(cd_amt, 2),
+            'creditAmt': round(cr_amt, 2),
+            'link': f'/billing/{s.id}',
+        })
+
+        if cr_amt > 0:
+            credit_sales_items.append({
+                'id': str(s.id),
+                'no': s.invoice_no,
+                'date': dt_str,
+                'customer': cust_name,
+                'amount': round(cr_amt, 2),
+                'grandTotal': round(gt, 2),
+                'link': f'/billing/{s.id}',
+            })
+        if u_amt > 0:
+            upi_sales_items.append({
+                'id': str(s.id),
+                'no': s.invoice_no,
+                'date': dt_str,
+                'customer': cust_name,
+                'amount': round(u_amt, 2),
+                'grandTotal': round(gt, 2),
+                'link': f'/billing/{s.id}',
+            })
+        if cd_amt > 0:
+            card_sales_items.append({
+                'id': str(s.id),
+                'no': s.invoice_no,
+                'date': dt_str,
+                'customer': cust_name,
+                'amount': round(cd_amt, 2),
+                'grandTotal': round(gt, 2),
+                'link': f'/billing/{s.id}',
+            })
+
+    # Cumulative Sale Upto
     sale_upto = float(SaleInvoice.objects.filter(outlet_id=outlet_id, invoice_date__lte=end_dt, is_cancelled=False).aggregate(total=Sum('grand_total'))['total'] or 0.0)
 
-    # Breakdowns by payment mode
-    phonepay_sales = float(sales.filter(payment_mode='upi').aggregate(total=Sum('grand_total'))['total'] or 0.0)
-    card_sales = float(sales.filter(payment_mode='card').aggregate(total=Sum('grand_total'))['total'] or 0.0)
-    credit_sales = float(sales.filter(payment_mode='credit').aggregate(total=Sum('grand_total'))['total'] or 0.0)
-    
     # Returns
-    returns = SalesReturn.objects.filter(outlet_id=outlet_id, return_date__range=(start_date, end_date))
+    returns = SalesReturn.objects.filter(outlet_id=outlet_id, return_date__range=(start_date, end_date)).select_related('original_sale__customer').order_by('return_date')
     total_returns = float(returns.aggregate(total=Sum('total_amount'))['total'] or 0.0)
+    sales_return_items = [
+        {
+            'id': str(r.id),
+            'no': r.return_no or f'RET-{r.id}',
+            'date': r.return_date.strftime("%d-%m-%Y"),
+            'customer': r.original_sale.customer.name if (r.original_sale and r.original_sale.customer) else 'Walk-in',
+            'amount': round(float(r.total_amount), 2),
+            'link': f'/dashboard/accounts/sale-returns/{r.id}/edit',
+        }
+        for r in returns
+    ]
     net_sales = total_sales - total_returns
 
-    # Customer Jama (Receipts in Cash)
+    # Customer Jama (POS Receipts in Cash)
     jama_manual = float(ReceiptEntry.objects.filter(outlet_id=outlet_id, date__range=(start_date, end_date), payment_mode='cash').aggregate(total=Sum('total_amount'))['total'] or 0.0)
 
     # COGS
@@ -59,15 +180,31 @@ def get_daily_snapshot_data(outlet_id, start_date_str, end_date_str=None):
             )
         )
     )['total'] or 0.0)
-            
     gross_profit = net_sales - cogs
 
     # --- Purchases ---
-    # Purchases in range
     purchases = PurchaseInvoice.objects.filter(outlet_id=outlet_id, invoice_date__range=(start_date, end_date))
     total_purchases = float(purchases.aggregate(total=Sum('grand_total'))['total'] or 0.0)
-    # Cumulative Purchase
     cumulative_purchase = float(PurchaseInvoice.objects.filter(outlet_id=outlet_id, invoice_date__lte=end_date).aggregate(total=Sum('grand_total'))['total'] or 0.0)
+
+    # Cash Purchases (purchase_type == 'cash')
+    cash_purchases_qs = PurchaseInvoice.objects.filter(
+        outlet_id=outlet_id,
+        invoice_date__range=(start_date, end_date),
+        purchase_type='cash'
+    ).select_related('distributor').order_by('invoice_date')
+    total_cash_purchases = float(sum(p.grand_total for p in cash_purchases_qs))
+    cash_purchase_items = [
+        {
+            'id': str(p.id),
+            'no': p.invoice_no,
+            'date': p.invoice_date.strftime("%d-%m-%Y") if p.invoice_date else '',
+            'distributor': p.distributor.name if p.distributor else 'Direct Purchase',
+            'amount': round(float(p.grand_total), 2),
+            'link': f'/dashboard/purchases/revisions/{p.id}',
+        }
+        for p in cash_purchases_qs
+    ]
 
     # --- Stock Value ---
     batches = Batch.objects.filter(outlet_id=outlet_id, is_active=True, qty_strips__gt=0)
@@ -84,71 +221,150 @@ def get_daily_snapshot_data(outlet_id, start_date_str, end_date_str=None):
     # --- Bills ---
     first_bill = sales.order_by('invoice_no').first()
     last_bill = sales.order_by('-invoice_no').first()
-    
-    # --- Cash Report State (Only makes sense for a single day, but we sum up petty cash for reconciliation if single day) ---
-    is_single_day = start_date == end_date
-    cash_state = None
-    if is_single_day:
-        cash_state, _ = DailyCashReport.objects.get_or_create(outlet_id=outlet_id, date=start_date)
-        petty_cash_exp_manual = float(cash_state.petty_cash_exp)
-        carton_sale_manual = float(cash_state.carton_sale)
-    else:
-        # Sum petty cash and carton sale over the period for math
-        cash_reports = DailyCashReport.objects.filter(outlet_id=outlet_id, date__range=(start_date, end_date))
-        petty_cash_exp_manual = float(cash_reports.aggregate(total=Sum('petty_cash_exp'))['total'] or 0.0)
-        carton_sale_manual = float(cash_reports.aggregate(total=Sum('carton_sale'))['total'] or 0.0)
-        
-    # --- Ledger Entries (Vouchers) ---
+
+    # --- Vouchers: Strict Cash Portion Logic ---
     from apps.accounts.models import Voucher, VoucherLine
-    
-    # 1. Ledger Expenses (All Cash Payments)
-    cash_payments = Voucher.objects.filter(
-        outlet_id=outlet_id, 
-        date__range=(start_date, end_date), 
-        voucher_type='payment', 
-        payment_mode='cash',
+
+    vouchers = Voucher.objects.filter(
+        outlet_id=outlet_id,
+        date__range=(start_date, end_date),
         status='posted'
-    )
-    ledger_expenses = float(cash_payments.aggregate(total=Sum('total_amount'))['total'] or 0.0)
+    ).prefetch_related('lines__ledger__group').order_by('date', 'created_at')
 
-    # 2. Ledger Customer Jama (Cash Receipts crediting a Sundry Debtors ledger)
-    jama_qs = VoucherLine.objects.filter(
-        voucher__outlet_id=outlet_id,
-        voucher__date__range=(start_date, end_date),
-        voucher__voucher_type='receipt',
-        voucher__payment_mode='cash',
-        voucher__status='posted',
-        ledger__group__name='Sundry Debtors',
-        credit__gt=0
-    )
-    ledger_jama = float(jama_qs.aggregate(total=Sum('credit'))['total'] or 0.0)
+    cash_expenses = 0.0
+    cash_payments = 0.0
+    cash_received = 0.0
+    cash_income = 0.0
 
-    # 3. Ledger Carton Sale (Cash Receipts crediting an Income ledger)
-    carton_qs = VoucherLine.objects.filter(
-        voucher__outlet_id=outlet_id,
-        voucher__date__range=(start_date, end_date),
-        voucher__voucher_type='receipt',
-        voucher__payment_mode='cash',
-        voucher__status='posted',
-        ledger__group__nature='income',
-        credit__gt=0
-    )
-    ledger_carton_sale = float(carton_qs.aggregate(total=Sum('credit'))['total'] or 0.0)
-    
-    # Combine Manual + Ledger
-    petty_cash_exp = petty_cash_exp_manual + ledger_expenses
-    carton_sale = carton_sale_manual + ledger_carton_sale
-    jama = jama_manual + ledger_jama
-    
+    cash_expense_items = []
+    cash_payment_items = []
+    cash_received_items = []
+    cash_income_items = []
+
+    def is_cash_line(line):
+        if not line or not line.ledger:
+            return False
+        grp = (line.ledger.group.name if line.ledger.group else '').lower().replace('-', ' ')
+        return grp == 'cash in hand' or line.ledger.name.strip().lower() == 'cash'
+
+    for v in vouchers:
+        lines = list(v.lines.all())
+        cash_cr_lines = [l for l in lines if is_cash_line(l) and l.credit > 0]
+        cash_dr_lines = [l for l in lines if is_cash_line(l) and l.debit > 0]
+
+        # Cash Paid OUT (Payment voucher crediting Cash in Hand)
+        if cash_cr_lines and v.voucher_type == 'payment':
+            cash_out_amt = float(sum(l.credit for l in cash_cr_lines))
+            dr_lines = [l for l in lines if l.debit > 0 and not is_cash_line(l)]
+            total_dr = float(sum(d.debit for d in dr_lines))
+
+            for dl in dr_lines:
+                dr_amt = float(dl.debit)
+                portion = cash_out_amt * (dr_amt / total_dr) if total_dr > 0 else dr_amt
+                grp_name = dl.ledger.group.name if dl.ledger.group else ''
+                nature = dl.ledger.group.nature if dl.ledger.group else ''
+
+                item_record = {
+                    'id': str(v.id),
+                    'no': v.voucher_no,
+                    'date': v.date.strftime("%d-%m-%Y"),
+                    'ledger': dl.ledger.name,
+                    'group': grp_name,
+                    'narration': v.narration or '',
+                    'amount': round(portion, 2),
+                    'totalVoucherAmount': round(float(v.total_amount), 2),
+                    'link': f'/dashboard/accounts/voucher-entry?editId={v.id}',
+                }
+
+                if 'Expense' in grp_name or nature == 'expense':
+                    cash_expenses += portion
+                    cash_expense_items.append(item_record)
+                else:
+                    cash_payments += portion
+                    cash_payment_items.append(item_record)
+
+        # Cash Received IN (Receipt voucher debiting Cash in Hand)
+        if cash_dr_lines and v.voucher_type == 'receipt':
+            cash_in_amt = float(sum(l.debit for l in cash_dr_lines))
+            cr_lines = [l for l in lines if l.credit > 0 and not is_cash_line(l)]
+            total_cr = float(sum(c.credit for c in cr_lines))
+
+            for cl in cr_lines:
+                cr_amt = float(cl.credit)
+                portion = cash_in_amt * (cr_amt / total_cr) if total_cr > 0 else cr_amt
+                grp_name = cl.ledger.group.name if cl.ledger.group else ''
+                nature = cl.ledger.group.nature if cl.ledger.group else ''
+
+                item_record = {
+                    'id': str(v.id),
+                    'no': v.voucher_no,
+                    'date': v.date.strftime("%d-%m-%Y"),
+                    'ledger': cl.ledger.name,
+                    'group': grp_name,
+                    'narration': v.narration or '',
+                    'amount': round(portion, 2),
+                    'totalVoucherAmount': round(float(v.total_amount), 2),
+                    'link': f'/dashboard/accounts/voucher-entry?editId={v.id}',
+                }
+
+                if 'Income' in grp_name or nature == 'income':
+                    cash_income += portion
+                    cash_income_items.append(item_record)
+                else:
+                    cash_received += portion
+                    cash_received_items.append(item_record)
+
+    # Legacy POS receipts & manual carton sale
+    if jama_manual > 0:
+        cash_received += jama_manual
+        cash_received_items.append({
+            'id': 'manual_pos',
+            'no': 'POS Receipt',
+            'date': start_date.strftime("%d-%m-%Y"),
+            'ledger': 'Customer Jama (POS)',
+            'group': 'Sundry Debtors',
+            'narration': 'Cash received at POS',
+            'amount': round(jama_manual, 2),
+            'totalVoucherAmount': round(jama_manual, 2),
+            'link': '',
+        })
+
+    if carton_sale_manual > 0:
+        cash_income += carton_sale_manual
+        cash_income_items.append({
+            'id': 'manual_carton',
+            'no': 'Manual Entry',
+            'date': start_date.strftime("%d-%m-%Y"),
+            'ledger': 'Carton Sale (Manual)',
+            'group': 'Direct Incomes',
+            'narration': 'Daily till carton sale',
+            'amount': round(carton_sale_manual, 2),
+            'totalVoucherAmount': round(carton_sale_manual, 2),
+            'link': '',
+        })
+
     # --- Fixed Monthly Expense ---
     fixed_exp, _ = FixedMonthlyExpense.objects.get_or_create(outlet_id=outlet_id)
-    
-    # Math
-    cash_required = total_sales - total_returns - credit_sales - phonepay_sales - card_sales - petty_cash_exp + jama + carton_sale
-    
-    if is_single_day:
+
+    # ── Strict Formula for End-of-Day Required Cash ──
+    # Opening Cash + Gross Sales - Sales Return - Credit Sale - UPI - Cards - Cash Expenses - Cash Payments - Cash Purchases + Cash Received + Cash Income
+    cash_required = (
+        opening_cash
+        + total_sales
+        - total_returns
+        - total_credit_sales
+        - total_upi_sales
+        - total_card_sales
+        - cash_expenses
+        - cash_payments
+        - total_cash_purchases
+        + cash_received
+        + cash_income
+    )
+
+    if cash_state:
         actual_cash = float(cash_state.actual_cash)
-        extra_short = actual_cash - cash_required
+        extra_short = round(actual_cash - cash_required, 2)
     else:
         actual_cash = 0.0
         extra_short = 0.0
@@ -234,18 +450,39 @@ def get_daily_snapshot_data(outlet_id, start_date_str, end_date_str=None):
             'stockValue': round(stock_value, 2),
         },
         'salesBreakdown': {
-            'saleReturn': total_returns,
-            'creditSale': credit_sales,
-            'phonePay': phonepay_sales,
-            'card': card_sales,
-            'expenses': petty_cash_exp,
-            'customerJama': jama,
-            'cartonSale': carton_sale,
+            'openingCash': round(opening_cash, 2),
+            'grossSales': round(total_sales, 2),
+            'saleReturn': round(total_returns, 2),
+            'creditSale': round(total_credit_sales, 2),
+            'upi': round(total_upi_sales, 2),
+            'phonePay': round(total_upi_sales, 2),
+            'card': round(total_card_sales, 2),
+            'cashExpenses': round(cash_expenses, 2),
+            'expenses': round(cash_expenses, 2),
+            'cashPayments': round(cash_payments, 2),
+            'cashPurchases': round(total_cash_purchases, 2),
+            'cashReceived': round(cash_received, 2),
+            'customerJama': round(cash_received, 2),
+            'cashIncome': round(cash_income, 2),
+            'cartonSale': round(cash_income, 2),
             'cashRequired': round(cash_required, 2),
             'actualCash': round(actual_cash, 2),
             'extraShort': round(extra_short, 2),
+            'details': {
+                'grossSales': gross_sales_items,
+                'saleReturn': sales_return_items,
+                'creditSale': credit_sales_items,
+                'upi': upi_sales_items,
+                'card': card_sales_items,
+                'cashExpenses': cash_expense_items,
+                'cashPayments': cash_payment_items,
+                'cashPurchases': cash_purchase_items,
+                'cashReceived': cash_received_items,
+                'cashIncome': cash_income_items,
+            }
         },
         'cashState': {
+            'openingCash': round(opening_cash, 2),
             'notes2000': cash_state.notes_2000 if cash_state else 0,
             'notes500': cash_state.notes_500 if cash_state else 0,
             'notes200': cash_state.notes_200 if cash_state else 0,
@@ -253,7 +490,7 @@ def get_daily_snapshot_data(outlet_id, start_date_str, end_date_str=None):
             'notes50': cash_state.notes_50 if cash_state else 0,
             'notes20': cash_state.notes_20 if cash_state else 0,
             'notes10': cash_state.notes_10 if cash_state else 0,
-            'pettyCashExp': petty_cash_exp,
+            'pettyCashExp': round(cash_expenses, 2),
             'sideCash': float(cash_state.side_cash) if cash_state else 0.0,
             'nextDayOpening': float(cash_state.next_day_opening) if cash_state else 0.0,
         },
@@ -318,6 +555,10 @@ class DailyCashReportView(APIView):
         cash_state.notes_10 = request.data.get('notes10', cash_state.notes_10)
         cash_state.side_cash = request.data.get('sideCash', cash_state.side_cash)
         cash_state.next_day_opening = request.data.get('nextDayOpening', cash_state.next_day_opening)
+        if 'openingCash' in request.data:
+            cash_state.opening_cash = request.data.get('openingCash')
+        if 'cartonSale' in request.data:
+            cash_state.carton_sale = request.data.get('cartonSale')
         cash_state.updated_by = request.user
         cash_state.save()
         
@@ -440,16 +681,19 @@ class DailySnapshotExportView(APIView):
         r += 1
         ws[f'A{r}'] = "TOTAL"; ws.merge_cells(f'A{r}:B{r}'); ws[f'C{r}'] = data['salesBreakdown']['actualCash']; style_cell(ws[f'A{r}']); style_cell(ws[f'C{r}'])
         
-        # Sales Breakdown (D8:E20)
+        # Sales Breakdown (D8:E22)
         sb_rows = [
+            ("OPENING CASH", data['salesBreakdown']['openingCash'], None),
+            ("GROSS SALES", data['salesBreakdown']['grossSales'], None),
             ("(-)SALE RETURN", data['salesBreakdown']['saleReturn'], None),
             ("(-)CREDIT SALE", data['salesBreakdown']['creditSale'], "FF0000"),
-            ("(-)PHONEPAY", data['salesBreakdown']['phonePay'], None),
+            ("(-)PHONEPAY / UPI", data['salesBreakdown']['upi'], None),
             ("(-)CARD", data['salesBreakdown']['card'], None),
-            ("(-) EXPENSES", data['salesBreakdown']['expenses'], "FF0000"),
-            (None, None, "FFFF00"), # Yellow blank row
-            ("(+) CUSTOMER JAMA", data['salesBreakdown']['customerJama'], "FF0000"),
-            ("(+) CARTON SALE", data['salesBreakdown']['cartonSale'], None),
+            ("(-) CASH EXPENSES", data['salesBreakdown']['cashExpenses'], "FF0000"),
+            ("(-) CASH PAYMENTS", data['salesBreakdown']['cashPayments'], "FF0000"),
+            ("(-) CASH PURCHASES", data['salesBreakdown']['cashPurchases'], "FF0000"),
+            ("(+) CASH RECEIVED", data['salesBreakdown']['cashReceived'], "FF0000"),
+            ("(+) CASH INCOME", data['salesBreakdown']['cashIncome'], None),
             ("CASH REQUIRED", data['salesBreakdown']['cashRequired'], "FFFF00"),
             ("ACTUAL CASH", data['salesBreakdown']['actualCash'], "FFFF00"),
             ("(+EXTRA)(-SHORT)", data['salesBreakdown']['extraShort'], "C9DAF8"),

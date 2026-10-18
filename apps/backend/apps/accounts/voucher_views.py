@@ -73,17 +73,18 @@ class LedgerListView(APIView):
         filter_group = request.query_params.get('filterGroup', '').lower()
         if filter_group == 'cashbank':
             qs = qs.filter(group__name__in=['Cash in Hand', 'Bank Accounts'])
+        else:
+            voucher_type = request.query_params.get('voucherType', '').lower()
+            if voucher_type == 'receipt':
+                qs = qs.filter(group__nature__in=['asset', 'income'])
+            elif voucher_type == 'payment':
+                qs = qs.filter(group__nature__in=['liability', 'expense'])
+            elif voucher_type == 'contra':
+                qs = qs.filter(group__name__in=['Cash in Hand', 'Bank Accounts'])
         search = request.query_params.get('search', '').strip()
         if search:
             from django.db.models import Q
             qs = qs.filter(Q(name__icontains=search) | Q(phone__icontains=search))
-        voucher_type = request.query_params.get('voucherType', '').lower()
-        if voucher_type == 'receipt':
-            qs = qs.filter(group__nature__in=['asset', 'income'])
-        elif voucher_type == 'payment':
-            qs = qs.filter(group__nature__in=['liability', 'expense'])
-        elif voucher_type == 'contra':
-            qs = qs.filter(group__name__in=['Cash in Hand', 'Bank Accounts'])
 
         total_count = qs.count()
         limit_param = request.query_params.get('limit')

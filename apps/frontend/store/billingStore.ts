@@ -146,7 +146,7 @@ export const useBillingStore = create<BillingState>((set, get) => ({
     billsToday: 0,
     backendRateErrors: {},
     
-    showMarginInfo: false,
+    showMarginInfo: true,
 
     // --- Draft Management ---
 

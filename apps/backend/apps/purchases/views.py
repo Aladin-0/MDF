@@ -780,8 +780,30 @@ class PurchaseListView(APIView):
 
             # Filter by status if provided
             status_filter = request.query_params.get('status')
+            is_modified_param = request.query_params.get('isModified')
             if status_filter == 'draft':
                 queryset = queryset.filter(status='SAVED')
+            elif status_filter == 'modified' or is_modified_param in ('true', '1'):
+                from apps.audit.models import DocumentRevisionV2, DocumentRevision
+                from django.contrib.contenttypes.models import ContentType
+                from django.db.models import Exists, OuterRef, Q
+
+                pi_ct = ContentType.objects.get_for_model(PurchaseInvoice)
+                rev_v2_subquery = DocumentRevisionV2.objects.filter(
+                    content_type=pi_ct,
+                    object_id=OuterRef('pk')
+                ).filter(
+                    Q(action__in=['UPDATE', 'update', 'correction', 'standard_correction', 'direct_revise', 'financial_change']) |
+                    Q(revision_no__gt=1)
+                )
+                rev_v1_subquery = DocumentRevision.objects.filter(
+                    content_type=pi_ct,
+                    object_id=OuterRef('pk')
+                )
+                queryset = queryset.exclude(status='SAVED').filter(
+                    Q(Exists(rev_v2_subquery)) | Q(Exists(rev_v1_subquery))
+                )
+                logger.info("Filtered purchases by modified status")
             else:
                 # Exclude drafts from all other views
                 queryset = queryset.exclude(status='SAVED')
@@ -828,8 +850,12 @@ class PurchaseListView(APIView):
 
             logger.info(f"Returning {len(invoices)} invoices (page {page}/{total_pages}, total {total_records})")
 
+            # Bulk fetch modified status
+            invoice_ids = [inv.id for inv in invoices]
+            mod_info = self._get_modified_status_bulk(invoice_ids)
+
             # Serialize invoices
-            data = [self._serialize_purchase(inv) for inv in invoices]
+            data = [self._serialize_purchase(inv, mod_info.get(str(inv.id))) for inv in invoices]
 
             result = {
                 'data': data,
@@ -850,8 +876,46 @@ class PurchaseListView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-    def _serialize_purchase(self, purchase_invoice):
+    def _get_modified_status_bulk(self, invoice_ids):
+        if not invoice_ids:
+            return {}
+        from apps.audit.models import DocumentRevisionV2, DocumentRevision
+        from django.contrib.contenttypes.models import ContentType
+        from django.db.models import Q
+        from collections import defaultdict
+
+        pi_ct = ContentType.objects.get_for_model(PurchaseInvoice)
+        results = defaultdict(lambda: {'isModified': False, 'revisionCount': 0})
+
+        v2_revs = DocumentRevisionV2.objects.filter(
+            content_type=pi_ct,
+            object_id__in=invoice_ids
+        ).filter(
+            Q(action__in=['UPDATE', 'update', 'correction', 'standard_correction', 'direct_revise', 'financial_change']) |
+            Q(revision_no__gt=1)
+        ).values_list('object_id', flat=True)
+
+        for oid in v2_revs:
+            s_oid = str(oid)
+            results[s_oid]['isModified'] = True
+            results[s_oid]['revisionCount'] += 1
+
+        v1_revs = DocumentRevision.objects.filter(
+            content_type=pi_ct,
+            object_id__in=invoice_ids
+        ).values_list('object_id', flat=True)
+
+        for oid in v1_revs:
+            s_oid = str(oid)
+            results[s_oid]['isModified'] = True
+            results[s_oid]['revisionCount'] += 1
+
+        return results
+
+    def _serialize_purchase(self, purchase_invoice, mod_info=None):
         """Serialize PurchaseInvoice (without items) to response shape."""
+        if mod_info is None:
+            mod_info = {'isModified': False, 'revisionCount': 0}
         dist_data = None
         if purchase_invoice.distributor:
             dist_data = {
@@ -927,6 +991,8 @@ class PurchaseListView(APIView):
             'amountPaid': float(purchase_invoice.amount_paid),
             'outstanding': float(purchase_invoice.outstanding),
             'status': purchase_invoice.status,
+            'isModified': mod_info.get('isModified', False),
+            'revisionCount': mod_info.get('revisionCount', 0),
             'createdAt': purchase_invoice.created_at.isoformat(),
         }
         
@@ -1162,6 +1228,24 @@ class PurchaseDetailView(APIView):
             'notes': invoice.notes,
             'createdAt': invoice.created_at.isoformat(),
         }
+
+        # Check if modified
+        from apps.audit.models import DocumentRevisionV2, DocumentRevision
+        from django.contrib.contenttypes.models import ContentType
+        from django.db.models import Q
+        pi_ct = ContentType.objects.get_for_model(PurchaseInvoice)
+        rev_count = DocumentRevisionV2.objects.filter(
+            content_type=pi_ct,
+            object_id=invoice.id
+        ).filter(
+            Q(action__in=['UPDATE', 'update', 'correction', 'standard_correction', 'direct_revise', 'financial_change']) |
+            Q(revision_no__gt=1)
+        ).count() + DocumentRevision.objects.filter(
+            content_type=pi_ct,
+            object_id=invoice.id
+        ).count()
+        result['isModified'] = rev_count > 0
+        result['revisionCount'] = rev_count
         
         return Response(result, status=status.HTTP_200_OK)
 

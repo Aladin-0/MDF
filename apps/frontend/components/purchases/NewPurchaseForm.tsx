@@ -144,7 +144,7 @@ export const normalizeExpiry = (exp?: string): string => {
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () => void, invoiceToEdit?: PurchaseInvoiceFull | null }) {
+export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (updatedInvoiceId?: string) => void, invoiceToEdit?: PurchaseInvoiceFull | null }) {
     const searchParams = useSearchParams();
     const poId = searchParams?.get('poId');
     const [linkedPoNo, setLinkedPoNo] = useState<string | null>(null);
@@ -638,7 +638,7 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                 });
             }
 
-            onSuccess();
+            onSuccess(invoiceToEdit?.id);
         } catch (err: any) {
             const code = err?.error?.code;
             if (code === 'DUPLICATE_INVOICE') {
@@ -1161,7 +1161,7 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: () =>
                     >
                         <Save className="h-4 w-4" /> Save Draft <span className="text-[10px] text-slate-400 ml-1 border rounded px-1 hidden md:inline">Alt+S</span>
                     </Button>
-                    <Button type="button" variant="outline" onClick={onSuccess} className="flex-1 md:flex-none h-10">
+                    <Button type="button" variant="outline" onClick={() => onSuccess()} className="flex-1 md:flex-none h-10">
                         <X className="mr-1 h-4 w-4" /> Cancel
                     </Button>
                 </div>

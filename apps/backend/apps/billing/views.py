@@ -245,7 +245,29 @@ def build_sale_response_payload(sale_invoice, message=None, revision_id=None):
             for p in sale_invoice.payments.all()
         ],
         'createdAt': sale_invoice.created_at.isoformat() if sale_invoice.created_at else None,
+        'isModified': bool(revision_id),
     }
+    if not revision_id and getattr(sale_invoice, 'id', None):
+        try:
+            from apps.audit.models import DocumentRevisionV2, DocumentRevision
+            from apps.billing.models import BillRevision
+            from django.contrib.contenttypes.models import ContentType
+            from django.db.models import Q
+            si_ct = ContentType.objects.get_for_model(sale_invoice.__class__)
+            has_rev = DocumentRevisionV2.objects.filter(
+                content_type=si_ct, object_id=sale_invoice.id
+            ).filter(
+                Q(action__in=['UPDATE', 'update', 'correction', 'standard_correction', 'direct_revise', 'financial_change', 'cancel_reissue', 'paid_bill_correction']) |
+                Q(revision_no__gt=1) |
+                ~Q(action__iexact='create')
+            ).exists() or DocumentRevision.objects.filter(
+                content_type=si_ct, object_id=sale_invoice.id
+            ).exists() or BillRevision.objects.filter(
+                original_invoice_id=sale_invoice.id
+            ).exists()
+            response_data['isModified'] = has_rev
+        except Exception:
+            pass
     if message:
         response_data['message'] = message
     if revision_id:
@@ -1357,6 +1379,35 @@ class SaleListView(APIView):
                     (Q(payment_mode__iexact='split') & Q(payments__method__iexact=pm, payments__amount__gt=0))
                 ).distinct()
 
+        # ── Optional isModified filter ─────────────────────────────────────────
+        is_modified_param = request.query_params.get('isModified') or request.query_params.get('modified') or request.query_params.get('status')
+        if is_modified_param in ('true', '1', 'modified'):
+            from apps.audit.models import DocumentRevisionV2, DocumentRevision
+            from apps.billing.models import BillRevision
+            from django.contrib.contenttypes.models import ContentType
+            from django.db.models import Exists, OuterRef, Q
+            
+            si_ct = ContentType.objects.get_for_model(SaleInvoice)
+            rev_v2_sub = DocumentRevisionV2.objects.filter(
+                content_type=si_ct,
+                object_id=OuterRef('pk')
+            ).filter(
+                Q(action__in=['UPDATE', 'update', 'correction', 'standard_correction', 'direct_revise', 'financial_change', 'cancel_reissue', 'paid_bill_correction', 'return_aware_correction']) |
+                Q(revision_no__gt=1) |
+                ~Q(action__iexact='create')
+            )
+            rev_v1_sub = DocumentRevision.objects.filter(
+                content_type=si_ct,
+                object_id=OuterRef('pk')
+            )
+            bill_rev_sub = BillRevision.objects.filter(
+                original_invoice=OuterRef('pk')
+            )
+            invoices = invoices.filter(
+                Q(Exists(rev_v2_sub)) | Q(Exists(rev_v1_sub)) | Q(Exists(bill_rev_sub))
+            )
+            logger.info("Filtered sales by isModified")
+
         # ── Profit aggregates for the filtered set (EXCLUDE return invoices) ───
         from django.db.models import Sum as dSum, Count as dCount
         agg = SaleInvoice.objects.filter(
@@ -1463,9 +1514,14 @@ class SaleListView(APIView):
         end_idx = start_idx + page_size
         paginated_invoices = invoices[start_idx:end_idx]
 
+        # ── Bulk fetch modified status for paginated sales ───────────────────
+        sale_ids = [inv.id for inv in paginated_invoices]
+        sale_mod_info = self._get_sale_modified_status_bulk(sale_ids)
+
         # ── Serialize invoices ───────────────────────────────────────────────
         results = []
         for invoice in paginated_invoices:
+            mod = sale_mod_info.get(str(invoice.id), {'isModified': False, 'revisionCount': 0})
             result = {
                 'id': str(invoice.id),
                 'outletId': str(invoice.outlet.id),
@@ -1510,6 +1566,8 @@ class SaleListView(APIView):
                     for p in invoice.payments.all()
                 ],
                 'isReturn': invoice.is_return,
+                'isModified': mod['isModified'],
+                'revisionCount': mod['revisionCount'],
                 'eway_bill_no': invoice.eway_bill_no,
                 'irn': invoice.irn,
                 'qr_code': invoice.qr_code,
@@ -1716,6 +1774,50 @@ class SaleListView(APIView):
                 'totalRecords': total_records
             }
         }, status=status.HTTP_200_OK)
+
+    def _get_sale_modified_status_bulk(self, sale_ids):
+        if not sale_ids:
+            return {}
+        from apps.audit.models import DocumentRevisionV2, DocumentRevision
+        from apps.billing.models import BillRevision
+        from django.contrib.contenttypes.models import ContentType
+        from django.db.models import Q
+        from collections import defaultdict
+
+        si_ct = ContentType.objects.get_for_model(SaleInvoice)
+        results = defaultdict(lambda: {'isModified': False, 'revisionCount': 0})
+
+        v2_revs = DocumentRevisionV2.objects.filter(
+            content_type=si_ct,
+            object_id__in=sale_ids
+        ).filter(
+            Q(action__in=['UPDATE', 'update', 'correction', 'standard_correction', 'direct_revise', 'financial_change', 'cancel_reissue', 'paid_bill_correction', 'return_aware_correction']) |
+            Q(revision_no__gt=1) |
+            ~Q(action__iexact='create')
+        ).values_list('object_id', flat=True)
+        for oid in v2_revs:
+            s_oid = str(oid)
+            results[s_oid]['isModified'] = True
+            results[s_oid]['revisionCount'] += 1
+
+        v1_revs = DocumentRevision.objects.filter(
+            content_type=si_ct,
+            object_id__in=sale_ids
+        ).values_list('object_id', flat=True)
+        for oid in v1_revs:
+            s_oid = str(oid)
+            results[s_oid]['isModified'] = True
+            results[s_oid]['revisionCount'] += 1
+
+        br_revs = BillRevision.objects.filter(
+            original_invoice_id__in=sale_ids
+        ).values_list('original_invoice_id', flat=True)
+        for oid in br_revs:
+            s_oid = str(oid)
+            results[s_oid]['isModified'] = True
+            results[s_oid]['revisionCount'] += 1
+
+        return results
 
 
 

@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { getExpiryStatus } from '@/utils/expiry';
-import { calculateLineMargin } from '@/lib/billingMarginUtils';
+import { calculateLineMargin, calculateTotalMargin } from '@/lib/billingMarginUtils';
 import { useProductSearch } from '@/hooks/useProductSearch';
 import { Batch, ProductSearchResult } from '@/types';
 import { format } from 'date-fns';
@@ -20,7 +20,7 @@ interface MainInvoiceWorkspaceProps {
 }
 
 export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = {}) {
-    const { drafts, activeDraftId, addToCart, removeFromCart, updateCartItem, showMarginInfo, activeStaff } = useBillingStore();
+    const { drafts, activeDraftId, addToCart, removeFromCart, updateCartItem, getDraftTotals, showMarginInfo, activeStaff } = useBillingStore();
     
     // Search State
     const [searchQuery, setSearchQuery] = useState('');
@@ -84,6 +84,8 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
     if (!activeDraft) return null;
     const cart = activeDraft.cart;
     const saleType = activeDraft.saleType || 'RETAIL';
+    const totals = getDraftTotals(activeDraftId);
+    const marginData = calculateTotalMargin(activeDraft.cart, totals.grandTotal, totals.extraDiscountAmount);
 
     // --- Editor Handlers ---
     const handleSaveEdit = (oldBatchId: string, updatedItem: any) => {
@@ -479,7 +481,7 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                     <Search className="absolute left-3 top-2.5 w-5 h-5 text-slate-400" />
                     <Input 
                         ref={(node) => {
-                            if (searchInputRef) searchInputRef.current = node;
+                            if (searchInputRef) (searchInputRef as any).current = node;
                             if (searchRef) (searchRef as any).current = node;
                         }}
                         className="w-full h-10 pl-10 pr-10 border-2 border-[#0EA5E9] rounded-md focus-visible:ring-0 focus-visible:border-[#0284C7] font-semibold text-sm shadow-sm"
@@ -751,17 +753,24 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                                                         {item.qtyLoose > 0 && (item.packType?.toLowerCase() === 'strip' || item.packType?.toLowerCase() === 'blister') ? `${item.qtyLoose}L` : ''}
                                                     </>
                                                 </div>
-                                                {(showMarginInfo && (activeStaff?.role === 'owner' || activeStaff?.role === 'admin')) && (
+                                                {showMarginInfo && (
                                                     <div className="text-[10px] text-emerald-600 font-medium whitespace-nowrap mt-0.5">
-                                                        Base ₹{item.landingRate ?? item.purchaseRate ?? 0} · Margin ₹{calculateLineMargin(item).margin} ({calculateLineMargin(item).marginPct}%)
+                                                        Landing ₹{(item.landingRate ?? item.purchaseRate ?? 0).toFixed(2)} · Profit ₹{calculateLineMargin(item).lineGrossProfit.toFixed(2)} ({calculateLineMargin(item).marginPct.toFixed(1)}%)
                                                     </div>
                                                 )}
                                             </td>
                                         ) : (
                                             <>
-                                                <td className="px-2 py-1.5 text-right border-r border-slate-100 text-[11px] font-bold text-blue-700">
-                                                    {item.qtyStrips > 0 ? `${item.qtyStrips}S ` : ''}
-                                                    {item.qtyLoose > 0 ? `${item.qtyLoose}L` : ''}
+                                                <td className="px-2 py-1.5 text-right border-r border-slate-100">
+                                                    <div className="text-[11px] font-bold text-blue-700">
+                                                        {item.qtyStrips > 0 ? `${item.qtyStrips}S ` : ''}
+                                                        {item.qtyLoose > 0 ? `${item.qtyLoose}L` : ''}
+                                                    </div>
+                                                    {showMarginInfo && (
+                                                        <div className="text-[10px] text-emerald-600 font-medium whitespace-nowrap mt-0.5">
+                                                            Landing ₹{(item.landingRate ?? item.purchaseRate ?? 0).toFixed(2)} · Profit ₹{calculateLineMargin(item).lineGrossProfit.toFixed(2)} ({calculateLineMargin(item).marginPct.toFixed(1)}%)
+                                                        </div>
+                                                    )}
                                                 </td>
                                                 <td className="px-2 py-1.5 text-right border-r border-slate-100 text-[11px] font-bold text-amber-600">
                                                     {(item.freeQtyStrips || 0) > 0 ? `${item.freeQtyStrips}S ` : ''}
@@ -785,6 +794,44 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                             })
                         )}
                     </tbody>
+                    {cart.length > 0 && (
+                        <tfoot className="sticky bottom-0 bg-slate-50 border-t-2 border-slate-300 font-bold text-xs text-slate-700 shadow-sm z-10">
+                            <tr>
+                                <td colSpan={saleType === 'WHOLESALE' ? 5 : 4} className="px-3 py-2 text-left font-bold text-slate-700">
+                                    Total: {cart.length} {cart.length === 1 ? 'Item' : 'Items'} ({totals.itemCount} Units)
+                                </td>
+                                {saleType === 'WHOLESALE' && (
+                                    <td className="px-2 py-2 text-right"></td>
+                                )}
+                                <td colSpan={saleType === 'WHOLESALE' ? 2 : 2} className="px-2 py-2 text-right">
+                                    {showMarginInfo && marginData && (
+                                        <div className="flex items-center justify-end gap-2 text-[11px]">
+                                            <span className="font-semibold text-slate-600">Total Landing:</span>
+                                            <span className="font-black text-sky-700 bg-sky-50 px-2 py-0.5 rounded border border-sky-200">
+                                                ₹{marginData.totalLandingCost.toFixed(2)}
+                                            </span>
+                                        </div>
+                                    )}
+                                </td>
+                                <td colSpan={saleType === 'WHOLESALE' ? 2 : 1} className="px-2 py-2 text-right">
+                                    {showMarginInfo && marginData && (
+                                        <div className="flex items-center justify-end gap-2 text-[11px]">
+                                            <span className="font-semibold text-slate-600">Total Profit:</span>
+                                            <span className={cn(
+                                                "font-black px-2 py-0.5 rounded border",
+                                                marginData.totalProfit >= 0 ? "text-emerald-700 bg-emerald-50 border-emerald-200" : "text-rose-700 bg-rose-50 border-rose-200"
+                                            )}>
+                                                {marginData.totalProfit >= 0 ? '+' : ''}₹{marginData.totalProfit.toFixed(2)} ({marginData.profitMarginPct.toFixed(1)}%)
+                                            </span>
+                                        </div>
+                                    )}
+                                </td>
+                                <td className="px-3 py-2 text-right text-sm font-black text-slate-900 whitespace-nowrap">
+                                    ₹{totals.grandTotal.toFixed(2)}
+                                </td>
+                            </tr>
+                        </tfoot>
+                    )}
                 </table>
             </div>
         </div>

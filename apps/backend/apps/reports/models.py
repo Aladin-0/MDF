@@ -262,6 +262,7 @@ class DailyCashReport(models.Model):
     notes_20 = models.IntegerField(default=0)
     notes_10 = models.IntegerField(default=0)
     
+    opening_cash = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     carton_sale = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     petty_cash_exp = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     side_cash = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -285,4 +286,4 @@ class DailyCashReport(models.Model):
             self.notes_50 * 50,
             self.notes_20 * 20,
             self.notes_10 * 10,
-        ])
+        ]) + float(self.side_cash or 0)
