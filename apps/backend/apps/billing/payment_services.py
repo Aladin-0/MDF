@@ -528,7 +528,7 @@ def create_sales_return(payload: Dict[str, Any], outlet_id: str, created_by_id: 
         )
 
     # Handle credit note
-    if refund_mode == 'credit_note' and original_sale.customer:
+    if refund_mode == 'credit_note' and original_sale and original_sale.customer:
         customer = original_sale.customer
         customer.outstanding = max(Decimal('0'), customer.outstanding - total_amount)
         customer.save(update_fields=['outstanding'])

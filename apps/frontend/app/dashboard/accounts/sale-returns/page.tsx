@@ -92,7 +92,7 @@ export default function SaleReturnsPage() {
                                     <td className="px-4 py-3 text-muted-foreground">
                                         {format(new Date(r.returnDate), 'dd MMM yyyy')}
                                     </td>
-                                    <td className="px-4 py-3 font-mono text-xs">{r.originalInvoiceNo}</td>
+                                    <td className="px-4 py-3 font-mono text-xs">{r.originalInvoiceNo || '—'}</td>
                                     <td className="px-4 py-3">{r.customerName || '—'}</td>
                                     <td className="px-4 py-3 text-right font-semibold">
                                         ₹{Number(r.totalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
