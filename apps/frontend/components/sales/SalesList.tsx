@@ -40,6 +40,7 @@ const PAYMENT_FILTER_OPTIONS = [
     { label: 'Split', value: 'split' },
     { label: 'Bank Transfer', value: 'bank_transfer' },
     { label: 'Cheque', value: 'cheque' },
+    { label: 'Modified Bills', value: 'modified' },
 ];
 
 // ── formatters ────────────────────────────────────────────────────────────────
@@ -142,12 +143,20 @@ export default function SalesList() {
         router.push(`/billing?edit=${invoice.id}`);
     };
 
-    const handlePaymentModeChange = (val: string) => {
+    const handleFilterChange = (val: string) => {
         const params = new URLSearchParams(searchParams.toString());
         if (val === 'all') {
             params.delete('paymentMode');
+            params.delete('modified');
+            setModifiedOnly(false);
+        } else if (val === 'modified') {
+            params.delete('paymentMode');
+            params.set('modified', 'true');
+            setModifiedOnly(true);
         } else {
             params.set('paymentMode', val);
+            params.delete('modified');
+            setModifiedOnly(false);
         }
         params.delete('page');
         const qs = params.toString();
@@ -157,17 +166,7 @@ export default function SalesList() {
 
     const toggleModifiedOnly = (enabled?: boolean) => {
         const nextVal = enabled !== undefined ? enabled : !modifiedOnly;
-        setModifiedOnly(nextVal);
-        const params = new URLSearchParams(searchParams.toString());
-        if (nextVal) {
-            params.set('modified', 'true');
-        } else {
-            params.delete('modified');
-        }
-        params.delete('page');
-        const qs = params.toString();
-        router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-        setPage(1);
+        handleFilterChange(nextVal ? 'modified' : 'all');
     };
 
     // When search or modified filter is active: bypass date filters → search ALL dates (newest first)
@@ -523,57 +522,7 @@ export default function SalesList() {
             </div>
 
             {/* ── Active Highlight Alert Banner ── */}
-            {activeHighlightId && (
-                <div className="flex items-center justify-between gap-3 p-3.5 rounded-xl border border-amber-300 bg-amber-50/90 text-amber-900 text-sm shadow-sm animate-in fade-in slide-in-from-top-2">
-                    <div className="flex items-center gap-2.5">
-                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-200 text-amber-800">
-                            <Sparkles className="w-3.5 h-3.5 animate-pulse" />
-                        </span>
-                        <div>
-                            <span className="font-semibold">
-                                Sale bill modified successfully!
-                            </span>
-                            {invoices.some((inv) => inv.id === activeHighlightId) ? (
-                                <span className="ml-1 text-xs text-amber-700">
-                                    Highlighted below in the table.
-                                </span>
-                            ) : (
-                                <span className="ml-1 text-xs text-amber-700">
-                                    (The bill may be on another page or under a different date/search filter)
-                                </span>
-                            )}
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        {!modifiedOnly && (
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-7 text-xs border-amber-300 bg-white hover:bg-amber-100 text-amber-900 font-medium"
-                                onClick={() => toggleModifiedOnly(true)}
-                            >
-                                <History className="w-3 h-3 mr-1 text-amber-700" />
-                                Filter Modified Bills
-                            </Button>
-                        )}
-                        <button
-                            onClick={() => {
-                                setActiveHighlightId(null);
-                                const params = new URLSearchParams(searchParams.toString());
-                                params.delete('highlight');
-                                const qs = params.toString();
-                                router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-                            }}
-                            className="text-amber-700 hover:text-amber-950 p-1 rounded-md hover:bg-amber-100 transition-colors"
-                            title="Dismiss highlight"
-                        >
-                            <X className="w-4 h-4" />
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            {/* ── Search, Payment Filter & Sort ── */}
+            {/* ── Search, Filter & Sort ── */}
             <div className="flex flex-col gap-2.5 w-full">
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                     {/* Big Prominent Search Bar */}
@@ -604,27 +553,11 @@ export default function SalesList() {
 
                     {/* Filter & Sort Controls */}
                     <div className="flex items-center gap-2.5 shrink-0 flex-wrap sm:flex-nowrap">
-                        {/* Modified Bills Filter Toggle */}
-                        <Button
-                            type="button"
-                            variant={modifiedOnly ? "default" : "outline"}
-                            onClick={() => toggleModifiedOnly()}
-                            className={cn(
-                                "h-11 px-3.5 text-xs font-medium rounded-xl gap-1.5 transition-all shadow-xs",
-                                modifiedOnly
-                                    ? "bg-amber-600 hover:bg-amber-700 text-white border-amber-600"
-                                    : "bg-white hover:bg-amber-50 text-slate-700 hover:text-amber-900 border-slate-200/90 hover:border-amber-300"
-                            )}
-                        >
-                            <History className={cn("w-3.5 h-3.5", modifiedOnly ? "text-white" : "text-amber-600")} />
-                            <span>Modified Bills</span>
-                        </Button>
-
-                        {/* Payment Mode Selector */}
-                        <Select value={currentPaymentMode} onValueChange={handlePaymentModeChange}>
+                        {/* Filter Selector (Payment Modes & Modified Bills) */}
+                        <Select value={modifiedOnly ? 'modified' : currentPaymentMode} onValueChange={handleFilterChange}>
                             <SelectTrigger className="h-11 min-w-[155px] px-3.5 bg-white text-xs font-medium border border-slate-200/90 rounded-xl shadow-xs hover:bg-slate-50 hover:border-slate-300 focus:ring-2 focus:ring-primary/10 transition-all">
                                 <div className="flex items-center gap-1.5 truncate">
-                                    <span className="text-slate-400 text-xs font-normal shrink-0">Payment:</span>
+                                    <span className="text-slate-400 text-xs font-normal shrink-0">Filter:</span>
                                     <SelectValue placeholder="All Payments" />
                                 </div>
                             </SelectTrigger>
@@ -657,7 +590,7 @@ export default function SalesList() {
                                 <History className="w-3.5 h-3.5 text-amber-700" />
                                 <span>Filter: Modified Bills (all dates)</span>
                                 <button
-                                    onClick={() => toggleModifiedOnly(false)}
+                                    onClick={() => handleFilterChange('all')}
                                     className="hover:text-amber-950 p-0.5 rounded transition-colors"
                                     title="Clear modified filter"
                                 >
@@ -681,7 +614,7 @@ export default function SalesList() {
                             <span className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-800 border border-slate-200 px-2.5 py-1 rounded-lg text-xs font-medium capitalize">
                                 <span>Payment: {currentPaymentMode.replace('_', ' ')}</span>
                                 <button
-                                    onClick={() => handlePaymentModeChange('all')}
+                                    onClick={() => handleFilterChange('all')}
                                     className="hover:text-slate-900 p-0.5 rounded transition-colors"
                                     title="Clear payment filter"
                                 >
