@@ -424,11 +424,6 @@ export function PurchasesList({
                                             <td className="px-4 py-3 font-mono text-xs text-foreground whitespace-nowrap">
                                                 <div className="flex items-center gap-1.5 flex-wrap">
                                                     <span>{inv.status === 'SAVED' ? '—' : inv.invoiceNo}</span>
-                                                    {isHighlighted && (
-                                                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-200 text-amber-900 border border-amber-300 shadow-xs animate-pulse">
-                                                            <Sparkles className="w-2.5 h-2.5 text-amber-700" /> Just Modified
-                                                        </span>
-                                                    )}
                                                     {inv.isModified && (
                                                         <button
                                                             type="button"
