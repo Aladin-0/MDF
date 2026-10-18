@@ -2774,6 +2774,11 @@ class SaleDetailView(APIView):
         
         items_list = []
         for item in items:
+            batch = item.batch
+            landing_rate = float(batch.landing_rate or batch.purchase_rate or 0) if batch else 0.0
+            purchase_rate = float(batch.purchase_rate or 0) if batch else 0.0
+            ptr = float(batch.ptr or 0) if batch else 0.0
+            pts = float(batch.pts or 0) if batch else 0.0
             items_list.append({
                 'batchId': str(item.batch_id) if item.batch_id else '',
                 'productId': str(item.batch.product_id) if item.batch and item.batch.product_id else '',
@@ -2800,6 +2805,10 @@ class SaleDetailView(APIView):
                 'taxableAmount': float(item.taxable_amount),
                 'gstAmount': float(item.gst_amount),
                 'totalAmount': float(item.total_amount),
+                'purchaseRate': purchase_rate,
+                'landingRate': landing_rate,
+                'ptr': ptr,
+                'pts': pts,
             })
 
         # Check if this sale has any returns against it

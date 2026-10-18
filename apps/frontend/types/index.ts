@@ -694,6 +694,9 @@ export interface SaleItemDetail {
     b_qty?: number;
     f_qty?: number;
     ptr?: number;
+    pts?: number;
+    purchaseRate?: number;
+    landingRate?: number;
     igstAmount?: number;
 }
 
