@@ -728,8 +728,11 @@ def post_sale_invoice(sale_invoice):
                 lines.append(('credit', customer_ledger, abs(grand_total), invoice_desc))
             
             # 2. Credit the customer for instant payments and debit the respective asset accounts
-            if invoice_payments:
-                for p in invoice_payments:
+            expected_paid = cash_paid + upi_paid + card_paid
+            non_credit_pmts = [p for p in invoice_payments if (p.method or '').lower() != 'credit']
+            payments_valid = bool(non_credit_pmts and abs(sum(p.amount for p in non_credit_pmts) - expected_paid) <= Decimal('0.05'))
+            if payments_valid:
+                for p in non_credit_pmts:
                     tl = _resolve_tender_ledger(p)
                     if tl and p.amount > 0:
                         meth_label = _get_method_label(p.method)
@@ -756,7 +759,8 @@ def post_sale_invoice(sale_invoice):
                     lines.append(('credit', customer_ledger, card_paid, card_desc))
         else:
             # Fallback for walk-in (no customer attached)
-            if invoice_payments:
+            walk_in_payments_valid = bool(invoice_payments and abs(sum(p.amount for p in invoice_payments) - grand_total) <= Decimal('0.05'))
+            if walk_in_payments_valid:
                 for p in invoice_payments:
                     tl = _resolve_tender_ledger(p)
                     if tl and p.amount > 0:
@@ -764,17 +768,28 @@ def post_sale_invoice(sale_invoice):
                         pay_desc = f"Sale ({meth_label}) {sale_invoice.invoice_no}"
                         lines.append(('debit', tl, p.amount, pay_desc))
             else:
-                if cash_paid > 0:
-                    cash_ledger = _get_ledger(outlet, 'Cash')
-                    lines.append(('debit', cash_ledger, cash_paid, f"Sale (Cash) {sale_invoice.invoice_no}"))
+                scalar_sum = cash_paid + upi_paid + card_paid
+                if scalar_sum > 0:
+                    if cash_paid > 0:
+                        cash_ledger = _get_ledger(outlet, 'Cash')
+                        lines.append(('debit', cash_ledger, cash_paid, f"Sale (Cash) {sale_invoice.invoice_no}"))
 
-                if upi_paid > 0:
-                    upi_ledger = _get_ledger(outlet, 'UPI Collections')
-                    lines.append(('debit', upi_ledger, upi_paid, f"Sale (UPI) {sale_invoice.invoice_no}"))
+                    if upi_paid > 0:
+                        upi_ledger = _get_ledger(outlet, 'UPI Collections')
+                        lines.append(('debit', upi_ledger, upi_paid, f"Sale (UPI) {sale_invoice.invoice_no}"))
 
-                if card_paid > 0:
-                    card_ledger = _get_ledger(outlet, 'Card/POS Settlement')
-                    lines.append(('debit', card_ledger, card_paid, f"Sale (Card) {sale_invoice.invoice_no}"))
+                    if card_paid > 0:
+                        card_ledger = _get_ledger(outlet, 'Card/POS Settlement')
+                        lines.append(('debit', card_ledger, card_paid, f"Sale (Card) {sale_invoice.invoice_no}"))
+                elif grand_total > 0:
+                    pm = (sale_invoice.payment_mode or 'cash').lower()
+                    if pm == 'upi':
+                        tl = _get_ledger(outlet, 'UPI Collections')
+                    elif pm == 'card':
+                        tl = _get_ledger(outlet, 'Card/POS Settlement')
+                    else:
+                        tl = _get_ledger(outlet, 'Cash')
+                    lines.append(('debit', tl, grand_total, f"Sale ({pm.title()}) {sale_invoice.invoice_no}"))
 
         # ── CREDIT side: Sales Account ──
         sales_ledger = _get_ledger(outlet, 'Sales Account')
