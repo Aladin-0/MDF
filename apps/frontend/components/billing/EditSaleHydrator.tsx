@@ -152,6 +152,10 @@ export function EditSaleHydrator() {
                              totalQty: totalQtyFractional,
                              saleMode: item.saleMode || 'mixed',
                              mrp: item.mrp || item.rate,
+                             purchaseRate: Number(item.purchaseRate ?? item.purchase_rate ?? 0),
+                             landingRate: Number(item.landingRate ?? item.landing_rate ?? item.purchaseRate ?? item.purchase_rate ?? 0),
+                             ptr: Number(item.ptr || 0),
+                             pts: Number(item.pts || 0),
                          });
                      });
                 }

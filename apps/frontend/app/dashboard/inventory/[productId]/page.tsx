@@ -152,7 +152,7 @@ function BatchInlineEditCell({ batch, product, field, onSave }: { batch: any, pr
     return (
         <div className="flex items-center gap-1 w-40 relative group">
             <Input 
-                type={['gstRate', 'packSize', 'mrp', 'purchaseRate'].includes(field) ? 'number' : 'text'}
+                type={['gstRate', 'packSize', 'mrp', 'purchaseRate', 'landingRate'].includes(field) ? 'number' : 'text'}
                 className="h-8 text-xs font-bold bg-white"
                 value={value}
                 onChange={e => setValue(e.target.value)}
@@ -187,6 +187,7 @@ export default function ProductInventoryPage() {
         mfgDate: 'Mfg Date (YYYY-MM-DD)',
         mrp: 'MRP',
         purchaseRate: 'Purchase Rate',
+        landingRate: 'Landing Price',
         rackLocation: 'Rack Location',
         packSize: 'Pack Size',
         packType: 'Pack Type',
@@ -234,7 +235,7 @@ export default function ProductInventoryPage() {
             return d > 0 && d <= 90;
         });
 
-        const totalCostValue = batches.reduce((s: number, b: any) => s + ((Number(b.purchaseRate) || 0) * (Number(b.qtyStrips) || 0)), 0);
+        const totalCostValue = batches.reduce((s: number, b: any) => s + ((Number(b.landingRate ?? b.purchaseRate) || 0) * (Number(b.qtyStrips) || 0)), 0);
         const totalMrpValue = batches.reduce((s: number, b: any) => s + ((Number(b.mrp) || 0) * (Number(b.qtyStrips) || 0)), 0);
         const weightedMrp = totalStrips > 0 ? (totalMrpValue / totalStrips) : 0;
         const nearestExpiry = activeBatches.length > 0
@@ -404,6 +405,7 @@ export default function ProductInventoryPage() {
                                     <SelectItem value="mfgDate">Mfg Date</SelectItem>
                                     <SelectItem value="mrp">MRP</SelectItem>
                                     <SelectItem value="purchaseRate">Purchase Rate</SelectItem>
+                                    <SelectItem value="landingRate">Landing Price</SelectItem>
                                     <SelectItem value="packSize">Pack Size</SelectItem>
                                     <SelectItem value="packType">Pack Type</SelectItem>
                                     <SelectItem value="packUnit">Unit Name</SelectItem>
@@ -444,6 +446,7 @@ export default function ProductInventoryPage() {
                                     <th className="text-right py-4 px-6 font-black text-xs uppercase tracking-widest text-slate-400">MRP</th>
                                     <PermissionGate permission="view_purchase_rates">
                                         <th className="text-right py-4 px-6 font-black text-xs uppercase tracking-widest text-slate-400">Purchase Rate</th>
+                                        <th className="text-right py-4 px-6 font-black text-xs uppercase tracking-widest text-slate-400">Landing Price</th>
                                         <th className="text-right py-4 px-6 font-black text-xs uppercase tracking-widest text-slate-400">Stock Value</th>
                                     </PermissionGate>
                                     <th className="text-center py-4 px-6 font-black text-xs uppercase tracking-widest text-slate-400">Rack</th>
@@ -463,7 +466,7 @@ export default function ProductInventoryPage() {
                                     const diffDays = Math.ceil((exDate.getTime() - now.getTime()) / 86400000);
                                     const isExpired = diffDays <= 0;
                                     const isExpiringSoon = diffDays > 0 && diffDays <= 90;
-                                    const stockValue = (Number(batch.purchaseRate) || 0) * (Number(batch.qtyStrips) || 0);
+                                    const stockValue = (Number(batch.landingRate ?? batch.purchaseRate) || 0) * (Number(batch.qtyStrips) || 0);
 
                                     let rowBg = idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50';
                                     if (isExpired) rowBg = 'bg-red-50/70';
@@ -495,6 +498,7 @@ export default function ProductInventoryPage() {
                                             <td className="py-4 px-6 text-right font-bold text-slate-700">{formatCurrency(batch.mrp)}</td>
                                             <PermissionGate permission="view_purchase_rates">
                                                 <td className="py-4 px-6 text-right font-bold text-slate-700">{formatCurrency(batch.purchaseRate)}</td>
+                                                <td className="py-4 px-6 text-right font-bold text-slate-700">{formatCurrency(batch.landingRate ?? batch.purchaseRate)}</td>
                                                 <td className="py-4 px-6 text-right font-bold text-emerald-700">{formatCurrency(stockValue)}</td>
                                             </PermissionGate>
                                             <td className="py-4 px-6 text-center text-slate-500 text-sm">
@@ -548,8 +552,9 @@ export default function ProductInventoryPage() {
                                     <td className="py-4 px-6 text-right font-black text-slate-900 text-base">
                                         {formatQty(metrics?.totalStrips ?? 0, metrics?.totalLoose ?? 0, product.packSize || 1, product.packType, product.packUnit)}
                                     </td>
-                                    <td colSpan={2} className="py-4 px-6"></td>
+                                    <td className="py-4 px-6"></td>
                                     <PermissionGate permission="view_purchase_rates">
+                                        <td className="py-4 px-6"></td>
                                         <td className="py-4 px-6"></td>
                                         <td className="py-4 px-6 text-right font-black text-emerald-700">{formatCurrency(metrics?.totalCostValue ?? 0)}</td>
                                     </PermissionGate>

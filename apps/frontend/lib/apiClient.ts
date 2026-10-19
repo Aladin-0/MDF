@@ -239,13 +239,13 @@ const realSettingsApi = {
 };
 
 const realProductsApi = {
-    search: async (q: string, outletId: string, context: 'purchase' | 'billing' | '' = 'purchase'): Promise<ProductSearchResult[]> => {
+    search: async (q: string, outletId: string, context: 'purchase' | 'billing' | '' = 'purchase', signal?: AbortSignal): Promise<ProductSearchResult[]> => {
         // context=purchase → backend shows all active batches regardless of expiry
         // context=billing  → backend only shows non-expired batches (safe for selling)
         const contextParam = context ? `&context=${context}` : '';
         const response = await fetch(
             `${API_URL}/products/search/?q=${encodeURIComponent(q)}&outletId=${outletId}${contextParam}`,
-            { headers: getHeaders() }
+            { headers: getHeaders(), signal }
         );
         await assertOk(response);
         const data = await response.json();
@@ -287,10 +287,10 @@ const realProductsApi = {
             }),
         }));
     },
-    catalogSearch: async (q: string, outletId: string): Promise<ProductSearchResult[]> => {
+    catalogSearch: async (q: string, outletId: string, signal?: AbortSignal): Promise<ProductSearchResult[]> => {
         const response = await fetch(
             `${API_URL}/products/catalog/search/?q=${encodeURIComponent(q)}&outletId=${outletId}`,
-            { headers: getHeaders() }
+            { headers: getHeaders(), signal }
         );
         await assertOk(response);
         const data = await response.json();
@@ -505,6 +505,7 @@ const realSalesApi = {
         if (params?.hospitalName) url += `&hospitalName=${encodeURIComponent(params.hospitalName)}`;
         if (params?.saleType && params.saleType !== 'ALL') url += `&saleType=${params.saleType}`;
         if (params?.paymentMode && params.paymentMode.toLowerCase() !== 'all') url += `&paymentMode=${encodeURIComponent(params.paymentMode)}`;
+        if (params?.isModified) url += `&isModified=true`;
         if (params?.ordering) url += `&ordering=${encodeURIComponent(params.ordering)}`;
 
         const response = await fetch(url, { headers: getHeaders() });
@@ -514,6 +515,7 @@ const realSalesApi = {
     getById: async (id: string, outletId?: string): Promise<SaleInvoice> => {
         const url = outletId ? `${API_URL}/sales/${id}/?outletId=${outletId}` : `${API_URL}/sales/${id}/`;
         const response = await fetch(url, { headers: getHeaders() });
+        await assertOk(response); // Ensure 404/500 throws cleanly instead of crashing the invoice renderer
         const data = await response.json();
         return {
             ...data,
@@ -625,11 +627,15 @@ const realSalesApi = {
 
 const realCreditApi = {
     getAccountsList: async (outletId: string, filters?: any) => {
-        const response = await fetch(`${API_URL}/credit/?outletId=${outletId}`, {
+        let url = `${API_URL}/credit/?outletId=${outletId}&pageSize=500`;
+        if (filters?.status && filters.status !== 'all') url += `&status=${filters.status}`;
+        if (filters?.search) url += `&search=${encodeURIComponent(filters.search)}`;
+        const response = await fetch(url, {
             headers: getHeaders(),
         });
         await assertOk(response);
-        return response.json();
+        const data = await response.json();
+        return Array.isArray(data) ? data : (data.data || []);
     },
     list: async (outletId: string) => {
         const response = await fetch(`${API_URL}/credit/?outletId=${outletId}`, {
@@ -867,6 +873,7 @@ const realPurchasesApi = {
         if (filters?.startDate) url += `&startDate=${filters.startDate}`;
         if (filters?.endDate) url += `&endDate=${filters.endDate}`;
         if (filters?.status) url += `&status=${filters.status}`;
+        if (filters?.isModified) url += `&isModified=true`;
         if (filters?.search) url += `&search=${encodeURIComponent(filters.search)}`;
         if (filters?.page) url += `&page=${filters.page}`;
         if (filters?.pageSize) url += `&pageSize=${filters.pageSize}`;
@@ -1642,24 +1649,27 @@ const realVoucherApi = {
         const data = await response.json();
         return data.data || [];
     },
-    getLedgers: async (outletId: string, params?: { type?: string; voucherType?: string; search?: string; group?: string; filterGroup?: string }) => {
+    getLedgers: async (outletId: string, params?: { type?: string; voucherType?: string; search?: string; group?: string; filterGroup?: string; limit?: number }) => {
         let url = `${API_URL}/ledgers/?outletId=${outletId}`;
         if (params?.type) url += `&type=${params.type}`;
         if (params?.voucherType) url += `&voucherType=${params.voucherType}`;
         if (params?.filterGroup) url += `&filterGroup=${params.filterGroup}`;
         if (params?.search) url += `&search=${encodeURIComponent(params.search)}`;
         if (params?.group) url += `&group=${encodeURIComponent(params.group)}`;
+        if (params?.limit) url += `&limit=${params.limit}`;
         const response = await fetch(url, { headers: getHeaders() });
         await assertOk(response);
         const data = await response.json();
         return data.data || [];
     },
-    getLedgerStatement: async (ledgerId: string, from?: string, to?: string, ordering?: string) => {
+    getLedgerStatement: async (ledgerId: string, from?: string, to?: string, ordering?: string, page?: number, pageSize?: number) => {
         let url = `${API_URL}/ledgers/${ledgerId}/statement/`;
         const params: string[] = [];
         if (from) params.push(`from=${from}`);
         if (to) params.push(`to=${to}`);
         if (ordering) params.push(`ordering=${encodeURIComponent(ordering)}`);
+        if (page && page > 1) params.push(`page=${page}`);
+        if (pageSize) params.push(`page_size=${pageSize}`);
         if (params.length) url += '?' + params.join('&');
         const response = await fetch(url, { headers: getHeaders() });
         await assertOk(response);
@@ -1838,9 +1848,10 @@ const realVoucherApi = {
 };
 
 const realDoctorsApi = {
-    search: async (outletId: string, search?: string): Promise<any[]> => {
+    search: async (outletId: string, search?: string, limit?: number): Promise<any[]> => {
         let url = `${API_URL}/doctors/?outletId=${outletId}`;
         if (search) url += `&search=${encodeURIComponent(search)}`;
+        if (limit) url += `&limit=${limit}`;
         const response = await fetch(url, { headers: getHeaders() });
         await assertOk(response);
         const data = await response.json();

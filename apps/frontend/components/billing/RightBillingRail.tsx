@@ -9,9 +9,10 @@ import { calculateTotalMargin } from '@/lib/billingMarginUtils';
 import { useCheckout } from '@/hooks/useCheckout';
 import { useToast } from '@/hooks/use-toast';
 import { RevisionReasonModal } from './RevisionReasonModal';
+import { Eye, EyeOff, TrendingUp, Truck } from 'lucide-react';
 
 export function RightBillingRail() {
-    const { drafts, activeDraftId, getDraftTotals, setDraftDocumentMode, setRevisionContext, showMarginInfo, activeStaff } = useBillingStore();
+    const { drafts, activeDraftId, getDraftTotals, setDraftDocumentMode, setRevisionContext, showMarginInfo, toggleMarginInfo, activeStaff } = useBillingStore();
     const { outlet } = useAuthStore();
     const containerRef = useRef<HTMLDivElement>(null);
     
@@ -72,8 +73,8 @@ export function RightBillingRail() {
 
     const marginData = useMemo(() => {
         if (!activeDraft) return null;
-        return calculateTotalMargin(activeDraft.cart, totals.subtotal);
-    }, [activeDraft, totals.subtotal]);
+        return calculateTotalMargin(activeDraft.cart, totals.grandTotal, totals.extraDiscountAmount);
+    }, [activeDraft, totals.grandTotal, totals.extraDiscountAmount]);
 
 
 
@@ -123,8 +124,22 @@ export function RightBillingRail() {
     return (
         <div ref={containerRef} className="flex flex-col h-full bg-white relative overflow-hidden border-l border-slate-200">
             {/* Bill Summary Header */}
-            <div className="px-5 py-4 border-b border-slate-200 shrink-0">
-                <h3 className="font-bold text-slate-800 text-lg">Bill Summary</h3>
+            <div className="px-5 py-3.5 border-b border-slate-200 shrink-0 flex justify-between items-center">
+                <h3 className="font-bold text-slate-800 text-base">Bill Summary</h3>
+                <button
+                    type="button"
+                    onClick={toggleMarginInfo}
+                    title="Toggle Margin & Landing Cost (Ctrl+M)"
+                    className={cn(
+                        "text-xs px-2.5 py-1 rounded-md font-semibold flex items-center gap-1.5 border transition-all cursor-pointer",
+                        showMarginInfo 
+                            ? "bg-emerald-50 border-emerald-300 text-emerald-700 shadow-sm hover:bg-emerald-100" 
+                            : "bg-slate-50 border-slate-200 text-slate-500 hover:text-slate-700 hover:bg-slate-100"
+                    )}
+                >
+                    {showMarginInfo ? <Eye className="w-3.5 h-3.5 text-emerald-600" /> : <EyeOff className="w-3.5 h-3.5 text-slate-400" />}
+                    <span>{showMarginInfo ? 'Profit ON' : 'Show Profit'}</span>
+                </button>
             </div>
 
             {/* Quick Stats */}
@@ -243,26 +258,74 @@ export function RightBillingRail() {
                                 : '₹ 0.00'}
                         </span>
                     </div>
+
+                    {/* Accurate Landing Cost & Profit Breakdown */}
+                    {marginData && cart.length > 0 && showMarginInfo && (
+                        <div className="pt-3 border-t border-dashed border-slate-200 space-y-2 text-xs">
+                            <div className="flex justify-between text-slate-600">
+                                <span className="flex items-center gap-1.5 font-medium">
+                                    <Truck className="w-3.5 h-3.5 text-sky-600" />
+                                    Total Bill Landing Cost
+                                </span>
+                                <span className="font-bold text-slate-800 tabular-nums">
+                                    ₹ {marginData.totalLandingCost.toFixed(2)}
+                                </span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <span className="flex items-center gap-1.5 text-emerald-700 font-medium">
+                                    <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
+                                    Total Profit
+                                </span>
+                                <span className={cn(
+                                    "font-bold tabular-nums",
+                                    marginData.totalProfit >= 0 ? "text-emerald-700" : "text-rose-600"
+                                )}>
+                                    {marginData.totalProfit >= 0 ? '+' : ''}₹ {marginData.totalProfit.toFixed(2)} ({marginData.profitMarginPct.toFixed(1)}%)
+                                </span>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 
             {/* Sticky Payment Dock (Dark Theme) */}
             <div className="bg-[#2A303C] text-white p-5 shrink-0 border-t-4 border-slate-800">
                 {/* Net Payable */}
-                <div className="flex justify-between items-end mb-6">
+                <div className="flex justify-between items-end mb-4">
                     <span className="text-[13px] font-black tracking-widest text-slate-300">NET PAYABLE</span>
                     <span className="font-black text-5xl tracking-tight text-white" data-testid="grand-total-amount">₹ {totals.grandTotal.toFixed(2)}</span>
                 </div>
                 
-                {(showMarginInfo && (activeStaff?.role === 'owner' || activeStaff?.role === 'admin') && marginData) && (
-                    <div className="flex flex-col mb-4 bg-emerald-900/40 p-3 rounded-md border border-emerald-800/50">
-                        <div className="flex justify-between text-sm">
-                            <span className="text-emerald-400/80">Total Margin</span>
-                            <span className="font-semibold text-emerald-400">₹ {marginData.totalMargin.toFixed(2)} ({marginData.totalMarginPct.toFixed(2)}%)</span>
+                {(showMarginInfo && marginData && cart.length > 0) && (
+                    <div className="flex flex-col mb-4 bg-slate-800/90 p-3 rounded-lg border border-slate-700/80 shadow-sm">
+                        <div className="flex justify-between items-center text-xs pb-2 border-b border-slate-700/70">
+                            <span className="text-slate-300 font-medium flex items-center gap-1.5">
+                                <Truck className="w-3.5 h-3.5 text-sky-400" />
+                                Total Bill Landing Cost
+                            </span>
+                            <span className="font-black text-sky-300 text-sm tabular-nums">
+                                ₹ {marginData.totalLandingCost.toFixed(2)}
+                            </span>
                         </div>
-                        <div className="flex justify-between text-sm mt-1">
-                            <span className="text-emerald-400/80">Gross Profit</span>
-                            <span className="font-semibold text-emerald-400">₹ {marginData.totalGrossProfit.toFixed(2)}</span>
+                        <div className="flex justify-between items-center pt-2">
+                            <span className="text-slate-300 font-medium flex items-center gap-1.5">
+                                <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
+                                Total Profit
+                            </span>
+                            <div className="text-right">
+                                <span className={cn(
+                                    "font-black text-sm tabular-nums",
+                                    marginData.totalProfit >= 0 ? "text-emerald-400" : "text-rose-400"
+                                )}>
+                                    {marginData.totalProfit >= 0 ? '+' : ''}₹ {marginData.totalProfit.toFixed(2)}
+                                </span>
+                                <span className={cn(
+                                    "text-[10px] font-bold ml-1.5 px-1.5 py-0.5 rounded",
+                                    marginData.totalProfit >= 0 ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" : "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                                )}>
+                                    {marginData.profitMarginPct.toFixed(1)}% margin
+                                </span>
+                            </div>
                         </div>
                     </div>
                 )}

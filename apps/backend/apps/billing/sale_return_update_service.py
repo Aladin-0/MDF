@@ -74,7 +74,7 @@ def atomic_sale_return_update(return_id: str, payload: dict, outlet_id: str, upd
             sale_item.save(update_fields=['qty_returned'])
 
     # Reverse Customer Ledger
-    if sales_return.refund_mode == 'credit_note' and original_sale.customer:
+    if sales_return.refund_mode == 'credit_note' and original_sale and original_sale.customer:
         customer = original_sale.customer
         customer.outstanding += sales_return.total_amount
         customer.save(update_fields=['outstanding'])
@@ -186,7 +186,7 @@ def atomic_sale_return_update(return_id: str, payload: dict, outlet_id: str, upd
         rebuild_stock_ledger(batch_id=b_id, from_date=sales_return.return_date)
 
     # 6. Handle NEW credit note
-    if new_refund_mode == 'credit_note' and original_sale.customer:
+    if new_refund_mode == 'credit_note' and original_sale and original_sale.customer:
         customer = original_sale.customer
         customer.outstanding = customer.outstanding - server_computed_total
         customer.save(update_fields=['outstanding'])

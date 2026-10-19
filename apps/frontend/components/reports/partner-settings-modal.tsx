@@ -22,7 +22,7 @@ export function PartnerSettingsModal({ onUpdate }: { onUpdate: () => void }) {
   const [partners, setPartners] = useState<Partner[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const canManage = user?.role === 'super_admin' || user?.canManagePartners;
+  const canManage = user?.role === 'super_admin' || user?.role === 'admin' || user?.canManagePartners;
 
   useEffect(() => {
     if (open && canManage) {

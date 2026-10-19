@@ -1,23 +1,23 @@
-import { useQuery, keepPreviousData } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useDebounce } from 'use-debounce'
 import { productsApi } from '@/lib/apiClient'
 import { useOutletId } from '@/hooks/useOutletId'
 
 export function useProductSearch(query: string, context: 'purchase' | 'billing' | 'procurement' | '' = 'purchase') {
-    const [debouncedQuery] = useDebounce(query, 150)
+    const trimmed = query.trim()
+    const [debouncedQuery] = useDebounce(trimmed, 300)
     const outletId = useOutletId()
 
     return useQuery({
         queryKey: ['products', 'search', debouncedQuery, outletId, context],
-        queryFn: () => {
+        queryFn: ({ signal }) => {
             if (!outletId) return Promise.resolve([])
             if (context === 'procurement') {
-                return productsApi.catalogSearch(debouncedQuery, outletId)
+                return productsApi.catalogSearch(debouncedQuery, outletId, signal)
             }
-            return productsApi.search(debouncedQuery, outletId, context as 'purchase' | 'billing' | '')
+            return productsApi.search(debouncedQuery, outletId, context as 'purchase' | 'billing' | '', signal)
         },
         enabled: debouncedQuery.length >= 2 && !!outletId,
-        staleTime: 1000 * 60, // 1 minute
-        placeholderData: keepPreviousData,
+        staleTime: 1000 * 60, // 1 minute client cache
     })
 }

@@ -502,6 +502,7 @@ class CustomerDetailView(APIView):
             'isChronic': customer.is_chronic,
             'isActive': customer.is_active,
             'createdAt': customer.created_at.isoformat(),
+            'ledgerId': str(customer.ledgers.filter(group__name='Sundry Debtors').first().id) if customer.ledgers.filter(group__name='Sundry Debtors').exists() else None,
         }
 
         return Response(result, status=status.HTTP_200_OK)
@@ -1242,6 +1243,13 @@ class CustomerPurchaseHistoryView(APIView):
 
 # ─── Phase 2 Batch 2 Views ────────────────────────────────────────────────────
 
+def _format_time_safe(t):
+    if not t:
+        return None
+    if hasattr(t, 'isoformat'):
+        return t.isoformat()
+    return str(t)
+
 def _serialize_staff(s):
     return {
         'id': str(s.id),
@@ -1249,8 +1257,8 @@ def _serialize_staff(s):
         'phone': s.phone,
         'role': s.role,
         'outletId': str(s.outlet_id),
-        'shiftStartTime': s.shift_start_time.isoformat() if s.shift_start_time else None,
-        'shiftEndTime': s.shift_end_time.isoformat() if s.shift_end_time else None,
+        'shiftStartTime': _format_time_safe(s.shift_start_time),
+        'shiftEndTime': _format_time_safe(s.shift_end_time),
         'weeklyOffDay': s.weekly_off_day,
         'avatarUrl': s.avatar_url,
         'maxDiscount': float(s.max_discount),
@@ -1420,6 +1428,7 @@ class StaffDetailView(APIView):
             'canModifyPaidBill': 'can_modify_paid_bill',
             'canCancelAndReissueBill': 'can_cancel_and_reissue_bill',
             'canViewBillRevisionHistory': 'can_view_bill_revision_history',
+            'canManagePartners': 'can_manage_partners',
             'shiftStartTime': 'shift_start_time',
             'shiftEndTime': 'shift_end_time',
             'weeklyOffDay': 'weekly_off_day',
@@ -1456,8 +1465,9 @@ class StaffDetailView(APIView):
             'can_modify_paid_bill': staff.can_modify_paid_bill,
             'can_cancel_and_reissue_bill': staff.can_cancel_and_reissue_bill,
             'can_view_bill_revision_history': staff.can_view_bill_revision_history,
-            'shift_start_time': staff.shift_start_time.isoformat() if staff.shift_start_time else None,
-            'shift_end_time': staff.shift_end_time.isoformat() if staff.shift_end_time else None,
+            'can_manage_partners': staff.can_manage_partners,
+            'shift_start_time': _format_time_safe(staff.shift_start_time),
+            'shift_end_time': _format_time_safe(staff.shift_end_time),
             'weekly_off_day': staff.weekly_off_day,
             'is_active': staff.is_active,
         }
@@ -1465,8 +1475,16 @@ class StaffDetailView(APIView):
         for camel, snake in camel_map.items():
             if camel in request.data:
                 val = request.data[camel]
-                if snake in ('shift_start_time', 'shift_end_time') and not val:
-                    val = None
+                if snake in ('shift_start_time', 'shift_end_time'):
+                    if not val:
+                        val = None
+                    elif isinstance(val, str):
+                        try:
+                            parts = val.split(':')
+                            import datetime
+                            val = datetime.time(int(parts[0]), int(parts[1]), int(parts[2]) if len(parts) > 2 else 0)
+                        except Exception:
+                            val = None
                 setattr(staff, snake, val)
         for field in ('name', 'email', 'role'):
             if field in request.data:
@@ -1484,6 +1502,7 @@ class StaffDetailView(APIView):
             staff.staff_pin = make_password(raw_pin)
 
         staff.save()
+        staff.refresh_from_db()
 
         # Snapshot new state
         new_state = {
@@ -1515,8 +1534,9 @@ class StaffDetailView(APIView):
             'can_modify_paid_bill': staff.can_modify_paid_bill,
             'can_cancel_and_reissue_bill': staff.can_cancel_and_reissue_bill,
             'can_view_bill_revision_history': staff.can_view_bill_revision_history,
-            'shift_start_time': staff.shift_start_time.isoformat() if staff.shift_start_time else None,
-            'shift_end_time': staff.shift_end_time.isoformat() if staff.shift_end_time else None,
+            'can_manage_partners': staff.can_manage_partners,
+            'shift_start_time': _format_time_safe(staff.shift_start_time),
+            'shift_end_time': _format_time_safe(staff.shift_end_time),
             'weekly_off_day': staff.weekly_off_day,
             'is_active': staff.is_active,
         }
@@ -1845,6 +1865,19 @@ class DoctorListCreateView(APIView):
         if search:
             qs = qs.filter(Q(name__icontains=search) | Q(registration_no__icontains=search))
 
+        total_count = qs.count()
+        limit_param = request.query_params.get('limit')
+        if limit_param:
+            try:
+                limit_val = max(1, min(200, int(limit_param)))
+                qs = qs.order_by('name')[:limit_val]
+            except ValueError:
+                qs = qs.order_by('name')
+        elif search:
+            qs = qs.order_by('name')[:50]
+        else:
+            qs = qs.order_by('name')
+
         data = [{
             'id': str(d.id),
             'name': d.name,
@@ -1857,9 +1890,9 @@ class DoctorListCreateView(APIView):
             'specialization': d.specialty,
             'hospitalName': d.hospital_name,
             'address': d.address,
-        } for d in qs.order_by('name')]
+        } for d in qs]
 
-        return Response({'success': True, 'data': data, 'meta': {'total': len(data)}}, status=status.HTTP_200_OK)
+        return Response({'success': True, 'data': data, 'meta': {'total': total_count}}, status=status.HTTP_200_OK)
 
     def post(self, request, *args, **kwargs):
         from apps.accounts.models import Doctor

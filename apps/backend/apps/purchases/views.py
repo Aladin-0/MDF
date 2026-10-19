@@ -5,6 +5,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from apps.core.permissions import IsAuthenticated, IsManagerOrAbove, CanCreatePurchases, CanEditPurchaseInvoice, CanAccessPurchases
 from rest_framework import status
+from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.filters import OrderingFilter
 from django.db.models import Q
 from django.db import transaction
@@ -779,8 +780,30 @@ class PurchaseListView(APIView):
 
             # Filter by status if provided
             status_filter = request.query_params.get('status')
+            is_modified_param = request.query_params.get('isModified')
             if status_filter == 'draft':
                 queryset = queryset.filter(status='SAVED')
+            elif status_filter == 'modified' or is_modified_param in ('true', '1'):
+                from apps.audit.models import DocumentRevisionV2, DocumentRevision
+                from django.contrib.contenttypes.models import ContentType
+                from django.db.models import Exists, OuterRef, Q
+
+                pi_ct = ContentType.objects.get_for_model(PurchaseInvoice)
+                rev_v2_subquery = DocumentRevisionV2.objects.filter(
+                    content_type=pi_ct,
+                    object_id=OuterRef('pk')
+                ).filter(
+                    Q(action__in=['UPDATE', 'update', 'correction', 'standard_correction', 'direct_revise', 'financial_change']) |
+                    Q(revision_no__gt=1)
+                )
+                rev_v1_subquery = DocumentRevision.objects.filter(
+                    content_type=pi_ct,
+                    object_id=OuterRef('pk')
+                )
+                queryset = queryset.exclude(status='SAVED').filter(
+                    Q(Exists(rev_v2_subquery)) | Q(Exists(rev_v1_subquery))
+                )
+                logger.info("Filtered purchases by modified status")
             else:
                 # Exclude drafts from all other views
                 queryset = queryset.exclude(status='SAVED')
@@ -827,8 +850,12 @@ class PurchaseListView(APIView):
 
             logger.info(f"Returning {len(invoices)} invoices (page {page}/{total_pages}, total {total_records})")
 
+            # Bulk fetch modified status
+            invoice_ids = [inv.id for inv in invoices]
+            mod_info = self._get_modified_status_bulk(invoice_ids)
+
             # Serialize invoices
-            data = [self._serialize_purchase(inv) for inv in invoices]
+            data = [self._serialize_purchase(inv, mod_info.get(str(inv.id))) for inv in invoices]
 
             result = {
                 'data': data,
@@ -849,8 +876,46 @@ class PurchaseListView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-    def _serialize_purchase(self, purchase_invoice):
+    def _get_modified_status_bulk(self, invoice_ids):
+        if not invoice_ids:
+            return {}
+        from apps.audit.models import DocumentRevisionV2, DocumentRevision
+        from django.contrib.contenttypes.models import ContentType
+        from django.db.models import Q
+        from collections import defaultdict
+
+        pi_ct = ContentType.objects.get_for_model(PurchaseInvoice)
+        results = defaultdict(lambda: {'isModified': False, 'revisionCount': 0})
+
+        v2_revs = DocumentRevisionV2.objects.filter(
+            content_type=pi_ct,
+            object_id__in=invoice_ids
+        ).filter(
+            Q(action__in=['UPDATE', 'update', 'correction', 'standard_correction', 'direct_revise', 'financial_change']) |
+            Q(revision_no__gt=1)
+        ).values_list('object_id', flat=True)
+
+        for oid in v2_revs:
+            s_oid = str(oid)
+            results[s_oid]['isModified'] = True
+            results[s_oid]['revisionCount'] += 1
+
+        v1_revs = DocumentRevision.objects.filter(
+            content_type=pi_ct,
+            object_id__in=invoice_ids
+        ).values_list('object_id', flat=True)
+
+        for oid in v1_revs:
+            s_oid = str(oid)
+            results[s_oid]['isModified'] = True
+            results[s_oid]['revisionCount'] += 1
+
+        return results
+
+    def _serialize_purchase(self, purchase_invoice, mod_info=None):
         """Serialize PurchaseInvoice (without items) to response shape."""
+        if mod_info is None:
+            mod_info = {'isModified': False, 'revisionCount': 0}
         dist_data = None
         if purchase_invoice.distributor:
             dist_data = {
@@ -926,6 +991,8 @@ class PurchaseListView(APIView):
             'amountPaid': float(purchase_invoice.amount_paid),
             'outstanding': float(purchase_invoice.outstanding),
             'status': purchase_invoice.status,
+            'isModified': mod_info.get('isModified', False),
+            'revisionCount': mod_info.get('revisionCount', 0),
             'createdAt': purchase_invoice.created_at.isoformat(),
         }
         
@@ -1161,6 +1228,24 @@ class PurchaseDetailView(APIView):
             'notes': invoice.notes,
             'createdAt': invoice.created_at.isoformat(),
         }
+
+        # Check if modified
+        from apps.audit.models import DocumentRevisionV2, DocumentRevision
+        from django.contrib.contenttypes.models import ContentType
+        from django.db.models import Q
+        pi_ct = ContentType.objects.get_for_model(PurchaseInvoice)
+        rev_count = DocumentRevisionV2.objects.filter(
+            content_type=pi_ct,
+            object_id=invoice.id
+        ).filter(
+            Q(action__in=['UPDATE', 'update', 'correction', 'standard_correction', 'direct_revise', 'financial_change']) |
+            Q(revision_no__gt=1)
+        ).count() + DocumentRevision.objects.filter(
+            content_type=pi_ct,
+            object_id=invoice.id
+        ).count()
+        result['isModified'] = rev_count > 0
+        result['revisionCount'] = rev_count
         
         return Response(result, status=status.HTTP_200_OK)
 
@@ -1984,20 +2069,32 @@ class InvoiceScanUploadView(APIView):
         "message": "Invoice uploaded. OCR analysis in progress..."
     }
     """
+    parser_classes = [MultiPartParser, FormParser]
     permission_classes = [CanCreatePurchases]
 
     def post(self, request, *args, **kwargs):
         from apps.purchases.tasks import process_invoice_ocr
 
-        outlet_id = request.data.get('outletId')
-        image_file = request.FILES.get('image')
+        outlet_id = (
+            request.data.get('outletId')
+            or request.data.get('outlet_id')
+            or request.query_params.get('outletId')
+            or request.query_params.get('outlet_id')
+        )
+        image_file = (
+            request.FILES.get('image')
+            or request.FILES.get('file')
+            or request.FILES.get('invoice_image')
+        )
 
         if not outlet_id:
+            logger.warning(f"Scan upload missing outletId. Keys: data={list(request.data.keys())}, query={dict(request.query_params)}")
             return Response(
                 {'error': {'code': 'MISSING_OUTLET', 'message': 'outletId is required'}},
                 status=status.HTTP_400_BAD_REQUEST
             )
         if not image_file:
+            logger.warning(f"Scan upload missing image. Keys: files={list(request.FILES.keys())}, data={list(request.data.keys())}")
             return Response(
                 {'error': {'code': 'MISSING_IMAGE', 'message': 'image file is required'}},
                 status=status.HTTP_400_BAD_REQUEST
@@ -2133,13 +2230,32 @@ class InvoiceOCRStatusView(APIView):
         totals = ocr.get('totals', {})
 
         # Serialize items for review screen
+        import re as _re
         items_serialized = []
         for item in items_raw:
             med_match = item.get('_medicine_match', {})
+            raw_exp = item.get('expiry', '')
+            norm_exp = raw_exp
+            if raw_exp:
+                s_exp = str(raw_exp).strip()
+                m_short = _re.match(r'^(\d{1,2})[/\-.](\d{2})$', s_exp)
+                m_long = _re.match(r'^(\d{1,2})[/\-.](\d{4})$', s_exp)
+                m_iso = _re.match(r'^(\d{4})-(\d{1,2})$', s_exp)
+                if m_short:
+                    m_val, y_val = int(m_short.group(1)), int(m_short.group(2)) + 2000
+                    if 1 <= m_val <= 12:
+                        norm_exp = f"{y_val}-{str(m_val).zfill(2)}-01"
+                elif m_long:
+                    m_val, y_val = int(m_long.group(1)), int(m_long.group(2))
+                    if 1 <= m_val <= 12:
+                        norm_exp = f"{y_val}-{str(m_val).zfill(2)}-01"
+                elif m_iso:
+                    norm_exp = f"{m_iso.group(1)}-{m_iso.group(2).zfill(2)}-01"
+
             items_serialized.append({
                 'name': item.get('name', ''),
                 'batchNo': item.get('batch_no', ''),
-                'expiry': item.get('expiry', ''),
+                'expiry': norm_exp,
                 'qty': item.get('qty', ''),
                 'freeQty': item.get('free_qty', 0),
                 'mrp': item.get('mrp', ''),

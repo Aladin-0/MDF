@@ -118,7 +118,7 @@ export default function LedgerStatementPage() {
         setLoading(true);
         const sortToUse = sortVal || currentSort;
         voucherApi
-            .getLedgerStatement(id, from, to, sortToUse)
+            .getLedgerStatement(id, from, to, sortToUse, 1, 1000)
             .then(setStatement)
             .catch(() => toast({ variant: 'destructive', title: 'Failed to load statement' }))
             .finally(() => setLoading(false));
@@ -141,7 +141,7 @@ export default function LedgerStatementPage() {
 
     // ── Row click handler ─────────────────────────────────────────────────────
     async function handleRowClick(tx: LedgerTransaction) {
-        if (!tx.sourceId) return;
+        if (!tx.sourceId && !tx.journalEntryId) return;
 
         if (tx.sourceType === 'PURCHASE') {
             setPurchaseLoading(true);
@@ -150,8 +150,16 @@ export default function LedgerStatementPage() {
                 const inv = await purchasesApi.getById(tx.sourceId, outletId ?? undefined);
                 setPreviewPurchaseInvoice(inv);
             } catch {
-                toast({ variant: 'destructive', title: 'Could not load purchase invoice' });
+                // If inventory purchase invoice is not found (e.g. Daybook / Journal imported voucher),
+                // fall back to opening the Voucher / Journal detail modal!
                 setPurchaseModalOpen(false);
+                const targetVoucherId = tx.journalEntryId || tx.sourceId;
+                if (targetVoucherId) {
+                    setPreviewVoucherId(targetVoucherId);
+                    setVoucherModalOpen(true);
+                } else {
+                    toast({ variant: 'destructive', title: 'Could not load purchase invoice' });
+                }
             } finally {
                 setPurchaseLoading(false);
             }
@@ -159,18 +167,29 @@ export default function LedgerStatementPage() {
         }
 
         if (tx.sourceType === 'VOUCHER') {
-            setPreviewVoucherId(tx.sourceId);
+            setPreviewVoucherId(tx.sourceId || tx.journalEntryId || '');
             setVoucherModalOpen(true);
             return;
         }
 
         if (tx.sourceType === 'SALE') {
+            if (tx.journalEntryId && (!tx.sourceId || tx.sourceId === tx.journalEntryId)) {
+                setPreviewVoucherId(tx.journalEntryId);
+                setVoucherModalOpen(true);
+                return;
+            }
             router.push(`/billing/${tx.sourceId}`);
             return;
         }
 
-        // For RETURN etc — just show a toast for now (can extend)
-        toast({ title: `${txTypeLabel(tx.sourceType)} — ${tx.description}` });
+        // For RETURN etc — open voucher modal if journalEntryId/sourceId exists
+        if (tx.journalEntryId || tx.sourceId) {
+            setPreviewVoucherId(tx.journalEntryId || tx.sourceId || '');
+            setVoucherModalOpen(true);
+            return;
+        }
+
+        toast({ title: `${txTypeLabel(tx.sourceType, tx.voucherType)} — ${tx.description}` });
     }
 
     // ── Summary ───────────────────────────────────────────────────────────────
@@ -256,20 +275,27 @@ export default function LedgerStatementPage() {
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                         <div className="rounded-xl border bg-white p-4 shadow-sm">
                             <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Opening Balance</p>
-                            <p className="mt-1 text-xl font-bold text-slate-800">
-                                {INR(statement.openingBalance)}
-                            </p>
+                            <div className="mt-1 flex items-baseline gap-2">
+                                <p className="text-xl font-bold text-slate-800">
+                                    {INR(statement.openingBalance)}
+                                </p>
+                                <span className="text-sm font-semibold text-slate-500">
+                                    {statement.balanceType || statement.ledger.balanceType || 'Cr'}
+                                </span>
+                            </div>
                         </div>
                         <div className="rounded-xl border bg-white p-4 shadow-sm">
                             <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Transactions</p>
                             <div className="mt-1 flex items-baseline gap-3">
-                                <p className="text-xl font-bold text-slate-800">{statement.transactions.length}</p>
+                                <p className="text-xl font-bold text-slate-800">
+                                    {statement.pagination?.total_count ?? statement.transactions.length}
+                                </p>
                                 {search && filtered.length !== statement.transactions.length && (
                                     <span className="text-sm text-slate-400">({filtered.length} shown)</span>
                                 )}
                             </div>
-                            <p className="mt-0.5 text-xs text-slate-400">
-                                Dr: {INR(totalDebit)} &nbsp;·&nbsp; Cr: {INR(totalCredit)}
+                            <p className="mt-0.5 text-xs text-slate-500 font-medium">
+                                Dr: {INR(statement.totalDebit ?? totalDebit)} &nbsp;·&nbsp; Cr: {INR(statement.totalCredit ?? totalCredit)}
                             </p>
                         </div>
                         <div className="rounded-xl border bg-white p-4 shadow-sm">
@@ -281,10 +307,10 @@ export default function LedgerStatementPage() {
                                 )}>
                                     {INR(statement.closingBalance)}
                                 </p>
-                                <span className="text-sm font-medium text-slate-400">
-                                    {statement.closingBalance >= 0
+                                <span className="text-sm font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
+                                    {statement.balanceType || (statement.closingBalance >= 0
                                         ? statement.ledger.balanceType
-                                        : (statement.ledger.balanceType === 'Dr' ? 'Cr' : 'Dr')}
+                                        : (statement.ledger.balanceType === 'Dr' ? 'Cr' : 'Dr'))}
                                 </span>
                             </div>
                         </div>
@@ -333,7 +359,7 @@ export default function LedgerStatementPage() {
                                     </tr>
 
                                     {filtered.map((tx, i) => {
-                                        const clickable = !!tx.sourceId;
+                                        const clickable = !!tx.sourceId || !!tx.journalEntryId;
                                         return (
                                             <tr
                                                 key={i}
@@ -407,19 +433,19 @@ export default function LedgerStatementPage() {
                                 </tbody>
 
                                 {/* Footer totals */}
-                                <tfoot className="border-t bg-slate-50">
+                                <tfoot className="border-t bg-slate-50 font-semibold">
                                     <tr>
-                                        <td colSpan={4} className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                            Totals {search && `(${filtered.length} of ${statement.transactions.length})`}
+                                        <td colSpan={4} className="px-4 py-3 text-xs uppercase tracking-wide text-slate-600">
+                                            {search ? `Filtered Totals (${filtered.length} entries)` : `Overall Year Totals (${statement.pagination?.total_count ?? statement.transactions.length} entries)`}
                                         </td>
                                         <td className="px-4 py-3 text-right font-mono text-sm font-bold text-red-600">
-                                            {INR(filtered.reduce((s, t) => s + t.debit, 0))}
+                                            {INR(search ? filtered.reduce((s, t) => s + t.debit, 0) : (statement.totalDebit ?? filtered.reduce((s, t) => s + t.debit, 0)))}
                                         </td>
                                         <td className="px-4 py-3 text-right font-mono text-sm font-bold text-emerald-600">
-                                            {INR(filtered.reduce((s, t) => s + t.credit, 0))}
+                                            {INR(search ? filtered.reduce((s, t) => s + t.credit, 0) : (statement.totalCredit ?? filtered.reduce((s, t) => s + t.credit, 0)))}
                                         </td>
                                         <td className="px-4 py-3 text-right font-mono text-sm font-bold text-slate-800">
-                                            {INR(statement.closingBalance)}
+                                            {INR(statement.closingBalance)} <span className="text-xs text-blue-600 font-bold">{statement.balanceType || statement.ledger.balanceType}</span>
                                         </td>
                                         <td />
                                     </tr>

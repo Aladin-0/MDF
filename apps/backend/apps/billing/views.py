@@ -29,7 +29,7 @@ from apps.billing.services import (
 from apps.billing.utils.pricing import validate_sale_price
 from apps.inventory.models import Batch, MasterProduct
 from apps.accounts.models import Staff, Customer, Ledger
-from apps.accounts.journal_service import post_sale_invoice
+from apps.accounts.journal_service import post_sale_invoice, _get_ledger
 from apps.core.models import Outlet, TaxSlab
 from apps.billing.payment_services import (
     create_receipt_payment, create_expense_entry, create_sales_return,
@@ -245,7 +245,29 @@ def build_sale_response_payload(sale_invoice, message=None, revision_id=None):
             for p in sale_invoice.payments.all()
         ],
         'createdAt': sale_invoice.created_at.isoformat() if sale_invoice.created_at else None,
+        'isModified': bool(revision_id),
     }
+    if not revision_id and getattr(sale_invoice, 'id', None):
+        try:
+            from apps.audit.models import DocumentRevisionV2, DocumentRevision
+            from apps.billing.models import BillRevision
+            from django.contrib.contenttypes.models import ContentType
+            from django.db.models import Q
+            si_ct = ContentType.objects.get_for_model(sale_invoice.__class__)
+            has_rev = DocumentRevisionV2.objects.filter(
+                content_type=si_ct, object_id=sale_invoice.id
+            ).filter(
+                Q(action__in=['UPDATE', 'update', 'correction', 'standard_correction', 'direct_revise', 'financial_change', 'cancel_reissue', 'paid_bill_correction']) |
+                Q(revision_no__gt=1) |
+                ~Q(action__iexact='create')
+            ).exists() or DocumentRevision.objects.filter(
+                content_type=si_ct, object_id=sale_invoice.id
+            ).exists() or BillRevision.objects.filter(
+                original_invoice_id=sale_invoice.id
+            ).exists()
+            response_data['isModified'] = has_rev
+        except Exception:
+            pass
     if message:
         response_data['message'] = message
     if revision_id:
@@ -1394,6 +1416,35 @@ class SaleListView(APIView):
                     (Q(payment_mode__iexact='split') & Q(payments__method__iexact=pm, payments__amount__gt=0))
                 ).distinct()
 
+        # ── Optional isModified filter ─────────────────────────────────────────
+        is_modified_param = request.query_params.get('isModified') or request.query_params.get('modified') or request.query_params.get('status')
+        if is_modified_param in ('true', '1', 'modified'):
+            from apps.audit.models import DocumentRevisionV2, DocumentRevision
+            from apps.billing.models import BillRevision
+            from django.contrib.contenttypes.models import ContentType
+            from django.db.models import Exists, OuterRef, Q
+            
+            si_ct = ContentType.objects.get_for_model(SaleInvoice)
+            rev_v2_sub = DocumentRevisionV2.objects.filter(
+                content_type=si_ct,
+                object_id=OuterRef('pk')
+            ).filter(
+                Q(action__in=['UPDATE', 'update', 'correction', 'standard_correction', 'direct_revise', 'financial_change', 'cancel_reissue', 'paid_bill_correction', 'return_aware_correction']) |
+                Q(revision_no__gt=1) |
+                ~Q(action__iexact='create')
+            )
+            rev_v1_sub = DocumentRevision.objects.filter(
+                content_type=si_ct,
+                object_id=OuterRef('pk')
+            )
+            bill_rev_sub = BillRevision.objects.filter(
+                original_invoice=OuterRef('pk')
+            )
+            invoices = invoices.filter(
+                Q(Exists(rev_v2_sub)) | Q(Exists(rev_v1_sub)) | Q(Exists(bill_rev_sub))
+            )
+            logger.info("Filtered sales by isModified")
+
         # ── Profit aggregates for the filtered set (EXCLUDE return invoices) ───
         from django.db.models import Sum as dSum, Count as dCount
         agg = SaleInvoice.objects.filter(
@@ -1500,9 +1551,14 @@ class SaleListView(APIView):
         end_idx = start_idx + page_size
         paginated_invoices = invoices[start_idx:end_idx]
 
+        # ── Bulk fetch modified status for paginated sales ───────────────────
+        sale_ids = [inv.id for inv in paginated_invoices]
+        sale_mod_info = self._get_sale_modified_status_bulk(sale_ids)
+
         # ── Serialize invoices ───────────────────────────────────────────────
         results = []
         for invoice in paginated_invoices:
+            mod = sale_mod_info.get(str(invoice.id), {'isModified': False, 'revisionCount': 0})
             result = {
                 'id': str(invoice.id),
                 'outletId': str(invoice.outlet.id),
@@ -1547,6 +1603,8 @@ class SaleListView(APIView):
                     for p in invoice.payments.all()
                 ],
                 'isReturn': invoice.is_return,
+                'isModified': mod['isModified'],
+                'revisionCount': mod['revisionCount'],
                 'eway_bill_no': invoice.eway_bill_no,
                 'irn': invoice.irn,
                 'qr_code': invoice.qr_code,
@@ -1567,6 +1625,180 @@ class SaleListView(APIView):
             result['invoiceProfit'] = round(float(invoice.grand_total) - invoice_cost, 2)
             results.append(result)
 
+        # ── Customer ledger fallback: if filtering by customer and no SaleInvoice rows exist ──
+        if customer_obj and total_records == 0:
+            from apps.accounts.models import JournalLine, VoucherLine
+            import re
+            ledger = customer_obj.ledgers.filter(group__name='Sundry Debtors').first()
+            if ledger:
+                ledger_entries = []
+
+                # 1. Opening balance
+                if ledger.opening_balance and ledger.opening_balance > 0:
+                    ob_amt = float(ledger.opening_balance)
+                    ledger_entries.append({
+                        'id': f"ob-{ledger.id}",
+                        'outletId': str(ledger.outlet_id),
+                        'invoiceNo': 'OPENING-BAL',
+                        'invoiceDate': '2026-04-01T00:00:00',
+                        'saleType': 'RETAIL',
+                        'customerId': str(customer_obj.id),
+                        'customer': {
+                            'id': str(customer_obj.id),
+                            'name': customer_obj.name,
+                            'phone': getattr(customer_obj, 'phone', ''),
+                            'gstin': getattr(customer_obj, 'gstin', ''),
+                            'address': getattr(customer_obj, 'address', ''),
+                        },
+                        'doctorName': None,
+                        'hospitalName': None,
+                        'prescriptionNo': None,
+                        'subtotal': ob_amt,
+                        'discountAmount': 0.0,
+                        'taxableAmount': ob_amt,
+                        'cgstAmount': 0.0,
+                        'sgstAmount': 0.0,
+                        'igstAmount': 0.0,
+                        'cgst': 0.0,
+                        'sgst': 0.0,
+                        'igst': 0.0,
+                        'roundOff': 0.0,
+                        'grandTotal': ob_amt,
+                        'paymentMode': 'credit',
+                        'cashPaid': 0.0,
+                        'upiPaid': 0.0,
+                        'cardPaid': 0.0,
+                        'creditGiven': ob_amt,
+                        'amountPaid': 0.0,
+                        'amountDue': ob_amt,
+                        'itemsCount': 1,
+                        'payments': [],
+                        'invoiceCost': 0.0,
+                        'invoiceProfit': 0.0,
+                        'createdAt': '2026-04-01T00:00:00',
+                    })
+
+                # 2. JournalLines (Sales / manual journals excluding VOUCHER)
+                jlines = JournalLine.objects.filter(ledger=ledger).exclude(
+                    journal_entry__source_type='VOUCHER'
+                ).select_related('journal_entry')
+                for jl in jlines:
+                    je = jl.journal_entry
+                    is_debit = (jl.debit_amount > 0)
+                    amt = float(jl.debit_amount if is_debit else jl.credit_amount)
+                    if amt == 0:
+                        continue
+                    m = re.match(r'^([A-Za-z0-9\-_]+)', je.narration or '')
+                    inv_no = m.group(1) if m else f"JE-{str(je.id)[:8]}"
+                    dt_str = je.date.isoformat() if je.date else (je.created_at.date().isoformat() if je.created_at else '2026-04-01')
+                    dt_iso = f"{dt_str}T12:00:00"
+                    created_iso = je.created_at.isoformat() if je.created_at else dt_iso
+
+                    ledger_entries.append({
+                        'id': str(je.source_id) if je.source_id else str(jl.id),
+                        'outletId': str(ledger.outlet_id),
+                        'invoiceNo': inv_no,
+                        'invoiceDate': dt_iso,
+                        'saleType': 'RETAIL',
+                        'customerId': str(customer_obj.id),
+                        'customer': {
+                            'id': str(customer_obj.id),
+                            'name': customer_obj.name,
+                            'phone': getattr(customer_obj, 'phone', ''),
+                            'gstin': getattr(customer_obj, 'gstin', ''),
+                            'address': getattr(customer_obj, 'address', ''),
+                        },
+                        'doctorName': None,
+                        'hospitalName': None,
+                        'prescriptionNo': None,
+                        'subtotal': amt,
+                        'discountAmount': 0.0,
+                        'taxableAmount': amt,
+                        'cgstAmount': 0.0,
+                        'sgstAmount': 0.0,
+                        'igstAmount': 0.0,
+                        'cgst': 0.0,
+                        'sgst': 0.0,
+                        'igst': 0.0,
+                        'roundOff': 0.0,
+                        'grandTotal': amt,
+                        'paymentMode': 'credit' if is_debit else 'receipt',
+                        'cashPaid': 0.0 if is_debit else amt,
+                        'upiPaid': 0.0,
+                        'cardPaid': 0.0,
+                        'creditGiven': amt if is_debit else 0.0,
+                        'amountPaid': 0.0 if is_debit else amt,
+                        'amountDue': amt if is_debit else 0.0,
+                        'itemsCount': 1,
+                        'payments': [{'method': 'cash', 'amount': amt}] if not is_debit else [],
+                        'invoiceCost': 0.0,
+                        'invoiceProfit': 0.0,
+                        'createdAt': created_iso,
+                    })
+
+                # 3. VoucherLines (Receipts / Payments)
+                vlines = VoucherLine.objects.filter(ledger=ledger).select_related('voucher')
+                for vl in vlines:
+                    v = vl.voucher
+                    is_debit = (vl.debit > 0)
+                    amt = float(vl.debit if is_debit else vl.credit)
+                    if amt == 0:
+                        continue
+                    dt_str = v.date.isoformat() if v.date else (v.created_at.date().isoformat() if v.created_at else '2026-04-01')
+                    dt_iso = f"{dt_str}T12:00:00"
+                    created_iso = v.created_at.isoformat() if v.created_at else dt_iso
+
+                    ledger_entries.append({
+                        'id': str(v.id),
+                        'outletId': str(ledger.outlet_id),
+                        'invoiceNo': v.voucher_no or f"VCH-{str(v.id)[:8]}",
+                        'invoiceDate': dt_iso,
+                        'saleType': 'RETAIL',
+                        'customerId': str(customer_obj.id),
+                        'customer': {
+                            'id': str(customer_obj.id),
+                            'name': customer_obj.name,
+                            'phone': getattr(customer_obj, 'phone', ''),
+                            'gstin': getattr(customer_obj, 'gstin', ''),
+                            'address': getattr(customer_obj, 'address', ''),
+                        },
+                        'doctorName': None,
+                        'hospitalName': None,
+                        'prescriptionNo': None,
+                        'subtotal': amt,
+                        'discountAmount': 0.0,
+                        'taxableAmount': amt,
+                        'cgstAmount': 0.0,
+                        'sgstAmount': 0.0,
+                        'igstAmount': 0.0,
+                        'cgst': 0.0,
+                        'sgst': 0.0,
+                        'igst': 0.0,
+                        'roundOff': 0.0,
+                        'grandTotal': amt,
+                        'paymentMode': v.voucher_type,
+                        'cashPaid': amt if not is_debit else 0.0,
+                        'upiPaid': 0.0,
+                        'cardPaid': 0.0,
+                        'creditGiven': amt if is_debit else 0.0,
+                        'amountPaid': amt if not is_debit else 0.0,
+                        'amountDue': amt if is_debit else 0.0,
+                        'itemsCount': 1,
+                        'payments': [{'method': v.voucher_type, 'amount': amt}] if not is_debit else [],
+                        'invoiceCost': 0.0,
+                        'invoiceProfit': 0.0,
+                        'createdAt': created_iso,
+                    })
+
+                # Sort by invoiceDate descending
+                ledger_entries.sort(key=lambda x: x['invoiceDate'], reverse=True)
+                total_records = len(ledger_entries)
+                total_pages = (total_records + page_size - 1) // page_size if total_records > 0 else 1
+                start_idx = (page - 1) * page_size
+                end_idx = start_idx + page_size
+                results = ledger_entries[start_idx:end_idx]
+                analytics['totalRecords'] = total_records
+
         logger.info(f"Returning page {page} of {total_pages} ({len(results)} invoices) | date={start_date_str}→{end_date_str}")
 
         return Response({
@@ -1579,6 +1811,50 @@ class SaleListView(APIView):
                 'totalRecords': total_records
             }
         }, status=status.HTTP_200_OK)
+
+    def _get_sale_modified_status_bulk(self, sale_ids):
+        if not sale_ids:
+            return {}
+        from apps.audit.models import DocumentRevisionV2, DocumentRevision
+        from apps.billing.models import BillRevision
+        from django.contrib.contenttypes.models import ContentType
+        from django.db.models import Q
+        from collections import defaultdict
+
+        si_ct = ContentType.objects.get_for_model(SaleInvoice)
+        results = defaultdict(lambda: {'isModified': False, 'revisionCount': 0})
+
+        v2_revs = DocumentRevisionV2.objects.filter(
+            content_type=si_ct,
+            object_id__in=sale_ids
+        ).filter(
+            Q(action__in=['UPDATE', 'update', 'correction', 'standard_correction', 'direct_revise', 'financial_change', 'cancel_reissue', 'paid_bill_correction', 'return_aware_correction']) |
+            Q(revision_no__gt=1) |
+            ~Q(action__iexact='create')
+        ).values_list('object_id', flat=True)
+        for oid in v2_revs:
+            s_oid = str(oid)
+            results[s_oid]['isModified'] = True
+            results[s_oid]['revisionCount'] += 1
+
+        v1_revs = DocumentRevision.objects.filter(
+            content_type=si_ct,
+            object_id__in=sale_ids
+        ).values_list('object_id', flat=True)
+        for oid in v1_revs:
+            s_oid = str(oid)
+            results[s_oid]['isModified'] = True
+            results[s_oid]['revisionCount'] += 1
+
+        br_revs = BillRevision.objects.filter(
+            original_invoice_id__in=sale_ids
+        ).values_list('original_invoice_id', flat=True)
+        for oid in br_revs:
+            s_oid = str(oid)
+            results[s_oid]['isModified'] = True
+            results[s_oid]['revisionCount'] += 1
+
+        return results
 
 
 
@@ -1595,7 +1871,69 @@ class SaleItemsView(APIView):
     def get(self, request, sale_id, *args, **kwargs):
         try:
             invoice = SaleInvoice.objects.get(id=sale_id)
-        except SaleInvoice.DoesNotExist:
+        except (SaleInvoice.DoesNotExist, ValueError):
+            # Check if this sale_id is a JournalEntry / JournalLine or Voucher
+            from apps.accounts.models import JournalLine, JournalEntry, Voucher
+            je = JournalEntry.objects.filter(id=sale_id).first() or JournalEntry.objects.filter(source_id=sale_id).first()
+            if je:
+                jline = je.lines.filter(debit_amount__gt=0).first() or je.lines.first()
+                amt = float(jline.debit_amount if jline and jline.debit_amount > 0 else (jline.credit_amount if jline else 0))
+                return Response({'data': [{
+                    'id': str(je.id),
+                    'productName': je.narration or 'Historical Sale Entry',
+                    'qtyStrips': 1,
+                    'qtyLoose': 0,
+                    'totalQty': 1,
+                    'rate': amt,
+                    'discountPct': 0.0,
+                    'totalAmount': amt,
+                    'packSize': 1,
+                    'packUnit': 'units',
+                    'batchNo': '',
+                    'expiryDate': None,
+                    'gstRate': 0.0,
+                    'landingCost': amt,
+                }]}, status=status.HTTP_200_OK)
+
+            v = Voucher.objects.filter(id=sale_id).first()
+            if v:
+                vline = v.lines.first()
+                amt = float(vline.debit if vline and vline.debit > 0 else (vline.credit if vline else 0))
+                return Response({'data': [{
+                    'id': str(v.id),
+                    'productName': f"{v.voucher_no} {v.narration or v.voucher_type}".strip(),
+                    'qtyStrips': 1,
+                    'qtyLoose': 0,
+                    'totalQty': 1,
+                    'rate': amt,
+                    'discountPct': 0.0,
+                    'totalAmount': amt,
+                    'packSize': 1,
+                    'packUnit': 'units',
+                    'batchNo': '',
+                    'expiryDate': None,
+                    'gstRate': 0.0,
+                    'landingCost': amt,
+                }]}, status=status.HTTP_200_OK)
+
+            if str(sale_id).startswith('ob-'):
+                return Response({'data': [{
+                    'id': str(sale_id),
+                    'productName': 'Opening Balance',
+                    'qtyStrips': 1,
+                    'qtyLoose': 0,
+                    'totalQty': 1,
+                    'rate': 0.0,
+                    'discountPct': 0.0,
+                    'totalAmount': 0.0,
+                    'packSize': 1,
+                    'packUnit': 'units',
+                    'batchNo': '',
+                    'expiryDate': None,
+                    'gstRate': 0.0,
+                    'landingCost': 0.0,
+                }]}, status=status.HTTP_200_OK)
+
             return Response({'detail': 'Invoice not found'}, status=status.HTTP_404_NOT_FOUND)
 
         items = invoice.items.select_related('batch').order_by('created_at')
@@ -1744,11 +2082,11 @@ class CustomerCreditPaymentView(APIView):
                 # Resolve payment mode ledger
                 mode = (payment_mode or 'cash').lower()
                 if mode in ('upi', 'upi_transfer', 'phonepe', 'gpay', 'paytm', 'neft', 'imps'):
-                    collection_ledger = Ledger.objects.filter(name='UPI Collections', outlet=outlet).first()
+                    collection_ledger = _get_ledger(outlet, 'UPI Collections')
                 elif mode in ('card', 'pos', 'swipe', 'credit_card', 'debit_card'):
-                    collection_ledger = Ledger.objects.filter(name='Card/POS Settlement', outlet=outlet).first()
+                    collection_ledger = _get_ledger(outlet, 'Card/POS Settlement')
                 else:
-                    collection_ledger = Ledger.objects.filter(name='Cash', outlet=outlet).first()
+                    collection_ledger = _get_ledger(outlet, 'Cash')
 
                 if not collection_ledger:
                     return Response(
@@ -2215,8 +2553,21 @@ class CreditAccountListView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
+        # Auto-sync if no credit accounts exist yet for this outlet
+        if not CreditAccount.objects.filter(outlet=outlet).exists():
+            try:
+                from apps.billing.management.commands.sync_credit_accounts import sync_all_credit_accounts
+                sync_all_credit_accounts()
+            except Exception as e:
+                logger.error(f"Error during auto-sync of credit accounts: {e}")
+
         # Query credit accounts
         accounts = CreditAccount.objects.filter(outlet=outlet).select_related('customer')
+
+        # Status filter
+        status_param = request.query_params.get('status')
+        if status_param and status_param != 'all':
+            accounts = accounts.filter(status=status_param)
 
         # Apply search filter (by customer name or phone)
         if search:
@@ -2243,6 +2594,8 @@ class CreditAccountListView(APIView):
                     'name': account.customer.name,
                     'phone': account.customer.phone,
                     'address': account.customer.address,
+                    'isChronic': account.customer.is_chronic,
+                    'totalPurchases': float(account.customer.total_purchases),
                 },
                 'outletId': str(account.outlet_id),
                 'creditLimit': float(account.credit_limit),
@@ -2299,6 +2652,8 @@ class CreditAccountDetailView(APIView):
                 'name': account.customer.name,
                 'phone': account.customer.phone,
                 'address': account.customer.address,
+                'isChronic': account.customer.is_chronic,
+                'totalPurchases': float(account.customer.total_purchases),
             },
             'outletId': str(account.outlet_id),
             'creditLimit': float(account.credit_limit),
@@ -2456,6 +2811,11 @@ class SaleDetailView(APIView):
         
         items_list = []
         for item in items:
+            batch = item.batch
+            landing_rate = float(batch.landing_rate or batch.purchase_rate or 0) if batch else 0.0
+            purchase_rate = float(batch.purchase_rate or 0) if batch else 0.0
+            ptr = float(batch.ptr or 0) if batch else 0.0
+            pts = float(batch.pts or 0) if batch else 0.0
             items_list.append({
                 'batchId': str(item.batch_id) if item.batch_id else '',
                 'productId': str(item.batch.product_id) if item.batch and item.batch.product_id else '',
@@ -2482,6 +2842,10 @@ class SaleDetailView(APIView):
                 'taxableAmount': float(item.taxable_amount),
                 'gstAmount': float(item.gst_amount),
                 'totalAmount': float(item.total_amount),
+                'purchaseRate': purchase_rate,
+                'landingRate': landing_rate,
+                'ptr': ptr,
+                'pts': pts,
             })
 
         # Check if this sale has any returns against it
@@ -3313,8 +3677,8 @@ class SalesReturnListView(APIView):
                 'id': str(r.id),
                 'returnNo': r.return_no,
                 'returnDate': r.return_date.isoformat(),
-                'originalInvoiceNo': r.original_sale.invoice_no,
-                'customerName': r.original_sale.customer.name if r.original_sale.customer else None,
+                'originalInvoiceNo': r.original_sale.invoice_no if r.original_sale else None,
+                'customerName': r.original_sale.customer.name if (r.original_sale and r.original_sale.customer) else None,
                 'totalAmount': float(r.total_amount),
                 'refundMode': r.refund_mode,
                 'reason': r.reason,
@@ -3439,7 +3803,7 @@ class SalesReturnPrintView(APIView):
             'productName': item.product_name,
             'batchNo': item.batch_no,
             'qtyReturned': item.qty_returned,
-            'packSize': item.original_sale_item.pack_size if item.original_sale_item_id else 1,
+            'packSize': item.original_sale_item.pack_size if (item.original_sale_item_id and item.original_sale_item and item.original_sale_item.pack_size) else 1,
             'returnRate': float(item.return_rate),
             'totalAmount': float(item.total_amount),
         } for item in r.items.select_related('original_sale_item').all()]
@@ -3447,8 +3811,8 @@ class SalesReturnPrintView(APIView):
         data = {
             'returnNo': r.return_no,
             'returnDate': r.return_date.isoformat(),
-            'originalInvoiceNo': r.original_sale.invoice_no,
-            'customerName': r.original_sale.customer.name if r.original_sale.customer else 'Walk-in',
+            'originalInvoiceNo': r.original_sale.invoice_no if r.original_sale else None,
+            'customerName': r.original_sale.customer.name if (r.original_sale and r.original_sale.customer) else 'Walk-in',
             'items': items,
             'totalAmount': float(r.total_amount),
             'refundMode': r.refund_mode,
@@ -3713,6 +4077,60 @@ class SaleInvoiceSearchView(APIView):
                 'grandTotal': float(inv.grand_total),
                 'items': items,
             })
+
+        if len(results) < 20 and q:
+            from apps.accounts.models import JournalEntry
+            import re
+
+            existing_nos = {r['invoiceNo'].lower() for r in results}
+            je_limit = 20 - len(results)
+            je_qs = JournalEntry.objects.filter(
+                outlet=outlet,
+                source_type='SALE',
+                narration__icontains=q
+            ).prefetch_related('lines__ledger').order_by('-date')[:je_limit]
+
+            for je in je_qs:
+                narration = (je.narration or '').strip()
+                parts = narration.split(' ', 1)
+                inv_no = parts[0] if parts else f"SALE-{str(je.id)[:6]}"
+                cust_name = parts[1].strip() if len(parts) > 1 and parts[1].strip() else 'Walk-in / Daybook Customer'
+
+                if inv_no.lower() in existing_nos:
+                    continue
+                existing_nos.add(inv_no.lower())
+
+                debit_sum = sum(l.debit_amount for l in je.lines.all() if l.debit_amount > 0)
+                credit_sum = sum(l.credit_amount for l in je.lines.all() if l.credit_amount > 0)
+                grand_total = float(debit_sum if debit_sum > 0 else credit_sum)
+
+                default_gst_rate = 18.0
+                for l in je.lines.all():
+                    lname = (l.ledger.name or '').upper()
+                    if 'GST' in lname or 'TAX' in lname:
+                        match = re.search(r'(\d+(?:\.\d+)?)\s*%', lname)
+                        if match:
+                            found_pct = float(match.group(1))
+                            if 'CGST' in lname or 'SGST' in lname:
+                                default_gst_rate = found_pct * 2.0
+                            else:
+                                default_gst_rate = found_pct
+                            break
+
+                results.append({
+                    'id': str(je.id),
+                    'invoiceNo': inv_no,
+                    'date': str(je.date),
+                    'customerName': cust_name,
+                    'customerId': None,
+                    'doctorName': None,
+                    'hospitalName': '',
+                    'grandTotal': grand_total,
+                    'isDaybook': True,
+                    'defaultGstRate': default_gst_rate,
+                    'items': [],
+                })
+
         return Response({'data': results})
 
 from django.shortcuts import get_object_or_404

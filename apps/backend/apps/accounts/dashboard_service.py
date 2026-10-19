@@ -41,11 +41,11 @@ class DashboardService:
 
         # Cash/Bank Balance: Can be calculated from Ledger if we identify Cash/Bank accounts, 
         # but for simplicity, we'll return 0 if not easily identifiable.
-        # Let's try to find Cash-in-Hand ledger.
+        # Let's try to find Cash in Hand ledger.
         from apps.accounts.models import Ledger
         cash_ledgers = Ledger.objects.filter(
             outlet_id=outlet_id, 
-            group__name__icontains='Cash-in-hand'
+            group__name='Cash in Hand'
         ).aggregate(total=Sum('current_balance'))['total'] or Decimal('0.00')
         
         bank_ledgers = Ledger.objects.filter(

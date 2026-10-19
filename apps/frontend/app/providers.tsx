@@ -19,9 +19,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
         // Then re-key settings store to the current outlet's bucket and hydrate
         try {
             const auth = JSON.parse(localStorage.getItem('mediflow-auth') || '{}');
-            const outletId = auth?.state?.user?.outletId;
+            const user = auth?.state?.user;
+            const outletId = user?.outletId;
             if (outletId) {
                 rehydrateSettingsForOutlet(outletId);
+                if (user?.role !== 'super_admin') {
+                    useSettingsStore.getState().setOutletId(outletId);
+                }
             } else {
                 useSettingsStore.persist.rehydrate();
                 useSettingsStore.getState().setHasHydrated(true);

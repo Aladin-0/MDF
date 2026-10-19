@@ -176,6 +176,7 @@ export function VoucherLinesGrid({
                                     {/* Ghost Ledger Picker */}
                                     <td className="py-1 px-2 align-middle">
                                         <LedgerPicker
+                                            voucherType={voucherType}
                                             filterGroup={filter.filterGroup}
                                             value={line.ledger}
                                             onChange={(l) => updateLine(line.id, { ledger: l })}

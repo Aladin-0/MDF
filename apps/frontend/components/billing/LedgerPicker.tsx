@@ -77,10 +77,10 @@ export function LedgerPicker({
             // If defaultGroupName is provided, we filter by it. Otherwise fetch all or let the user search.
             const res = await voucherApi.getLedgers(outletId, { 
                 group: defaultGroupName, 
-                search: debouncedQuery || undefined 
+                search: debouncedQuery || undefined,
+                limit: 50
             });
-            // Let's only return top 5-10 for the dropdown
-            return (res as Ledger[]).slice(0, 10);
+            return res as Ledger[];
         },
         enabled: isOpen && !!outletId,
     });

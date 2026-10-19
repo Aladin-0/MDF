@@ -66,7 +66,7 @@ export function FixedExpensesModal({ initialData, onUpdate }: { initialData?: an
         </DialogHeader>
         
         {/* We only show settings if they have can_manage_partners or are a super_admin for now as it's an admin setting */}
-        {!(user?.canManagePartners || user?.role === 'super_admin') ? (
+        {!(user?.canManagePartners || user?.role === 'super_admin' || user?.role === 'admin') ? (
           <div className="p-6 text-center text-red-500 bg-red-50 rounded-lg">
             You do not have permission to manage fixed expenses.
           </div>

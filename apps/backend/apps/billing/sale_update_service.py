@@ -6,13 +6,11 @@ from django.db.models import Sum
 
 from apps.core.models import Outlet
 from apps.inventory.models import Batch, MasterProduct
-from apps.billing.models import SaleInvoice, SaleItem, ScheduleHRegister, CreditAccount, CreditTransaction, LedgerEntry
+from apps.billing.models import SaleInvoice, SaleItem, ScheduleHRegister, CreditAccount, CreditTransaction, LedgerEntry, InvoicePayment
 from apps.accounts.models import Staff, Customer, Ledger, JournalEntry
 from apps.accounts.services import LedgerService
 from apps.accounts.journal_service import _get_ledger, _create_lines_and_update_balances, post_sale_invoice
 from apps.billing.services import validate_sale_price, fefo_batch_select, schedule_h_validate
-from apps.billing.services import validate_sale_price, fefo_batch_select, schedule_h_validate
-from apps.billing.models import SaleInvoice, SaleItem, ScheduleHRegister, CreditAccount, CreditTransaction, LedgerEntry
 
 class SaleServiceError(Exception):
     pass
@@ -259,11 +257,62 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
         invoice_d = invoice_date.date()
 
         # Validate payments
-        cash_paid_val = Decimal(str(payload.get('cashPaid', 0)))
-        upi_paid_val = Decimal(str(payload.get('upiPaid', 0)))
-        card_paid_val = Decimal(str(payload.get('cardPaid', 0)))
-        credit_given_val = Decimal(str(payload.get('creditGiven', 0)))
-        payment_sum = cash_paid_val + upi_paid_val + card_paid_val + credit_given_val
+        payments_data_raw = payload.get('payments', [])
+        parsed_payments = []
+        cash_paid_val = Decimal('0')
+        upi_paid_val = Decimal('0')
+        card_paid_val = Decimal('0')
+        credit_given_val = Decimal('0')
+
+        if payments_data_raw and isinstance(payments_data_raw, list) and len(payments_data_raw) > 0:
+            for p in payments_data_raw:
+                p_amt = Decimal(str(p.get('amount', 0)))
+                if p_amt <= Decimal('0'):
+                    continue
+                p_method = str(p.get('method') or 'cash').lower()
+                if p_method == 'cash':
+                    cash_paid_val += p_amt
+                elif p_method == 'upi':
+                    upi_paid_val += p_amt
+                elif p_method == 'card':
+                    card_paid_val += p_amt
+                elif p_method == 'credit':
+                    credit_given_val += p_amt
+
+                parsed_payments.append({
+                    'method': p_method,
+                    'amount': p_amt,
+                    'reference_no': p.get('referenceNo') or p.get('reference_no'),
+                    'ledger_id': p.get('ledgerId') or p.get('ledger_id'),
+                })
+        else:
+            cash_paid_val = Decimal(str(payload.get('cashPaid', 0)))
+            upi_paid_val = Decimal(str(payload.get('upiPaid', 0)))
+            card_paid_val = Decimal(str(payload.get('cardPaid', 0)))
+            credit_given_val = Decimal(str(payload.get('creditGiven', 0)))
+            payment_sum = cash_paid_val + upi_paid_val + card_paid_val + credit_given_val
+
+            if payment_sum == Decimal('0') and client_grand_total > Decimal('0'):
+                pm = str(payload.get('paymentMode', 'cash')).lower()
+                if pm == 'cash':
+                    cash_paid_val = client_grand_total
+                elif pm == 'upi':
+                    upi_paid_val = client_grand_total
+                elif pm == 'card':
+                    card_paid_val = client_grand_total
+                elif pm == 'credit':
+                    credit_given_val = client_grand_total
+
+            if cash_paid_val > 0:
+                parsed_payments.append({'method': 'cash', 'amount': cash_paid_val})
+            if upi_paid_val > 0:
+                parsed_payments.append({'method': 'upi', 'amount': upi_paid_val})
+            if card_paid_val > 0:
+                parsed_payments.append({'method': 'card', 'amount': card_paid_val})
+            if credit_given_val > 0:
+                parsed_payments.append({'method': 'credit', 'amount': credit_given_val})
+
+        payment_sum = sum(p['amount'] for p in parsed_payments)
         if abs(payment_sum - client_grand_total) > Decimal('0.01'):
             if payment_sum > client_grand_total:
                 # Handle overpayment
@@ -274,8 +323,19 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
                 
                 overpayment = payment_sum - client_grand_total
                 credit_given_val -= overpayment
+                for p in parsed_payments:
+                    if p['method'] == 'credit':
+                        p['amount'] -= overpayment
+                        break
             else:
                 raise SaleServiceError(f"Payment amounts ({payment_sum}) are less than grand total ({client_grand_total})")
+
+        if len(parsed_payments) > 1 or payload.get('paymentMode') == 'split':
+            resolved_payment_mode = 'split'
+        elif len(parsed_payments) == 1:
+            resolved_payment_mode = parsed_payments[0]['method']
+        else:
+            resolved_payment_mode = payload.get('paymentMode', 'cash')
 
         # Step 2: Validate Schedule H
         cart_items = [{'scheduleType': item.get('scheduleType', 'OTC')} for item in items_data]
@@ -561,6 +621,18 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
         sale_invoice.round_off = server_round_off
         sale_invoice.save()
 
+        # Recreate InvoicePayment child records to match updated invoice
+        InvoicePayment.objects.filter(invoice=sale_invoice).delete()
+        for p in parsed_payments:
+            InvoicePayment.objects.create(
+                outlet=outlet,
+                invoice=sale_invoice,
+                method=p['method'],
+                amount=p['amount'],
+                reference_no=p.get('reference_no'),
+                ledger_id=p.get('ledger_id'),
+            )
+
         # Step 9: Credit Transactions
         if credit_given_val != 0 and new_customer:
             credit_account, _ = CreditAccount.objects.get_or_create(outlet=outlet, customer=new_customer)
@@ -623,6 +695,10 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
             rebuild_customer_ledger(str(outlet.id), str(new_customer.id), invoice_d)
             if old_customer and old_customer.id != new_customer.id:
                 rebuild_customer_ledger(str(outlet.id), str(old_customer.id), min(invoice_d, old_customer.created_at.date()))
+
+        # Clear cached relationships so post_sale_invoice reads fresh InvoicePayments
+        if hasattr(sale_invoice, '_prefetched_objects_cache'):
+            sale_invoice._prefetched_objects_cache.clear()
 
         # Post journal
         post_sale_invoice(sale_invoice)

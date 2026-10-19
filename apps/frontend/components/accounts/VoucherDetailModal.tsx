@@ -36,14 +36,29 @@ export function VoucherDetailModal({
             .finally(() => setLoading(false));
     }, [open, voucherId]);
 
-    const typeLabels: Record<string, string> = { receipt: 'Receipt', payment: 'Payment', contra: 'Contra', journal: 'Journal' };
+    const typeLabels: Record<string, string> = { 
+        receipt: 'Receipt', 
+        payment: 'Payment', 
+        contra: 'Contra', 
+        journal: 'Journal',
+        sale: 'Sale',
+        purchase: 'Purchase',
+    };
     const typeColors: Record<string, string> = {
         receipt: 'bg-emerald-100 text-emerald-700 border-emerald-200',
         payment: 'bg-blue-100 text-blue-700 border-blue-200',
         contra: 'bg-amber-100 text-amber-700 border-amber-200',
         journal: 'bg-slate-100 text-slate-600 border-slate-200',
+        sale: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+        purchase: 'bg-orange-100 text-orange-700 border-orange-200',
     };
-    const modeLabel: Record<string, string> = { cash: 'Cash', bank: 'Bank', cheque: 'Cheque' };
+    const modeLabel: Record<string, string> = { 
+        cash: 'Cash', 
+        bank: 'Bank', 
+        cheque: 'Cheque',
+        upi: 'UPI / Online',
+        other: 'General'
+    };
     const billAdj: any[] = data?.billAdjustments ?? [];
     const billTotal = billAdj.reduce((s: number, b: any) => s + b.adjustedAmount, 0);
 
@@ -54,9 +69,11 @@ export function VoucherDetailModal({
                     <DialogTitle className="flex items-center justify-between text-base">
                         <div className="flex items-center gap-2">
                             <FileText className="h-4 w-4 text-slate-500" />
-                            Voucher Details
+                            {data?.isJournalEntry 
+                                ? (data?.voucherType === 'purchase' ? 'Purchase Invoice / Voucher Details' : 'Voucher / Invoice Details') 
+                                : 'Voucher Details'}
                         </div>
-                        {data && (
+                        {data && !data.isJournalEntry && (
                             <div className="flex items-center gap-2 mr-6">
                                 <Button variant="outline" size="sm" asChild className="h-8 shadow-sm">
                                     <Link href={`/dashboard/accounts/voucher-entry/revisions/${data.id}`}>
@@ -109,7 +126,18 @@ export function VoucherDetailModal({
                             </div>
                             <div className="col-span-2">
                                 <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-0.5">Created At</p>
-                                <p className="text-slate-500 text-xs">{format(new Date(data.createdAt), 'dd MMM yyyy, hh:mm a')}</p>
+                                <p className="text-slate-500 text-xs">
+                                    {data.createdAt ? (() => {
+                                        try {
+                                            const norm = typeof data.createdAt === 'string' && data.createdAt.includes(' ') && !data.createdAt.includes('T')
+                                                ? data.createdAt.replace(' ', 'T')
+                                                : data.createdAt;
+                                            return format(new Date(norm), 'dd MMM yyyy, hh:mm a');
+                                        } catch {
+                                            return String(data.createdAt);
+                                        }
+                                    })() : '—'}
+                                </p>
                             </div>
                             {data.narration && (
                                 <div className="col-span-4 border-t pt-3">

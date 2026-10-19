@@ -66,8 +66,9 @@ export function calculateRowTotals(
         gstAmount = sellAmount - taxableAmount;
     }
     
-    // Purchase rate per pack
-    const totalCost = (currentBatch.purchaseRate || 0) * tQtyFractional;
+    // Cost rate per pack: use landingRate if available, otherwise purchaseRate
+    const costRate = Number(currentBatch.landingRate ?? currentBatch.purchaseRate ?? 0);
+    const totalCost = costRate * tQtyFractional;
     
     // Calculate margin on pre-tax amount for accuracy, though maintaining backward compat structure
     const marginAmount = taxableAmount - totalCost;

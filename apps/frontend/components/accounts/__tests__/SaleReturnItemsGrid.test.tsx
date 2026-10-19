@@ -4,6 +4,10 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { SaleReturnItemsGrid } from '../SaleReturnItemsGrid';
 import { ReturnItemRow } from '@/hooks/useSaleReturnCart';
 
+jest.mock('@/hooks/useProductSearch', () => ({
+    useProductSearch: () => ({ data: [], isFetching: false }),
+}));
+
 describe('SaleReturnItemsGrid component', () => {
     const mockItems: ReturnItemRow[] = [
         {

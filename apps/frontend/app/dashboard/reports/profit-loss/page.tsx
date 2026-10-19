@@ -6,11 +6,13 @@ import { useRouter } from 'next/navigation';
 import {
     TrendingUp, TrendingDown, RefreshCw, Printer, Download, ChevronDown, ChevronRight,
     BarChart2, Package, Settings2, ExternalLink, X, Scale, CalendarDays,
-    ChevronsDownUp, ChevronsUpDown, Receipt, Info,
+    ChevronsDownUp, ChevronsUpDown, Receipt, Info, FileText,
 } from 'lucide-react';
 import { accountsApi, voucherApi } from '@/lib/apiClient';
+import { VoucherDetailModal } from '@/components/accounts/VoucherDetailModal';
 import { useAuthStore } from '@/store/authStore';
 import { useSettingsStore } from '@/store/settingsStore';
+import { useOutletId } from '@/hooks/useOutletId';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
@@ -205,7 +207,7 @@ function PrintDialog({ open, onClose, fromDate, toDate, outletName, onPrint, onE
                         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Layout</p>
                         <RadioGroup value={layout} onValueChange={setLayout} className="grid grid-cols-2 gap-2">
                             {[{ value: 'horizontal', label: 'Horizontal (T-Format)', desc: 'A4 Landscape' },
-                              { value: 'vertical', label: 'Vertical (Top-Down)', desc: 'A4 Portrait' }].map(o => (
+                            { value: 'vertical', label: 'Vertical (Top-Down)', desc: 'A4 Portrait' }].map(o => (
                                 <div key={o.value} className={cn('p-3 rounded-lg border cursor-pointer text-sm transition-colors',
                                     layout === o.value ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 hover:border-indigo-200')}>
                                     <RadioGroupItem value={o.value} id={`pl-print-${o.value}`} className="sr-only" />
@@ -221,7 +223,7 @@ function PrintDialog({ open, onClose, fromDate, toDate, outletName, onPrint, onE
                         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Detail</p>
                         <RadioGroup value={detail} onValueChange={setDetail} className="grid grid-cols-2 gap-2">
                             {[{ value: 'with', label: 'With Detail', desc: 'All ledger rows' },
-                              { value: 'without', label: 'Without Detail', desc: 'Group totals only' }].map(o => (
+                            { value: 'without', label: 'Without Detail', desc: 'Group totals only' }].map(o => (
                                 <div key={o.value} className={cn('p-3 rounded-lg border cursor-pointer text-sm transition-colors',
                                     detail === o.value ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 hover:border-indigo-200')}>
                                     <RadioGroupItem value={o.value} id={`pl-detail-${o.value}`} className="sr-only" />
@@ -311,27 +313,63 @@ function LedgerDrilldown({ ledgerId, ledgerName, fromDate, toDate, onClose }: {
 }) {
     const router = useRouter();
     const [activeTx, setActiveTx] = useState<any | null>(null);
+    const [selectedVoucherId, setSelectedVoucherId] = useState<string | null>(null);
+    const [voucherModalOpen, setVoucherModalOpen] = useState(false);
 
-    const { data, isLoading } = useQuery({
-        queryKey: ['pl-ledger-stmt', ledgerId, fromDate, toDate],
-        queryFn: () => voucherApi.getLedgerStatement(ledgerId!, fromDate, toDate),
+    // ── Pagination state ───────────────────────────────────────────────────────
+    const [page, setPage] = useState(1);
+    const [allTransactions, setAllTransactions] = useState<any[]>([]);
+    const [openingBalance, setOpeningBalance] = useState(0);
+    const [closingBalance, setClosingBalance] = useState(0);
+    const [totalCount, setTotalCount] = useState(0);
+    const [hasMore, setHasMore] = useState(false);
+
+    // Reset everything when the ledger changes
+    useEffect(() => {
+        setPage(1);
+        setAllTransactions([]);
+        setActiveTx(null);
+        setOpeningBalance(0);
+        setClosingBalance(0);
+        setTotalCount(0);
+        setHasMore(false);
+    }, [ledgerId]);
+
+    const { data, isLoading, isFetching } = useQuery({
+        queryKey: ['pl-ledger-stmt', ledgerId, fromDate, toDate, page],
+        queryFn: () => voucherApi.getLedgerStatement(ledgerId!, fromDate, toDate, undefined, page),
         enabled: !!ledgerId,
     });
 
-    const transactions: any[] = data?.transactions ?? [];
-    const txWithBal = useMemo(() => {
-        let running = 0;
-        return transactions.map(tx => { running += (tx.debit || 0) - (tx.credit || 0); return { ...tx, _running: running }; });
-    }, [transactions]);
-    const totalDr = transactions.reduce((s: number, t: any) => s + (t.debit || 0), 0);
-    const totalCr = transactions.reduce((s: number, t: any) => s + (t.credit || 0), 0);
+    // Accumulate transactions across pages
+    useEffect(() => {
+        if (!data?.transactions) return;
+        setAllTransactions(prev => page === 1 ? data.transactions : [...prev, ...data.transactions]);
+        setOpeningBalance(data.openingBalance ?? 0);
+        setClosingBalance(data.closingBalance ?? 0);
+        setTotalCount(data.pagination?.total_count ?? data.transactions.length);
+        setHasMore(data.pagination?.has_more ?? false);
+    }, [data, page]);
 
-    const getRoute = (tx: any): { url: string; hasDetail: boolean } => {
+    // Running balance across all loaded transactions
+    const txWithBal = useMemo(() => {
+        let running = openingBalance;
+        return allTransactions.map(tx => {
+            running += (tx.debit || 0) - (tx.credit || 0);
+            return { ...tx, _running: running };
+        });
+    }, [allTransactions, openingBalance]);
+
+    const totalDr = allTransactions.reduce((s: number, t: any) => s + (t.debit || 0), 0);
+    const totalCr = allTransactions.reduce((s: number, t: any) => s + (t.credit || 0), 0);
+
+    // ── Route helper — null means no navigation button (Tally/imported entries) ──
+    const getRoute = (tx: any): { url: string; label: string } | null => {
         const type = (tx.sourceType || '').toUpperCase();
-        if (type === 'SALE' && tx.sourceId) return { url: `/billing/${tx.sourceId}`, hasDetail: true };
-        if (type === 'PURCHASE') return { url: '/dashboard/purchases', hasDetail: false };
-        if (type === 'RETURN') return { url: '/dashboard/accounts/sale-returns', hasDetail: false };
-        return { url: '/dashboard/accounts/voucher-entry', hasDetail: false };
+        if (type === 'PURCHASE') return { url: '/dashboard/purchases', label: 'Go to Purchases' };
+        if (type === 'RETURN') return { url: '/dashboard/accounts/sale-returns', label: 'Go to Sale Returns' };
+        if (type === 'VOUCHER') return { url: '/dashboard/accounts/voucher-entry', label: 'Go to Voucher Entry' };
+        return null;
     };
 
     useEffect(() => {
@@ -340,6 +378,8 @@ function LedgerDrilldown({ ledgerId, ledgerName, fromDate, toDate, onClose }: {
         return () => window.removeEventListener('keydown', onKey, true);
     }, [activeTx]);
 
+    const showSkeleton = isLoading && page === 1;
+
     return (
         <Sheet open={!!ledgerId} onOpenChange={o => !o && onClose()}>
             <SheetContent side="right" className="w-full sm:max-w-3xl flex flex-col bg-slate-50 p-0 overflow-hidden">
@@ -347,20 +387,29 @@ function LedgerDrilldown({ ledgerId, ledgerName, fromDate, toDate, onClose }: {
                     <SheetTitle className="text-base font-semibold text-slate-800 flex items-center gap-2">
                         <BarChart2 className="h-4 w-4 text-indigo-500" /> {ledgerName}
                     </SheetTitle>
-                    <p className="text-xs text-slate-500 font-normal">Period: {fromDate} → {toDate}</p>
+                    <div className="flex items-center justify-between">
+                        <p className="text-xs text-slate-500 font-normal">Period: {fromDate} → {toDate}</p>
+                        {totalCount > 0 && (
+                            <p className="text-xs text-slate-400">
+                                {allTransactions.length < totalCount
+                                    ? `Showing ${allTransactions.length} of ${totalCount}`
+                                    : `All ${totalCount} transactions`}
+                            </p>
+                        )}
+                    </div>
                 </SheetHeader>
 
                 <div className="flex-1 overflow-y-auto">
-                    {isLoading && (
+                    {showSkeleton && (
                         <div className="p-4 space-y-2">{[...Array(8)].map((_, i) => <div key={i} className="h-9 bg-slate-200 rounded animate-pulse" />)}</div>
                     )}
-                    {!isLoading && transactions.length === 0 && (
+                    {!showSkeleton && allTransactions.length === 0 && (
                         <div className="flex flex-col items-center justify-center h-40 text-slate-400">
                             <BarChart2 className="h-8 w-8 mb-2" />
                             <p className="text-sm">No transactions in this period</p>
                         </div>
                     )}
-                    {!isLoading && transactions.length > 0 && (
+                    {!showSkeleton && allTransactions.length > 0 && (
                         <div className="overflow-x-auto">
                             <table className="w-full text-xs min-w-[640px]">
                                 <thead className="sticky top-0 bg-slate-100 text-slate-500 uppercase tracking-wide z-10">
@@ -377,19 +426,22 @@ function LedgerDrilldown({ ledgerId, ledgerName, fromDate, toDate, onClose }: {
                                 <tbody className="divide-y divide-slate-100 bg-white">
                                     <tr className="bg-blue-50">
                                         <td colSpan={6} className="px-3 py-2 text-xs font-semibold text-blue-700">↑ Opening Balance (before {fromDate})</td>
-                                        <td className="px-3 py-2 text-right font-mono text-xs font-semibold text-blue-700">—</td>
+                                        <td className="px-3 py-2 text-right font-mono text-xs font-semibold text-blue-700">
+                                            {fmtFull(Math.abs(openingBalance))}
+                                            <span className="text-[10px] ml-0.5 opacity-60">{openingBalance >= 0 ? 'Dr' : 'Cr'}</span>
+                                        </td>
                                     </tr>
                                     {txWithBal.map((tx: any, i: number) => (
                                         <tr key={i}
-                                            onClick={() => setActiveTx(activeTx?.date === tx.date && activeTx?.voucherNo === tx.voucherNo ? null : tx)}
+                                            onClick={() => setActiveTx(activeTx?.date === tx.date && activeTx?.voucherNo === tx.voucherNo && activeTx?.sourceId === tx.sourceId ? null : tx)}
                                             className={cn('hover:bg-indigo-50 transition-colors cursor-pointer',
-                                                activeTx?.date === tx.date && activeTx?.voucherNo === tx.voucherNo ? 'bg-indigo-50 border-l-2 border-indigo-400' : '')}>
+                                                activeTx?.date === tx.date && activeTx?.sourceId === tx.sourceId ? 'bg-indigo-50 border-l-2 border-indigo-400' : '')}>
                                             <td className="px-3 py-2 text-slate-500 whitespace-nowrap">{tx.date}</td>
                                             <td className="px-3 py-2">
                                                 <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase',
                                                     tx.sourceType === 'SALE' ? 'bg-green-100 text-green-700' :
-                                                    tx.sourceType === 'PURCHASE' ? 'bg-orange-100 text-orange-700' :
-                                                    'bg-slate-100 text-slate-600')}>
+                                                        tx.sourceType === 'PURCHASE' ? 'bg-orange-100 text-orange-700' :
+                                                            'bg-slate-100 text-slate-600')}>
                                                     {tx.sourceType || tx.voucherType || '—'}
                                                 </span>
                                             </td>
@@ -405,17 +457,43 @@ function LedgerDrilldown({ ledgerId, ledgerName, fromDate, toDate, onClose }: {
                                             </td>
                                         </tr>
                                     ))}
+                                    {/* Totals row — always shows full closing balance from API */}
                                     <tr className="bg-slate-100">
-                                        <td colSpan={4} className="px-3 py-2 text-xs font-bold text-slate-700">Closing Balance</td>
+                                        <td colSpan={4} className="px-3 py-2 text-xs font-bold text-slate-700">
+                                            Closing Balance {hasMore && <span className="text-slate-400 font-normal">(full period)</span>}
+                                        </td>
                                         <td className="px-3 py-2 text-right font-mono font-bold text-red-700">{totalDr > 0 ? fmtFull(totalDr) : '—'}</td>
                                         <td className="px-3 py-2 text-right font-mono font-bold text-green-700">{totalCr > 0 ? fmtFull(totalCr) : '—'}</td>
                                         <td className="px-3 py-2 text-right font-mono font-bold text-slate-800">
-                                            {fmtFull(Math.abs(totalDr - totalCr))}
-                                            <span className="text-[10px] ml-0.5 font-normal opacity-60">{totalDr >= totalCr ? 'Dr' : 'Cr'}</span>
+                                            {fmtFull(Math.abs(closingBalance))}
+                                            <span className="text-[10px] ml-0.5 font-normal opacity-60">{closingBalance >= 0 ? 'Dr' : 'Cr'}</span>
                                         </td>
                                     </tr>
                                 </tbody>
                             </table>
+
+                            {/* ── Load More ──────────────────────────────────────────── */}
+                            {hasMore && (
+                                <div className="flex items-center justify-between px-4 py-3 bg-indigo-50 border-t border-indigo-200">
+                                    <span className="text-xs text-indigo-600 font-medium">
+                                        {allTransactions.length} of {totalCount} transactions loaded
+                                    </span>
+                                    <button
+                                        onClick={() => setPage(p => p + 1)}
+                                        disabled={isFetching}
+                                        className="text-xs font-semibold text-indigo-700 hover:text-indigo-900 px-4 py-1.5 rounded-lg bg-white border border-indigo-300 hover:bg-indigo-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                                    >
+                                        {isFetching
+                                            ? <><span className="inline-block w-3 h-3 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" /> Loading…</>
+                                            : <>Load Next 200 →</>}
+                                    </button>
+                                </div>
+                            )}
+                            {!hasMore && totalCount > 0 && (
+                                <div className="px-4 py-2 text-center text-xs text-slate-400 border-t border-slate-100">
+                                    All {totalCount} transactions loaded
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
@@ -439,8 +517,8 @@ function LedgerDrilldown({ ledgerId, ledgerName, fromDate, toDate, onClose }: {
                                 <p className="text-[10px] text-slate-400 uppercase tracking-wide">Voucher Type</p>
                                 <span className={cn('text-[11px] font-semibold px-2 py-0.5 rounded uppercase',
                                     activeTx.sourceType === 'SALE' ? 'bg-green-100 text-green-700' :
-                                    activeTx.sourceType === 'PURCHASE' ? 'bg-orange-100 text-orange-700' :
-                                    'bg-slate-100 text-slate-600')}>
+                                        activeTx.sourceType === 'PURCHASE' ? 'bg-orange-100 text-orange-700' :
+                                            'bg-slate-100 text-slate-600')}>
                                     {activeTx.sourceType || activeTx.voucherType || '—'}
                                 </span>
                             </div>
@@ -463,22 +541,43 @@ function LedgerDrilldown({ ledgerId, ledgerName, fromDate, toDate, onClose }: {
                                 </div>
                             )}
                         </div>
-                        {activeTx.sourceId && (() => {
-                            const route = getRoute(activeTx);
-                            return (
-                                <div className="px-4 pb-3">
-                                    <button onClick={() => router.push(route.url)}
-                                        className="w-full text-xs text-indigo-600 hover:text-indigo-800 font-semibold flex items-center justify-center gap-1.5 border border-indigo-200 rounded-lg py-2 hover:bg-indigo-50 transition-colors">
-                                        {route.hasDetail
-                                            ? <><ExternalLink className="h-3.5 w-3.5" /> View Full Invoice</>
-                                            : <><ExternalLink className="h-3.5 w-3.5" /> Go to {activeTx.sourceType || 'Voucher'} Section</>}
+                        <div className="px-4 pb-3 flex flex-col gap-2">
+                            <button
+                                onClick={() => {
+                                    const targetId = activeTx.journalEntryId || activeTx.sourceId;
+                                    if (targetId) {
+                                        setSelectedVoucherId(targetId);
+                                        setVoucherModalOpen(true);
+                                    }
+                                }}
+                                className="w-full text-xs text-indigo-700 hover:text-indigo-900 font-semibold flex items-center justify-center gap-1.5 border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 rounded-lg py-2 transition-colors shadow-sm"
+                            >
+                                <FileText className="h-3.5 w-3.5" /> View Voucher / Bill Breakdown
+                            </button>
+                            {(() => {
+                                const route = getRoute(activeTx);
+                                if (!route) return null;
+                                return (
+                                    <button
+                                        onClick={() => router.push(route.url)}
+                                        className="w-full text-xs text-slate-600 hover:text-slate-900 font-semibold flex items-center justify-center gap-1.5 border border-slate-200 rounded-lg py-1.5 hover:bg-slate-50 transition-colors"
+                                    >
+                                        <ExternalLink className="h-3.5 w-3.5" /> {route.label}
                                     </button>
-                                </div>
-                            );
-                        })()}
+                                );
+                            })()}
+                        </div>
                     </div>
                 )}
             </SheetContent>
+
+            {selectedVoucherId && (
+                <VoucherDetailModal
+                    open={voucherModalOpen}
+                    onOpenChange={setVoucherModalOpen}
+                    voucherId={selectedVoucherId}
+                />
+            )}
         </Sheet>
     );
 }
@@ -530,9 +629,8 @@ function DataRow({ label, value, sub, bold, colorClass, indent = 0 }: {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function ProfitLossPage() {
     const router = useRouter();
-    const { outlet } = useAuthStore();
-    const { selectedOutletId } = useSettingsStore();
-    const outletId = selectedOutletId ?? outlet?.id ?? '';
+    const outlet = useAuthStore(s => s.outlet);
+    const outletId = useOutletId();
     const outletName = outlet?.name ?? 'MediFlow';
 
     // ── Date state ─────────────────────────────────────────────────────────
@@ -544,8 +642,8 @@ export default function ProfitLossPage() {
     // On first client mount, set the real defaults
     useEffect(() => {
         if (!fromDate) setFromDate(fyStartDate());
-        if (!toDate)   setToDate(localToday());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        if (!toDate) setToDate(localToday());
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // ── Stock state ────────────────────────────────────────────────────────
@@ -623,10 +721,10 @@ export default function ProfitLossPage() {
             }
             case 'this_quarter': {
                 let qStart: number;
-                if (m >= 3 && m <= 5)       qStart = 3;  // Q1 Apr-Jun
-                else if (m >= 6 && m <= 8)  qStart = 6;  // Q2 Jul-Sep
+                if (m >= 3 && m <= 5) qStart = 3;  // Q1 Apr-Jun
+                else if (m >= 6 && m <= 8) qStart = 6;  // Q2 Jul-Sep
                 else if (m >= 9 && m <= 11) qStart = 9;  // Q3 Oct-Dec
-                else                        qStart = 0;  // Q4 Jan-Mar
+                else qStart = 0;  // Q4 Jan-Mar
                 // For Q4 (Jan/Feb/Mar) the calendar year is the same as today's year;
                 // for Q1-Q3 it is also the same.  Simple: year = today.getFullYear().
                 const qYear = today.getFullYear();

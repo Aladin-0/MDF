@@ -2,15 +2,12 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { dashboardApi } from '@/lib/apiClient';
-import { useAuthStore } from '@/store/authStore';
-import { useSettingsStore } from '@/store/settingsStore';
+import { useOutletId } from '@/hooks/useOutletId';
 import { format } from 'date-fns';
 import { DateRangeFilter } from '@/types';
 
 export function useDashboardKPI(dateRange?: DateRangeFilter) {
-  const { outlet } = useAuthStore();
-  const { selectedOutletId } = useSettingsStore();
-  const outletId = selectedOutletId ?? outlet?.id ?? '';
+  const outletId = useOutletId();
   
   const today = format(new Date(), 'yyyy-MM-dd');
   const startDate = dateRange?.from;
@@ -26,9 +23,7 @@ export function useDashboardKPI(dateRange?: DateRangeFilter) {
 }
 
 export function useDashboardAlerts(dateRange?: DateRangeFilter) {
-  const { outlet } = useAuthStore();
-  const { selectedOutletId } = useSettingsStore();
-  const outletId = selectedOutletId ?? outlet?.id ?? '';
+  const outletId = useOutletId();
   
   const today = format(new Date(), 'yyyy-MM-dd');
   const startDate = dateRange?.from;

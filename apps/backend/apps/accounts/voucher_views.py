@@ -73,20 +73,36 @@ class LedgerListView(APIView):
         filter_group = request.query_params.get('filterGroup', '').lower()
         if filter_group == 'cashbank':
             qs = qs.filter(group__name__in=['Cash in Hand', 'Bank Accounts'])
+        else:
+            voucher_type = request.query_params.get('voucherType', '').lower()
+            if voucher_type == 'receipt':
+                qs = qs.filter(group__nature__in=['asset', 'income'])
+            elif voucher_type == 'payment':
+                qs = qs.filter(group__nature__in=['liability', 'expense'])
+            elif voucher_type == 'contra':
+                qs = qs.filter(group__name__in=['Cash in Hand', 'Bank Accounts'])
         search = request.query_params.get('search', '').strip()
         if search:
             from django.db.models import Q
             qs = qs.filter(Q(name__icontains=search) | Q(phone__icontains=search))
-        voucher_type = request.query_params.get('voucherType', '').lower()
-        if voucher_type == 'receipt':
-            qs = qs.filter(group__nature__in=['asset', 'income'])
-        elif voucher_type == 'payment':
-            qs = qs.filter(group__nature__in=['liability', 'expense'])
-        elif voucher_type == 'contra':
-            qs = qs.filter(group__name__in=['Cash in Hand', 'Bank Accounts'])
+
+        total_count = qs.count()
+        limit_param = request.query_params.get('limit')
+        if limit_param:
+            try:
+                limit_val = max(1, min(200, int(limit_param)))
+                qs = qs.order_by('name')[:limit_val]
+            except ValueError:
+                qs = qs.order_by('name')
+        elif search:
+            # Default to top 50 matches for fast, low-load search responses
+            qs = qs.order_by('name')[:50]
+        else:
+            qs = qs.order_by('name')
+
         return Response({
             'data': LedgerSerializer(qs, many=True).data,
-            'meta': {'total': qs.count()},
+            'meta': {'total': total_count},
         })
 
     def post(self, request):
@@ -249,7 +265,24 @@ class LedgerStatementView(APIView):
         from_date = request.query_params.get('from')
         to_date = request.query_params.get('to')
 
+        # ── Pagination params ────────────────────────────────────────────────
+        try:
+            page = max(1, int(request.query_params.get('page', 1)))
+        except (ValueError, TypeError):
+            page = 1
+        try:
+            page_size = min(2000, max(50, int(request.query_params.get('page_size', 1000))))
+        except (ValueError, TypeError):
+            page_size = 1000
+
         from apps.accounts.models import JournalLine
+
+        SOURCE_TYPE_TO_VOUCHER = {
+            'PURCHASE': 'purchase',
+            'SALE': 'sale',
+            'RETURN': 'journal',
+            'CREDIT_PAYMENT': 'receipt',
+        }
 
         # --- VoucherLines (manual voucher entries) ---
         voucher_lines_qs = ledger.voucherline_set.select_related('voucher').order_by('voucher__date', 'voucher__created_at')
@@ -259,15 +292,7 @@ class LedgerStatementView(APIView):
             voucher_lines_qs = voucher_lines_qs.filter(voucher__date__lte=to_date)
 
         # --- JournalLines (auto-posted from purchases, sales, etc.) ---
-        SOURCE_TYPE_TO_VOUCHER = {
-            'PURCHASE': 'purchase',
-            'SALE': 'sale',
-            'RETURN': 'journal',
-            'CREDIT_PAYMENT': 'receipt',
-        }
-        
-        # FIX: We add .exclude(journal_entry__source_type='VOUCHER') 
-        # to stop it from double-counting the manual vouchers we already grabbed above!
+        # Exclude VOUCHER source_type to avoid double-counting manual vouchers.
         journal_lines_qs = JournalLine.objects.filter(
             ledger=ledger
         ).exclude(
@@ -278,7 +303,12 @@ class LedgerStatementView(APIView):
         if to_date:
             journal_lines_qs = journal_lines_qs.filter(journal_entry__date__lte=to_date)
 
-        # Build unified list, tagged with sort key (date, created_at)
+        # ── Fast DB counts (O(1) index scan) ────────────────────────────────
+        total_voucher_count = voucher_lines_qs.count()
+        total_journal_count = journal_lines_qs.count()
+        total_count = total_voucher_count + total_journal_count
+
+        # ── Build merged, sorted raw list ────────────────────────────────────
         raw = []
         for line in voucher_lines_qs:
             raw.append({
@@ -295,22 +325,34 @@ class LedgerStatementView(APIView):
             })
         for line in journal_lines_qs:
             je = line.journal_entry
+            import re
+            match = re.match(r'^([A-Za-z0-9\-_]+)', je.narration or '')
+            v_no = match.group(1) if match else ''
             raw.append({
                 '_date': je.date,
                 '_created_at': je.created_at,
                 'date': str(je.date),
-                'voucherNo': '',
+                'voucherNo': v_no,
                 'voucherType': SOURCE_TYPE_TO_VOUCHER.get(je.source_type, 'journal'),
-                'description': line.description or je.narration,
+                'description': je.narration or line.description,
                 'debit': float(line.debit_amount),
                 'credit': float(line.credit_amount),
                 'sourceType': je.source_type,
-                'sourceId': str(je.source_id) if je.source_id else '',
+                'sourceId': str(je.source_id) if je.source_id else str(je.id),
+                'journalEntryId': str(je.id),
             })
 
         raw.sort(key=lambda r: (r['_date'], r['_created_at']))
 
-        # Dynamically calculate the opening balance for the selected date range
+        # ── Accounting nature: Credit (Liability/Creditor/Income) vs Debit (Asset/Debtor/Expense) ──
+        is_credit_nature = ledger.balance_type == 'Cr'
+        if not is_credit_nature and ledger.group:
+            nature = (ledger.group.nature or '').lower()
+            group_name = (ledger.group.name or '').lower()
+            if nature in ['liability', 'income'] or 'creditor' in group_name:
+                is_credit_nature = True
+
+        # ── Opening balance (DB aggregate — fast) ─────────────────────────────
         from django.db.models import Sum
         opening_balance = float(ledger.opening_balance)
         if from_date:
@@ -335,12 +377,29 @@ class LedgerStatementView(APIView):
             j_debit = float(prev_journals['debit'] or 0)
             j_credit = float(prev_journals['credit'] or 0)
 
-            opening_balance += (v_debit - v_credit) + (j_debit - j_credit)
+            if is_credit_nature:
+                opening_balance += (v_credit - v_debit) + (j_credit - j_debit)
+            else:
+                opening_balance += (v_debit - v_credit) + (j_debit - j_credit)
 
-        transactions = []
-        running = opening_balance
+        # ── True closing balance: traverse all rows (not just this page) ─────
+        closing_balance = opening_balance
         for row in raw:
-            running += row['debit'] - row['credit']
+            delta = (row['credit'] - row['debit']) if is_credit_nature else (row['debit'] - row['credit'])
+            closing_balance += delta
+
+        # ── Paginate: walk to page start for accurate running balance ─────────
+        offset = (page - 1) * page_size
+        running = opening_balance
+        for row in raw[:offset]:
+            delta = (row['credit'] - row['debit']) if is_credit_nature else (row['debit'] - row['credit'])
+            running += delta
+
+        # Build only this page's transactions
+        transactions = []
+        for row in raw[offset:offset + page_size]:
+            delta = (row['credit'] - row['debit']) if is_credit_nature else (row['debit'] - row['credit'])
+            running += delta
             transactions.append({
                 'date': row['date'],
                 'voucherNo': row['voucherNo'],
@@ -351,18 +410,37 @@ class LedgerStatementView(APIView):
                 'balance': round(running, 2),
                 'sourceType': row['sourceType'],
                 'sourceId': row['sourceId'],
+                'journalEntryId': row.get('journalEntryId', ''),
             })
 
-        # Balance-protected ordering: reverse final array for display when Latest First is requested
+        # Legacy: reverse page for 'latest first' ordering
         ordering = request.query_params.get('ordering', '').strip().lower()
         if ordering in ['desc', '-date', '-created_at', 'latest']:
             transactions.reverse()
 
+        total_debit = round(sum(r['debit'] for r in raw), 2)
+        total_credit = round(sum(r['credit'] for r in raw), 2)
+        page_debit = round(sum(t['debit'] for t in transactions), 2)
+        page_credit = round(sum(t['credit'] for t in transactions), 2)
+
         return Response({
             'ledger': LedgerSerializer(ledger).data,
             'openingBalance': round(opening_balance, 2),
-            'closingBalance': round(running, 2),
+            'closingBalance': round(closing_balance, 2),
+            'balanceType': 'Cr' if is_credit_nature else 'Dr',
+            'isCreditNature': is_credit_nature,
+            'totalDebit': total_debit,
+            'totalCredit': total_credit,
+            'pageDebit': page_debit,
+            'pageCredit': page_credit,
             'transactions': transactions,
+            'pagination': {
+                'page': page,
+                'page_size': page_size,
+                'total_count': total_count,
+                'total_pages': max(1, (total_count + page_size - 1) // page_size),
+                'has_more': (offset + page_size) < total_count,
+            },
         })
 
 
@@ -439,18 +517,98 @@ class VoucherListView(APIView):
 
 
 class VoucherDetailView(APIView):
-    permission_classes = [CanEditVouchers]
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [IsManagerOrAbove()]
+        return [CanEditVouchers()]
 
     def get(self, request, voucher_id):
+        import uuid
+        is_uuid = False
         try:
+            uuid.UUID(str(voucher_id))
+            is_uuid = True
+        except (ValueError, TypeError):
+            is_uuid = False
+
+        if is_uuid:
+            try:
+                voucher = Voucher.objects.prefetch_related(
+                    'lines__ledger',
+                    'bill_adjustments__purchase_invoice',
+                    'bill_adjustments__sale_invoice',
+                ).get(id=voucher_id)
+                return Response(VoucherSerializer(voucher).data)
+            except Voucher.DoesNotExist:
+                pass
+        else:
             voucher = Voucher.objects.prefetch_related(
                 'lines__ledger',
                 'bill_adjustments__purchase_invoice',
                 'bill_adjustments__sale_invoice',
-            ).get(id=voucher_id)
-            return Response(VoucherSerializer(voucher).data)
-        except Voucher.DoesNotExist:
-            return Response({'detail': 'Not found'}, status=404)
+            ).filter(voucher_no__iexact=voucher_id).first()
+            if voucher:
+                return Response(VoucherSerializer(voucher).data)
+
+        from apps.accounts.models import JournalEntry
+        from django.db.models import Q
+        import re
+
+        if is_uuid:
+            je = JournalEntry.objects.filter(
+                Q(id=voucher_id) | Q(source_id=voucher_id)
+            ).prefetch_related('lines__ledger').first()
+        else:
+            je = JournalEntry.objects.filter(
+                Q(narration__istartswith=voucher_id) | Q(narration__icontains=voucher_id)
+            ).prefetch_related('lines__ledger').first()
+
+        if je:
+            match = re.match(r'^([A-Za-z0-9\-_/]+)', je.narration or '')
+            v_no = match.group(1) if match else f"JE-{str(je.id)[:8]}"
+
+            line_names = [l.ledger.name.upper() for l in je.lines.all()]
+            if any('CASH' in n for n in line_names):
+                pmode = 'cash'
+            elif any('PAYTM' in n or 'PHONE' in n or 'UPI' in n for n in line_names):
+                pmode = 'upi'
+            elif any('BANK' in n or 'SBI' in n or 'HDFC' in n or 'ICICI' in n for n in line_names):
+                pmode = 'bank'
+            else:
+                pmode = 'other'
+
+            lines_data = []
+            total_dr = 0.0
+            total_cr = 0.0
+            for l in je.lines.all():
+                dr = float(l.debit_amount)
+                cr = float(l.credit_amount)
+                total_dr += dr
+                total_cr += cr
+                lines_data.append({
+                    'id': str(l.id),
+                    'ledgerId': str(l.ledger.id),
+                    'ledgerName': l.ledger.name,
+                    'debit': dr,
+                    'credit': cr,
+                    'description': l.description or l.ledger.name,
+                })
+
+            return Response({
+                'id': str(je.id),
+                'voucherType': je.source_type.lower(),
+                'voucherNo': v_no,
+                'date': str(je.date),
+                'narration': je.narration,
+                'totalAmount': round(total_dr or total_cr, 2),
+                'paymentMode': pmode,
+                'status': 'posted',
+                'createdAt': str(je.created_at),
+                'lines': lines_data,
+                'billAdjustments': [],
+                'isJournalEntry': True,
+            })
+        return Response({'detail': 'Not found'}, status=404)
 
     def put(self, request, voucher_id):
         outlet_id = get_outlet_id(request)
@@ -1256,9 +1414,9 @@ class ProfitLossView(APIView):
         def ledger_rows_for_group(group_name, side='dr'):
             """Returns list of {id, name, value} for the group in the period."""
             rows = []
-            try:
-                grp = LedgerGroup.objects.get(outlet=outlet, name=group_name)
-            except LedgerGroup.DoesNotExist:
+            candidates = [group_name, group_name + 's', group_name.rstrip('s')]
+            grp = LedgerGroup.objects.filter(outlet=outlet, name__in=candidates).first()
+            if not grp:
                 return rows
 
             for ledger in grp.ledger_set.all():
@@ -1275,9 +1433,9 @@ class ProfitLossView(APIView):
 
         # ── Helper — total for a named group ──────────────────────────────────
         def group_total(group_name, side='dr'):
-            try:
-                grp = LedgerGroup.objects.get(outlet=outlet, name=group_name)
-            except LedgerGroup.DoesNotExist:
+            candidates = [group_name, group_name + 's', group_name.rstrip('s')]
+            grp = LedgerGroup.objects.filter(outlet=outlet, name__in=candidates).first()
+            if not grp:
                 return Decimal('0')
 
             ledger_ids = list(grp.ledger_set.values_list('id', flat=True))

@@ -6,7 +6,7 @@ import {
     Printer, Eye, X, ShoppingBag, Search,
     CalendarRange, PlusCircle, ChevronLeft, ChevronRight, Users,
     TrendingUp, BarChart3, Wallet, CreditCard, Smartphone, Banknote, Tag, ArrowUpRight,
-    Download, RefreshCw
+    Download, RefreshCw, History, Sparkles
 } from 'lucide-react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { toast } from 'sonner';
@@ -40,6 +40,7 @@ const PAYMENT_FILTER_OPTIONS = [
     { label: 'Split', value: 'split' },
     { label: 'Bank Transfer', value: 'bank_transfer' },
     { label: 'Cheque', value: 'cheque' },
+    { label: 'Modified Bills', value: 'modified' },
 ];
 
 // ── formatters ────────────────────────────────────────────────────────────────
@@ -103,28 +104,59 @@ export default function SalesList() {
     const searchParams = useSearchParams();
     const currentSort = searchParams.get('sort') || '-invoice_date';
     const currentPaymentMode = searchParams.get('paymentMode') || 'all';
+    const urlModified = searchParams.get('modified') === 'true';
+    const urlHighlight = searchParams.get('highlight');
 
     const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
     const [startDate, setStartDate] = useState(fd(now));
     const [endDate, setEndDate] = useState(fd(now));
     const [activePreset, setActivePreset] = useState('Today');
     const [search, setSearch] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
     const [saleType, setSaleType] = useState<'ALL' | 'RETAIL' | 'WHOLESALE'>('ALL');
     const [page, setPage] = useState(1);
+    const [modifiedOnly, setModifiedOnly] = useState(urlModified);
+    const [activeHighlightId, setActiveHighlightId] = useState<string | null>(urlHighlight);
+
     const user = useAuthStore((s) => s.user);
     const canEdit = user?.role === 'super_admin' || user?.role === 'admin' || !!user?.canEditSales || !!user?.canModifyDraftBill || !!user?.canModifyUnpaidBill || !!user?.canModifyPaidBill;
+
+    useEffect(() => {
+        if (urlHighlight) {
+            setActiveHighlightId(urlHighlight);
+        }
+    }, [urlHighlight]);
+
+    useEffect(() => {
+        setModifiedOnly(searchParams.get('modified') === 'true');
+    }, [searchParams]);
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearch(search);
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [search]);
 
     const handleEditSale = (invoice: SaleInvoice) => {
         setSelectedInvoiceId(null);
         router.push(`/billing?edit=${invoice.id}`);
     };
 
-    const handlePaymentModeChange = (val: string) => {
+    const handleFilterChange = (val: string) => {
         const params = new URLSearchParams(searchParams.toString());
         if (val === 'all') {
             params.delete('paymentMode');
+            params.delete('modified');
+            setModifiedOnly(false);
+        } else if (val === 'modified') {
+            params.delete('paymentMode');
+            params.set('modified', 'true');
+            setModifiedOnly(true);
         } else {
             params.set('paymentMode', val);
+            params.delete('modified');
+            setModifiedOnly(false);
         }
         params.delete('page');
         const qs = params.toString();
@@ -132,23 +164,40 @@ export default function SalesList() {
         setPage(1);
     };
 
-    // When search is active: bypass date filters → search ALL dates (newest first)
-    // When search is empty: apply selected date range
-    const isSearching = search.trim().length > 0;
+    const toggleModifiedOnly = (enabled?: boolean) => {
+        const nextVal = enabled !== undefined ? enabled : !modifiedOnly;
+        handleFilterChange(nextVal ? 'modified' : 'all');
+    };
+
+    // When search or modified filter is active: bypass date filters → search ALL dates (newest first)
+    // When neither is active: apply selected date range
+    const isSearching = debouncedSearch.trim().length > 0;
     const { data, isLoading } = useSalesList({
-        startDate: isSearching ? undefined : startDate,
-        endDate:   isSearching ? undefined : endDate,
+        startDate: (isSearching || modifiedOnly) ? undefined : startDate,
+        endDate:   (isSearching || modifiedOnly) ? undefined : endDate,
         page,
         pageSize: PAGE_SIZE,
-        search: search.trim() || undefined,
+        search: debouncedSearch.trim() || undefined,
         saleType: saleType === 'ALL' ? undefined : saleType,
         paymentMode: currentPaymentMode !== 'all' ? currentPaymentMode : undefined,
+        isModified: modifiedOnly ? true : undefined,
         ordering: currentSort,
     });
     const invoices: SaleInvoice[] = data?.data ?? [];
     const pagination = data?.pagination;
-    // No further client-side filter needed; backend handles search
+    // No further client-side filter needed; backend handles search and modified filter
     const filteredInvoices = invoices;
+
+    useEffect(() => {
+        if (!activeHighlightId || isLoading) return;
+        const timer = setTimeout(() => {
+            const el = document.getElementById(`sale-row-${activeHighlightId}`);
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }, 200);
+        return () => clearTimeout(timer);
+    }, [activeHighlightId, isLoading, invoices]);
 
     // ── Analytics from backend (already filtered by date) ───────────────────
     // Backend returns analytics object with pre-aggregated numbers for selected date range.
@@ -472,7 +521,8 @@ export default function SalesList() {
                 </div>
             </div>
 
-            {/* ── Search, Payment Filter & Sort ── */}
+            {/* ── Active Highlight Alert Banner ── */}
+            {/* ── Search, Filter & Sort ── */}
             <div className="flex flex-col gap-2.5 w-full">
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                     {/* Big Prominent Search Bar */}
@@ -502,12 +552,12 @@ export default function SalesList() {
                     </div>
 
                     {/* Filter & Sort Controls */}
-                    <div className="flex items-center gap-2.5 shrink-0">
-                        {/* Payment Mode Selector */}
-                        <Select value={currentPaymentMode} onValueChange={handlePaymentModeChange}>
+                    <div className="flex items-center gap-2.5 shrink-0 flex-wrap sm:flex-nowrap">
+                        {/* Filter Selector (Payment Modes & Modified Bills) */}
+                        <Select value={modifiedOnly ? 'modified' : currentPaymentMode} onValueChange={handleFilterChange}>
                             <SelectTrigger className="h-11 min-w-[155px] px-3.5 bg-white text-xs font-medium border border-slate-200/90 rounded-xl shadow-xs hover:bg-slate-50 hover:border-slate-300 focus:ring-2 focus:ring-primary/10 transition-all">
                                 <div className="flex items-center gap-1.5 truncate">
-                                    <span className="text-slate-400 text-xs font-normal shrink-0">Payment:</span>
+                                    <span className="text-slate-400 text-xs font-normal shrink-0">Filter:</span>
                                     <SelectValue placeholder="All Payments" />
                                 </div>
                             </SelectTrigger>
@@ -532,9 +582,22 @@ export default function SalesList() {
                 </div>
 
                 {/* Active Filter Chips */}
-                {(isSearching || currentPaymentMode !== 'all') && (
+                {(isSearching || currentPaymentMode !== 'all' || modifiedOnly) && (
                     <div className="flex flex-wrap items-center gap-2 px-0.5 text-xs">
                         <span className="text-slate-400 text-xs font-medium">Active filters:</span>
+                        {modifiedOnly && (
+                            <span className="inline-flex items-center gap-1.5 bg-amber-100 text-amber-900 border border-amber-300 px-2.5 py-1 rounded-lg text-xs font-medium">
+                                <History className="w-3.5 h-3.5 text-amber-700" />
+                                <span>Filter: Modified Bills (all dates)</span>
+                                <button
+                                    onClick={() => handleFilterChange('all')}
+                                    className="hover:text-amber-950 p-0.5 rounded transition-colors"
+                                    title="Clear modified filter"
+                                >
+                                    <X className="w-3.5 h-3.5" />
+                                </button>
+                            </span>
+                        )}
                         {isSearching && (
                             <span className="inline-flex items-center gap-1.5 bg-primary/10 text-primary border border-primary/20 px-2.5 py-1 rounded-lg text-xs font-medium">
                                 <span>Search: &ldquo;{search}&rdquo; (all dates)</span>
@@ -551,7 +614,7 @@ export default function SalesList() {
                             <span className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-800 border border-slate-200 px-2.5 py-1 rounded-lg text-xs font-medium capitalize">
                                 <span>Payment: {currentPaymentMode.replace('_', ' ')}</span>
                                 <button
-                                    onClick={() => handlePaymentModeChange('all')}
+                                    onClick={() => handleFilterChange('all')}
                                     className="hover:text-slate-900 p-0.5 rounded transition-colors"
                                     title="Clear payment filter"
                                 >
@@ -563,6 +626,7 @@ export default function SalesList() {
                             onClick={() => {
                                 setSearch('');
                                 handlePaymentModeChange('all');
+                                toggleModifiedOnly(false);
                             }}
                             className="text-xs text-slate-500 hover:text-slate-800 underline underline-offset-2 ml-1 transition-colors"
                         >
@@ -616,11 +680,38 @@ export default function SalesList() {
                                     </td>
                                 </tr>
                             )}
-                            {!isLoading && filteredInvoices.map(inv => (
-                                <tr key={inv.id} className="hover:bg-slate-50 transition-colors">
+                            {!isLoading && filteredInvoices.map(inv => {
+                                const isHighlighted = inv.id === activeHighlightId;
+                                return (
+                                <tr 
+                                    key={inv.id} 
+                                    id={`sale-row-${inv.id}`}
+                                    className={cn(
+                                        "transition-all duration-300",
+                                        isHighlighted 
+                                            ? "bg-amber-100/70 ring-2 ring-amber-400 border-amber-300 font-medium shadow-xs" 
+                                            : "hover:bg-slate-50"
+                                    )}
+                                >
                                     <td className="px-4 py-3 font-mono text-xs font-semibold text-primary">
                                         <div className="flex flex-col gap-1 items-start">
-                                            <span>{inv.invoiceNo}</span>
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                <span>{inv.invoiceNo}</span>
+                                                {inv.isModified && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => router.push(`/dashboard/sales/revisions/${inv.id}`)}
+                                                        title={`Modified bill${inv.revisionCount ? ` (${inv.revisionCount} revisions)` : ''} - Click to view revision history`}
+                                                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 transition-colors"
+                                                    >
+                                                        <History className="w-2.5 h-2.5 text-amber-600" />
+                                                        Modified
+                                                        {inv.revisionCount && inv.revisionCount > 1 ? (
+                                                            <span className="text-[9px] text-amber-600 font-bold">v{inv.revisionCount}</span>
+                                                        ) : null}
+                                                    </button>
+                                                )}
+                                            </div>
                                             {saleType === 'ALL' && (
                                                 <span className={cn(
                                                     "text-[9px] px-1.5 py-0.5 rounded-sm border uppercase font-medium tracking-wide",
@@ -677,12 +768,23 @@ export default function SalesList() {
                                     <td className="px-4 py-3 text-slate-600 text-xs">{inv.billedByName ?? '—'}</td>
                                     <td className="px-4 py-3 text-right">
                                         <div className="flex items-center justify-end gap-1">
+                                            {inv.isModified && (
+                                                <Button 
+                                                    variant="ghost" 
+                                                    size="icon" 
+                                                    className="h-7 w-7 text-amber-700 hover:text-amber-800 hover:bg-amber-50" 
+                                                    title="View Revision History" 
+                                                    onClick={() => router.push(`/dashboard/sales/revisions/${inv.id}`)}
+                                                >
+                                                    <History className="w-4 h-4 text-amber-600" />
+                                                </Button>
+                                            )}
                                             {inv.eway_bill_no && (
                                                 <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-600 hover:text-blue-700 hover:bg-blue-50" title="Download E-Way Bill" onClick={() => handleDownloadEwb(inv.id)}>
                                                     <Download className="w-4 h-4" />
                                                 </Button>
                                             )}
-                                            {(inv.irnStatus === 'FAILED' || (inv as any).irn_status === 'FAILED') && (
+                                            {((inv as any).irnStatus === 'FAILED' || (inv as any).irn_status === 'FAILED') && (
                                                 <Button variant="ghost" size="icon" className="h-7 w-7 text-amber-600 hover:text-amber-700 hover:bg-amber-50" title="Retry E-Invoice Generation" onClick={() => handleRetryEinvoice(inv.id)}>
                                                     <RefreshCw className="w-4 h-4" />
                                                 </Button>
@@ -696,7 +798,8 @@ export default function SalesList() {
                                         </div>
                                     </td>
                                 </tr>
-                            ))}
+                            );
+                            })}
                         </tbody>
                     </table>
                 </div>

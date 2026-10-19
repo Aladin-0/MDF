@@ -6,6 +6,7 @@ import { RefreshCw, Scale, Printer, Download, ChevronDown, ChevronRight, FileTex
 import { accountsApi, voucherApi } from '@/lib/apiClient';
 import { useAuthStore } from '@/store/authStore';
 import { useSettingsStore } from '@/store/settingsStore';
+import { useOutletId } from '@/hooks/useOutletId';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -69,9 +70,9 @@ interface TrialBalanceResponse {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function TrialBalancePage() {
-    const { outlet } = useAuthStore();
-    const { selectedOutletId } = useSettingsStore();
-    const outletId = selectedOutletId ?? outlet?.id ?? '';
+    const outlet = useAuthStore(s => s.outlet);
+    const outletId = useOutletId();
+    const outletName = outlet?.name ?? 'MediFlow';
 
     // ── Date state — computed once at mount, NOT on every render ──────────────
     const [fromDate, setFromDate] = useState<string>(() => {
@@ -431,7 +432,7 @@ export default function TrialBalancePage() {
                 <TBPrintDialog
                     open={showPrintDialog}
                     onClose={() => setShowPrintDialog(false)}
-                    outletName={outlet?.name ?? 'MediFlow'}
+                    outletName={outletName}
                     fromDate={fromDate}
                     toDate={toDate}
                     onPrint={handlePrint}
@@ -534,7 +535,7 @@ export default function TrialBalancePage() {
 
                 {/* Print-only header — hidden on screen, shown in print */}
                 <div className="tb-print-company">
-                    <h2>{outlet?.name ?? 'MediFlow'}</h2>
+                    <h2>{outletName}</h2>
                     <p>Trial Balance</p>
                     <p>Period: {fromDate} to {toDate}</p>
                     <hr style={{ margin: '6px 0', borderColor: '#ccc' }} />

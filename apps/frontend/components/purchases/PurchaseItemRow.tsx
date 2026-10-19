@@ -28,9 +28,41 @@ interface Props {
 
 type ExpiryStatus = 'expired' | 'near' | 'ok';
 
+export const formatExpiryForDisplay = (exp?: string): string => {
+    if (!exp) return '';
+    const raw = exp.trim();
+    // YYYY-MM-DD or YYYY-MM
+    const mIso = raw.match(/^(\d{4})-(\d{1,2})/);
+    if (mIso) {
+        return `${mIso[2].padStart(2, '0')}/${mIso[1]}`;
+    }
+    // MM/YY or MM-YY or MM.YY
+    const mShort = raw.match(/^(\d{1,2})[/\-.](\d{2})$/);
+    if (mShort) {
+        return `${mShort[1].padStart(2, '0')}/20${mShort[2]}`;
+    }
+    // MM/YYYY or MM-YYYY or MM.YYYY
+    const mLong = raw.match(/^(\d{1,2})[/\-.](\d{4})$/);
+    if (mLong) {
+        return `${mLong[1].padStart(2, '0')}/${mLong[2]}`;
+    }
+    return raw;
+};
+
 const getExpiryStatus = (exp: string): ExpiryStatus => {
     if (!exp) return 'ok';
-    const diff = differenceInDays(new Date(exp), new Date());
+    let d = new Date(exp);
+    if (isNaN(d.getTime())) {
+        const mShort = exp.trim().match(/^(\d{1,2})[/\-.](\d{2})$/);
+        const mLong = exp.trim().match(/^(\d{1,2})[/\-.](\d{4})$/);
+        if (mShort) {
+            d = new Date(2000 + parseInt(mShort[2], 10), parseInt(mShort[1], 10) - 1, 1);
+        } else if (mLong) {
+            d = new Date(parseInt(mLong[2], 10), parseInt(mLong[1], 10) - 1, 1);
+        }
+    }
+    if (isNaN(d.getTime())) return 'ok';
+    const diff = differenceInDays(d, new Date());
     if (diff < 0)  return 'expired';
     if (diff < 90) return 'near';
     return 'ok';
@@ -103,6 +135,7 @@ export function PurchaseItemRow({
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const [dropdownStyle, setDropdownStyle] = useState<{ top: number; left: number } | null>(null);
     const debounceRef                     = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const abortControllerRef              = useRef<AbortController | null>(null);
     const wrapperRef                      = useRef<HTMLDivElement>(null);
     const inputRef                        = useRef<HTMLInputElement>(null);
     const portalRef                       = useRef<HTMLDivElement>(null);
@@ -175,6 +208,10 @@ export function PurchaseItemRow({
         onChange(index, 'isCustom', false as unknown as number);
 
         if (debounceRef.current) clearTimeout(debounceRef.current);
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+            abortControllerRef.current = null;
+        }
 
         if (raw.length < 2) {
             setResults([]);
@@ -191,10 +228,14 @@ export function PurchaseItemRow({
                 return;
             }
             try {
-                const found = await productsApi.search(raw, outletId);
+                const controller = new AbortController();
+                abortControllerRef.current = controller;
+                const found = await productsApi.search(raw, outletId, 'purchase', controller.signal);
                 setResults(found);
-            } catch {
-                setResults([]);
+            } catch (err: any) {
+                if (err?.name !== 'AbortError') {
+                    setResults([]);
+                }
             } finally {
                 setSearching(false);
             }
@@ -362,7 +403,7 @@ export function PurchaseItemRow({
                     />
                 </td>
 
-                {/* Expiry — MM/YY text input, compact */}
+                {/* Expiry — MM/YYYY text input, compact */}
                 <td className={td}>
                     <div className="flex items-center gap-0.5">
                         <input
@@ -371,28 +412,24 @@ export function PurchaseItemRow({
                                 expStatus === 'expired' && 'border-red-400 bg-red-50',
                                 expStatus === 'near'    && 'border-orange-300 bg-orange-50',
                             )}
-                            placeholder="MM/YY or MM/YYYY"
+                            placeholder="MM/YYYY"
                             maxLength={7}
-                            value={
-                                value.expiryDate
-                                    ? value.expiryDate.slice(0, 7).replace(/^(\d{4})-(\d{2})$/, '$2/$1')
-                                    : ''
-                            }
+                            value={formatExpiryForDisplay(value.expiryDate)}
                             onChange={(e) => {
                                 const raw = e.target.value;
                                 const mShort = raw.match(/^(\d{2})\/(\d{2})$/);   // MM/YY
                                 const mLong  = raw.match(/^(\d{2})\/(\d{4})$/);   // MM/YYYY
                                 if (mShort) {
-                                    const month = parseInt(mShort[1]);
-                                    const year  = parseInt(mShort[2]) + 2000;
+                                    const month = parseInt(mShort[1], 10);
+                                    const year  = parseInt(mShort[2], 10) + 2000;
                                     if (month >= 1 && month <= 12) {
                                         onChange(index, 'expiryDate', `${year}-${mShort[1]}-01`);
                                     } else {
                                         onChange(index, 'expiryDate', raw);
                                     }
                                 } else if (mLong) {
-                                    const month = parseInt(mLong[1]);
-                                    const year  = parseInt(mLong[2]);
+                                    const month = parseInt(mLong[1], 10);
+                                    const year  = parseInt(mLong[2], 10);
                                     if (month >= 1 && month <= 12) {
                                         onChange(index, 'expiryDate', `${year}-${mLong[1]}-01`);
                                     } else {
@@ -400,6 +437,40 @@ export function PurchaseItemRow({
                                     }
                                 } else {
                                     onChange(index, 'expiryDate', raw);
+                                }
+                            }}
+                            onBlur={() => {
+                                if (value.expiryDate) {
+                                    const raw = value.expiryDate.trim();
+                                    const mDigits4 = raw.match(/^(\d{2})(\d{2})$/);
+                                    const mShort1  = raw.match(/^(\d{1})\/(\d{2})$/);
+                                    const mLong1   = raw.match(/^(\d{1})\/(\d{4})$/);
+                                    const mShort2  = raw.match(/^(\d{2})\/(\d{2})$/);
+                                    if (mDigits4) {
+                                        const m = parseInt(mDigits4[1], 10);
+                                        const y = parseInt(mDigits4[2], 10) + 2000;
+                                        if (m >= 1 && m <= 12) {
+                                            onChange(index, 'expiryDate', `${y}-${mDigits4[1]}-01`);
+                                        }
+                                    } else if (mShort1) {
+                                        const m = parseInt(mShort1[1], 10);
+                                        const y = parseInt(mShort1[2], 10) + 2000;
+                                        if (m >= 1 && m <= 12) {
+                                            onChange(index, 'expiryDate', `${y}-0${m}-01`);
+                                        }
+                                    } else if (mLong1) {
+                                        const m = parseInt(mLong1[1], 10);
+                                        const y = parseInt(mLong1[2], 10);
+                                        if (m >= 1 && m <= 12) {
+                                            onChange(index, 'expiryDate', `${y}-0${m}-01`);
+                                        }
+                                    } else if (mShort2) {
+                                        const m = parseInt(mShort2[1], 10);
+                                        const y = parseInt(mShort2[2], 10) + 2000;
+                                        if (m >= 1 && m <= 12) {
+                                            onChange(index, 'expiryDate', `${y}-${mShort2[1]}-01`);
+                                        }
+                                    }
                                 }
                             }}
                         />
