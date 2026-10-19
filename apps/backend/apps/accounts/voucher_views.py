@@ -985,6 +985,71 @@ class GSTSummaryView(APIView):
         })
 
 
+def get_descendant_group_ids(outlet, group_names):
+    """
+    Given an outlet and group names (or single name), find all matching LedgerGroup IDs
+    and all their recursive child/descendant group IDs.
+    """
+    from apps.accounts.models import LedgerGroup
+    from django.db.models import Q
+    if isinstance(group_names, str):
+        group_names = [group_names]
+    query_names = set()
+    for n in group_names:
+        query_names.update([n, n + 's', n.rstrip('s'), n.upper(), n.lower(), n.title()])
+
+    root_groups = list(LedgerGroup.objects.filter(
+        outlet=outlet, name__in=query_names
+    ).values_list('id', flat=True))
+
+    if not root_groups:
+        q_obj = Q()
+        for n in group_names:
+            q_obj |= Q(name__iexact=n) | Q(name__iexact=n + 's') | Q(name__iexact=n.rstrip('s'))
+        root_groups = list(LedgerGroup.objects.filter(outlet=outlet).filter(q_obj).values_list('id', flat=True))
+
+    visited = set()
+    queue = list(root_groups)
+    while queue:
+        gid = queue.pop()
+        if gid in visited:
+            continue
+        visited.add(gid)
+        children = list(LedgerGroup.objects.filter(outlet=outlet, parent_id=gid).values_list('id', flat=True))
+        queue.extend(children)
+    return list(visited)
+
+
+def classify_balance_sheet_group(group):
+    """
+    Classifies a LedgerGroup into one of the Balance Sheet categories:
+    'CAPITAL', 'LOANS', 'CURRENT_LIAB', 'FIXED_ASSETS', 'INVESTMENTS', 'CURRENT_ASSETS', or None (for P&L).
+    """
+    if group.nature in ('income', 'expense'):
+        return None
+    curr = group
+    chain = [curr.name.upper()]
+    while curr.parent:
+        curr = curr.parent
+        chain.append(curr.name.upper())
+
+    if group.nature == 'asset':
+        if any('FIXED' in c or 'TANGIBLE' in c for c in chain):
+            return 'FIXED_ASSETS'
+        if any('INVEST' in c for c in chain):
+            return 'INVESTMENTS'
+        return 'CURRENT_ASSETS'
+
+    if group.nature == 'liability':
+        if any('CAPITAL' in c or 'RESERVE' in c or 'SHARE' in c or 'SURPLUS' in c for c in chain):
+            return 'CAPITAL'
+        if any('LOAN' in c or 'BORROW' in c or 'BANK OD' in c or 'BANK OCC' in c or 'SECURED' in c or 'UNSECURED' in c or 'BRANCH' in c or 'SUSPENSE' in c for c in chain):
+            return 'LOANS'
+        return 'CURRENT_LIAB'
+
+    return None
+
+
 class BalanceSheetView(APIView):
     """
     GET /api/v1/balance-sheet/?outlet_id=X&as_on_date=YYYY-MM-DD&stock_valuation=purchase_rate
@@ -1158,38 +1223,49 @@ class BalanceSheetView(APIView):
         expense_groups = []
 
         for group in all_groups:
+            # Skip empty placeholder groups with no ledgers
+            if not group.ledger_set.exists():
+                continue
             gdata = build_group_data(group)
-            name = group.name
+            cat = classify_balance_sheet_group(group)
 
-            if name in LIABILITIES_CAPITAL:
+            if cat == 'CAPITAL':
                 capital_groups.append(gdata)
-            elif name in LIABILITIES_LOANS:
+            elif cat == 'LOANS':
                 loans_groups.append(gdata)
-            elif name in LIABILITIES_CURRENT:
+            elif cat == 'CURRENT_LIAB':
                 current_liab_groups.append(gdata)
-            elif name in ASSETS_FIXED:
+            elif cat == 'FIXED_ASSETS':
                 fixed_asset_groups.append(gdata)
-            elif name in ASSETS_INVESTMENTS:
+            elif cat == 'INVESTMENTS':
                 investment_groups.append(gdata)
-            elif name in ASSETS_CURRENT:
+            elif cat == 'CURRENT_ASSETS':
                 current_asset_groups.append(gdata)
-            elif name in INCOME_GROUPS:
+            elif group.name in INCOME_GROUPS:
                 income_groups.append(gdata)
-            elif name in EXPENSE_GROUPS:
+            elif group.name in EXPENSE_GROUPS:
                 expense_groups.append(gdata)
-            # else: ignore groups not relevant to balance sheet
 
         # ── Net Profit (FY start → as_on_date) ─────────────────────────────
-        # Get all income and expense ledger IDs
-        income_group_names = list(INCOME_GROUPS)
-        expense_group_names = list(EXPENSE_GROUPS)
+        # Get all income and expense ledger IDs (including descendant groups and nature fallback)
+        from django.db.models import Q
+        income_group_names = ['Sales Account', 'Sales Accounts', 'Direct Incomes', 'Direct Income', 'Indirect Incomes', 'Indirect Income']
+        expense_group_names = ['Purchase Account', 'Purchase Accounts', 'Direct Expenses', 'Direct Expense', 'Indirect Expenses', 'Indirect Expense']
 
-        income_ledger_ids = Ledger.objects.filter(
-            outlet=outlet, group__name__in=income_group_names
-        ).values_list('id', flat=True)
-        expense_ledger_ids = Ledger.objects.filter(
-            outlet=outlet, group__name__in=expense_group_names
-        ).values_list('id', flat=True)
+        income_group_ids = get_descendant_group_ids(outlet, income_group_names)
+        expense_group_ids = get_descendant_group_ids(outlet, expense_group_names)
+
+        income_ledger_ids = list(Ledger.objects.filter(
+            outlet=outlet
+        ).filter(
+            Q(group_id__in=income_group_ids) | Q(group__nature='income')
+        ).values_list('id', flat=True))
+
+        expense_ledger_ids = list(Ledger.objects.filter(
+            outlet=outlet
+        ).filter(
+            Q(group_id__in=expense_group_ids) | Q(group__nature='expense')
+        ).values_list('id', flat=True))
 
         # Sum credits on income ledgers (FY start → as_on_date)
         income_agg = JournalLine.objects.filter(
@@ -1213,8 +1289,8 @@ class BalanceSheetView(APIView):
             (income_agg['total_cr'] or Decimal('0'))
             - (income_agg['total_dr'] or Decimal('0'))
         )
-        # Add opening income balances (income ledger base opening balances)
-        for ledger in Ledger.objects.filter(outlet=outlet, group__name__in=income_group_names):
+        # Add opening income balances
+        for ledger in Ledger.objects.filter(id__in=income_ledger_ids):
             base = ledger.opening_balance or Decimal('0')
             if ledger.balance_type == 'Cr':
                 income_total += float(base)
@@ -1236,7 +1312,7 @@ class BalanceSheetView(APIView):
             - (expense_agg['total_cr'] or Decimal('0'))
         )
         # Add opening expense balances
-        for ledger in Ledger.objects.filter(outlet=outlet, group__name__in=expense_group_names):
+        for ledger in Ledger.objects.filter(id__in=expense_ledger_ids):
             base = ledger.opening_balance or Decimal('0')
             if ledger.balance_type == 'Dr':
                 expense_total += float(base)
@@ -1245,8 +1321,9 @@ class BalanceSheetView(APIView):
 
         net_profit = income_total - expense_total  # positive = profit, negative = loss
 
-        # ── Stock in Hand (from inventory, read-only) ────────────────────────
+        # ── Stock in Hand & Stock Adjustment (Marg ERP Trading Account logic) ─
         stock_value = Decimal('0')
+        opening_stock = Decimal('0')
         if stock_scope != 'no_stock':
             batches = Batch.objects.filter(outlet=outlet, is_active=True, qty_strips__gt=0)
             for batch in batches:
@@ -1261,9 +1338,19 @@ class BalanceSheetView(APIView):
                     rate = batch.purchase_rate
                 stock_value += qty * rate
 
-        # ── Closing Stock adjusts Net Profit (Marg ERP Trading Account logic) ─
+            from apps.inventory.models import StockLedger
+            from django.db.models import Sum as _Sum
+            opening_qs = StockLedger.objects.filter(
+                outlet=outlet,
+                txn_type='OPENING',
+                txn_date__lte=as_on_date,
+            )
+            agg = opening_qs.aggregate(total=_Sum('value_in'))
+            opening_stock = agg['total'] or Decimal('0')
+
         stock_total = float(stock_value)  # 0 when stock_scope == 'no_stock'
-        net_profit_adjusted = net_profit + stock_total  # closing stock offsets purchases in P&L
+        stock_adjustment = stock_total - float(opening_stock)
+        net_profit_adjusted = net_profit + stock_adjustment
         is_profit = net_profit_adjusted >= 0
 
         # ── Compute section totals ───────────────────────────────────────────
@@ -1399,52 +1486,51 @@ class ProfitLossView(APIView):
         stock_valuation = request.query_params.get('stock_valuation', 'purchase_rate')
         stock_scope     = request.query_params.get('stock_scope', 'all_days')
 
+        # Pre-aggregate all JournalLines for the outlet in this period in one query for instant performance
+        period_lines = JournalLine.objects.filter(
+            ledger__outlet=outlet,
+            journal_entry__date__gte=from_date,
+            journal_entry__date__lte=to_date,
+        ).values('ledger_id').annotate(
+            tot_dr=Sum('debit_amount'),
+            tot_cr=Sum('credit_amount'),
+        )
+        totals_map = {
+            item['ledger_id']: (item['tot_dr'] or Decimal('0'), item['tot_cr'] or Decimal('0'))
+            for item in period_lines
+        }
+
         # ── Helper — aggregate JournalLines for a set of ledger IDs in period ─
         def period_agg(ledger_ids):
-            return JournalLine.objects.filter(
-                ledger_id__in=ledger_ids,
-                journal_entry__date__gte=from_date,
-                journal_entry__date__lte=to_date,
-            ).aggregate(
-                total_dr=Sum('debit_amount'),
-                total_cr=Sum('credit_amount'),
-            )
+            dr = sum(totals_map.get(lid, (Decimal('0'), Decimal('0')))[0] for lid in ledger_ids)
+            cr = sum(totals_map.get(lid, (Decimal('0'), Decimal('0')))[1] for lid in ledger_ids)
+            return {'total_dr': dr, 'total_cr': cr}
 
-        # ── Helper — build per-ledger breakdown for a group ─────────────────
-        def ledger_rows_for_group(group_name, side='dr'):
-            """Returns list of {id, name, value} for the group in the period."""
+        # ── Helper — build per-ledger breakdown for a group (including sub-groups) ──
+        def ledger_rows_for_group(group_names, side='dr'):
+            """Returns list of {id, name, value} for the group and all its descendant sub-groups in the period."""
+            if isinstance(group_names, str):
+                group_names = [group_names]
+            group_ids = get_descendant_group_ids(outlet, group_names)
+            if not group_ids:
+                return []
+
+            ledgers = Ledger.objects.filter(outlet=outlet, group_id__in=group_ids).order_by('name')
             rows = []
-            candidates = [group_name, group_name + 's', group_name.rstrip('s')]
-            grp = LedgerGroup.objects.filter(outlet=outlet, name__in=candidates).first()
-            if not grp:
-                return rows
-
-            for ledger in grp.ledger_set.all():
-                agg = period_agg([ledger.id])
-                dr = float(agg['total_dr'] or 0)
-                cr = float(agg['total_cr'] or 0)
-                value = dr - cr if side == 'dr' else cr - dr
+            for ledger in ledgers:
+                dr, cr = totals_map.get(ledger.id, (Decimal('0'), Decimal('0')))
+                val = (dr - cr) if side == 'dr' else (cr - dr)
                 rows.append({
                     'id': str(ledger.id),
                     'name': ledger.name,
-                    'value': round(value, 2),
+                    'value': round(float(val), 2),
                 })
             return rows
 
         # ── Helper — total for a named group ──────────────────────────────────
-        def group_total(group_name, side='dr'):
-            candidates = [group_name, group_name + 's', group_name.rstrip('s')]
-            grp = LedgerGroup.objects.filter(outlet=outlet, name__in=candidates).first()
-            if not grp:
-                return Decimal('0')
-
-            ledger_ids = list(grp.ledger_set.values_list('id', flat=True))
-            if not ledger_ids:
-                return Decimal('0')
-            agg = period_agg(ledger_ids)
-            dr = agg['total_dr'] or Decimal('0')
-            cr = agg['total_cr'] or Decimal('0')
-            return (dr - cr) if side == 'dr' else (cr - dr)
+        def group_total(group_names, side='dr'):
+            rows = ledger_rows_for_group(group_names, side)
+            return sum(Decimal(str(r['value'])) for r in rows)
 
         # ── Helper — build expense/income group breakdown ─────────────────────
         def build_group_block(group_names, side='dr'):
@@ -1463,31 +1549,27 @@ class ProfitLossView(APIView):
             return blocks, float(total)
 
         # ── SALES ──────────────────────────────────────────────────────────────
-        sales_ledgers = ledger_rows_for_group('Sales Account', 'cr')
+        sales_ledgers = ledger_rows_for_group(['Sales Account', 'Sales Accounts', 'Sales'], 'cr')
         # Net credits (income) from Sales Account
         total_sales = sum(Decimal(str(l['value'])) for l in sales_ledgers)
 
         # ── SALES RETURN (credit notes reduce sales) ───────────────────────────
-        sales_return_ledgers = ledger_rows_for_group('Sales Account', 'dr')  # debits to Sales = returns
-        # More robust: look for ledgers named "Sales Return" in any group
+        sales_return_ledgers = ledger_rows_for_group(['Sales Account', 'Sales Accounts', 'Sales'], 'dr')
         total_sales_return = Decimal('0')
         sr_rows = []
         try:
-            # Try to find a dedicated Sales Return ledger
             from apps.accounts.models import Ledger as LedgerModel
             for l in LedgerModel.objects.filter(outlet=outlet, name__icontains='sales return'):
-                agg = period_agg([l.id])
-                dr = float(agg['total_dr'] or 0)
-                cr = float(agg['total_cr'] or 0)
-                val = dr - cr  # Dr on sales return ledger = reducing sales
+                dr, cr = totals_map.get(l.id, (Decimal('0'), Decimal('0')))
+                val = dr - cr
                 if abs(val) > 0.001:
                     total_sales_return += Decimal(str(abs(val)))
-                    sr_rows.append({'id': str(l.id), 'name': l.name, 'value': round(abs(val), 2)})
+                    sr_rows.append({'id': str(l.id), 'name': l.name, 'value': round(float(abs(val)), 2)})
         except Exception:
             pass
 
         # ── PURCHASES ─────────────────────────────────────────────────────────
-        purchase_ledgers = ledger_rows_for_group('Purchase Account', 'dr')
+        purchase_ledgers = ledger_rows_for_group(['Purchase Account', 'Purchase Accounts', 'Purchase'], 'dr')
         total_purchases = sum(Decimal(str(l['value'])) for l in purchase_ledgers)
 
         # ── DIRECT EXPENSES (true cost expenses only — no GST/tax groups) ──────────
