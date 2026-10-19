@@ -10,7 +10,7 @@ from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 
 from apps.inventory.models import MasterProduct, Batch
-from apps.core.models import Outlet
+from apps.core.models import Outlet, TaxSlab
 from apps.accounts.models import Staff
 from apps.audit.services import log_activity
 
@@ -216,6 +216,9 @@ class ProductListView(APIView):
 
         try:
             gst_rate = Decimal(str(data.get('gstRate', 0)))
+            is_valid, err_msg = TaxSlab.is_rate_active(gst_rate)
+            if not is_valid:
+                errors['gstRate'] = err_msg
         except (InvalidOperation, TypeError):
             errors['gstRate'] = 'Invalid GST rate'
             gst_rate = Decimal('0')
@@ -329,7 +332,12 @@ class ProductDetailView(APIView):
 
         if 'gstRate' in data:
             try:
-                product.gst_rate = Decimal(str(data['gstRate']))
+                candidate_rate = Decimal(str(data['gstRate']))
+                is_valid, err_msg = TaxSlab.is_rate_active(candidate_rate)
+                if not is_valid:
+                    errors['gstRate'] = err_msg
+                else:
+                    product.gst_rate = candidate_rate
             except (InvalidOperation, TypeError):
                 errors['gstRate'] = 'Invalid GST rate'
 

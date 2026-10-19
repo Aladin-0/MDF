@@ -28,12 +28,18 @@ export function ValidationPanel({ validation }: { validation: any }) {
                     <AlertTitle>Validation Failed - Please fix these errors before exporting</AlertTitle>
                     <AlertDescription>
                         <ul className="list-disc pl-5 mt-2 space-y-1">
-                            {blocking_errors.map((err: any, i: number) => (
-                                <li key={i}>
-                                    <strong>[{err.code}]</strong> {err.message}
-                                    {err.reference_id && <span className="ml-2 text-xs opacity-75">(Ref: {err.reference_id})</span>}
-                                </li>
-                            ))}
+                            {blocking_errors.map((err: any, i: number) => {
+                                const message = typeof err === 'string' ? err : (err.message || err.error || err.issue || err.warning || JSON.stringify(err));
+                                const code = typeof err === 'object' && err.code ? String(err.code) : null;
+                                const ref = typeof err === 'object' ? (err.reference_id || err.invoice_no) : null;
+                                return (
+                                    <li key={i}>
+                                        {code && <strong className="mr-1">[{code}]</strong>}
+                                        {message}
+                                        {ref && <span className="ml-2 text-xs opacity-75">(Ref: {ref})</span>}
+                                    </li>
+                                );
+                            })}
                         </ul>
                     </AlertDescription>
                 </Alert>
@@ -45,12 +51,18 @@ export function ValidationPanel({ validation }: { validation: any }) {
                     <AlertTitle className="text-amber-800">Warnings</AlertTitle>
                     <AlertDescription className="text-amber-800">
                         <ul className="list-disc pl-5 mt-2 space-y-1">
-                            {warnings.map((warn: any, i: number) => (
-                                <li key={i}>
-                                    <strong>[{warn.code}]</strong> {warn.message}
-                                    {warn.reference_id && <span className="ml-2 text-xs opacity-75">(Ref: {warn.reference_id})</span>}
-                                </li>
-                            ))}
+                            {warnings.map((warn: any, i: number) => {
+                                const message = typeof warn === 'string' ? warn : (warn.message || warn.warning || warn.issue || JSON.stringify(warn));
+                                const code = typeof warn === 'object' && warn.code ? String(warn.code) : null;
+                                const ref = typeof warn === 'object' ? (warn.reference_id || warn.invoice_no) : null;
+                                return (
+                                    <li key={i}>
+                                        {code && <strong className="mr-1">[{code}]</strong>}
+                                        {message}
+                                        {ref && <span className="ml-2 text-xs opacity-75">(Ref: {ref})</span>}
+                                    </li>
+                                );
+                            })}
                         </ul>
                     </AlertDescription>
                 </Alert>
@@ -62,9 +74,10 @@ export function ValidationPanel({ validation }: { validation: any }) {
                     <AlertTitle className="text-blue-800">Information</AlertTitle>
                     <AlertDescription className="text-blue-800">
                         <ul className="list-disc pl-5 mt-2 space-y-1">
-                            {info.map((inf: any, i: number) => (
-                                <li key={i}>{inf.message}</li>
-                            ))}
+                            {info.map((inf: any, i: number) => {
+                                const message = typeof inf === 'string' ? inf : (inf.message || inf.info || JSON.stringify(inf));
+                                return <li key={i}>{message}</li>;
+                            })}
                         </ul>
                     </AlertDescription>
                 </Alert>

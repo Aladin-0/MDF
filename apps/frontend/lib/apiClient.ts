@@ -1917,8 +1917,10 @@ const realGstApi = {
         await assertOk(response);
         return response.json();
     },
-    getSummary: async (start: string, end: string) => {
-        const query = new URLSearchParams({ start, end }).toString();
+    getSummary: async (start: string, end: string, returnType?: string) => {
+        const params: Record<string, string> = { start, end, start_date: start, end_date: end };
+        if (returnType) params.return_type = returnType;
+        const query = new URLSearchParams(params).toString();
         const response = await fetch(`${API_URL}/gst/summary/?${query}`, { headers: getHeaders() });
         await assertOk(response);
         return response.json();
@@ -1934,7 +1936,7 @@ const realGstApi = {
         return response.json();
     },
     getGSTR1Invoices: async (start: string, end: string, filters: { report_type?: string, tax_filter?: string } = {}) => {
-        const query = new URLSearchParams({ start, end, ...filters } as Record<string, string>).toString();
+        const query = new URLSearchParams({ start, end, start_date: start, end_date: end, ...filters } as Record<string, string>).toString();
         const response = await fetch(`${API_URL}/gst/gstr1-invoices/?${query}`, { headers: getHeaders() });
         await assertOk(response);
         return response.json();

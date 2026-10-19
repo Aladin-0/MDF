@@ -212,8 +212,8 @@ class GSTR1ReportView(APIView):
 
     def get(self, request, *args, **kwargs):
         outlet_id = request.query_params.get('outletId')
-        from_str = request.query_params.get('from')
-        to_str = request.query_params.get('to')
+        from_str = request.query_params.get('start_date') or request.query_params.get('start') or request.query_params.get('from')
+        to_str = request.query_params.get('end_date') or request.query_params.get('end') or request.query_params.get('to')
 
         # Validate outlet
         try:

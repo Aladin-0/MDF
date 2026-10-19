@@ -30,7 +30,7 @@ from apps.billing.utils.pricing import validate_sale_price
 from apps.inventory.models import Batch, MasterProduct
 from apps.accounts.models import Staff, Customer, Ledger
 from apps.accounts.journal_service import post_sale_invoice
-from apps.core.models import Outlet
+from apps.core.models import Outlet, TaxSlab
 from apps.billing.payment_services import (
     create_receipt_payment, create_expense_entry, create_sales_return,
     ReceiptServiceError, ExpenseServiceError, ReturnServiceError,
@@ -568,6 +568,43 @@ class SaleCreateView(APIView):
                             )},
                             status=status.HTTP_400_BAD_REQUEST
                         )
+
+            # Validate GST 2.0 Tax Rates for all items in cart
+            raw_invoice_date = request.data.get('invoiceDate')
+            for item_data in items_data:
+                product_obj = None
+                product_id = item_data.get('productId')
+                batch_id = item_data.get('batchId')
+                if product_id:
+                    product_obj = MasterProduct.objects.filter(id=product_id).first()
+                elif batch_id:
+                    batch_obj = Batch.objects.filter(id=batch_id, outlet=outlet).select_related('product').first()
+                    if batch_obj:
+                        product_obj = batch_obj.product
+
+                raw_rate = item_data.get('gstRate')
+                if raw_rate is None:
+                    raw_rate = item_data.get('gst_rate')
+                if raw_rate is None and product_obj:
+                    raw_rate = product_obj.gst_rate
+
+                try:
+                    dec_rate = Decimal(str(raw_rate if raw_rate is not None else 0))
+                except Exception:
+                    dec_rate = Decimal('0')
+
+                is_valid, err_msg = TaxSlab.is_rate_active(dec_rate, transaction_date=raw_invoice_date)
+                if not is_valid:
+                    prod_name = item_data.get('productName') or (product_obj.name if product_obj else 'Unknown Item')
+                    return Response(
+                        {
+                            'detail': f"Product '{prod_name}' has an inactive/legacy GST rate of {dec_rate}%. {err_msg}",
+                            'code': 'DEACTIVATED_GST_RATE',
+                            'product_name': prod_name,
+                            'gst_rate': float(dec_rate)
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
 
             logger.info(f"Creating sale invoice for outlet {outlet.name}")
 

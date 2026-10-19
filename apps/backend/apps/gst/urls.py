@@ -10,10 +10,12 @@ from apps.gst.views import (
     GSTR1InvoicesView,
     GSTR2BReconciliationDataView,
     GSTR2AWarningView,
-    GSTR1ValidationView
+    GSTR1ValidationView,
+    TaxSlabListView
 )
 
 urlpatterns = [
+    path('tax-slabs/', TaxSlabListView.as_view(), name='tax-slabs-list'),
     path('sandbox/status/', SandboxStatusView.as_view(), name='sandbox-status'),
     path('sandbox/request-otp/', SandboxRequestOTPView.as_view(), name='sandbox-request-otp'),
     path('sandbox/verify-otp/', SandboxVerifyOTPView.as_view(), name='sandbox-verify-otp'),

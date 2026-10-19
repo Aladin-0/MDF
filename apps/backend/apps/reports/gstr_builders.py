@@ -141,7 +141,14 @@ class GSTR1Builder:
                     b2cs_agg[key]["csamt"] += (Decimal(str(values['cess'])) * multiplier)
                     
         result = []
-        for (pos, sply_ty, rate, typ), vals in b2cs_agg.items():
+        sorted_b2cs_items = sorted(
+            b2cs_agg.items(),
+            key=lambda x: (
+                Decimal(str(x[0][2])),  # rate
+                str(x[0][0])            # pos
+            )
+        )
+        for (pos, sply_ty, rate, typ), vals in sorted_b2cs_items:
             if vals["txval"] != Decimal('0.0'):
                 result.append({
                     "sply_ty": sply_ty,
@@ -268,7 +275,14 @@ class GSTR1Builder:
                     
         def format_result(agg_dict):
             res = []
-            for num, ((hsn, uqc, rate), vals) in enumerate(agg_dict.items(), 1):
+            sorted_items = sorted(
+                agg_dict.items(),
+                key=lambda x: (
+                    Decimal(str(x[0][2])),  # rate
+                    str(x[0][0])            # hsn_code
+                )
+            )
+            for num, ((hsn, uqc, rate), vals) in enumerate(sorted_items, 1):
                 if vals["txval"] != Decimal('0.0') or vals["qty"] != Decimal('0.0'):
                     val = vals["txval"] + vals["iamt"] + vals["camt"] + vals["samt"] + vals["csamt"]
                     res.append({

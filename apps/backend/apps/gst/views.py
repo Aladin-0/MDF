@@ -416,6 +416,7 @@ class GSTR2BReconciliationRunView(APIView):
 
 
 from apps.reports.models import GSTTransactionSnapshot
+from apps.billing.models import SaleInvoice
 
 class GSTR1InvoicesView(APIView):
     permission_classes = [IsAuthenticated]
@@ -427,61 +428,124 @@ class GSTR1InvoicesView(APIView):
             
         report_type = request.query_params.get('report_type', 'all')
         tax_filter = request.query_params.get('tax_filter', 'all')
-        start = request.query_params.get('start')
-        end = request.query_params.get('end')
 
-        qs = GSTTransactionSnapshot.objects.filter(
-            outlet=outlet,
-            transaction_type='sale'
+        # Safely extract start_date and end_date query parameters
+        start_date = (
+            request.query_params.get('start_date') or 
+            request.query_params.get('start') or 
+            request.query_params.get('from')
         )
-        if start and end:
-            qs = qs.filter(document_date__gte=start, document_date__lte=end)
-            
-        snapshots = qs.order_by('-document_date', 'document_number')
+        end_date = (
+            request.query_params.get('end_date') or 
+            request.query_params.get('end') or 
+            request.query_params.get('to')
+        )
+
+        # Build filter kwargs for underlying SaleInvoice queryset
+        filter_kwargs = {
+            'outlet': outlet,
+            'is_return': False,
+        }
+        if start_date:
+            start_val = start_date if (' ' in str(start_date) or 'T' in str(start_date)) else f"{start_date} 00:00:00"
+            filter_kwargs['invoice_date__gte'] = start_val
+        if end_date:
+            end_val = end_date if (' ' in str(end_date) or 'T' in str(end_date)) else f"{end_date} 23:59:59"
+            filter_kwargs['invoice_date__lte'] = end_val
+
+        sale_invoices = SaleInvoice.objects.filter(**filter_kwargs).select_related('customer').order_by('-invoice_date', 'invoice_no')
 
         results = []
-        for s in snapshots:
-            data = s.snapshot_json or {}
-            
-            # Filters
-            is_b2b = data.get('is_b2b', False)
-            if report_type == 'b2b' and not is_b2b:
-                continue
-            if report_type == 'b2c' and is_b2b:
-                continue
+        if sale_invoices.exists():
+            for inv in sale_invoices:
+                customer = inv.customer
+                cust_gstin = customer.gstin.strip() if customer and customer.gstin else ""
+                is_b2b = bool(cust_gstin)
+
+                if report_type == 'b2b' and not is_b2b:
+                    continue
+                if report_type == 'b2c' and is_b2b:
+                    continue
+
+                taxable = float(inv.taxable_amount or 0)
+                igst = float(inv.igst_amount or 0)
+                cgst = float(inv.cgst_amount or 0)
+                sgst = float(inv.sgst_amount or 0)
+                total_tax = igst + cgst + sgst
+
+                if tax_filter == 'with_gst' and total_tax == 0:
+                    continue
+                if tax_filter == 'without_gst' and total_tax > 0:
+                    continue
+
+                total = float(inv.grand_total or (taxable + total_tax))
+
+                results.append({
+                    "id": str(inv.id),
+                    "invoice_no": inv.invoice_no,
+                    "customer_name": customer.name if customer else "Walk-in",
+                    "gstin": cust_gstin,
+                    "taxable_value": taxable,
+                    "igst": igst,
+                    "cgst": cgst,
+                    "sgst": sgst,
+                    "total": total
+                })
+        else:
+            # Fallback to GSTTransactionSnapshot if no direct SaleInvoices exist
+            snap_filter = {
+                'outlet': outlet,
+                'transaction_type': 'sale'
+            }
+            if start_date:
+                snap_filter['document_date__gte'] = str(start_date)[:10]
+            if end_date:
+                snap_filter['document_date__lte'] = str(end_date)[:10]
+
+            snapshots = GSTTransactionSnapshot.objects.filter(**snap_filter).order_by('-document_date', 'document_number')
+
+            for s in snapshots:
+                data = s.snapshot_json or {}
                 
-            # Aggregate taxes
-            taxable = 0
-            igst = 0
-            cgst = 0
-            sgst = 0
-            
-            rates = data.get('items_by_rate', {})
-            for rate, vals in rates.items():
-                taxable += float(vals.get('taxable_amount', 0))
-                igst += float(vals.get('igst', 0))
-                cgst += float(vals.get('cgst', 0))
-                sgst += float(vals.get('sgst', 0))
+                # Filters
+                is_b2b = data.get('is_b2b', False)
+                if report_type == 'b2b' and not is_b2b:
+                    continue
+                if report_type == 'b2c' and is_b2b:
+                    continue
+                    
+                # Aggregate taxes
+                taxable = 0.0
+                igst = 0.0
+                cgst = 0.0
+                sgst = 0.0
                 
-            total_tax = igst + cgst + sgst
-            
-            if tax_filter == 'with_gst' and total_tax == 0:
-                continue
-            if tax_filter == 'without_gst' and total_tax > 0:
-                continue
+                rates = data.get('items_by_rate', {})
+                for rate, vals in rates.items():
+                    taxable += float(vals.get('taxable_amount', 0))
+                    igst += float(vals.get('igst', 0))
+                    cgst += float(vals.get('cgst', 0))
+                    sgst += float(vals.get('sgst', 0))
+                    
+                total_tax = igst + cgst + sgst
                 
-            results.append({
-                "id": str(s.id),
-                "invoice_no": s.document_number,
-                "customer_name": data.get('customer_name', ''),
-                "gstin": data.get('customer_gstin', ''),
-                "taxable_value": taxable,
-                "igst": igst,
-                "cgst": cgst,
-                "sgst": sgst,
-                "total": taxable + total_tax
-            })
-            
+                if tax_filter == 'with_gst' and total_tax == 0:
+                    continue
+                if tax_filter == 'without_gst' and total_tax > 0:
+                    continue
+                    
+                results.append({
+                    "id": str(s.id),
+                    "invoice_no": s.document_number,
+                    "customer_name": data.get('customer_name', ''),
+                    "gstin": data.get('customer_gstin', ''),
+                    "taxable_value": taxable,
+                    "igst": igst,
+                    "cgst": cgst,
+                    "sgst": sgst,
+                    "total": taxable + total_tax
+                })
+                
         return Response(results)
 
 
@@ -668,3 +732,27 @@ class GSTR1ValidationView(APIView):
                 unique_warnings.append(w)
                 
         return Response({"warnings": unique_warnings})
+
+
+class TaxSlabListView(APIView):
+    """
+    GET /api/v1/gst/tax-slabs/
+    Returns list of configured GST Tax Slabs (rates, description, is_active, effective dates).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from apps.core.models import TaxSlab
+        slabs = TaxSlab.objects.all().order_by('rate')
+        return Response([
+            {
+                'id': str(s.id),
+                'rate': float(s.rate),
+                'description': s.description,
+                'is_active': s.is_active,
+                'effective_from': s.effective_from.isoformat() if s.effective_from else None,
+                'effective_to': s.effective_to.isoformat() if s.effective_to else None,
+            }
+            for s in slabs
+        ])
+

@@ -48,9 +48,35 @@ class GSTSummaryView(APIView):
         if not outlet:
             return Response({"error": "No outlet found"}, status=404)
             
-        start = request.query_params.get('start')
-        end = request.query_params.get('end')
+        start = request.query_params.get('start_date') or request.query_params.get('start') or request.query_params.get('from')
+        end = request.query_params.get('end_date') or request.query_params.get('end') or request.query_params.get('to')
+        return_type = request.query_params.get('return_type')
+
+        # Ensure any SaleInvoices in this date range have up-to-date GST snapshots
+        try:
+            from apps.billing.models import SaleInvoice
+            from apps.reports.gst_snapshot_service import create_sale_snapshots
+            inv_qs = SaleInvoice.objects.filter(outlet=outlet, is_return=False)
+            if start:
+                inv_qs = inv_qs.filter(invoice_date__gte=start)
+            if end:
+                inv_qs = inv_qs.filter(invoice_date__lte=end)
             
+            existing_snap_ids = set(
+                GSTTransactionSnapshot.objects.filter(
+                    outlet=outlet,
+                    transaction_type='sale'
+                ).values_list('document_id', flat=True)
+            )
+            for inv in inv_qs:
+                if inv.id not in existing_snap_ids:
+                    try:
+                        create_sale_snapshots(inv)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
         # GSTR-1
         b1 = GSTR1Builder(outlet.gstin, period=None, start_date=start, end_date=end)
         payload1 = b1.generate_json()
@@ -92,11 +118,55 @@ class GSTSummaryView(APIView):
 
         m1 = payload1.get('_metadata', {})
         m3 = payload3.get('_metadata', {})
-        
-        blocking = m1.get('blocking_errors', []) + m3.get('blocking_errors', [])
-        warnings = m1.get('validation_warnings', []) + m3.get('validation_warnings', [])
-        info = m1.get('info', []) + m3.get('info', [])
-        is_valid = m1.get('is_valid_for_export', True) and m3.get('is_valid_for_export', True)
+
+        def normalize_validation_items(items):
+            normalized = []
+            for item in items:
+                if isinstance(item, str):
+                    normalized.append({"code": "INFO", "message": item})
+                elif isinstance(item, dict):
+                    msg = item.get('message') or item.get('warning') or item.get('issue') or item.get('error') or str(item)
+                    code = item.get('code') or item.get('error_code') or "WARN"
+                    ref = item.get('reference_id') or item.get('invoice_no')
+                    d = {"code": str(code), "message": str(msg)}
+                    if ref:
+                        d["reference_id"] = str(ref)
+                    normalized.append(d)
+                else:
+                    code = getattr(item, 'code', 'WARN')
+                    msg = getattr(item, 'message', str(item))
+                    normalized.append({"code": str(code), "message": str(msg)})
+            return normalized
+
+        m1_blocking = normalize_validation_items(m1.get('blocking_errors', []))
+        m1_warnings = normalize_validation_items(m1.get('validation_warnings', []))
+        m1_info = normalize_validation_items(m1.get('info', []))
+
+        m3_blocking = normalize_validation_items(m3.get('blocking_errors', []))
+        m3_warnings = normalize_validation_items(m3.get('validation_warnings', []))
+        m3_info = normalize_validation_items(m3.get('info', []))
+
+        if return_type == 'gstr1':
+            blocking = m1_blocking
+            warnings = m1_warnings
+            info = m1_info
+            is_valid = m1.get('is_valid_for_export', True)
+        elif return_type == 'gstr3b':
+            blocking = m3_blocking
+            warnings = m3_warnings
+            info = m3_info
+            is_valid = m3.get('is_valid_for_export', True)
+        else:
+            # Combined / general overview
+            gstr1_has_activity = (b2b_total > 0 or b2cs_total > 0 or b2cl_total > 0 or cdnr_total > 0)
+            filtered_m3_warnings = [
+                w for w in m3_warnings
+                if not (gstr1_has_activity and 'Zero activity return' in w.get('message', ''))
+            ]
+            blocking = m1_blocking + m3_blocking
+            warnings = m1_warnings + filtered_m3_warnings
+            info = m1_info + m3_info
+            is_valid = m1.get('is_valid_for_export', True) and m3.get('is_valid_for_export', True)
 
         return Response({
             "gstr1": {

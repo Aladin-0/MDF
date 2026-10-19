@@ -17,10 +17,12 @@ import {
 interface DatePickerWithRangeProps extends React.HTMLAttributes<HTMLDivElement> {
     date: DateRange | undefined;
     setDate: (date: DateRange | undefined) => void;
+    buttonClassName?: string;
 }
 
 export function DatePickerWithRange({
   className,
+  buttonClassName,
   date,
   setDate,
 }: DatePickerWithRangeProps) {
@@ -32,11 +34,12 @@ export function DatePickerWithRange({
             id="date"
             variant={"outline"}
             className={cn(
-              "w-full md:w-[300px] justify-start text-left font-normal bg-white",
-              !date && "text-muted-foreground"
+              "w-full sm:w-[260px] h-8 justify-start text-left font-normal bg-white text-xs sm:text-sm border-slate-200 text-slate-700 hover:bg-slate-50",
+              !date && "text-muted-foreground",
+              buttonClassName
             )}
           >
-            <CalendarIcon className="mr-2 h-4 w-4" />
+            <CalendarIcon className="mr-2 h-3.5 w-3.5 text-slate-500" />
             {date?.from ? (
               date.to ? (
                 <>
@@ -51,7 +54,7 @@ export function DatePickerWithRange({
             )}
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="start">
+        <PopoverContent className="w-auto p-0 z-50" align="start">
           <Calendar
             mode="range"
             defaultMonth={date?.from}
@@ -64,3 +67,5 @@ export function DatePickerWithRange({
     </div>
   )
 }
+
+export const DateRangePicker = DatePickerWithRange;

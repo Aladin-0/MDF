@@ -24,6 +24,9 @@ export const metadata: Metadata = {
         statusBarStyle: 'default',
         title: 'MediFlow',
     },
+    other: {
+        'mobile-web-app-capable': 'yes',
+    },
     formatDetection: {
         telephone: false,
     },

@@ -4,12 +4,26 @@ import { format, parse } from 'date-fns';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { useGSTStore } from '@/store/gstStore';
 
-export function GSTPeriodSelector() {
-    const { periods, selectedPeriod, fetchPeriods, setSelectedPeriod, loading } = useGSTStore();
+interface GSTPeriodSelectorProps {
+    selectedPeriod?: string | null;
+    onSelectPeriod?: (period: string) => void;
+}
+
+export function GSTPeriodSelector({ selectedPeriod: propSelectedPeriod, onSelectPeriod }: GSTPeriodSelectorProps = {}) {
+    const { periods, selectedPeriod: storeSelectedPeriod, fetchPeriods, setSelectedPeriod, loading } = useGSTStore();
 
     useEffect(() => {
         fetchPeriods();
     }, [fetchPeriods]);
+
+    const activePeriod = propSelectedPeriod !== undefined ? propSelectedPeriod : storeSelectedPeriod;
+
+    const handlePeriodClick = (periodValue: string) => {
+        setSelectedPeriod(periodValue);
+        if (onSelectPeriod) {
+            onSelectPeriod(periodValue);
+        }
+    };
 
     const formatPeriod = (fp: string) => {
         try {
@@ -29,20 +43,20 @@ export function GSTPeriodSelector() {
     }
 
     return (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
             {periods.map(p => {
                 const periodValue = typeof p === 'string' ? p : p.period;
                 const status = typeof p === 'string' ? 'draft' : (p.status || 'draft');
                 
-                const isSelected = periodValue === selectedPeriod;
+                const isSelected = Boolean(activePeriod && periodValue === activePeriod);
                 const isValidated = status === 'validated';
                 
                 return (
                     <button
                         key={periodValue}
-                        onClick={() => setSelectedPeriod(periodValue)}
+                        onClick={() => handlePeriodClick(periodValue)}
                         className={cn(
-                            "relative flex items-center gap-2 px-4 py-2 rounded-md border text-sm font-medium transition-colors cursor-pointer outline-none focus:ring-2 focus:ring-primary/50",
+                            "relative flex items-center gap-1.5 px-3 py-1.5 h-8 rounded-md border text-xs sm:text-sm font-medium transition-colors cursor-pointer outline-none focus:ring-2 focus:ring-primary/50",
                             isSelected 
                                 ? "bg-primary text-primary-foreground border-primary"
                                 : "bg-white text-slate-700 border-slate-200 hover:border-primary/50 hover:bg-slate-50"
@@ -51,9 +65,9 @@ export function GSTPeriodSelector() {
                         <span>{formatPeriod(periodValue)}</span>
                         
                         {isValidated ? (
-                            <CheckCircle2 className={cn("w-4 h-4", isSelected ? "text-primary-foreground" : "text-green-500")} />
+                            <CheckCircle2 className={cn("w-3.5 h-3.5", isSelected ? "text-primary-foreground" : "text-green-500")} />
                         ) : (
-                            <AlertCircle className={cn("w-4 h-4", isSelected ? "text-primary-foreground" : "text-amber-500")} />
+                            <AlertCircle className={cn("w-3.5 h-3.5", isSelected ? "text-primary-foreground" : "text-amber-500")} />
                         )}
                     </button>
                 );
@@ -61,3 +75,4 @@ export function GSTPeriodSelector() {
         </div>
     );
 }
+

@@ -140,7 +140,7 @@ export default function GSTR2APage() {
         taxFilter={taxFilter}
         setTaxFilter={setTaxFilter}
         customActionRight={FetchButton}
-        onSearch={(p) => { setPeriod(p); toast.success(`Filters applied for period ${p}`); }}
+        onSearch={(p) => { if (p) { setPeriod(p); toast.success(`Filters applied for period ${p}`); } }}
         onPrint={() => window.print()}
         exportDisabled={true}
       />

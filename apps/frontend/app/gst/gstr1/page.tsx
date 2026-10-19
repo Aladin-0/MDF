@@ -2,11 +2,12 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { gstApi } from '@/lib/apiClient';
-import { useGSTStore } from '@/store/gstStore';
 import { ValidationPanel } from '@/components/gst/ValidationPanel';
 import { ReportFilterRibbon } from '@/components/gst/ReportFilterRibbon';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
+import { DateRange } from 'react-day-picker';
+import { format } from 'date-fns';
 import {
   createColumnHelper,
   flexRender,
@@ -30,7 +31,6 @@ type InvoiceRow = {
 const columnHelper = createColumnHelper<InvoiceRow>();
 
 export default function GSTR1Page() {
-    
     const [summaryData, setSummaryData] = useState<any>(null);
     const [invoiceData, setInvoiceData] = useState<InvoiceRow[]>([]);
     
@@ -38,9 +38,26 @@ export default function GSTR1Page() {
     const [reportType, setReportType] = useState('all');
     const [taxFilter, setTaxFilter] = useState('all');
 
+    // Date Range state: Single Source of Truth
+    const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
+        const now = new Date();
+        return {
+            from: new Date(now.getFullYear(), now.getMonth(), 1),
+            to: new Date(now.getFullYear(), now.getMonth() + 1, 0),
+        };
+    });
+
     const [loading, setLoading] = useState(false);
     const [exporting, setExporting] = useState(false);
     const { toast } = useToast();
+
+    const fromDate = useMemo(() => {
+        return dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : '';
+    }, [dateRange?.from]);
+
+    const toDate = useMemo(() => {
+        return dateRange?.to ? format(dateRange.to, 'yyyy-MM-dd') : '';
+    }, [dateRange?.to]);
 
     const columns = useMemo(() => [
       columnHelper.accessor('invoice_no', {
@@ -92,58 +109,58 @@ export default function GSTR1Page() {
     // Calculate totals for footer
     const totals = useMemo(() => {
       return invoiceData.reduce((acc, row) => ({
-        taxable_value: acc.taxable_value + row.taxable_value,
-        igst: acc.igst + row.igst,
-        cgst: acc.cgst + row.cgst,
-        sgst: acc.sgst + row.sgst,
-        total: acc.total + row.total,
+        taxable_value: acc.taxable_value + (row.taxable_value || 0),
+        igst: acc.igst + (row.igst || 0),
+        cgst: acc.cgst + (row.cgst || 0),
+        sgst: acc.sgst + (row.sgst || 0),
+        total: acc.total + (row.total || 0),
       }), { taxable_value: 0, igst: 0, cgst: 0, sgst: 0, total: 0 });
     }, [invoiceData]);
 
-    const loadDashboardData = useCallback(async (start: string, end: string) => {
-        if (!start || !end) return;
+    const loadDashboardData = useCallback(async (start?: string, end?: string) => {
+        const queryStart = start || fromDate;
+        const queryEnd = end || toDate;
+        if (!queryStart || !queryEnd) return;
         setLoading(true);
         try {
             const [summary, invoices] = await Promise.all([
-                gstApi.getSummary(start, end),
-                gstApi.getGSTR1Invoices(start, end, { report_type: reportType, tax_filter: taxFilter })
+                gstApi.getSummary(queryStart, queryEnd, 'gstr1'),
+                gstApi.getGSTR1Invoices(queryStart, queryEnd, { report_type: reportType, tax_filter: taxFilter })
             ]);
             setSummaryData(summary);
-            setInvoiceData(invoices);
+            setInvoiceData(invoices || []);
         } catch (error) {
             console.error("Failed to load dashboard data", error);
             toast({ variant: 'destructive', title: 'Failed to load dashboard data' });
         } finally {
             setLoading(false);
         }
-    }, [reportType, taxFilter, toast]);
+    }, [fromDate, toDate, reportType, taxFilter, toast]);
 
-    
-    const handleSearch = (period: string) => {
-        if (!period) return;
-        // Convert period MMYYYY to start/end dates for the backend if getSummary expects dates
-        // Actually, let's see what loadDashboardData expects.
-        // It expects start and end strings. But GST backend now uses period.
-        // Let's pass the first and last day of the month as strings just in case,
-        // or just pass the period if backend supports it.
-        // Wait, gstApi.getSummary(start, end)
-        // I will reconstruct start/end dates from MMYYYY for now to not break the API if it expects dates.
-        const month = parseInt(period.substring(0, 2), 10) - 1;
-        const year = parseInt(period.substring(2, 6), 10);
-        const startDate = new Date(year, month, 1);
-        const endDate = new Date(year, month + 1, 0);
-        
-        const startStr = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-01`;
-        const endStr = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
-        
-        loadDashboardData(startStr, endStr);
+    // Auto-fetch data on mount and whenever date range or filter state changes
+    useEffect(() => {
+        if (fromDate && toDate) {
+            loadDashboardData(fromDate, toDate);
+        }
+    }, [fromDate, toDate, reportType, taxFilter, loadDashboardData]);
+
+    const handleSearch = (start?: string, end?: string) => {
+        loadDashboardData(start || fromDate, end || toDate);
     };
 
-    const handleExportExcel = async (period: string) => {
-        if (!period) return;
+    const handleExportExcel = async (period?: string) => {
+        const periodToExport = period || (dateRange?.from ? format(dateRange.from, 'MMyyyy') : null);
+        if (!periodToExport) {
+            toast({ 
+                variant: 'destructive', 
+                title: 'Export Failed', 
+                description: 'Please select a date range to export.' 
+            });
+            return;
+        }
         setExporting(true);
         try {
-            await gstApi.generateExport(period, 'gstr1_excel');
+            await gstApi.generateExport(periodToExport, 'gstr1_excel');
             toast({ title: 'Export successful. Check Export History for audit details.' });
         } catch (error: any) {
             toast({ variant: 'destructive', title: 'Export failed', description: error?.detail || 'An error occurred' });
@@ -152,11 +169,19 @@ export default function GSTR1Page() {
         }
     };
     
-    const handleExportJson = async (period: string) => {
-        if (!period) return;
+    const handleExportJson = async (period?: string) => {
+        const periodToExport = period || (dateRange?.from ? format(dateRange.from, 'MMyyyy') : null);
+        if (!periodToExport) {
+            toast({ 
+                variant: 'destructive', 
+                title: 'Export Failed', 
+                description: 'Please select a date range to export.' 
+            });
+            return;
+        }
         setExporting(true);
         try {
-            await gstApi.generateExport(period, 'gstr1_json');
+            await gstApi.generateExport(periodToExport, 'gstr1_json');
             toast({ title: 'JSON Export successful.' });
         } catch (error: any) {
             toast({ variant: 'destructive', title: 'Export failed', description: error?.detail || 'An error occurred' });
@@ -185,6 +210,9 @@ export default function GSTR1Page() {
               setReportType={setReportType}
               taxFilter={taxFilter}
               setTaxFilter={setTaxFilter}
+              dateRange={dateRange}
+              setDateRange={setDateRange}
+              showPeriodSelector={false}
               onSearch={handleSearch}
               onPrint={handlePrint}
               onDownloadExcel={handleExportExcel}
@@ -192,6 +220,7 @@ export default function GSTR1Page() {
               isExporting={exporting}
               exportDisabled={!isValid || exporting}
             />
+
 
             {loading && !summaryData ? (
                 <div className="space-y-4">

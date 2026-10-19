@@ -74,6 +74,10 @@ class ExporterPreflightValidator:
             self._add_error(sheet, row_idx, f"Invalid {col_desc} numeric value: {val}")
 
     def _validate_row(self, sheet, row_idx, row):
+        if row_idx < 5:
+            # Summary rows (e.g. row 3) do not follow data row schemas
+            return
+
         if sheet == 'b2b,sez,de':
             if not row.get(1): self._add_error(sheet, row_idx, "Missing GSTIN/UIN")
             if not row.get(3): self._add_error(sheet, row_idx, "Missing Invoice Number")
@@ -127,6 +131,13 @@ class ExporterPreflightValidator:
             self._validate_number(sheet, row_idx, row.get(4), "Total Quantity")
             self._validate_number(sheet, row_idx, row.get(5), "Total Value")
             self._validate_number(sheet, row_idx, row.get(6), "Rate")
+
+        elif sheet == 'docs':
+            if not row.get(1): self._add_error(sheet, row_idx, "Missing Nature of Document")
+            if not row.get(2): self._add_error(sheet, row_idx, "Missing Sr. No. From")
+            if not row.get(3): self._add_error(sheet, row_idx, "Missing Sr. No. To")
+            self._validate_number(sheet, row_idx, row.get(4), "Total Number")
+            self._validate_number(sheet, row_idx, row.get(5), "Cancelled Number")
 
 
 class GSTR3BValidator:

@@ -1,5 +1,6 @@
 from django.db import models
 import uuid
+from decimal import Decimal
 
 # GST state codes per GSTN portal — mirrors packages/constants/index.ts STATE_CODES.
 # Always derive state_code from state using this map; never store it independently.
@@ -392,3 +393,109 @@ class GstTaxpayerAuth(models.Model):
 
     def __str__(self):
         return f"Taxpayer Auth for {self.outlet.name} - {'Valid' if self.is_session_valid() else 'Invalid'}"
+
+
+class TaxSlab(models.Model):
+    """
+    Dynamic GST Tax Slab model for GST 2.0 compliance.
+    Under GST 2.0 (effective Sept 2025), slabs 12% and 28% are deactivated for new sales.
+    Historical transactions created before Sept 2025 preserve their original tax rates.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        unique=True,
+        help_text="Total GST Rate percentage, e.g. 0.00, 5.00, 12.00, 18.00, 28.00"
+    )
+    description = models.CharField(max_length=120, blank=True)
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether this rate is active for new transactions under current GST regime"
+    )
+    effective_from = models.DateField(null=True, blank=True, help_text="Effective start date")
+    effective_to = models.DateField(null=True, blank=True, help_text="Effective end date if abolished/phased out")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'core_taxslab'
+        ordering = ['rate']
+
+    def __str__(self):
+        status = "Active" if self.is_active else "Legacy/Deactivated"
+        return f"{self.rate}% - {self.description or status}"
+
+    @classmethod
+    def get_active_rates(cls) -> set:
+        """Return set of active Decimal GST rates."""
+        try:
+            rates = set(cls.objects.filter(is_active=True).values_list('rate', flat=True))
+            if rates:
+                return {Decimal(str(r)) for r in rates}
+        except Exception:
+            pass
+        return {Decimal('0.00'), Decimal('5.00'), Decimal('18.00')}
+
+    @classmethod
+    def get_all_rates(cls) -> list:
+        """Return sorted list of all known standard rates (active and legacy)."""
+        try:
+            rates = list(cls.objects.values_list('rate', flat=True).order_by('rate'))
+            if rates:
+                return [Decimal(str(r)) for r in rates]
+        except Exception:
+            pass
+        return [Decimal('0.00'), Decimal('5.00'), Decimal('12.00'), Decimal('18.00'), Decimal('28.00'), Decimal('40.00')]
+
+    @classmethod
+    def is_rate_active(cls, rate, transaction_date=None) -> tuple[bool, str]:
+        """
+        Validate whether a GST rate is allowed for a given transaction date.
+        - Historical invoices before Sept 1, 2025: All standard legacy rates (12%, 28%) are permitted.
+        - New transactions (on or after Sept 1, 2025 or current): Only active slabs (0%, 5%, 18%) are permitted.
+        """
+        from datetime import date
+        try:
+            dec_rate = Decimal(str(rate))
+        except Exception:
+            return False, f"Invalid GST rate format: '{rate}'."
+
+        target_date = None
+        if transaction_date:
+            if hasattr(transaction_date, 'date') and callable(transaction_date.date):
+                target_date = transaction_date.date()
+            elif isinstance(transaction_date, date):
+                target_date = transaction_date
+            elif isinstance(transaction_date, str):
+                try:
+                    from django.utils.dateparse import parse_date, parse_datetime
+                    dt = parse_datetime(transaction_date)
+                    if dt:
+                        target_date = dt.date()
+                    else:
+                        target_date = parse_date(transaction_date)
+                except Exception:
+                    pass
+
+        gst2_cutoff = date(2025, 9, 1)
+
+        # Historical transactions before Sept 2025: accept standard legacy rates
+        if target_date and target_date < gst2_cutoff:
+            all_known = cls.get_all_rates()
+            if any(abs(dec_rate - r) < Decimal('0.01') for r in all_known):
+                return True, ""
+            return False, f"Rate {dec_rate}% was not a standard GST rate prior to Sept 2025."
+
+        # Current and new transactions: must be an active slab
+        active_rates = cls.get_active_rates()
+        if any(abs(dec_rate - r) < Decimal('0.01') for r in active_rates):
+            return True, ""
+
+        active_str = ", ".join(f"{r}%" for r in sorted(active_rates))
+        return (
+            False,
+            f"GST rate {dec_rate}% is deactivated under GST 2.0 reforms (effective Sept 2025). "
+            f"Active rates are: {active_str}."
+        )
+

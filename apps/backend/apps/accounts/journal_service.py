@@ -87,15 +87,36 @@ def _get_ledger_safe(outlet, name, fallback_name=None):
         raise ValueError('Required GST ledgers not found')
 
 
+def _get_standard_gst_rates():
+    """Dynamically fetch standard rates from TaxSlab with fallback to default list."""
+    try:
+        from apps.core.models import TaxSlab
+        rates = TaxSlab.get_all_rates()
+        if rates:
+            return rates
+    except Exception:
+        pass
+    return STANDARD_GST_RATES
+
+
+def _get_components_safe(rate: Decimal):
+    """Return (cgst_rate, sgst_rate) for any given rate."""
+    if rate in GST_RATE_TO_COMPONENTS:
+        return GST_RATE_TO_COMPONENTS[rate]
+    half = (rate / Decimal('2')).quantize(Decimal('0.01'))
+    return (half, half)
+
+
 def _snap_to_standard_rate(rate):
     """
-    Round a computed GST rate to the nearest standard rate (5, 12, 18, 28, 40).
+    Round a computed GST rate to the nearest standard rate from dynamic TaxSlab.
     Used when inferring rate from purchase invoice totals.
     Returns None if the rate is too far from any standard rate.
     """
     if rate <= 0:
         return None
-    closest = min(STANDARD_GST_RATES, key=lambda r: abs(r - rate))
+    standard_rates = _get_standard_gst_rates()
+    closest = min(standard_rates, key=lambda r: abs(r - rate))
     # Accept if within 1 percentage point of a standard rate
     if abs(closest - rate) <= Decimal('1'):
         return closest
@@ -421,8 +442,8 @@ def _build_purchase_gst_lines(outlet, purchase_invoice, gst_amount, distributor_
             cgst_input = (gst_amount / 2).quantize(Decimal('0.01'))
             sgst_input = gst_amount - cgst_input
 
-            if snapped_rate and snapped_rate in GST_RATE_TO_COMPONENTS:
-                cgst_rate, sgst_rate = GST_RATE_TO_COMPONENTS[snapped_rate]
+            if snapped_rate:
+                cgst_rate, sgst_rate = _get_components_safe(snapped_rate)
                 cgst_ledger = _get_ledger_safe(
                     outlet, f'CGST Input {cgst_rate}%', 'GST Input (CGST)'
                 )
@@ -1091,8 +1112,8 @@ def post_debit_note(debit_note, party_ledger=None):
                 inferred_rate = (gst_amount / subtotal * 100).quantize(Decimal('0.01'))
                 snapped_rate = _snap_to_standard_rate(inferred_rate)
 
-            if snapped_rate and snapped_rate in GST_RATE_TO_COMPONENTS:
-                cgst_rate, sgst_rate = GST_RATE_TO_COMPONENTS[snapped_rate]
+            if snapped_rate:
+                cgst_rate, sgst_rate = _get_components_safe(snapped_rate)
                 cgst_ledger = _get_ledger_safe(
                     outlet, f'CGST Input {cgst_rate}%', 'GST Input (CGST)'
                 )
