@@ -63,23 +63,27 @@ def generate_return_number(outlet) -> str:
     Must be called inside transaction.atomic().
     """
     current_year = datetime.now().year
-    last_return = (
+    prefix = f"RTN-{current_year}-"
+
+    # Lock returns for this outlet and year to prevent race conditions
+    returns = (
         SalesReturn.objects
-        .filter(outlet=outlet)
+        .filter(outlet=outlet, return_no__startswith=prefix)
         .select_for_update(skip_locked=False)
-        .order_by('-return_date', '-created_at')
-        .first()
     )
-    if not last_return:
-        seq = 1
-    else:
-        match = re.search(r'RTN-(\d{4})-(\d+)', last_return.return_no)
-        if not match:
-            seq = 1
-        else:
-            last_year = int(match.group(1))
-            last_seq = int(match.group(2))
-            seq = 1 if last_year != current_year else last_seq + 1
+
+    max_seq = 0
+    for r in returns:
+        match = re.search(r'RTN-\d{4}-(\d+)', r.return_no)
+        if match:
+            seq_val = int(match.group(1))
+            if seq_val > max_seq:
+                max_seq = seq_val
+
+    seq = max_seq + 1
+    while SalesReturn.objects.filter(outlet=outlet, return_no=f"RTN-{current_year}-{seq:06d}").exists():
+        seq += 1
+
     return f"RTN-{current_year}-{seq:06d}"
 
 
