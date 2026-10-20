@@ -2765,10 +2765,26 @@ class SaleDetailView(APIView):
                 # Fetch by ID only — used by billing detail page which doesn't pass outletId
                 invoice = SaleInvoice.objects.select_related('customer', 'billed_by', 'outlet').get(id=sale_id)
         except (Outlet.DoesNotExist, SaleInvoice.DoesNotExist):
-            return Response(
-                {'detail': f'Sale {sale_id} not found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            invoice = None
+            try:
+                import os, redis
+                r = redis.from_url(os.getenv('REDIS_URL', 'redis://redis:6379/0'))
+                mapped_id = r.get(f'legacy_sale_map:{sale_id}')
+                if mapped_id:
+                    real_sale_id = mapped_id.decode()
+                    if outlet_id:
+                        outlet = Outlet.objects.get(id=outlet_id)
+                        invoice = SaleInvoice.objects.select_related('customer', 'billed_by', 'outlet').get(id=real_sale_id, outlet=outlet)
+                    else:
+                        invoice = SaleInvoice.objects.select_related('customer', 'billed_by', 'outlet').get(id=real_sale_id)
+            except Exception:
+                invoice = None
+
+            if not invoice:
+                return Response(
+                    {'detail': f'Sale {sale_id} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
             
         items = SaleItem.objects.filter(invoice=invoice).select_related('batch', 'batch__product', 'schedule_h_register')
         
@@ -4046,20 +4062,32 @@ class SaleInvoiceSearchView(APIView):
             import re
 
             existing_nos = {r['invoiceNo'].lower() for r in results}
-            je_limit = 20 - len(results)
+            # Collect all existing SaleInvoice IDs and invoice numbers for this outlet to prevent duplicates
+            existing_sale_ids = set(SaleInvoice.objects.filter(outlet=outlet).values_list('id', flat=True))
+            all_sale_nos_lower = {no.lower() for no in SaleInvoice.objects.filter(outlet=outlet).values_list('invoice_no', flat=True)}
+
+            # Exclude JournalEntries that are already linked to a real SaleInvoice
             je_qs = JournalEntry.objects.filter(
                 outlet=outlet,
                 source_type='SALE',
                 narration__icontains=q
-            ).prefetch_related('lines__ledger').order_by('-date')[:je_limit]
+            ).exclude(source_id__in=existing_sale_ids).prefetch_related('lines__ledger').order_by('-date')
 
             for je in je_qs:
                 narration = (je.narration or '').strip()
-                parts = narration.split(' ', 1)
-                inv_no = parts[0] if parts else f"SALE-{str(je.id)[:6]}"
-                cust_name = parts[1].strip() if len(parts) > 1 and parts[1].strip() else 'Walk-in / Daybook Customer'
+                # If narration is formatted like "Sale Invoice <inv_no> ..."
+                m = re.match(r'^Sale\s+Invoice\s+([^\s]+)', narration, re.IGNORECASE)
+                if m:
+                    inv_no = m.group(1)
+                    rest = narration[m.end():].strip()
+                    cust_name = rest if rest else 'Walk-in / Daybook Customer'
+                else:
+                    parts = narration.split(' ', 1)
+                    inv_no = parts[0] if parts else f"SALE-{str(je.id)[:6]}"
+                    cust_name = parts[1].strip() if len(parts) > 1 and parts[1].strip() else 'Walk-in / Daybook Customer'
 
-                if inv_no.lower() in existing_nos:
+                # If this invoice number matches an existing SaleInvoice or is already in results, skip it!
+                if inv_no.lower() in existing_nos or inv_no.lower() in all_sale_nos_lower:
                     continue
                 existing_nos.add(inv_no.lower())
 
@@ -4093,6 +4121,8 @@ class SaleInvoiceSearchView(APIView):
                     'defaultGstRate': default_gst_rate,
                     'items': [],
                 })
+                if len(results) >= 20:
+                    break
 
         return Response({'data': results})
 
