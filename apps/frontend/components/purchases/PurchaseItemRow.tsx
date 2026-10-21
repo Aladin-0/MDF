@@ -134,6 +134,7 @@ export function PurchaseItemRow({
     const [searching, setSearching]       = useState(false);
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const [dropdownStyle, setDropdownStyle] = useState<{ top: number; left: number } | null>(null);
+    const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
     const debounceRef                     = useRef<ReturnType<typeof setTimeout> | null>(null);
     const abortControllerRef              = useRef<AbortController | null>(null);
     const wrapperRef                      = useRef<HTMLDivElement>(null);
@@ -215,6 +216,7 @@ export function PurchaseItemRow({
 
         if (raw.length < 2) {
             setResults([]);
+            setHighlightedIndex(-1);
             if (raw.length > 0) openDropdown(); // show "no results + add" even for short queries
             return;
         }
@@ -224,6 +226,7 @@ export function PurchaseItemRow({
         debounceRef.current = setTimeout(async () => {
             if (!outletId) {
                 setResults([]);
+                setHighlightedIndex(-1);
                 setSearching(false);
                 return;
             }
@@ -232,9 +235,11 @@ export function PurchaseItemRow({
                 abortControllerRef.current = controller;
                 const found = await productsApi.search(raw, outletId, 'purchase', controller.signal);
                 setResults(found);
+                setHighlightedIndex(found.length > 0 ? 0 : -1);
             } catch (err: any) {
                 if (err?.name !== 'AbortError') {
                     setResults([]);
+                    setHighlightedIndex(-1);
                 }
             } finally {
                 setSearching(false);
@@ -245,12 +250,29 @@ export function PurchaseItemRow({
     const handleSelectResult = (product: ProductSearchResult) => {
         setQuery('');
         setResults([]);
+        setHighlightedIndex(-1);
         setDropdownOpen(false);
         onSelectProduct(index, product);
+
+        // After selection, advance focus to next input in row (HSN)
+        setTimeout(() => {
+            const row = wrapperRef.current?.closest('[data-cart-row]');
+            if (row) {
+                const inputs = Array.from(
+                    row.querySelectorAll('input:not([disabled]):not([type="hidden"])')
+                ) as HTMLInputElement[];
+                if (inputs[0]) {
+                    inputs[0].focus();
+                    inputs[0].select?.();
+                    inputs[0].scrollIntoView({ block: 'nearest', inline: 'nearest' });
+                }
+            }
+        }, 50);
     };
 
     const handleAddNew = () => {
         setDropdownOpen(false);
+        setHighlightedIndex(-1);
         onOpenAddProduct(index, query);
     };
 
@@ -300,11 +322,15 @@ export function PurchaseItemRow({
                         </div>
                     )}
 
-                    {!searching && results.map((product) => (
+                    {!searching && results.map((product, pIdx) => (
                         <button
                             key={product.id}
                             type="button"
-                            className="flex w-full flex-col px-3 py-2 text-left hover:bg-blue-50"
+                            className={cn(
+                                "flex w-full flex-col px-3 py-2 text-left transition-colors",
+                                highlightedIndex === pIdx ? "bg-blue-100 text-blue-900 ring-1 ring-blue-300" : "hover:bg-blue-50"
+                            )}
+                            onMouseEnter={() => setHighlightedIndex(pIdx)}
                             onMouseDown={(e) => { e.preventDefault(); handleSelectResult(product); }}
                         >
                             <span className="text-xs font-medium text-slate-800">{product.name}</span>
@@ -320,7 +346,11 @@ export function PurchaseItemRow({
                     {/* Always show "Add new product" at bottom */}
                     <button
                         type="button"
-                        className="flex w-full items-center gap-1.5 border-t border-dashed border-slate-200 px-3 py-2 text-left hover:bg-blue-50"
+                        className={cn(
+                            "flex w-full items-center gap-1.5 border-t border-dashed border-slate-200 px-3 py-2 text-left transition-colors",
+                            highlightedIndex === results.length ? "bg-blue-100 text-blue-900 ring-1 ring-blue-300" : "hover:bg-blue-50"
+                        )}
+                        onMouseEnter={() => setHighlightedIndex(results.length)}
                         onMouseDown={(e) => { e.preventDefault(); handleAddNew(); }}
                     >
                         <Plus className="h-3 w-3 text-blue-600" />
@@ -356,6 +386,7 @@ export function PurchaseItemRow({
                                         onChange(index, 'isCustom', false as unknown as number);
                                         setQuery('');
                                         setResults([]);
+                                        setHighlightedIndex(-1);
                                     }}
                                     className="cursor-pointer rounded bg-slate-100 px-1 py-0.5 text-[10px] font-medium text-slate-500 hover:bg-red-100 hover:text-red-600 whitespace-nowrap"
                                 >
@@ -372,6 +403,57 @@ export function PurchaseItemRow({
                                 onChange={(e) => handleQueryChange(e.target.value)}
                                 onFocus={() => {
                                     if (query.length >= 2 || results.length > 0) openDropdown();
+                                }}
+                                onKeyDown={(e) => {
+                                    if (dropdownOpen) {
+                                        const totalOptions = results.length + 1; // including add new button
+                                        if (e.key === 'ArrowDown') {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            setHighlightedIndex((prev) => (prev + 1) % totalOptions);
+                                            return;
+                                        }
+                                        if (e.key === 'ArrowUp') {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            setHighlightedIndex((prev) => (prev <= 0 ? totalOptions - 1 : prev - 1));
+                                            return;
+                                        }
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            if (highlightedIndex >= 0 && highlightedIndex < results.length) {
+                                                handleSelectResult(results[highlightedIndex]);
+                                            } else if (highlightedIndex === results.length) {
+                                                handleAddNew();
+                                            } else if (results.length > 0) {
+                                                handleSelectResult(results[0]);
+                                            } else {
+                                                setDropdownOpen(false);
+                                                // Advance to next input (HSN)
+                                                setTimeout(() => {
+                                                    const row = wrapperRef.current?.closest('[data-cart-row]');
+                                                    if (row) {
+                                                        const inputs = Array.from(
+                                                            row.querySelectorAll('input:not([disabled]):not([type="hidden"])')
+                                                        ) as HTMLInputElement[];
+                                                        const currIdx = inputs.indexOf(inputRef.current!);
+                                                        if (currIdx !== -1 && currIdx < inputs.length - 1) {
+                                                            inputs[currIdx + 1].focus();
+                                                            inputs[currIdx + 1].select?.();
+                                                        }
+                                                    }
+                                                }, 20);
+                                            }
+                                            return;
+                                        }
+                                        if (e.key === 'Escape') {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            setDropdownOpen(false);
+                                            return;
+                                        }
+                                    }
                                 }}
                                 autoComplete="off"
                             />

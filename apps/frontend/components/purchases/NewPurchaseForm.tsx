@@ -69,9 +69,9 @@ const itemSchema = z.object({
 });
 
 const schema = z.object({
-    partyLedgerId:    z.string({ required_error: 'Select a party ledger', invalid_type_error: 'Select a party ledger' }).min(1, 'Select a party ledger'),
+    partyLedgerId:    z.string().min(1, 'Select a party ledger'),
     purchaseType:     z.enum(['credit', 'cash']),
-    invoiceNo:        z.string({ required_error: 'Invoice No required', invalid_type_error: 'Invoice No required' }).min(1, 'Invoice No required'),
+    invoiceNo:        z.string().min(1, 'Invoice No required'),
     invoiceDate:      z.string(),
     dueDate:          z.string().optional(),
     purchaseOrderRef: z.string().optional(),
@@ -171,13 +171,13 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
 
     // Refs for enter navigation
     const partyRef = useRef<HTMLDivElement>(null);
-    const invoiceNoRef = useRef<HTMLInputElement>(null);
-    const dateRef = useRef<HTMLInputElement>(null);
-    const poRef = useRef<HTMLInputElement>(null);
-    const notesRef = useRef<HTMLTextAreaElement>(null);
+    const invoiceNoRef = useRef<HTMLInputElement | null>(null);
+    const dateRef = useRef<HTMLInputElement | null>(null);
+    const poRef = useRef<HTMLInputElement | null>(null);
+    const notesRef = useRef<HTMLTextAreaElement | null>(null);
     const gridContainerRef = useRef<HTMLDivElement>(null);
     
-    useEnterNavigation([partyRef, invoiceNoRef, dateRef, poRef, notesRef]);
+    useEnterNavigation([partyRef, invoiceNoRef, dateRef, poRef, notesRef, gridContainerRef]);
     useGridNavigation(gridContainerRef, () => handleAddItem());
 
     const [ledgerAdjustment,  setLedgerAdjustment]   = useState<number>(0);
@@ -304,7 +304,7 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
 
         if (invoiceToEdit.status === 'SAVED') {
             setOcrStatus('processing');
-            setScannedImage(invoiceToEdit.invoiceImageUrl || null);
+            setScannedImage((invoiceToEdit as any).invoiceImageUrl || null);
             
             const pollStatus = async () => {
                 if (!outlet?.id) return;
@@ -651,8 +651,14 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
         }
     };
 
-    useMagicSubmit(formRef, () => {
-        handleSubmit(onSubmit)();
+    useMagicSubmit(null, () => {
+        if (!drawerOpen && !scannedImageModalOpen) {
+            if (formRef.current?.requestSubmit) {
+                formRef.current.requestSubmit();
+            } else {
+                handleSubmit(onSubmit)();
+            }
+        }
     });
 
     // ─── JSX ─────────────────────────────────────────────────────────────────
@@ -661,6 +667,24 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
         <>
         <form 
             ref={formRef}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                    if (e.ctrlKey || e.metaKey) {
+                        e.preventDefault();
+                        if (formRef.current?.requestSubmit) {
+                            formRef.current.requestSubmit();
+                        } else {
+                            handleSubmit(onSubmit)();
+                        }
+                        return;
+                    }
+                    const target = e.target as HTMLElement;
+                    if (target.tagName !== 'TEXTAREA') {
+                        // Prevent accidental submit on plain Enter from inputs
+                        e.preventDefault();
+                    }
+                }
+            }}
             onSubmit={handleSubmit(onSubmit, (errors) => {
                 console.error("FORM VALIDATION ERRORS:", errors);
                 let errMsg = "Please check required fields in the form";
@@ -672,8 +696,8 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
                     const firstRowErrors = errors.items[0] || {};
                     const failingKeys = Object.keys(firstRowErrors);
                     errMsg = `Item Row 1: Please check ${failingKeys.join(", ")}`;
-                } else if (errors.items?.message) {
-                    errMsg = errors.items.message;
+                } else if ((errors.items as any)?.message) {
+                    errMsg = (errors.items as any).message;
                 }
                 toast({
                     variant: 'destructive',
@@ -816,19 +840,20 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0">
                             <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3">Invoice No <span className="text-red-500">*</span></Label>
                             <div className="w-full sm:w-2/3">
-                                <Input
-                                    ref={(e) => {
-                                        invoiceNoRef.current = e;
-                                        register('invoiceNo').ref(e);
-                                    }}
-                                    className={cn("h-10 text-sm bg-white", (errors.invoiceNo || isDuplicate) && "border-red-400 focus-visible:ring-red-400")}
-                                    {...register('invoiceNo', {
-                                        onChange: register('invoiceNo').onChange,
-                                        onBlur: register('invoiceNo').onBlur,
-                                        name: register('invoiceNo').name
-                                    })}
-                                    placeholder="e.g. AJD-2026-0123"
-                                />
+                                {(() => {
+                                    const { ref: formRef, ...rest } = register('invoiceNo');
+                                    return (
+                                        <Input
+                                            ref={(e) => {
+                                                invoiceNoRef.current = e;
+                                                formRef(e);
+                                            }}
+                                            className={cn("h-10 text-sm bg-white", (errors.invoiceNo || isDuplicate) && "border-red-400 focus-visible:ring-red-400")}
+                                            {...rest}
+                                            placeholder="e.g. AJD-2026-0123"
+                                        />
+                                    );
+                                })()}
                                 {errors.invoiceNo ? (
                                     <p className="text-[11px] text-red-500 mt-1">{errors.invoiceNo.message}</p>
                                 ) : isDuplicate ? (
@@ -841,39 +866,41 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0">
                             <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3">Invoice Date</Label>
                             <div className="w-full sm:w-2/3">
-                                <Input 
-                                    className="h-10 text-sm bg-white" 
-                                    type="date" 
-                                    min="2020-01-01"
-                                    max="2035-12-31"
-                                    ref={(e) => {
-                                        dateRef.current = e;
-                                        register('invoiceDate').ref(e);
-                                    }}
-                                    {...register('invoiceDate', {
-                                        onChange: register('invoiceDate').onChange,
-                                        onBlur: register('invoiceDate').onBlur,
-                                        name: register('invoiceDate').name
-                                    })} 
-                                />
+                                {(() => {
+                                    const { ref: formRef, ...rest } = register('invoiceDate');
+                                    return (
+                                        <Input 
+                                            className="h-10 text-sm bg-white" 
+                                            type="date" 
+                                            min="2020-01-01"
+                                            max="2035-12-31"
+                                            ref={(e) => {
+                                                dateRef.current = e;
+                                                formRef(e);
+                                            }}
+                                            {...rest}
+                                        />
+                                    );
+                                })()}
                             </div>
                         </div>
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0">
                             <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3">PO Ref</Label>
                             <div className="w-full sm:w-2/3">
-                                <Input 
-                                    className="h-10 text-sm bg-white" 
-                                    ref={(e) => {
-                                        poRef.current = e;
-                                        register('purchaseOrderRef').ref(e);
-                                    }}
-                                    {...register('purchaseOrderRef', {
-                                        onChange: register('purchaseOrderRef').onChange,
-                                        onBlur: register('purchaseOrderRef').onBlur,
-                                        name: register('purchaseOrderRef').name
-                                    })} 
-                                    placeholder="Optional" 
-                                />
+                                {(() => {
+                                    const { ref: formRef, ...rest } = register('purchaseOrderRef');
+                                    return (
+                                        <Input 
+                                            className="h-10 text-sm bg-white" 
+                                            ref={(e) => {
+                                                poRef.current = e;
+                                                formRef(e);
+                                            }}
+                                            {...rest}
+                                            placeholder="Optional" 
+                                        />
+                                    );
+                                })()}
                             </div>
                         </div>
                     </div>
@@ -929,19 +956,20 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
                         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1.5 sm:gap-0">
                             <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3 pt-0 sm:pt-2">Notes</Label>
                             <div className="w-full sm:w-2/3">
-                                <Textarea
-                                    className="resize-none text-sm h-10 min-h-[40px] py-2 bg-white"
-                                    ref={(e) => {
-                                        notesRef.current = e;
-                                        register('notes').ref(e);
-                                    }}
-                                    {...register('notes', {
-                                        onChange: register('notes').onChange,
-                                        onBlur: register('notes').onBlur,
-                                        name: register('notes').name
-                                    })}
-                                    placeholder="Optional notes..."
-                                />
+                                {(() => {
+                                    const { ref: formRef, ...rest } = register('notes');
+                                    return (
+                                        <Textarea
+                                            className="resize-none text-sm h-10 min-h-[40px] py-2 bg-white"
+                                            ref={(e) => {
+                                                notesRef.current = e;
+                                                formRef(e);
+                                            }}
+                                            {...rest}
+                                            placeholder="Optional notes..."
+                                        />
+                                    );
+                                })()}
                             </div>
                         </div>
                     </div>
