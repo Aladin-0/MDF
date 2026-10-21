@@ -947,6 +947,11 @@ def post_purchase_invoice(purchase_invoice, distributor_ledger=None):
         discount_amount = getattr(purchase_invoice, 'discount_amount', Decimal('0')) or Decimal('0')
         invoice_discount = getattr(purchase_invoice, 'invoice_discount', Decimal('0')) or Decimal('0')
         total_discount = discount_amount + invoice_discount
+        # Guarantee mathematical integrity: if subtotal exceeds taxable_amount, ensure
+        # all discount is recognized on the credit side to match the debit to Purchase Account.
+        implied_discount = subtotal - taxable_amount
+        if implied_discount > total_discount:
+            total_discount = implied_discount
         if total_discount > 0:
             discount_ledger = _get_ledger(outlet, 'Discount Received')
             lines.append(('credit', discount_ledger, total_discount))

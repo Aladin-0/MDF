@@ -139,11 +139,14 @@ def atomic_purchase_save(payload: Dict[str, Any], outlet_id: str, created_by_id:
             purchase_order_ref=payload.get('purchaseOrderRef'),
             godown=payload.get('godown', 'main'),
             subtotal=Decimal(str(payload['subtotal'])),
-            discount_amount=Decimal(str(payload['discountAmount'])),
-            invoice_discount=Decimal(str(payload.get('invoiceDiscount') or 0)),
+            discount_amount=Decimal(str(payload.get('discountAmount') or 0)),
+            invoice_discount=max(
+                Decimal(str(payload.get('invoiceDiscount') or 0)),
+                Decimal(str(payload['subtotal'])) - Decimal(str(payload['taxableAmount'])) - Decimal(str(payload.get('discountAmount') or 0))
+            ),
             taxable_amount=Decimal(str(payload['taxableAmount'])),
             gst_amount=Decimal(str(payload['gstAmount'])),
-            cess_amount=Decimal(str(payload['cessAmount'])),
+            cess_amount=Decimal(str(payload.get('cessAmount') or 0)),
             freight=Decimal(str(payload.get('freight', 0))),
             round_off=Decimal(str(payload.get('roundOff', 0))),
             ledger_adjustment=Decimal(str(payload.get('ledgerAdjustment', 0))),
@@ -849,11 +852,14 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
         purchase_invoice.purchase_order_ref = payload.get('purchaseOrderRef')
         purchase_invoice.godown = payload.get('godown', 'main')
         purchase_invoice.subtotal = Decimal(str(payload['subtotal']))
-        purchase_invoice.discount_amount = Decimal(str(payload['discountAmount']))
-        purchase_invoice.invoice_discount = Decimal(str(payload.get('invoiceDiscount') or 0))
+        purchase_invoice.discount_amount = Decimal(str(payload.get('discountAmount') or 0))
+        purchase_invoice.invoice_discount = max(
+            Decimal(str(payload.get('invoiceDiscount') or 0)),
+            Decimal(str(payload['subtotal'])) - Decimal(str(payload['taxableAmount'])) - Decimal(str(payload.get('discountAmount') or 0))
+        )
         purchase_invoice.taxable_amount = Decimal(str(payload['taxableAmount']))
         purchase_invoice.gst_amount = Decimal(str(payload['gstAmount']))
-        purchase_invoice.cess_amount = Decimal(str(payload['cessAmount']))
+        purchase_invoice.cess_amount = Decimal(str(payload.get('cessAmount') or 0))
         purchase_invoice.freight = Decimal(str(payload.get('freight', 0)))
         purchase_invoice.round_off = Decimal(str(payload.get('roundOff', 0)))
         purchase_invoice.ledger_adjustment = Decimal(str(payload.get('ledgerAdjustment', 0)))

@@ -893,28 +893,7 @@ const realPurchasesApi = {
         const response = await fetch(`${API_URL}/purchases/`, {
             method: 'POST',
             headers: getHeaders(),
-            body: JSON.stringify({
-                outletId: payload.outletId,
-                partyLedgerId: payload.partyLedgerId,
-                invoiceNo: payload.invoiceNo,
-                invoiceDate: payload.invoiceDate,
-                dueDate: payload.dueDate,
-                purchaseType: payload.purchaseType,
-                purchaseOrderRef: payload.purchaseOrderRef,
-                godown: payload.godown,
-                notes: payload.notes,
-                items: payload.items,
-                subtotal: payload.subtotal,
-                discountAmount: payload.discountAmount,
-                taxableAmount: payload.taxableAmount,
-                gstAmount: payload.gstAmount,
-                cessAmount: payload.cessAmount,
-                freight: payload.freight,
-                roundOff: payload.roundOff,
-                ledgerAdjustment: payload.ledgerAdjustment,
-                ledgerNote: payload.ledgerNote,
-                grandTotal: payload.grandTotal,
-            }),
+            body: JSON.stringify(payload),
         });
         await assertOk(response);
         return response.json();
