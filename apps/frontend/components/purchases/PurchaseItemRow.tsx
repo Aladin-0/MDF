@@ -255,19 +255,23 @@ export function PurchaseItemRow({
         onSelectProduct(index, product);
 
         // After selection, advance focus to next input in row (HSN)
-        setTimeout(() => {
+        const focusHsn = (retries = 10) => {
             const row = wrapperRef.current?.closest('[data-cart-row]');
             if (row) {
-                const inputs = Array.from(
-                    row.querySelectorAll('input:not([disabled]):not([type="hidden"])')
-                ) as HTMLInputElement[];
-                if (inputs[0]) {
-                    inputs[0].focus();
-                    inputs[0].select?.();
-                    inputs[0].scrollIntoView({ block: 'nearest', inline: 'nearest' });
+                const target = (row.querySelector('input[data-field="hsn"]') ||
+                    row.querySelector('input:not([disabled]):not([type="hidden"])')) as HTMLInputElement | null;
+                if (target) {
+                    target.focus();
+                    target.select?.();
+                    target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+                    return;
                 }
             }
-        }, 50);
+            if (retries > 0) {
+                setTimeout(() => focusHsn(retries - 1), 30);
+            }
+        };
+        setTimeout(() => focusHsn(10), 30);
     };
 
     const handleAddNew = () => {
@@ -397,6 +401,7 @@ export function PurchaseItemRow({
                             /* Search input */
                             <input
                                 ref={inputRef}
+                                data-field="product-search"
                                 className={cn(cellInputCls(!!errors?.productName), 'w-full')}
                                 value={query || value.productName}
                                 placeholder="Search product..."
@@ -434,13 +439,11 @@ export function PurchaseItemRow({
                                                 setTimeout(() => {
                                                     const row = wrapperRef.current?.closest('[data-cart-row]');
                                                     if (row) {
-                                                        const inputs = Array.from(
-                                                            row.querySelectorAll('input:not([disabled]):not([type="hidden"])')
-                                                        ) as HTMLInputElement[];
-                                                        const currIdx = inputs.indexOf(inputRef.current!);
-                                                        if (currIdx !== -1 && currIdx < inputs.length - 1) {
-                                                            inputs[currIdx + 1].focus();
-                                                            inputs[currIdx + 1].select?.();
+                                                        const target = (row.querySelector('input[data-field="hsn"]') ||
+                                                            row.querySelector('input:not([disabled]):not([type="hidden"])')) as HTMLInputElement | null;
+                                                        if (target) {
+                                                            target.focus();
+                                                            target.select?.();
                                                         }
                                                     }
                                                 }, 20);
@@ -468,6 +471,7 @@ export function PurchaseItemRow({
                 {/* HSN */}
                 <td className={td}>
                     <input
+                        data-field="hsn"
                         className={cellInputCls()}
                         value={value.hsnCode}
                         placeholder="300490"
@@ -478,6 +482,7 @@ export function PurchaseItemRow({
                 {/* Batch */}
                 <td className={td}>
                     <input
+                        data-field="batch"
                         className={cellInputCls(!!errors?.batchNo)}
                         value={value.batchNo}
                         placeholder="Batch No"
@@ -489,6 +494,7 @@ export function PurchaseItemRow({
                 <td className={td}>
                     <div className="flex items-center gap-0.5">
                         <input
+                            data-field="expiry"
                             className={cn(
                                 cellInputCls(!!errors?.expiryDate),
                                 expStatus === 'expired' && 'border-red-400 bg-red-50',
@@ -570,6 +576,7 @@ export function PurchaseItemRow({
                 {/* Pkg */}
                 <td className={cn(td, 'align-top')}>
                     <input
+                        data-field="pkg"
                         type="number" min={1}
                         className={cellInputCls(!!errors?.pkg, 'right')}
                         value={value.pkg || ''}
@@ -586,6 +593,7 @@ export function PurchaseItemRow({
                 {/* Qty */}
                 <td className={cn(td, 'align-top')}>
                     <input
+                        data-field="qty"
                         type="number" min={0}
                         className={cellInputCls(!!errors?.qty, 'right')}
                         value={value.qty || ''}
@@ -602,6 +610,7 @@ export function PurchaseItemRow({
                 {/* Free */}
                 <td className={td}>
                     <input
+                        data-field="free"
                         type="number" min={0}
                         className={cellInputCls(false, 'right')}
                         value={value.freeQty || ''}
@@ -613,6 +622,7 @@ export function PurchaseItemRow({
                 {/* Rate */}
                 <td className={td}>
                     <input
+                        data-field="rate"
                         type="number" min={0} step="0.01"
                         className={cellInputCls(!!errors?.purchaseRate, 'right')}
                         value={value.purchaseRate || ''}
@@ -623,6 +633,7 @@ export function PurchaseItemRow({
                 {/* Disc% */}
                 <td className={td}>
                     <input
+                        data-field="disc"
                         type="number" min={0} max={100} step="0.01"
                         className={cellInputCls(false, 'right')}
                         value={value.discountPct || ''}
@@ -633,6 +644,7 @@ export function PurchaseItemRow({
                 {/* GST% */}
                 <td className={td}>
                     <input
+                        data-field="gst"
                         type="number" min={0}
                         className={cellInputCls(false, 'right')}
                         value={value.gstRate || ''}
@@ -643,6 +655,7 @@ export function PurchaseItemRow({
                 {/* MRP */}
                 <td className={td}>
                     <input
+                        data-field="mrp"
                         type="number" min={0} step="0.01"
                         className={cellInputCls(!!errors?.mrp, 'right')}
                         value={value.mrp || ''}
@@ -653,6 +666,7 @@ export function PurchaseItemRow({
                 {/* PTR */}
                 <td className={td}>
                     <input
+                        data-field="ptr"
                         type="number" min={0} step="0.01"
                         className={cellInputCls(false, 'right')}
                         value={value.ptr || ''}
@@ -663,6 +677,7 @@ export function PurchaseItemRow({
                 {/* PTS */}
                 <td className={td}>
                     <input
+                        data-field="pts"
                         type="number" min={0} step="0.01"
                         className={cellInputCls(false, 'right')}
                         value={value.pts || ''}

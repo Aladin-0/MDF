@@ -671,11 +671,7 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
                 if (e.key === 'Enter') {
                     if (e.ctrlKey || e.metaKey) {
                         e.preventDefault();
-                        if (formRef.current?.requestSubmit) {
-                            formRef.current.requestSubmit();
-                        } else {
-                            handleSubmit(onSubmit)();
-                        }
+                        handleSubmit(onSubmit)();
                         return;
                     }
                     const target = e.target as HTMLElement;
@@ -1240,7 +1236,8 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
                     </div>
                     
                     <Button
-                        type="submit"
+                        type="button"
+                        onClick={() => handleSubmit(onSubmit)()}
                         disabled={isSubmitting}
                         className="h-14 md:h-auto min-h-full w-full md:w-32 flex flex-col gap-1 justify-center rounded-lg shadow-sm"
                         title="Shortcut: Ctrl + Enter"

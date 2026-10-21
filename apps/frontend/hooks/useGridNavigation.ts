@@ -1,12 +1,17 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 export function useGridNavigation(containerRef: React.RefObject<HTMLElement>, onAddRow?: () => void) {
+    const onAddRowRef = useRef(onAddRow);
     useEffect(() => {
-        const container = containerRef.current;
-        if (!container) return;
+        onAddRowRef.current = onAddRow;
+    }, [onAddRow]);
 
+    useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            const activeEl = document.activeElement as HTMLElement;
+            const container = containerRef.current;
+            if (!container) return;
+
+            const activeEl = (e.target || document.activeElement) as HTMLElement;
             if (!activeEl || !container.contains(activeEl)) return;
 
             const rowElement = activeEl.closest('[data-cart-row]');
@@ -27,11 +32,12 @@ export function useGridNavigation(containerRef: React.RefObject<HTMLElement>, on
                 // If Ctrl or Cmd is held, let it bubble up for invoice submission (Ctrl + Enter)
                 if (e.ctrlKey || e.metaKey) return;
 
-                const inputIndex = rowInputs.indexOf(activeEl as HTMLInputElement);
-                if (inputIndex === -1) return;
-
+                // Immediately stop Enter from submitting the form or bubbling
                 e.preventDefault();
                 e.stopPropagation();
+
+                const inputIndex = rowInputs.indexOf(activeEl as HTMLInputElement);
+                if (inputIndex === -1) return;
 
                 if (e.shiftKey) {
                     // Shift + Enter: Move backwards
@@ -77,28 +83,27 @@ export function useGridNavigation(containerRef: React.RefObject<HTMLElement>, on
                             nextInputs[0].select?.();
                             nextInputs[0].scrollIntoView({ block: 'nearest', inline: 'nearest' });
                         }
-                    } else if (onAddRow) {
+                    } else {
                         // Automatically add a new row and focus its first input
-                        onAddRow();
+                        onAddRowRef.current?.();
 
-                        const focusNewRow = (retries = 6) => {
+                        const focusNewRow = (retries = 12) => {
                             const newRow = container.querySelector(`[data-cart-row="${rowIndex + 1}"]`);
                             if (newRow) {
-                                const newInputs = Array.from(
-                                    newRow.querySelectorAll('input:not([disabled]):not([type="hidden"])')
-                                ) as HTMLInputElement[];
-                                if (newInputs.length > 0) {
-                                    newInputs[0].focus();
-                                    newInputs[0].select?.();
-                                    newInputs[0].scrollIntoView({ block: 'nearest', inline: 'nearest' });
+                                const target = (newRow.querySelector('input[data-field="product-search"]') ||
+                                    newRow.querySelector('input:not([disabled]):not([type="hidden"])')) as HTMLInputElement | null;
+                                if (target) {
+                                    target.focus();
+                                    target.select?.();
+                                    target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
                                     return;
                                 }
                             }
                             if (retries > 0) {
-                                setTimeout(() => focusNewRow(retries - 1), 35);
+                                setTimeout(() => focusNewRow(retries - 1), 30);
                             }
                         };
-                        setTimeout(() => focusNewRow(6), 40);
+                        setTimeout(() => focusNewRow(12), 30);
                     }
                 }
                 return;
@@ -158,10 +163,10 @@ export function useGridNavigation(containerRef: React.RefObject<HTMLElement>, on
                     }
                     targetEl = nextCells[colIndex !== -1 ? colIndex : 0] || nextCells[nextCells.length - 1];
                     shouldMove = true;
-                } else if (onAddRow) {
+                } else {
                     e.preventDefault();
-                    onAddRow();
-                    const focusNewDownRow = (retries = 6) => {
+                    onAddRowRef.current?.();
+                    const focusNewDownRow = (retries = 10) => {
                         const newFirstCellRow = container.querySelector(`[data-cart-row="${rowIndex + 1}"]`);
                         if (newFirstCellRow) {
                             let newCells = Array.from(
@@ -180,10 +185,10 @@ export function useGridNavigation(containerRef: React.RefObject<HTMLElement>, on
                             }
                         }
                         if (retries > 0) {
-                            setTimeout(() => focusNewDownRow(retries - 1), 35);
+                            setTimeout(() => focusNewDownRow(retries - 1), 30);
                         }
                     };
-                    setTimeout(() => focusNewDownRow(6), 40);
+                    setTimeout(() => focusNewDownRow(10), 30);
                     return;
                 }
             }
@@ -198,7 +203,7 @@ export function useGridNavigation(containerRef: React.RefObject<HTMLElement>, on
             }
         };
 
-        container.addEventListener('keydown', handleKeyDown);
-        return () => container.removeEventListener('keydown', handleKeyDown);
-    }, [containerRef, onAddRow]);
+        document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
+    }, [containerRef]);
 }
