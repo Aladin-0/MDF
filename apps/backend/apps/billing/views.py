@@ -3659,6 +3659,7 @@ class SalesReturnListView(APIView):
                 'originalInvoiceNo': r.original_sale.invoice_no if r.original_sale else None,
                 'customerName': r.original_sale.customer.name if (r.original_sale and r.original_sale.customer) else None,
                 'totalAmount': float(r.total_amount),
+                'deductionAmount': float(r.deduction_amount or 0),
                 'refundMode': r.refund_mode,
                 'reason': r.reason,
                 'createdAt': r.created_at.isoformat(),
@@ -3719,6 +3720,8 @@ class SalesReturnDetailView(APIView):
             'customerId': str(r.original_sale.customer_id) if r.original_sale and r.original_sale.customer_id else None,
             'customerName': r.original_sale.customer.name if r.original_sale and r.original_sale.customer else None,
             'totalAmount': float(r.total_amount),
+            'deductionAmount': float(r.deduction_amount or 0),
+            'grossAmount': float(sum(item.total_amount for item in r.items.all())),
             'refundMode': r.refund_mode,
             'reason': r.reason,
             'items': items,
@@ -3794,6 +3797,8 @@ class SalesReturnPrintView(APIView):
             'customerName': r.original_sale.customer.name if (r.original_sale and r.original_sale.customer) else 'Walk-in',
             'items': items,
             'totalAmount': float(r.total_amount),
+            'deductionAmount': float(r.deduction_amount or 0),
+            'grossAmount': float(sum(item.total_amount for item in r.items.all())),
             'refundMode': r.refund_mode,
             'reason': r.reason,
             'outletName': outlet.name,
@@ -4007,12 +4012,31 @@ class SaleInvoiceSearchView(APIView):
         except Outlet.DoesNotExist:
             return Response({'detail': 'Outlet not found'}, status=404)
 
+        customer_id = request.query_params.get('customerId')
         qs = SaleInvoice.objects.filter(outlet=outlet, is_return=False).select_related('customer', 'doctor').prefetch_related('items')
+        if customer_id:
+            qs = qs.filter(customer_id=customer_id)
+
         if q:
-            qs = qs.filter(
-                Q(invoice_no__icontains=q) | Q(customer__name__icontains=q) | Q(doctor__name__icontains=q) | Q(hospital_name__icontains=q)
+            import re
+            clean_q = q.strip()
+            query = (
+                Q(invoice_no__icontains=clean_q)
+                | Q(customer__name__icontains=clean_q)
+                | Q(customer__phone__icontains=clean_q)
+                | Q(doctor__name__icontains=clean_q)
+                | Q(hospital_name__icontains=clean_q)
             )
-        qs = qs.order_by('-invoice_date')[:20]
+            # Smart digit matching (e.g., '606', 'INV-606', 'INV 606' -> match '000606')
+            digits = re.findall(r'\d+', clean_q)
+            if digits:
+                last_num = int(digits[-1])
+                padded_6 = f"{last_num:06d}"
+                query |= Q(invoice_no__icontains=padded_6)
+                query |= Q(invoice_no__icontains=str(last_num))
+            qs = qs.filter(query)
+
+        qs = qs.order_by('-invoice_date')[:10]
 
         results = []
         for inv in qs:
@@ -4057,21 +4081,25 @@ class SaleInvoiceSearchView(APIView):
                 'items': items,
             })
 
-        if len(results) < 20 and q:
+        if len(results) < 10 and q:
             from apps.accounts.models import JournalEntry
-            import re
 
             existing_nos = {r['invoiceNo'].lower() for r in results}
             # Collect all existing SaleInvoice IDs and invoice numbers for this outlet to prevent duplicates
             existing_sale_ids = set(SaleInvoice.objects.filter(outlet=outlet).values_list('id', flat=True))
             all_sale_nos_lower = {no.lower() for no in SaleInvoice.objects.filter(outlet=outlet).values_list('invoice_no', flat=True)}
 
+            je_query = Q(narration__icontains=clean_q)
+            if digits:
+                last_num = int(digits[-1])
+                padded_6 = f"{last_num:06d}"
+                je_query |= Q(narration__icontains=padded_6) | Q(narration__icontains=str(last_num))
+
             # Exclude JournalEntries that are already linked to a real SaleInvoice
             je_qs = JournalEntry.objects.filter(
                 outlet=outlet,
                 source_type='SALE',
-                narration__icontains=q
-            ).exclude(source_id__in=existing_sale_ids).prefetch_related('lines__ledger').order_by('-date')
+            ).filter(je_query).exclude(source_id__in=existing_sale_ids).prefetch_related('lines__ledger').order_by('-date')
 
             for je in je_qs:
                 narration = (je.narration or '').strip()
@@ -4121,10 +4149,10 @@ class SaleInvoiceSearchView(APIView):
                     'defaultGstRate': default_gst_rate,
                     'items': [],
                 })
-                if len(results) >= 20:
+                if len(results) >= 10:
                     break
 
-        return Response({'data': results})
+        return Response({'data': results[:10]})
 
 from django.shortcuts import get_object_or_404
 

@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { format } from 'date-fns';
-import { ArrowLeft, Loader2, Search, Save } from 'lucide-react';
+import { ArrowLeft, Loader2, Search, Save, X } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,6 +25,11 @@ function NewCreditNoteContent() {
     const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
     const [customers, setCustomers] = useState<any[]>([]);
     const [customerId, setCustomerId] = useState('');
+    const [customerSearch, setCustomerSearch] = useState('');
+    const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+    const customerDropdownRef = useRef<HTMLDivElement>(null);
+
+    const [deductionAmount, setDeductionAmount] = useState<string>('');
     const [reason, setReason] = useState('');
     const [refundMode, setRefundMode] = useState<'cash' | 'upi' | 'credit_note' | 'adjust'>('cash');
     const {
@@ -49,6 +54,9 @@ function NewCreditNoteContent() {
     const [searchLoading, setSearchLoading] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
+    const deductionNum = Math.max(0, parseFloat(deductionAmount) || 0);
+    const netRefundAmount = Math.max(0, totalAmount - deductionNum);
+
     useEffect(() => {
         if (!outletId) return;
         customersApi.list(outletId).then((res: any) => setCustomers(res?.data ?? res ?? [])).catch(() => {});
@@ -58,6 +66,9 @@ function NewCreditNoteContent() {
         function handleClick(e: MouseEvent) {
             if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
                 setShowInvoiceDropdown(false);
+            }
+            if (customerDropdownRef.current && !customerDropdownRef.current.contains(e.target as Node)) {
+                setShowCustomerDropdown(false);
             }
         }
         document.addEventListener('mousedown', handleClick);
@@ -79,6 +90,23 @@ function NewCreditNoteContent() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [searchParams, outletId]);
 
+    const filteredCustomers = customers.filter((c: any) => {
+        if (!customerSearch.trim()) return true;
+        const q = customerSearch.toLowerCase();
+        return (c.name || '').toLowerCase().includes(q) || (c.phone || '').includes(q);
+    }).slice(0, 10);
+
+    function handleSelectCustomer(c: any | null) {
+        if (!c) {
+            setCustomerId('');
+            setCustomerSearch('');
+        } else {
+            setCustomerId(c.id);
+            setCustomerSearch(`${c.name}${c.phone ? ` (${c.phone})` : ''}`);
+        }
+        setShowCustomerDropdown(false);
+    }
+
     async function handleInvoiceSearch(q: string) {
         setInvoiceSearch(q);
         if (!q.trim() || !outletId) {
@@ -88,7 +116,7 @@ function NewCreditNoteContent() {
         }
         setSearchLoading(true);
         try {
-            const res = await voucherApi.searchSaleInvoices(outletId, q);
+            const res = await voucherApi.searchSaleInvoices(outletId, q, customerId || undefined);
             const list = res?.data ?? res ?? [];
             setInvoiceResults(list);
             setShowInvoiceDropdown(list.length > 0);
@@ -104,6 +132,11 @@ function NewCreditNoteContent() {
         setOriginalSaleId(inv.id);
         const cName = inv.customerName || inv.customer?.name || 'Walk-in';
         setInvoiceSearch(`${inv.invoiceNo} — ${cName}`);
+        if (inv.customerId && inv.customerName) {
+            setCustomerSearch(inv.customerName);
+        } else {
+            setCustomerSearch('');
+        }
         setShowInvoiceDropdown(false);
         if (inv.items && inv.items.length > 0) {
             const newItems: any[] = [];
@@ -209,6 +242,10 @@ function NewCreditNoteContent() {
                     overrideReason: reason,
                     refundMode,
                     refund_mode: refundMode,
+                    deductionAmount: deductionNum,
+                    deduction_amount: deductionNum,
+                    totalAmount: netRefundAmount,
+                    total_amount: netRefundAmount,
                     items: validItems.map((i) => {
                         const packSize = i.packSize || 1;
                         const qs = parseInt(i.qtyStrips, 10) || 0;
@@ -354,21 +391,68 @@ function NewCreditNoteContent() {
                         />
                     </div>
 
-                    {/* Field 3: Customer */}
-                    <div className="space-y-1">
+                    {/* Field 3: Searchable Customer / Account */}
+                    <div className="space-y-1 relative" ref={customerDropdownRef}>
                         <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
                             Customer / Account
                         </label>
-                        <select
-                            value={customerId}
-                            onChange={(e) => setCustomerId(e.target.value)}
-                            className="w-full h-8 rounded-md border border-slate-200 bg-slate-50/70 px-2.5 text-xs text-slate-800 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        >
-                            <option value="">Walk-in / Cash Customer</option>
-                            {customers.map((c: any) => (
-                                <option key={c.id} value={c.id}>{c.name} {c.phone ? `(${c.phone})` : ''}</option>
-                            ))}
-                        </select>
+                        <div className="relative">
+                            <Input
+                                className="h-8 text-xs bg-slate-50/70 border-slate-200 focus-visible:bg-white pr-7"
+                                placeholder="Search Customer or Walk-in..."
+                                value={customerSearch}
+                                onChange={(e) => {
+                                    setCustomerSearch(e.target.value);
+                                    setShowCustomerDropdown(true);
+                                }}
+                                onFocus={() => setShowCustomerDropdown(true)}
+                            />
+                            {customerSearch ? (
+                                <button
+                                    type="button"
+                                    onClick={() => handleSelectCustomer(null)}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                                >
+                                    <X className="h-3.5 w-3.5" />
+                                </button>
+                            ) : (
+                                <Search className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+                            )}
+                        </div>
+
+                        {showCustomerDropdown && (
+                            <div className="absolute z-50 mt-1 w-full rounded-md border border-slate-200 bg-white shadow-lg max-h-52 overflow-y-auto left-0">
+                                <button
+                                    type="button"
+                                    onClick={() => handleSelectCustomer(null)}
+                                    className={cn(
+                                        "w-full text-left px-3 py-1.5 hover:bg-slate-50 transition-colors border-b border-slate-100 text-xs font-medium",
+                                        !customerId ? "bg-blue-50/70 text-blue-700 font-semibold" : "text-slate-700"
+                                    )}
+                                >
+                                    Walk-in / Cash Customer
+                                </button>
+                                {filteredCustomers.map((c: any) => (
+                                    <button
+                                        key={c.id}
+                                        type="button"
+                                        onClick={() => handleSelectCustomer(c)}
+                                        className={cn(
+                                            "w-full text-left px-3 py-1.5 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0 text-xs",
+                                            customerId === c.id ? "bg-blue-50/70 text-blue-700 font-semibold" : "text-slate-700"
+                                        )}
+                                    >
+                                        <div className="flex justify-between items-center">
+                                            <span className="truncate">{c.name}</span>
+                                            {c.phone && <span className="text-[11px] font-mono text-slate-400 ml-2">{c.phone}</span>}
+                                        </div>
+                                    </button>
+                                ))}
+                                {filteredCustomers.length === 0 && (
+                                    <div className="px-3 py-2 text-xs text-slate-400 text-center">No customer found</div>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -442,17 +526,36 @@ function NewCreditNoteContent() {
                         </div>
                         <div className="p-3 space-y-2 text-xs">
                             <div className="flex justify-between text-slate-600">
-                                <span>Taxable Subtotal</span>
-                                <span className="font-mono font-semibold text-slate-800">₹{subtotal.toFixed(2)}</span>
+                                <span>Gross Return Total</span>
+                                <span className="font-mono font-semibold text-slate-800">₹{totalAmount.toFixed(2)}</span>
                             </div>
-                            <div className="flex justify-between text-slate-600">
+                            <div className="flex justify-between text-slate-500 text-[11px]">
+                                <span>Taxable Subtotal</span>
+                                <span className="font-mono text-slate-600">₹{subtotal.toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between text-slate-500 text-[11px]">
                                 <span>GST Value (Exact)</span>
-                                <span className="font-mono font-semibold text-slate-800">₹{gstAmount.toFixed(2)}</span>
+                                <span className="font-mono text-slate-600">₹{gstAmount.toFixed(2)}</span>
+                            </div>
+                            <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                                <span className="font-semibold text-xs text-amber-900">Return Deduction / Fee (-)</span>
+                                <div className="relative w-28">
+                                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">₹</span>
+                                    <Input
+                                        type="number"
+                                        min="0"
+                                        step="any"
+                                        placeholder="0.00"
+                                        value={deductionAmount}
+                                        onChange={(e) => setDeductionAmount(e.target.value)}
+                                        className="h-7 text-xs font-mono font-bold text-right pl-5 pr-2 bg-amber-50/60 border-amber-200 focus-visible:ring-amber-500 text-amber-900"
+                                    />
+                                </div>
                             </div>
                         </div>
                         <div className="px-3.5 py-2.5 bg-slate-100 border-t-2 border-slate-300 flex justify-between items-baseline">
                             <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Net Refund Amount</span>
-                            <span className="font-mono text-base font-black text-slate-900">₹{totalAmount.toFixed(2)}</span>
+                            <span className="font-mono text-base font-black text-slate-900">₹{netRefundAmount.toFixed(2)}</span>
                         </div>
                     </div>
                 </div>

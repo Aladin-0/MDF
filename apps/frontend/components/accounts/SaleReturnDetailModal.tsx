@@ -174,7 +174,19 @@ export function SaleReturnDetailModal({ open, onOpenChange, returnId }: SaleRetu
                                 {/* Right Details */}
                                 <div className="space-y-4 flex flex-col justify-end">
                                     <div className="bg-slate-50 text-slate-900 border border-slate-200 rounded-lg p-4">
-                                        <p className="text-slate-500 text-xs font-medium uppercase mb-1">Total Refund Amount</p>
+                                        {Number(data.deductionAmount) > 0 && (
+                                            <div className="mb-2 pb-2 border-b border-slate-200 space-y-1 text-xs">
+                                                <div className="flex justify-between text-slate-500">
+                                                    <span>Gross Goods Value</span>
+                                                    <span className="font-mono font-medium">{formatINR((data.totalAmount || 0) + (data.deductionAmount || 0))}</span>
+                                                </div>
+                                                <div className="flex justify-between text-amber-700 font-medium">
+                                                    <span>Deduction / Fee (-)</span>
+                                                    <span className="font-mono">-{formatINR(data.deductionAmount)}</span>
+                                                </div>
+                                            </div>
+                                        )}
+                                        <p className="text-slate-500 text-xs font-medium uppercase mb-1">Net Refund Amount</p>
                                         <p className="font-bold text-2xl">{formatINR(data.totalAmount)}</p>
                                         <p className="text-xs text-muted-foreground mt-1">
                                             Refunded via <span className="font-medium text-slate-700">{REFUND_MODE_LABELS[data.refundMode] || data.refundMode}</span>
@@ -307,9 +319,21 @@ export function SaleReturnDetailModal({ open, onOpenChange, returnId }: SaleRetu
                                         </table>
 
                                         <div className="flex justify-end border-b border-black pb-2 mb-2">
-                                            <div className="w-1/3 min-w-[150px]">
+                                            <div className="w-1/2 min-w-[200px] text-right space-y-1">
+                                                {Number(data.deductionAmount) > 0 && (
+                                                    <>
+                                                        <div className="flex justify-between text-[10px]">
+                                                            <span>Gross Goods Value:</span>
+                                                            <span>{formatINR((data.totalAmount || 0) + (data.deductionAmount || 0))}</span>
+                                                        </div>
+                                                        <div className="flex justify-between text-[10px]">
+                                                            <span>Deduction / Fee (-):</span>
+                                                            <span>-{formatINR(data.deductionAmount)}</span>
+                                                        </div>
+                                                    </>
+                                                )}
                                                 <div className="flex justify-between font-bold text-xs pt-1 border-t border-black border-dashed mt-1">
-                                                    <span>Total Refund</span>
+                                                    <span>Net Refund Total:</span>
                                                     <span>{formatINR(data.totalAmount)}</span>
                                                 </div>
                                             </div>
