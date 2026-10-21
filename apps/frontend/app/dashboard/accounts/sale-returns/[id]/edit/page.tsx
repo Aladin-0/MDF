@@ -42,6 +42,7 @@ function EditSaleReturnContent() {
     const [reason, setReason] = useState('');
     const [refundMode, setRefundMode] = useState<'cash' | 'upi' | 'credit_note' | 'adjust'>('cash');
     const [expectedUpdatedAt, setExpectedUpdatedAt] = useState<string | undefined>();
+    const [deductionAmount, setDeductionAmount] = useState('');
 
     // Audit Trail fields (Mandatory)
     const [revisionReasonCode, setRevisionReasonCode] = useState('correction');
@@ -56,6 +57,9 @@ function EditSaleReturnContent() {
         gstAmount,
         totalAmount,
     } = useSaleReturnCart([]);
+
+    const deductionNum = Math.max(0, parseFloat(deductionAmount) || 0);
+    const netRefundAmount = Math.max(0, totalAmount - deductionNum);
 
     // Fetch existing return details on mount
     useEffect(() => {
@@ -77,6 +81,9 @@ function EditSaleReturnContent() {
                 setReason(d.reason || '');
                 setRefundMode(d.refundMode || 'cash');
                 setExpectedUpdatedAt(d.updatedAt);
+                if (d.deductionAmount) {
+                    setDeductionAmount(String(d.deductionAmount));
+                }
 
                 if (Array.isArray(d.items)) {
                     const loadedItems: ReturnItemRow[] = d.items.map((it: any) => {
@@ -175,6 +182,10 @@ function EditSaleReturnContent() {
             revisionReasonCode,
             revisionReasonText,
             expectedUpdatedAt,
+            deductionAmount: deductionNum,
+            deduction_amount: deductionNum,
+            totalAmount: netRefundAmount,
+            total_amount: netRefundAmount,
             items: validItems.map((i) => {
                 const qs = parseInt(i.qtyStrips, 10) || 0;
                 const ql = parseInt(i.qtyLoose, 10) || 0;
@@ -423,17 +434,36 @@ function EditSaleReturnContent() {
                         </div>
                         <div className="p-3 space-y-2 text-xs">
                             <div className="flex justify-between text-slate-600">
-                                <span>Taxable Subtotal</span>
-                                <span className="font-mono font-semibold text-slate-800">₹{subtotal.toFixed(2)}</span>
+                                <span>Gross Return Total</span>
+                                <span className="font-mono font-semibold text-slate-800">₹{totalAmount.toFixed(2)}</span>
                             </div>
-                            <div className="flex justify-between text-slate-600">
+                            <div className="flex justify-between text-slate-500 text-[11px]">
+                                <span>Taxable Subtotal</span>
+                                <span className="font-mono text-slate-600">₹{subtotal.toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between text-slate-500 text-[11px]">
                                 <span>GST Value (Exact Rate)</span>
-                                <span className="font-mono font-semibold text-slate-800">₹{gstAmount.toFixed(2)}</span>
+                                <span className="font-mono text-slate-600">₹{gstAmount.toFixed(2)}</span>
+                            </div>
+                            <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                                <span className="font-semibold text-xs text-amber-900">Return Deduction / Fee (-)</span>
+                                <div className="relative w-28">
+                                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">₹</span>
+                                    <Input
+                                        type="number"
+                                        min="0"
+                                        step="any"
+                                        placeholder="0.00"
+                                        value={deductionAmount}
+                                        onChange={(e) => setDeductionAmount(e.target.value)}
+                                        className="h-7 text-xs font-mono font-bold text-right pl-5 pr-2 bg-amber-50/60 border-amber-200 focus-visible:ring-amber-500 text-amber-900"
+                                    />
+                                </div>
                             </div>
                         </div>
                         <div className="px-3.5 py-2.5 bg-slate-100 border-t-2 border-slate-300 flex justify-between items-baseline">
                             <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Net Refund Amount</span>
-                            <span className="font-mono text-base font-black text-slate-900">₹{totalAmount.toFixed(2)}</span>
+                            <span className="font-mono text-base font-black text-slate-900">₹{netRefundAmount.toFixed(2)}</span>
                         </div>
                     </div>
                 </div>

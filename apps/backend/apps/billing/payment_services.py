@@ -428,6 +428,12 @@ def create_sales_return(payload: Dict[str, Any], outlet_id: str, created_by_id: 
             'return_rate': return_rate,
             'total_amount': item_total,
         })
+
+    deduction_amount = Decimal(str(payload.get('deductionAmount') or payload.get('deduction_amount') or payload.get('adjustmentAmount') or 0))
+    if deduction_amount < 0:
+        deduction_amount = Decimal('0')
+    net_refund_amount = max(Decimal('0'), total_amount - deduction_amount)
+
     # Generate return number (SELECT FOR UPDATE inside atomic)
     return_no = generate_return_number(outlet)
 
@@ -439,7 +445,8 @@ def create_sales_return(payload: Dict[str, Any], outlet_id: str, created_by_id: 
         return_no=return_no,
         return_date=return_date,
         reason=reason,
-        total_amount=total_amount,
+        total_amount=net_refund_amount,
+        deduction_amount=deduction_amount,
         refund_mode=refund_mode,
         created_by=created_by,
         manual_override=manual_override

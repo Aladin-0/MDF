@@ -893,28 +893,7 @@ const realPurchasesApi = {
         const response = await fetch(`${API_URL}/purchases/`, {
             method: 'POST',
             headers: getHeaders(),
-            body: JSON.stringify({
-                outletId: payload.outletId,
-                partyLedgerId: payload.partyLedgerId,
-                invoiceNo: payload.invoiceNo,
-                invoiceDate: payload.invoiceDate,
-                dueDate: payload.dueDate,
-                purchaseType: payload.purchaseType,
-                purchaseOrderRef: payload.purchaseOrderRef,
-                godown: payload.godown,
-                notes: payload.notes,
-                items: payload.items,
-                subtotal: payload.subtotal,
-                discountAmount: payload.discountAmount,
-                taxableAmount: payload.taxableAmount,
-                gstAmount: payload.gstAmount,
-                cessAmount: payload.cessAmount,
-                freight: payload.freight,
-                roundOff: payload.roundOff,
-                ledgerAdjustment: payload.ledgerAdjustment,
-                ledgerNote: payload.ledgerNote,
-                grandTotal: payload.grandTotal,
-            }),
+            body: JSON.stringify(payload),
         });
         await assertOk(response);
         return response.json();
@@ -1805,11 +1784,10 @@ const realVoucherApi = {
         const data = await response.json();
         return data.data || [];
     },
-    searchSaleInvoices: async (outletId: string, q: string) => {
-        const response = await fetch(
-            `${API_URL}/sales/invoices/search/?outletId=${encodeURIComponent(outletId)}&q=${encodeURIComponent(q)}`,
-            { headers: getHeaders() }
-        );
+    searchSaleInvoices: async (outletId: string, q: string, customerId?: string) => {
+        let url = `${API_URL}/sales/invoices/search/?outletId=${encodeURIComponent(outletId)}&q=${encodeURIComponent(q)}`;
+        if (customerId) url += `&customerId=${encodeURIComponent(customerId)}`;
+        const response = await fetch(url, { headers: getHeaders() });
         await assertOk(response);
         const data = await response.json();
         return data.data || [];

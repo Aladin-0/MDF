@@ -185,10 +185,15 @@ def atomic_sale_return_update(return_id: str, payload: dict, outlet_id: str, upd
     for b_id in affected_batch_ids:
         rebuild_stock_ledger(batch_id=b_id, from_date=sales_return.return_date)
 
+    deduction_amount = Decimal(str(payload.get('deductionAmount') or payload.get('deduction_amount') or payload.get('adjustmentAmount') or 0))
+    if deduction_amount < 0:
+        deduction_amount = Decimal('0')
+    net_refund_amount = max(Decimal('0'), server_computed_total - deduction_amount)
+
     # 6. Handle NEW credit note
     if new_refund_mode == 'credit_note' and original_sale and original_sale.customer:
         customer = original_sale.customer
-        customer.outstanding = customer.outstanding - server_computed_total
+        customer.outstanding = customer.outstanding - net_refund_amount
         customer.save(update_fields=['outstanding'])
 
         prev_balance = _last_ledger_balance(outlet, customer=customer)
@@ -197,15 +202,16 @@ def atomic_sale_return_update(return_id: str, payload: dict, outlet_id: str, upd
             date=sales_return.return_date, entry_type='credit_note',
             reference_no=sales_return.return_no,
             description=f"Sales return {sales_return.return_no} - credit note",
-            debit=Decimal('0'), credit=server_computed_total,
-            running_balance=prev_balance - server_computed_total,
+            debit=Decimal('0'), credit=net_refund_amount,
+            running_balance=prev_balance - net_refund_amount,
         )
 
     # 7. Update Header
-    sales_return.total_amount = server_computed_total
+    sales_return.total_amount = net_refund_amount
+    sales_return.deduction_amount = deduction_amount
     sales_return.refund_mode = new_refund_mode
     sales_return.reason = payload.get('reason', sales_return.reason)
-    sales_return.save(update_fields=['total_amount', 'refund_mode', 'reason'])
+    sales_return.save(update_fields=['total_amount', 'deduction_amount', 'refund_mode', 'reason'])
 
     # Fetch fresh for snapshot
     sales_return.refresh_from_db()

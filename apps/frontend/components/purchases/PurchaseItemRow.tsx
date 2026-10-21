@@ -134,6 +134,7 @@ export function PurchaseItemRow({
     const [searching, setSearching]       = useState(false);
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const [dropdownStyle, setDropdownStyle] = useState<{ top: number; left: number } | null>(null);
+    const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
     const debounceRef                     = useRef<ReturnType<typeof setTimeout> | null>(null);
     const abortControllerRef              = useRef<AbortController | null>(null);
     const wrapperRef                      = useRef<HTMLDivElement>(null);
@@ -215,6 +216,7 @@ export function PurchaseItemRow({
 
         if (raw.length < 2) {
             setResults([]);
+            setHighlightedIndex(-1);
             if (raw.length > 0) openDropdown(); // show "no results + add" even for short queries
             return;
         }
@@ -224,6 +226,7 @@ export function PurchaseItemRow({
         debounceRef.current = setTimeout(async () => {
             if (!outletId) {
                 setResults([]);
+                setHighlightedIndex(-1);
                 setSearching(false);
                 return;
             }
@@ -232,9 +235,11 @@ export function PurchaseItemRow({
                 abortControllerRef.current = controller;
                 const found = await productsApi.search(raw, outletId, 'purchase', controller.signal);
                 setResults(found);
+                setHighlightedIndex(found.length > 0 ? 0 : -1);
             } catch (err: any) {
                 if (err?.name !== 'AbortError') {
                     setResults([]);
+                    setHighlightedIndex(-1);
                 }
             } finally {
                 setSearching(false);
@@ -245,12 +250,33 @@ export function PurchaseItemRow({
     const handleSelectResult = (product: ProductSearchResult) => {
         setQuery('');
         setResults([]);
+        setHighlightedIndex(-1);
         setDropdownOpen(false);
         onSelectProduct(index, product);
+
+        // After selection, advance focus to next input in row (HSN)
+        const focusHsn = (retries = 10) => {
+            const row = wrapperRef.current?.closest('[data-cart-row]');
+            if (row) {
+                const target = (row.querySelector('input[data-field="hsn"]') ||
+                    row.querySelector('input:not([disabled]):not([type="hidden"])')) as HTMLInputElement | null;
+                if (target) {
+                    target.focus();
+                    target.select?.();
+                    target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+                    return;
+                }
+            }
+            if (retries > 0) {
+                setTimeout(() => focusHsn(retries - 1), 30);
+            }
+        };
+        setTimeout(() => focusHsn(10), 30);
     };
 
     const handleAddNew = () => {
         setDropdownOpen(false);
+        setHighlightedIndex(-1);
         onOpenAddProduct(index, query);
     };
 
@@ -300,11 +326,15 @@ export function PurchaseItemRow({
                         </div>
                     )}
 
-                    {!searching && results.map((product) => (
+                    {!searching && results.map((product, pIdx) => (
                         <button
                             key={product.id}
                             type="button"
-                            className="flex w-full flex-col px-3 py-2 text-left hover:bg-blue-50"
+                            className={cn(
+                                "flex w-full flex-col px-3 py-2 text-left transition-colors",
+                                highlightedIndex === pIdx ? "bg-blue-100 text-blue-900 ring-1 ring-blue-300" : "hover:bg-blue-50"
+                            )}
+                            onMouseEnter={() => setHighlightedIndex(pIdx)}
                             onMouseDown={(e) => { e.preventDefault(); handleSelectResult(product); }}
                         >
                             <span className="text-xs font-medium text-slate-800">{product.name}</span>
@@ -320,7 +350,11 @@ export function PurchaseItemRow({
                     {/* Always show "Add new product" at bottom */}
                     <button
                         type="button"
-                        className="flex w-full items-center gap-1.5 border-t border-dashed border-slate-200 px-3 py-2 text-left hover:bg-blue-50"
+                        className={cn(
+                            "flex w-full items-center gap-1.5 border-t border-dashed border-slate-200 px-3 py-2 text-left transition-colors",
+                            highlightedIndex === results.length ? "bg-blue-100 text-blue-900 ring-1 ring-blue-300" : "hover:bg-blue-50"
+                        )}
+                        onMouseEnter={() => setHighlightedIndex(results.length)}
                         onMouseDown={(e) => { e.preventDefault(); handleAddNew(); }}
                     >
                         <Plus className="h-3 w-3 text-blue-600" />
@@ -356,6 +390,7 @@ export function PurchaseItemRow({
                                         onChange(index, 'isCustom', false as unknown as number);
                                         setQuery('');
                                         setResults([]);
+                                        setHighlightedIndex(-1);
                                     }}
                                     className="cursor-pointer rounded bg-slate-100 px-1 py-0.5 text-[10px] font-medium text-slate-500 hover:bg-red-100 hover:text-red-600 whitespace-nowrap"
                                 >
@@ -366,12 +401,62 @@ export function PurchaseItemRow({
                             /* Search input */
                             <input
                                 ref={inputRef}
+                                data-field="product-search"
                                 className={cn(cellInputCls(!!errors?.productName), 'w-full')}
                                 value={query || value.productName}
                                 placeholder="Search product..."
                                 onChange={(e) => handleQueryChange(e.target.value)}
                                 onFocus={() => {
                                     if (query.length >= 2 || results.length > 0) openDropdown();
+                                }}
+                                onKeyDown={(e) => {
+                                    if (dropdownOpen) {
+                                        const totalOptions = results.length + 1; // including add new button
+                                        if (e.key === 'ArrowDown') {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            setHighlightedIndex((prev) => (prev + 1) % totalOptions);
+                                            return;
+                                        }
+                                        if (e.key === 'ArrowUp') {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            setHighlightedIndex((prev) => (prev <= 0 ? totalOptions - 1 : prev - 1));
+                                            return;
+                                        }
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            if (highlightedIndex >= 0 && highlightedIndex < results.length) {
+                                                handleSelectResult(results[highlightedIndex]);
+                                            } else if (highlightedIndex === results.length) {
+                                                handleAddNew();
+                                            } else if (results.length > 0) {
+                                                handleSelectResult(results[0]);
+                                            } else {
+                                                setDropdownOpen(false);
+                                                // Advance to next input (HSN)
+                                                setTimeout(() => {
+                                                    const row = wrapperRef.current?.closest('[data-cart-row]');
+                                                    if (row) {
+                                                        const target = (row.querySelector('input[data-field="hsn"]') ||
+                                                            row.querySelector('input:not([disabled]):not([type="hidden"])')) as HTMLInputElement | null;
+                                                        if (target) {
+                                                            target.focus();
+                                                            target.select?.();
+                                                        }
+                                                    }
+                                                }, 20);
+                                            }
+                                            return;
+                                        }
+                                        if (e.key === 'Escape') {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            setDropdownOpen(false);
+                                            return;
+                                        }
+                                    }
                                 }}
                                 autoComplete="off"
                             />
@@ -386,6 +471,7 @@ export function PurchaseItemRow({
                 {/* HSN */}
                 <td className={td}>
                     <input
+                        data-field="hsn"
                         className={cellInputCls()}
                         value={value.hsnCode}
                         placeholder="300490"
@@ -396,6 +482,7 @@ export function PurchaseItemRow({
                 {/* Batch */}
                 <td className={td}>
                     <input
+                        data-field="batch"
                         className={cellInputCls(!!errors?.batchNo)}
                         value={value.batchNo}
                         placeholder="Batch No"
@@ -407,6 +494,7 @@ export function PurchaseItemRow({
                 <td className={td}>
                     <div className="flex items-center gap-0.5">
                         <input
+                            data-field="expiry"
                             className={cn(
                                 cellInputCls(!!errors?.expiryDate),
                                 expStatus === 'expired' && 'border-red-400 bg-red-50',
@@ -488,6 +576,7 @@ export function PurchaseItemRow({
                 {/* Pkg */}
                 <td className={cn(td, 'align-top')}>
                     <input
+                        data-field="pkg"
                         type="number" min={1}
                         className={cellInputCls(!!errors?.pkg, 'right')}
                         value={value.pkg || ''}
@@ -504,6 +593,7 @@ export function PurchaseItemRow({
                 {/* Qty */}
                 <td className={cn(td, 'align-top')}>
                     <input
+                        data-field="qty"
                         type="number" min={0}
                         className={cellInputCls(!!errors?.qty, 'right')}
                         value={value.qty || ''}
@@ -520,6 +610,7 @@ export function PurchaseItemRow({
                 {/* Free */}
                 <td className={td}>
                     <input
+                        data-field="free"
                         type="number" min={0}
                         className={cellInputCls(false, 'right')}
                         value={value.freeQty || ''}
@@ -531,6 +622,7 @@ export function PurchaseItemRow({
                 {/* Rate */}
                 <td className={td}>
                     <input
+                        data-field="rate"
                         type="number" min={0} step="0.01"
                         className={cellInputCls(!!errors?.purchaseRate, 'right')}
                         value={value.purchaseRate || ''}
@@ -541,6 +633,7 @@ export function PurchaseItemRow({
                 {/* Disc% */}
                 <td className={td}>
                     <input
+                        data-field="disc"
                         type="number" min={0} max={100} step="0.01"
                         className={cellInputCls(false, 'right')}
                         value={value.discountPct || ''}
@@ -551,6 +644,7 @@ export function PurchaseItemRow({
                 {/* GST% */}
                 <td className={td}>
                     <input
+                        data-field="gst"
                         type="number" min={0}
                         className={cellInputCls(false, 'right')}
                         value={value.gstRate || ''}
@@ -561,6 +655,7 @@ export function PurchaseItemRow({
                 {/* MRP */}
                 <td className={td}>
                     <input
+                        data-field="mrp"
                         type="number" min={0} step="0.01"
                         className={cellInputCls(!!errors?.mrp, 'right')}
                         value={value.mrp || ''}
@@ -571,6 +666,7 @@ export function PurchaseItemRow({
                 {/* PTR */}
                 <td className={td}>
                     <input
+                        data-field="ptr"
                         type="number" min={0} step="0.01"
                         className={cellInputCls(false, 'right')}
                         value={value.ptr || ''}
@@ -581,6 +677,7 @@ export function PurchaseItemRow({
                 {/* PTS */}
                 <td className={td}>
                     <input
+                        data-field="pts"
                         type="number" min={0} step="0.01"
                         className={cellInputCls(false, 'right')}
                         value={value.pts || ''}

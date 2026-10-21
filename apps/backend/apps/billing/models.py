@@ -697,6 +697,7 @@ class SalesReturn(models.Model):
     return_date = models.DateField()
     reason = models.TextField()
     total_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    deduction_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     refund_mode = models.CharField(max_length=20, choices=REFUND_MODE_CHOICES)
 
     created_by = models.ForeignKey('accounts.Staff', on_delete=models.SET_NULL, null=True)
