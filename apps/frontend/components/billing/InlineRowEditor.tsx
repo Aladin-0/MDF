@@ -176,8 +176,8 @@ export function InlineRowEditor({ item, saleType = 'RETAIL', onSave, onCancel, o
 
     return (
         <tr data-cart-row="0" className="bg-blue-50/80 border-y-2 border-blue-400 shadow-[inset_0_2px_8px_rgba(0,0,0,0.05)] relative z-20">
-            <td colSpan={8} className={`p-0 relative ${statusBorder}`}>
-                <div className="flex flex-col p-4 gap-4">
+            <td colSpan={saleType === 'WHOLESALE' ? 12 : 9} className={`p-0 relative ${statusBorder}`}>
+                <div className="flex flex-col p-3 md:p-4 gap-4">
                     {/* Header Row */}
                     <div className="flex justify-between items-start border-b border-blue-200 pb-3">
                         <div>
@@ -191,9 +191,9 @@ export function InlineRowEditor({ item, saleType = 'RETAIL', onSave, onCancel, o
                         </div>
                     </div>
 
-                    <div className="flex gap-6">
+                    <div className="flex flex-col md:flex-row gap-4 md:gap-6">
                         {/* Left Column: Batches */}
-                        <div className="w-[45%] border-r border-blue-200 pr-6">
+                        <div className="w-full md:w-[45%] border-b md:border-b-0 md:border-r border-blue-200 pb-4 md:pb-0 pr-0 md:pr-6">
                             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Select Batch</label>
                             <div className="flex flex-col gap-2 max-h-[160px] overflow-y-auto pr-1 custom-scrollbar">
                                 {availableBatches.map(batch => {

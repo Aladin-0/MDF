@@ -9,7 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { getExpiryStatus } from '@/utils/expiry';
 import { calculateLineMargin, calculateTotalMargin } from '@/lib/billingMarginUtils';
 import { useProductSearch } from '@/hooks/useProductSearch';
-import { Batch, ProductSearchResult } from '@/types';
+import { Batch, ProductSearchResult, BillTotals } from '@/types';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { InlineRowEditor } from './InlineRowEditor';
@@ -47,15 +47,31 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
     const qtyInputRef = useRef<HTMLInputElement>(null);
     const tableContainerRef = useRef<HTMLDivElement>(null);
 
+    const [dropdownPlacement, setDropdownPlacement] = useState<'bottom' | 'top'>('bottom');
+
     useGridNavigation(tableContainerRef, () => {
         searchInputRef.current?.focus();
     });
-
 
     // Reset selected index when search changes
     useEffect(() => {
         setSelectedIndex(0);
     }, [searchResults]);
+
+    // Smart Dropdown Placement: Flip upward if close to viewport bottom on tablet
+    useEffect(() => {
+        if (!isSearchFocused || searchQuery.length < 2) return;
+        if (searchContainerRef.current) {
+            const rect = searchContainerRef.current.getBoundingClientRect();
+            const viewportHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+            const spaceBelow = viewportHeight - rect.bottom;
+            if (spaceBelow < 220 && rect.top > spaceBelow) {
+                setDropdownPlacement('top');
+            } else {
+                setDropdownPlacement('bottom');
+            }
+        }
+    }, [isSearchFocused, searchQuery, searchResults]);
 
     // Close search dropdown when clicking/tapping outside
     useEffect(() => {
@@ -84,8 +100,28 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
     if (!activeDraft) return null;
     const cart = activeDraft.cart;
     const saleType = activeDraft.saleType || 'RETAIL';
-    const totals = getDraftTotals(activeDraftId);
-    const marginData = calculateTotalMargin(activeDraft.cart, totals.grandTotal, totals.extraDiscountAmount);
+    const fallbackTotals: BillTotals = {
+        subtotal: 0,
+        discountAmount: 0,
+        extraDiscountAmount: 0,
+        preExtraNet: 0,
+        taxableAmount: 0,
+        cgstAmount: 0,
+        sgstAmount: 0,
+        cgst: 0,
+        sgst: 0,
+        igst: 0,
+        roundOff: 0,
+        grandTotal: 0,
+        amountPaid: 0,
+        amountDue: 0,
+        itemCount: 0,
+        totalQty: 0,
+        hasScheduleH: false,
+        requiresDoctorDetails: false,
+    };
+    const totals = (typeof getDraftTotals === 'function' ? getDraftTotals(activeDraftId) : null) || fallbackTotals;
+    const marginData = calculateTotalMargin(activeDraft.cart, totals.grandTotal, totals.extraDiscountAmount, activeDraft.extraDiscountPct || 0);
 
     // --- Editor Handlers ---
     const handleSaveEdit = (oldBatchId: string, updatedItem: any) => {
@@ -133,6 +169,11 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
     };
 
     const handleSelectProduct = (product: ProductSearchResult) => {
+        // Force blur active element to instantly retract virtual keyboard on tablets
+        if (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) {
+            document.activeElement.blur();
+        }
+
         const availableBatches = product.batches || [];
         
         // Filter out expired batches and batches with no stock
@@ -172,10 +213,13 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
         setQtyStrips('1');
         setQtyLoose('');
         setDiscountPct('');
-        setTimeout(() => {
-            qtyInputRef.current?.focus();
-            qtyInputRef.current?.select();
-        }, 50);
+        // Only autofocus qty on desktop/mouse to avoid re-summoning virtual keyboard on touch tablets
+        if (typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches) {
+            setTimeout(() => {
+                qtyInputRef.current?.focus();
+                qtyInputRef.current?.select();
+            }, 50);
+        }
     };
 
     const cancelQuickAdd = () => {
@@ -298,9 +342,8 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                                         key={batch.id}
                                         type="button"
                                         onPointerDown={(e) => {
-                                            if (!isExpired) {
+                                            if (e.pointerType === 'mouse' && !isExpired) {
                                                 e.preventDefault();
-                                                handleSelectBatch(batch);
                                             }
                                         }}
                                         onClick={() => !isExpired && handleSelectBatch(batch)}
@@ -331,7 +374,7 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                         </div>
                     </div>
                 ) : (
-                    <div className="flex items-end gap-4 bg-slate-50 p-4 rounded-md border border-slate-200">
+                    <div className="flex flex-wrap items-end gap-3 bg-slate-50 p-3 md:p-4 rounded-md border border-slate-200">
                         <div>
                             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Batch</label>
                             <div className="h-10 px-3 bg-white border border-slate-200 rounded flex items-center font-mono font-bold text-slate-700 text-sm">
@@ -477,37 +520,110 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
             )}
             {/* Search Bar Area */}
             <div className="px-4 py-3 bg-[#F8FAFC] border-b border-slate-200 shrink-0 relative" ref={searchContainerRef}>
-                <div className="relative w-full">
-                    <Search className="absolute left-3 top-2.5 w-5 h-5 text-slate-400" />
-                    <Input 
-                        ref={(node) => {
-                            if (searchInputRef) (searchInputRef as any).current = node;
-                            if (searchRef) (searchRef as any).current = node;
+                {/* Backdrop on tablet/mobile when search overlay is open - clears global navbar and tabs */}
+                {isSearchFocused && searchQuery.length >= 2 && !quickAddProduct && (
+                    <div 
+                        className="fixed inset-x-0 bottom-0 top-[120px] md:top-[calc(env(safe-area-inset-top)+120px)] bg-slate-900/40 z-40 lg:hidden backdrop-blur-xs"
+                        onClick={() => {
+                            setIsSearchFocused(false);
+                            if (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) {
+                                document.activeElement.blur();
+                            }
                         }}
-                        className="w-full h-10 pl-10 pr-10 border-2 border-[#0EA5E9] rounded-md focus-visible:ring-0 focus-visible:border-[#0284C7] font-semibold text-sm shadow-sm"
-                        placeholder="Search Medicine..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        onFocus={() => setIsSearchFocused(true)}
-                        onKeyDown={handleSearchKeyDown}
-                        disabled={!!quickAddProduct}
                     />
-                    
-                    {isFetching && (
-                        <div className="absolute right-3 top-2.5">
-                            <Loader2 className="w-5 h-5 text-slate-400 animate-spin" />
+                )}
+
+                <div className={cn(
+                    "w-full transition-all",
+                    isSearchFocused && searchQuery.length >= 2 && !quickAddProduct
+                        ? "fixed inset-x-0 top-[120px] md:top-[calc(env(safe-area-inset-top)+120px)] h-[55vh] max-h-[calc(100dvh-130px)] z-50 bg-white shadow-2xl overflow-y-auto p-4 border-b-2 border-blue-500 lg:relative lg:inset-auto lg:top-auto lg:h-auto lg:max-h-none lg:shadow-none lg:overflow-visible lg:p-0 lg:border-none"
+                        : "relative"
+                )}>
+                    {/* Sticky Search Bar: Stays sticky at top of 50vh overlay on tablet */}
+                    <div className={cn(
+                        "w-full relative",
+                        isSearchFocused && searchQuery.length >= 2 && !quickAddProduct
+                            ? "sticky top-0 z-20 bg-white pb-3 pt-1 border-b border-slate-100 flex items-center gap-2 lg:static lg:p-0 lg:border-none"
+                            : ""
+                    )}>
+                        <div className="relative flex-1">
+                            <Search className="absolute left-3 top-2.5 w-5 h-5 text-slate-400" />
+                            <Input 
+                                ref={(node) => {
+                                    if (searchInputRef) (searchInputRef as any).current = node;
+                                    if (searchRef) (searchRef as any).current = node;
+                                }}
+                                className="w-full h-10 pl-10 pr-10 border-2 border-[#0EA5E9] rounded-md focus-visible:ring-0 focus-visible:border-[#0284C7] font-semibold text-sm shadow-sm"
+                                placeholder="Search Medicine..."
+                                value={searchQuery}
+                                onChange={(e) => {
+                                    setSearchQuery(e.target.value);
+                                    if (e.target.value.length >= 2) {
+                                        setIsSearchFocused(true);
+                                    }
+                                }}
+                                onFocus={() => {
+                                    setIsSearchFocused(true);
+                                    if (searchContainerRef.current) {
+                                        setTimeout(() => {
+                                            searchContainerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                                        }, 100);
+                                    }
+                                }}
+                                onClick={() => {
+                                    if (searchQuery.length >= 2) {
+                                        setIsSearchFocused(true);
+                                    }
+                                }}
+                                onPointerDown={() => {
+                                    if (searchQuery.length >= 2) {
+                                        setIsSearchFocused(true);
+                                    }
+                                }}
+                                onKeyDown={handleSearchKeyDown}
+                                disabled={!!quickAddProduct}
+                            />
+                            
+                            {isFetching && (
+                                <div className="absolute right-3 top-2.5">
+                                    <Loader2 className="w-5 h-5 text-slate-400 animate-spin" />
+                                </div>
+                            )}
                         </div>
-                    )}
+
+                        {/* Tablet/Mobile Close Button */}
+                        {isSearchFocused && searchQuery.length >= 2 && !quickAddProduct && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setIsSearchFocused(false);
+                                    if (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) {
+                                        document.activeElement.blur();
+                                    }
+                                }}
+                                className="lg:hidden shrink-0 h-10 px-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded font-bold text-xs flex items-center gap-1"
+                            >
+                                <X className="w-4 h-4" />
+                                <span>Close</span>
+                            </button>
+                        )}
+                    </div>
 
                     {errorMsg && (
-                        <div className="absolute -bottom-6 left-0 text-xs font-bold text-red-500 bg-red-50 px-2 py-0.5 rounded">
+                        <div className="text-xs font-bold text-red-500 bg-red-50 px-2 py-0.5 rounded mt-1">
                             {errorMsg}
                         </div>
                     )}
 
-                    {/* Floating Search Dropdown */}
+                    {/* Floating Search Dropdown (Desktop) / Scrollable Results List (Mobile Overlay) */}
                     {isSearchFocused && searchQuery.length >= 2 && !quickAddProduct && (
-                        <div className="absolute top-11 left-0 w-full bg-white border border-slate-300 rounded-md shadow-2xl z-50 max-h-[40vh] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent">
+                        <div 
+                            className={cn(
+                                "w-full bg-white divide-y divide-slate-100",
+                                "lg:absolute lg:left-0 lg:w-full lg:bg-white lg:border lg:border-slate-300 lg:rounded-md lg:shadow-2xl lg:max-h-[min(45vh,340px)] lg:overflow-y-auto lg:overscroll-contain lg:touch-pan-y lg:scrollbar-thin lg:scrollbar-thumb-slate-300 lg:scrollbar-track-transparent lg:z-50",
+                                dropdownPlacement === 'top' ? "lg:bottom-full lg:top-auto lg:mb-1" : "lg:top-full lg:mt-1"
+                            )}
+                        >
                             {isFetching && searchResults.length === 0 ? (
                                 <div className="p-4 text-center text-slate-500 text-sm font-medium">Searching...</div>
                             ) : searchResults.length === 0 ? (
@@ -524,8 +640,10 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                                                     isSelected ? "bg-blue-50 border-blue-500" : "bg-white border-transparent hover:bg-slate-50 active:bg-blue-50"
                                                 )}
                                                 onPointerDown={(e) => {
-                                                    e.preventDefault();
-                                                    handleSelectProduct(product);
+                                                    // Prevent search input blur on desktop mouse click, while allowing touch scrolling on tablets
+                                                    if (e.pointerType === 'mouse') {
+                                                        e.preventDefault();
+                                                    }
                                                 }}
                                                 onClick={() => handleSelectProduct(product)}
                                                 onMouseEnter={() => setSelectedIndex(idx)}
@@ -571,15 +689,15 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
             </div>
 
             {/* Dense Invoice Table Area */}
-            <div className="flex-1 w-full overflow-x-auto overflow-y-visible bg-slate-50 relative" ref={tableContainerRef}>
-                <table className="w-full min-w-[1000px] lg:min-w-[1200px] text-left border-collapse">
+            <div className="flex-1 w-full overflow-x-auto border border-gray-200 rounded-md bg-slate-50 relative pb-56 lg:pb-0" ref={tableContainerRef}>
+                <table className="w-full min-w-full lg:min-w-[1200px] text-left border-collapse">
                     <thead className="bg-slate-200 sticky top-0 z-10 shadow-sm">
                         <tr>
                             <th className="px-2 py-1.5 text-[11px] font-bold text-slate-600 uppercase tracking-wider w-8 text-center border-r border-slate-300">#</th>
-                            <th className="px-3 py-1.5 text-[11px] font-bold text-slate-600 uppercase tracking-wider border-r border-slate-300 w-[300px] min-w-[300px] sticky left-0 z-20 bg-slate-200 shadow-[4px_0_10px_-3px_rgba(0,0,0,0.1)]">Product & Composition</th>
-                            <th className="px-2 py-1.5 text-[11px] font-bold text-slate-600 uppercase tracking-wider w-20 border-r border-slate-300 text-center">HSN</th>
-                            <th className="px-2 py-1.5 text-[11px] font-bold text-slate-600 uppercase tracking-wider w-24 border-r border-slate-300">Batch</th>
-                            <th className="px-2 py-1.5 text-[11px] font-bold text-slate-600 uppercase tracking-wider w-16 text-center border-r border-slate-300">Exp</th>
+                            <th className="px-3 py-1.5 text-[11px] font-bold text-slate-600 uppercase tracking-wider border-r border-slate-300 w-auto min-w-[160px] lg:w-[320px] lg:min-w-[280px] sticky left-0 z-20 bg-slate-200 shadow-[4px_0_10px_-3px_rgba(0,0,0,0.1)]">Product & Composition</th>
+                            <th className="hidden lg:table-cell px-2 py-1.5 text-[11px] font-bold text-slate-600 uppercase tracking-wider w-20 border-r border-slate-300 text-center">HSN</th>
+                            <th className="hidden lg:table-cell px-2 py-1.5 text-[11px] font-bold text-slate-600 uppercase tracking-wider w-24 border-r border-slate-300">Batch</th>
+                            <th className="hidden lg:table-cell px-2 py-1.5 text-[11px] font-bold text-slate-600 uppercase tracking-wider w-16 text-center border-r border-slate-300">Exp</th>
                             <th className="px-2 py-1.5 text-[11px] font-bold text-slate-600 uppercase tracking-wider w-16 text-right border-r border-slate-300">MRP</th>
                             {saleType === 'WHOLESALE' && (
                                 <>
@@ -608,13 +726,13 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                                 {Array.from({ length: 15 }).map((_, i) => (
                                     <tr key={`empty-${i}`} className="pointer-events-none opacity-40 hover:bg-transparent">
                                         <td className="px-2 py-1.5 text-[11px] font-bold text-slate-300 text-center border-r border-slate-100">{i + 1}</td>
-                                        <td className="px-3 py-1.5 border-r border-slate-100 sticky left-0 z-10 bg-white shadow-[4px_0_10px_-3px_rgba(0,0,0,0.1)]">
-                                            <div className="h-3 w-48 bg-slate-100 rounded mb-1"></div>
-                                            <div className="h-2 w-32 bg-slate-50 rounded"></div>
+                                        <td className="px-3 py-1.5 border-r border-slate-100 sticky left-0 z-10 bg-white shadow-[4px_0_10px_-3px_rgba(0,0,0,0.1)] w-auto min-w-[160px] lg:w-[320px]">
+                                            <div className="h-3 w-36 md:w-48 bg-slate-100 rounded mb-1"></div>
+                                            <div className="h-2 w-24 md:w-32 bg-slate-50 rounded"></div>
                                         </td>
-                                        <td className="px-2 py-1.5 border-r border-slate-100"><div className="h-3 w-16 bg-slate-100 rounded mx-auto"></div></td>
-                                        <td className="px-2 py-1.5 border-r border-slate-100"><div className="h-3 w-16 bg-slate-100 rounded"></div></td>
-                                        <td className="px-2 py-1.5 border-r border-slate-100"><div className="h-3 w-10 bg-slate-100 rounded mx-auto"></div></td>
+                                        <td className="hidden lg:table-cell px-2 py-1.5 border-r border-slate-100"><div className="h-3 w-16 bg-slate-100 rounded mx-auto"></div></td>
+                                        <td className="hidden lg:table-cell px-2 py-1.5 border-r border-slate-100"><div className="h-3 w-16 bg-slate-100 rounded"></div></td>
+                                        <td className="hidden lg:table-cell px-2 py-1.5 border-r border-slate-100"><div className="h-3 w-10 bg-slate-100 rounded mx-auto"></div></td>
                                         <td className="px-2 py-1.5 border-r border-slate-100"><div className="h-3 w-12 bg-slate-100 rounded ml-auto"></div></td>
                                         {saleType === 'WHOLESALE' && (
                                             <>
@@ -672,6 +790,8 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                                     );
                                 }
 
+                                const lineMargin = calculateLineMargin(item, activeDraft?.extraDiscountPct || 0);
+
                                 return (
                                     <tr 
                                         key={`${item.batchId}-${index}`} 
@@ -687,9 +807,9 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                                         className="hover:bg-blue-50/50 focus-visible:bg-blue-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 cursor-pointer transition-colors group animate-in fade-in duration-300"
                                     >
                                         <td className={`px-2 py-1.5 text-[11px] font-bold text-slate-400 text-center border-r border-slate-100 ${statusBorder}`}>{index + 1}</td>
-                                        <td className="px-3 py-1.5 border-r border-slate-100 sticky left-0 z-10 bg-white shadow-[4px_0_10px_-3px_rgba(0,0,0,0.1)]">
+                                        <td className="px-3 py-1.5 border-r border-slate-100 sticky left-0 z-10 bg-white shadow-[4px_0_10px_-3px_rgba(0,0,0,0.1)] w-auto min-w-[160px] lg:w-[320px]">
                                             <div className="font-bold text-[13px] text-slate-800 leading-tight flex items-center gap-2">
-                                                {item.name}
+                                                <span className="truncate">{item.name}</span>
                                                 {item.batchAvailabilityStatus === 'BATCH_UNAVAILABLE' && (
                                                     <span title="Batch Unavailable" className="inline-flex items-center justify-center bg-red-100 text-red-600 rounded px-1.5 py-0.5 text-[9px] uppercase tracking-wider font-bold shrink-0">
                                                         Out of Stock
@@ -706,11 +826,26 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                                                     </span>
                                                 )}
                                             </div>
-                                            <div className="text-[10px] text-slate-500 truncate max-w-[250px] leading-tight mt-0.5">{item.composition}</div>
+                                            <div className="text-[10px] text-slate-500 truncate max-w-[180px] md:max-w-[240px] leading-tight mt-0.5">{item.composition}</div>
+                                            {/* Tablet/Mobile dense batch & expiry badge */}
+                                            <div className="lg:hidden text-[9px] text-slate-500 font-mono flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                                <span className="bg-slate-100 px-1 py-0.2 rounded text-slate-700 font-bold border border-slate-200">B: {item.batchNo}</span>
+                                                {item.expiryDate && (
+                                                    <span className={cn(
+                                                        "px-1 py-0.2 rounded font-semibold",
+                                                        expiryStatus === 'expired' ? "bg-red-100 text-red-700" :
+                                                        expiryStatus === 'expiring_soon' ? "bg-amber-100 text-amber-700" : "bg-slate-50 text-slate-600"
+                                                    )}>
+                                                        Exp: {typeof item.expiryDate === 'string' && item.expiryDate.includes('-') && item.expiryDate.length > 7 && !isNaN(new Date(item.expiryDate).getTime())
+                                                            ? format(new Date(item.expiryDate), 'MM/yy')
+                                                            : String(item.expiryDate)}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </td>
-                                        <td className="px-2 py-1.5 text-[10px] text-slate-500 text-center border-r border-slate-100 whitespace-nowrap">{item.hsn || '-'}</td>
-                                        <td className="px-2 py-1.5 text-[11px] font-bold text-slate-600 border-r border-slate-100">{item.batchNo}</td>
-                                        <td className="px-2 py-1.5 text-[10px] font-semibold text-slate-500 text-center border-r border-slate-100 whitespace-nowrap">
+                                        <td className="hidden lg:table-cell px-2 py-1.5 text-[10px] text-slate-500 text-center border-r border-slate-100 whitespace-nowrap">{item.hsn || '-'}</td>
+                                        <td className="hidden lg:table-cell px-2 py-1.5 text-[11px] font-bold text-slate-600 border-r border-slate-100">{item.batchNo}</td>
+                                        <td className="hidden lg:table-cell px-2 py-1.5 text-[10px] font-semibold text-slate-500 text-center border-r border-slate-100 whitespace-nowrap">
                                             {item.expiryDate
                                                 ? (typeof item.expiryDate === 'string' && item.expiryDate.includes('-') && item.expiryDate.length > 7 && !isNaN(new Date(item.expiryDate).getTime())
                                                     ? format(new Date(item.expiryDate), 'MM/yy')
@@ -754,8 +889,11 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                                                     </>
                                                 </div>
                                                 {showMarginInfo && (
-                                                    <div className="text-[10px] text-emerald-600 font-medium whitespace-nowrap mt-0.5">
-                                                        Landing ₹{(item.landingRate ?? item.purchaseRate ?? 0).toFixed(2)} · Profit ₹{calculateLineMargin(item).lineGrossProfit.toFixed(2)} ({calculateLineMargin(item).marginPct.toFixed(1)}%)
+                                                    <div className={cn(
+                                                        "text-[10px] font-medium whitespace-nowrap mt-0.5",
+                                                        lineMargin.isLossSale ? "text-red-600 font-bold" : "text-emerald-600"
+                                                    )}>
+                                                        Landing ₹{lineMargin.costFloor.toFixed(2)} · Profit ₹{lineMargin.lineGrossProfit.toFixed(2)} ({lineMargin.marginPct.toFixed(1)}%)
                                                     </div>
                                                 )}
                                             </td>
@@ -767,8 +905,11 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                                                         {item.qtyLoose > 0 ? `${item.qtyLoose}L` : ''}
                                                     </div>
                                                     {showMarginInfo && (
-                                                        <div className="text-[10px] text-emerald-600 font-medium whitespace-nowrap mt-0.5">
-                                                            Landing ₹{(item.landingRate ?? item.purchaseRate ?? 0).toFixed(2)} · Profit ₹{calculateLineMargin(item).lineGrossProfit.toFixed(2)} ({calculateLineMargin(item).marginPct.toFixed(1)}%)
+                                                        <div className={cn(
+                                                            "text-[10px] font-medium whitespace-nowrap mt-0.5",
+                                                            lineMargin.isLossSale ? "text-red-600 font-bold" : "text-emerald-600"
+                                                        )}>
+                                                            Landing ₹{lineMargin.costFloor.toFixed(2)} · Profit ₹{lineMargin.lineGrossProfit.toFixed(2)} ({lineMargin.marginPct.toFixed(1)}%)
                                                         </div>
                                                     )}
                                                 </td>
@@ -786,8 +927,26 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                                                 {item.gstPct ?? item.gstRate}%
                                             </td>
                                         )}
-                                        <td className="px-3 py-1.5 text-[13px] font-black text-slate-800 text-right">
-                                            ₹{item.totalAmount.toFixed(2)}
+                                        <td 
+                                            className={cn(
+                                                "px-3 py-1.5 text-[13px] font-black text-right transition-colors",
+                                                lineMargin.isLossSale 
+                                                    ? "bg-red-50 text-red-600 border border-red-200" 
+                                                    : "text-slate-800"
+                                            )}
+                                            title={lineMargin.isLossSale ? `Rate is below PTR (₹${lineMargin.costFloor.toFixed(2)})` : undefined}
+                                        >
+                                            <div className="flex flex-col items-end">
+                                                <span>₹{item.totalAmount.toFixed(2)}</span>
+                                                {lineMargin.isLossSale && (
+                                                    <span 
+                                                        className="text-[9px] font-bold text-red-600 bg-red-100 px-1 py-0.5 rounded flex items-center gap-0.5 mt-0.5"
+                                                        title={`Rate is below PTR (₹${lineMargin.costFloor.toFixed(2)})`}
+                                                    >
+                                                        Below PTR (₹{lineMargin.costFloor.toFixed(2)})
+                                                    </span>
+                                                )}
+                                            </div>
                                         </td>
                                     </tr>
                                 );
@@ -797,7 +956,10 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                     {cart.length > 0 && (
                         <tfoot className="sticky bottom-0 bg-slate-50 border-t-2 border-slate-300 font-bold text-xs text-slate-700 shadow-sm z-10">
                             <tr>
-                                <td colSpan={saleType === 'WHOLESALE' ? 5 : 4} className="px-3 py-2 text-left font-bold text-slate-700">
+                                <td colSpan={saleType === 'WHOLESALE' ? 5 : 4} className="hidden lg:table-cell px-3 py-2 text-left font-bold text-slate-700">
+                                    Total: {cart.length} {cart.length === 1 ? 'Item' : 'Items'} ({totals.itemCount} Units)
+                                </td>
+                                <td colSpan={saleType === 'WHOLESALE' ? 2 : 2} className="lg:hidden px-3 py-2 text-left font-bold text-slate-700">
                                     Total: {cart.length} {cart.length === 1 ? 'Item' : 'Items'} ({totals.itemCount} Units)
                                 </td>
                                 {saleType === 'WHOLESALE' && (

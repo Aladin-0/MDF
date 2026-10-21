@@ -7,9 +7,9 @@ export default function manifest(): MetadataRoute.Manifest {
     description: 'MediFlow Enterprise Resource Planning',
     start_url: '/',
     display: 'standalone',
-    background_color: '#F8FAFC',
-    theme_color: '#4F46E5',
-    orientation: 'portrait-primary',
+    background_color: '#ffffff',
+    theme_color: '#ffffff',
+    orientation: 'landscape',
     icons: [
       {
         src: '/icon-192x192.png',

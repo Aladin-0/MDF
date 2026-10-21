@@ -359,7 +359,14 @@ def atomic_sale_save(
                 validate_unit_integrity(product, loose_to_deduct)
                 if pricing_check.get('block'):
                     transaction.set_rollback(True)
-                    raise ValidationError(f"Pricing Block on {batch.batch_no}: {pricing_check['message']}")
+                    raise ValidationError(f"{pricing_check['message']}")
+
+                c_floor = batch.ptr if (batch.ptr and batch.ptr > Decimal('0')) else (batch.landing_rate or batch.purchase_rate or Decimal('0'))
+                if sale_invoice.sale_type == 'WHOLESALE' and batch.pts and batch.pts > Decimal('0'):
+                    c_floor = batch.pts
+                if c_floor > Decimal('0') and pricing_result['net_rate'] < (c_floor - Decimal('0.005')):
+                    transaction.set_rollback(True)
+                    raise ValidationError(f"Loss Sale Prevented: Cannot sell {product.name} below its purchase rate of ₹{c_floor:.2f}.")
 
                 tax_info = pricing_result['tax_info']
                 gst_rate_val = Decimal(str(item_data.get('gstRate', 0)))

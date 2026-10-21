@@ -5,6 +5,7 @@ import { queryClient } from '../lib/queryClient';
 import { useEffect } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { useSettingsStore, rehydrateSettingsForOutlet } from '../store/settingsStore';
+import { useBillingStore } from '../store/billingStore';
 
 export function Providers({ children }: { children: React.ReactNode }) {
     useEffect(() => {
@@ -14,6 +15,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
             console.error('Failed to rehydrate auth store:', e);
         } finally {
             useAuthStore.getState().setHasHydrated(true);
+        }
+
+        try {
+            useBillingStore.persist.rehydrate();
+        } catch (e) {
+            console.error('Failed to rehydrate billing store:', e);
+        } finally {
+            useBillingStore.getState().setHasHydrated(true);
         }
 
         // Then re-key settings store to the current outlet's bucket and hydrate

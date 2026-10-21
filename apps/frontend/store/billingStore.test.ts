@@ -1,3 +1,6 @@
+let uuidCounter = 0;
+jest.mock('uuid', () => ({ v4: () => `uuid-${++uuidCounter}` }));
+
 import { useBillingStore } from './billingStore';
 
 describe('billingStore Payment State', () => {
@@ -48,5 +51,23 @@ describe('billingStore Payment State', () => {
 
         const draft = useBillingStore.getState().drafts[draftId];
         expect(draft.payment.method).toBe('credit');
+    });
+
+    it('tracks hydration lifecycle via _hasHydrated and setHasHydrated', () => {
+        useBillingStore.getState().setHasHydrated(false);
+        expect(useBillingStore.getState()._hasHydrated).toBe(false);
+
+        useBillingStore.getState().setHasHydrated(true);
+        expect(useBillingStore.getState()._hasHydrated).toBe(true);
+    });
+
+    it('preserves multi-tab drafts and active draft ID', () => {
+        const store = useBillingStore.getState();
+        const draft1 = store.createDraft();
+        const draft2 = store.createDraft();
+        store.switchDraft(draft2);
+
+        expect(Object.keys(useBillingStore.getState().drafts)).toHaveLength(2);
+        expect(useBillingStore.getState().activeDraftId).toBe(draft2);
     });
 });

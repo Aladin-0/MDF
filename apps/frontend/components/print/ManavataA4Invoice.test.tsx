@@ -42,4 +42,42 @@ describe('ManavataA4Invoice Print Batch Word Wrapping', () => {
         expect(batchTd).toBeInTheDocument();
         expect(batchTd?.textContent).toContain('VERYLONGBATCHNUMBER1234567890');
     });
+
+    it('renders dynamic Billed By cashier name in signature footer', () => {
+        const mockInvoice = {
+            id: 'inv-2',
+            invoiceNo: 'INV-1002',
+            invoiceDate: '2026-10-10',
+            saleType: 'RETAIL',
+            billedByName: 'Shivraj Dongave',
+            items: [],
+            totalAmount: 100,
+            grandTotal: 100,
+        };
+
+        const { getByText } = render(<ManavataA4Invoice invoice={mockInvoice as any} />);
+        expect(getByText('Billed By')).toBeInTheDocument();
+        expect(getByText('Shivraj Dongave')).toBeInTheDocument();
+    });
+
+    it('prioritizes explicit billedBy prop over invoice object', () => {
+        const mockInvoice = {
+            id: 'inv-3',
+            invoiceNo: 'INV-1003',
+            invoiceDate: '2026-10-10',
+            saleType: 'RETAIL',
+            billedByName: 'Old Cashier',
+            items: [],
+            totalAmount: 100,
+            grandTotal: 100,
+        };
+
+        const { getByText, queryByText } = render(
+            <ManavataA4Invoice invoice={mockInvoice as any} billedBy="Pratik Pardeshi" />
+        );
+        expect(getByText('Billed By')).toBeInTheDocument();
+        expect(getByText('Pratik Pardeshi')).toBeInTheDocument();
+        expect(queryByText('Old Cashier')).not.toBeInTheDocument();
+    });
 });
+

@@ -24,8 +24,14 @@ def get_landing_cost_for_batch(batch: Batch, pharmacy_id) -> Decimal:
     if purchase_item:
         return purchase_item.get_landing_cost(include_gst=include_gst)
     
+    # Check if batch has ptr > 0 or landing_rate > 0
+    if batch.ptr and batch.ptr > Decimal('0'):
+        return batch.ptr
+    if batch.landing_rate and batch.landing_rate > Decimal('0'):
+        return batch.landing_rate
+
     # Fallback if no PurchaseItem exists (e.g. Opening Stock injection without PO)
-    base = batch.purchase_rate
+    base = batch.purchase_rate or Decimal('0')
     # Without PurchaseItem, we don't know the exact GST rate, freight, etc.
     return base.quantize(Decimal('0.0001'))
 
@@ -51,11 +57,12 @@ def validate_sale_price(sale_rate: Decimal, batch: Batch, pharmacy_id) -> dict:
             'landing_cost': landing_cost, 'mrp': mrp
         }
 
-    if sale_rate < landing_cost:
+    if landing_cost > Decimal('0') and sale_rate < (landing_cost - Decimal('0.005')):
+        prod_name = batch.product.name if batch.product else f"Batch {batch.batch_no}"
         return {
-            'valid': True, 'block': False,
+            'valid': False, 'block': True,
             'message': (
-                f"Sale rate ₹{sale_rate:.2f} is below Landing Cost ₹{landing_cost:.2f}."
+                f"Loss Sale Prevented: Cannot sell {prod_name} below its purchase rate of ₹{landing_cost:.2f}."
             ),
             'landing_cost': landing_cost, 'mrp': mrp
         }

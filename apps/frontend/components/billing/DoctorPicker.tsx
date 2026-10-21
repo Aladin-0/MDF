@@ -196,7 +196,7 @@ export function DoctorPicker({
     };
 
     return (
-        <div className="relative" ref={containerRef} onBlur={handleBlur}>
+        <div className="relative w-full" ref={containerRef} onBlur={handleBlur}>
             <div className="absolute left-2.5 top-2.5 text-slate-400">
                 <Stethoscope className="w-4 h-4" />
             </div>
@@ -210,12 +210,15 @@ export function DoctorPicker({
                     if (!isOpen) setIsOpen(true);
                 }}
                 onFocus={() => setIsOpen(true)}
+                onClick={() => {
+                    if (!isOpen) setIsOpen(true);
+                }}
                 onKeyDown={handleKeyDown}
             />
 
             {isOpen && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-lg shadow-xl border border-slate-200 overflow-hidden z-50">
-                    <div className="max-h-60 overflow-y-auto p-1">
+                <div className="absolute top-full left-0 right-0 w-full min-w-full mt-1 bg-white rounded-lg shadow-xl border border-slate-200 overflow-hidden z-50">
+                    <div className="max-h-60 overflow-y-auto p-1 overscroll-contain touch-pan-y">
                         {isFetching ? (
                             <div className="flex items-center justify-center py-4 text-slate-400">
                                 <Loader2 className="w-5 h-5 animate-spin" />
@@ -229,9 +232,6 @@ export function DoctorPicker({
                                         onPointerDown={(e) => {
                                             e.preventDefault();
                                             handleSelect(doctor);
-                                        }}
-                                        onMouseDown={(e) => {
-                                            e.preventDefault();
                                         }}
                                         onClick={() => handleSelect(doctor)}
                                         onMouseEnter={() => setHighlightedIndex(idx)}
@@ -269,9 +269,9 @@ export function DoctorPicker({
                             type="button"
                             className="w-full flex items-center justify-center gap-2 py-2.5 min-h-[40px] text-xs font-bold text-purple-600 bg-purple-50 hover:bg-purple-100 active:bg-purple-200 rounded transition-colors border border-purple-100 select-none"
                             onPointerDown={(e) => {
-                                e.preventDefault();
-                                setIsOpen(false);
-                                setIsCreateOpen(true);
+                                if (e.pointerType === 'mouse') {
+                                    e.preventDefault();
+                                }
                             }}
                             onClick={(e) => {
                                 e.preventDefault();

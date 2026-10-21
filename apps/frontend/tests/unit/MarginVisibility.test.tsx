@@ -1,8 +1,8 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { MainInvoiceWorkspace } from '../../components/billing-v3/MainInvoiceWorkspace';
-import { RightBillingRail } from '../../components/billing-v3/RightBillingRail';
+import { MainInvoiceWorkspace } from '../../components/billing/MainInvoiceWorkspace';
+import { RightBillingRail } from '../../components/billing/RightBillingRail';
 import { useBillingStore } from '../../store/billingStore';
 import FullScreenBillingPage from '../../app/billing/page';
 
@@ -30,6 +30,7 @@ jest.mock('next/navigation', () => ({
     useRouter: () => ({ push: jest.fn(), replace: jest.fn() }),
     useParams: () => ({ id: '1' }),
     usePathname: () => '/',
+    useSearchParams: () => new URLSearchParams(),
 }));
 
 const mockCartItem = {

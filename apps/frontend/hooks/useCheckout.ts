@@ -4,6 +4,7 @@ import { useBillingStore } from '@/store/billingStore';
 import { useSaveBill } from '@/hooks/useSaveBill';
 import { useToast } from '@/hooks/use-toast';
 import { logger } from '@/lib/logger';
+import { calculateLineMargin, calculateTotalMargin } from '@/lib/billingMarginUtils';
 
 export function useCheckout() {
     const router = useRouter();
@@ -61,6 +62,13 @@ export function useCheckout() {
     const isSplitInvalid = paymentMethod === 'split' && Math.abs(splitTotal - (totals?.grandTotal || 0)) > 0.01;
     const isSplitCreditInvalid = paymentMethod === 'split' && (Number(splitBreakdown.credit) || 0) > 0 && !hasCustomer;
 
+    // Loss-Sale Prevention: Check line-item margins and overall bill margin
+    const extraDiscPct = draft?.extraDiscountPct || 0;
+    const marginData = draft ? calculateTotalMargin(draft.cart, totals?.grandTotal, totals?.extraDiscountAmount, extraDiscPct) : null;
+    const hasLossItem = draft ? draft.cart.some(item => calculateLineMargin(item, extraDiscPct).isLossSale) : false;
+    const isGlobalLoss = Boolean(marginData?.isGlobalLoss || hasLossItem);
+    const isLossSale = Boolean(hasLossItem || marginData?.hasLossSale);
+
     const canCheckout = Boolean(
         draft &&
         draft.cart.length > 0 && 
@@ -70,6 +78,8 @@ export function useCheckout() {
         !isSplitCreditInvalid &&
         !isLoading && 
         !isCreditInvalid &&
+        !isLossSale &&
+        !isGlobalLoss &&
         !isSubmitting
     );
 
@@ -136,5 +146,7 @@ export function useCheckout() {
         splitTotal,
         isSplitInvalid,
         isSplitCreditInvalid,
+        isLossSale,
+        isGlobalLoss,
     };
 }

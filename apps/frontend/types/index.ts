@@ -493,6 +493,7 @@ export type DraftStatus = 'active' | 'draft' | 'held' | 'rx_pending' | 'payment_
 
 export interface DraftBill {
     id: string;
+    localSessionId?: string;
     documentMode: 'invoice' | 'quotation';
     saleType: 'RETAIL' | 'WHOLESALE';
     billingBasis: 'MRP' | 'PTR' | 'PTS';
@@ -1338,6 +1339,7 @@ export interface PrintFooterConfig {
     bankDetails: string;
     terms: string;
     upiId?: string;
+    billedBy?: string;
 }
 
 export interface PrintSettingsConfig {
@@ -1345,6 +1347,7 @@ export interface PrintSettingsConfig {
     columns: PrintColumn[];
     header: PrintHeaderConfig;
     footer: PrintFooterConfig;
+    billedBy?: string;
 }
 
 export interface OutletSettings {

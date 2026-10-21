@@ -29,7 +29,7 @@ export function GlobalNavigation() {
     const totalTopItems = accessibleNavItems.length + (hasChainLink ? 1 : 0);
 
     // Active state logic
-    const activeItemIndex = accessibleNavItems.findIndex(item => 
+    const activeItemIndex = accessibleNavItems.findIndex(item =>
         pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
     );
     const isChainActive = hasChainLink && (pathname === '/dashboard/chain' || pathname.startsWith('/dashboard/chain/'));
@@ -39,7 +39,7 @@ export function GlobalNavigation() {
     const [focusedTopIndex, setFocusedTopIndex] = useState<number>(initialFocusedTopIndex);
     const [focusedChildIndex, setFocusedChildIndex] = useState<number>(-1);
     const [openMenuIndex, setOpenMenuIndex] = useState<number>(-1);
-    
+
     // Refs for focusing DOM elements
     const topItemRefs = useRef<(HTMLAnchorElement | HTMLButtonElement | null)[]>([]);
     const childItemRefs = useRef<(HTMLAnchorElement | null)[]>([]);
@@ -190,9 +190,9 @@ export function GlobalNavigation() {
     };
 
     return (
-        <div 
+        <div
             className="w-full bg-white shadow-sm border-b border-slate-200 flex flex-col z-40 shrink-0"
-            role="menubar" 
+            role="menubar"
             aria-label="Main navigation"
             onKeyDown={handleKeyDown}
             ref={navRef}
@@ -208,7 +208,7 @@ export function GlobalNavigation() {
                             </button>
                         </SheetTrigger>
                         <SheetContent side="left" className="p-0 w-[240px] border-r-0">
-                            <Sidebar isCollapsed={false} onToggle={() => {}} isMobile={true} />
+                            <Sidebar isCollapsed={false} onToggle={() => { }} isMobile={true} />
                         </SheetContent>
                     </Sheet>
                 </div>
@@ -258,18 +258,18 @@ export function GlobalNavigation() {
                         const hasPopup = !!(item.subItems && item.subItems.length > 0);
                         const isExpanded = openMenuIndex === index;
                         const isTabbable = focusedTopIndex === index && openMenuIndex === -1;
-                        
+
                         const itemClasses = cn(
                             "nav-item h-full flex items-center px-3 text-[13px] font-semibold transition-colors relative border-b-2 outline-none",
                             isActive || isExpanded
-                                ? "text-primary border-primary" 
+                                ? "text-primary border-primary"
                                 : "text-slate-600 border-transparent hover:text-slate-900 hover:bg-slate-50"
                         );
 
                         if (hasPopup) {
                             return (
-                                <div 
-                                    key={item.href} 
+                                <div
+                                    key={item.href}
                                     className="relative h-full"
                                     onMouseEnter={() => setOpenMenuIndex(index)}
                                     onMouseLeave={() => {
@@ -288,10 +288,10 @@ export function GlobalNavigation() {
                                     >
                                         {item.label}
                                     </button>
-                                    
+
                                     {/* Anchored Submenu Panel */}
                                     {isExpanded && (
-                                        <div 
+                                        <div
                                             className="absolute top-[calc(100%-2px)] left-0 min-w-[240px] bg-white border border-slate-200 shadow-md rounded-md py-1.5 z-50 overflow-hidden"
                                             role="menu"
                                             aria-label={`${item.label} submenu`}
@@ -299,7 +299,7 @@ export function GlobalNavigation() {
                                             {item.subItems!.map((subItem, j) => {
                                                 const isChildActive = pathname === subItem.href || pathname.startsWith(subItem.href + '/');
                                                 const Icon = subItem.icon;
-                                                
+
                                                 return (
                                                     <Link
                                                         key={subItem.href}
@@ -309,8 +309,8 @@ export function GlobalNavigation() {
                                                         ref={(el) => { childItemRefs.current[j] = el; }}
                                                         className={cn(
                                                             "nav-item flex items-center gap-3 px-4 py-2 text-[13px] font-medium transition-colors outline-none",
-                                                            isChildActive 
-                                                                ? "text-primary bg-primary/5" 
+                                                            isChildActive
+                                                                ? "text-primary bg-primary/5"
                                                                 : "text-slate-700 hover:bg-slate-50 hover:text-slate-900"
                                                         )}
                                                         onClick={() => setOpenMenuIndex(-1)}
@@ -344,14 +344,14 @@ export function GlobalNavigation() {
                 {/* Right Side Actions */}
                 <div className="ml-auto flex items-center gap-2">
 
-
-                    {/* Notifications & Settings */}
-                    <button className="hidden sm:flex items-center justify-center w-8 h-8 rounded text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition-colors nav-item" tabIndex={-1}>
+                    {/* 
+                    Notifications & Settings */}
+                    {/* <button className="hidden sm:flex items-center justify-center w-8 h-8 rounded text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition-colors nav-item" tabIndex={-1}>
                         <Bell className="w-4 h-4" />
                     </button>
                     <Link href="/dashboard/settings" className="hidden sm:flex items-center justify-center w-8 h-8 rounded text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition-colors mr-2 nav-item" tabIndex={-1}>
                         <Settings className="w-4 h-4" />
-                    </Link>
+                    </Link> */}
 
                     {/* User Dropdown */}
                     <DropdownMenu>

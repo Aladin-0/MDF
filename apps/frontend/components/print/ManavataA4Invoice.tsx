@@ -11,6 +11,7 @@ interface InvoicePreviewProps {
     outlet?: Outlet;
     template?: 'A4' | 'A5';
     saleType?: 'RETAIL' | 'WHOLESALE';
+    billedBy?: string;
 }
 
 const DEFAULT_CONFIG: PrintSettingsConfig = {
@@ -62,15 +63,30 @@ export function abbrevMfg(manufacturer?: string) {
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────
-export const ManavataA4Invoice = forwardRef<HTMLDivElement, InvoicePreviewProps>(({ invoice, config, outlet, template, saleType }, ref) => {
+export const ManavataA4Invoice = forwardRef<HTMLDivElement, InvoicePreviewProps>(({ invoice, config, outlet, template, saleType, billedBy }, ref) => {
     const authData = typeof useAuthStore === 'function' ? useAuthStore((s: any) => s?.outlet || s?.user?.outlet) : undefined;
     const authOutlet: Outlet | undefined = (authData as any)?.id ? authData : ((authData as any)?.outlet || (authData as any)?.user?.outlet);
+    const authUser = typeof useAuthStore === 'function' ? useAuthStore((s: any) => s?.user) : undefined;
     const settingsState = typeof useSettingsStore === 'function' ? useSettingsStore() : undefined;
     const effectiveOutlet: Outlet | undefined = outlet || invoice.outlet || authOutlet;
+
+    const billedByName = billedBy
+        || invoice.billedByName
+        || (invoice as any)?.createdBy?.name
+        || (typeof (invoice as any)?.createdBy === 'string' && (invoice as any)?.createdBy !== 'Unknown' ? (invoice as any)?.createdBy : undefined)
+        || (invoice as any)?.staff?.name
+        || (invoice as any)?.cashier?.name
+        || (invoice.billedBy && isNaN(Number(invoice.billedBy)) && !/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(invoice.billedBy) ? invoice.billedBy : undefined)
+        || (config as any)?.billedBy
+        || (config as any)?.footer?.billedBy
+        || authUser?.name
+        || authUser?.username
+        || 'Authorized Signatory';
 
     const activeConfig = config || DEFAULT_CONFIG;
     const isWholesale = saleType?.toUpperCase() === 'WHOLESALE' || invoice.saleType?.toUpperCase() === 'WHOLESALE';
     const isA4 = template === 'A4' || activeConfig.template === 'A4';
+    const isA5 = template === 'A5' || activeConfig.template === 'A5';
     
     const customer = invoice.customer || (invoice as any).patientName;
     const customerName = (invoice as any).patientName || customer?.name || 'Cash Customer';
@@ -392,7 +408,7 @@ export const ManavataA4Invoice = forwardRef<HTMLDivElement, InvoicePreviewProps>
                             </thead>
                             <tbody className="align-top">
                                 {items.map((item, idx) => (
-                                    <tr key={idx}>
+                                    <tr key={idx} className="break-inside-avoid">
                                         {sortedColumns.map((col, cIdx) => (
                                             <td 
                                                 key={col.id} 
@@ -404,7 +420,7 @@ export const ManavataA4Invoice = forwardRef<HTMLDivElement, InvoicePreviewProps>
                                     </tr>
                                 ))}
                                 {/* Empty Spacer Row (expands to fill vertical space with columns all the way to bottom) */}
-                                <tr style={{ height: '100%' }}>
+                                <tr style={{ height: '100%' }} className="break-inside-avoid">
                                     {sortedColumns.map((col, cIdx) => (
                                         <td 
                                             key={`spacer-${col.id}`} 
@@ -549,8 +565,11 @@ export const ManavataA4Invoice = forwardRef<HTMLDivElement, InvoicePreviewProps>
                         {/* Signature Area */}
                         <div className="flex-grow flex flex-col items-center justify-end p-1.5 relative min-h-[14mm]">
                             <div className="font-bold text-gray-800 text-center absolute top-1.5 w-full leading-tight text-[0.62rem]">For {storeName}</div>
-                            <div className="w-4/5 border-t border-gray-400 mt-6 pt-0.5 text-center">
-                                <span className="text-gray-500 uppercase tracking-wide font-medium text-[0.52rem]">Authorized Signatory</span>
+                            <div className="w-4/5 border-t border-gray-400 mt-6 pt-0.5 flex flex-col items-center">
+                                <span className="text-gray-500 uppercase tracking-wide font-medium text-[0.45rem]">Billed By</span>
+                                <span className="font-bold text-gray-800 uppercase text-[0.55rem] truncate w-full text-center">
+                                    {billedByName}
+                                </span>
                             </div>
                         </div>
 
@@ -567,18 +586,21 @@ export const ManavataA4Invoice = forwardRef<HTMLDivElement, InvoicePreviewProps>
     };
 
     return (
-        <div ref={ref} className="w-full max-w-[297mm] mx-auto bg-white font-sans" style={{ fontFamily: 'Inter, Arial, sans-serif' }}>
+        <div ref={ref} className="w-full max-w-[297mm] mx-auto bg-white font-sans h-auto overflow-hidden" style={{ fontFamily: 'Inter, Arial, sans-serif' }}>
             <style dangerouslySetInnerHTML={{ __html: `
                 @page {
-                    size: A4 landscape;
-                    margin: 0;
+                    size: ${isA5 ? 'A5 landscape' : 'A4 landscape'};
+                    margin: 0mm !important;
                 }
-                body {
+                html, body {
+                    height: auto !important;
+                    min-height: 0 !important;
                     -webkit-print-color-adjust: exact !important;
                     print-color-adjust: exact !important;
                 }
                 table tr {
                     page-break-inside: avoid;
+                    break-inside: avoid;
                 }
                 .pdf-table {
                     border-collapse: collapse;

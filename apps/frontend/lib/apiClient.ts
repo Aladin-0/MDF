@@ -13,7 +13,20 @@ import {
 } from '../types';
 import { toast } from 'sonner';
 
-export const API_URL = process.env.NEXT_PUBLIC_API_URL!; // Required — set NEXT_PUBLIC_API_URL in .env
+const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+
+export const API_URL = (() => {
+    if (typeof window !== 'undefined' && window.location.hostname && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+        try {
+            const u = new URL(rawApiUrl);
+            u.hostname = window.location.hostname;
+            return u.toString().replace(/\/$/, '');
+        } catch {
+            return rawApiUrl;
+        }
+    }
+    return rawApiUrl;
+})();
 
 if (!API_URL || !API_URL.startsWith('http')) {
     throw new Error(`CRITICAL: NEXT_PUBLIC_API_URL is unset or invalid. Currently: '${API_URL}'. Please check your .env files and Playwright configs.`);

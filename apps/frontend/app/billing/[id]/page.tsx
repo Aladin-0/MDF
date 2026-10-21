@@ -10,6 +10,7 @@ import { ManavataA4Invoice } from '@/components/print/ManavataA4Invoice'
 import { InvoiceThermal } from '@/components/billing/InvoiceThermal'
 import { useSettingsStore } from '@/store/settingsStore'
 import { useAuthStore } from '@/store/authStore'
+import { useBillingStore } from '@/store/billingStore'
 import { useOutletSettings } from '@/hooks/useOutletSettings'
 
 // Loading Skeleton
@@ -51,6 +52,8 @@ export default function PastInvoicePage() {
     const { printerType } = useSettingsStore()
     const { settings } = useOutletSettings()
     const authOutlet = useAuthStore((s) => s.outlet || s.user?.outlet)
+    const authUser = useAuthStore((s) => s.user)
+    const activeStaff = useBillingStore((s) => s.activeStaff)
     const invoiceId = params.id as string
     const [copied, setCopied] = useState(false)
 
@@ -156,32 +159,46 @@ export default function PastInvoicePage() {
                     @media print {
                         @page {
                             size: ${!isThermal ? 'auto' : printerType === 'thermal_80mm' ? '80mm auto' : '57mm auto'};
-                            margin: 0mm;
+                            margin: 0mm !important;
                         }
-                        body { -webkit-print-color-adjust: exact; }
+                        html, body {
+                            height: auto !important;
+                            min-height: 0 !important;
+                            -webkit-print-color-adjust: exact !important;
+                            print-color-adjust: exact !important;
+                        }
                         body * { visibility: hidden; }
-                        /* We want to make sure the root layout sidebar and header don't show up. */
-                        .past-invoice-print-container, .past-invoice-print-container * { visibility: visible; }
-                        /* But hide the header actions */
-                        .past-invoice-print-container .print\\:hidden, .past-invoice-print-container .print\\:hidden * { display: none !important; }
-                        .past-invoice-print-container {
-                            position: absolute;
-                            left: 0;
-                            top: 0;
-                            margin: 0;
-                            width: 100%;
+                        #print-root, #print-root * { visibility: visible; }
+                        #print-root {
+                            position: absolute !important;
+                            left: 0 !important;
+                            top: 0 !important;
+                            margin: 0 !important;
+                            padding: 0 !important;
+                            width: 100% !important;
                             max-width: none !important;
+                            height: auto !important;
+                            max-height: none !important;
                             transform: none !important;
                             box-shadow: none !important;
                         }
+                        .print\\:hidden, .print\\:hidden * { display: none !important; }
                     }
                 ` }} />
 
-                {isThermal ? (
-                    <InvoiceThermal ref={printRef} invoice={invoice} config={activeConfig} />
-                ) : (
-                    <ManavataA4Invoice ref={printRef as any} invoice={invoice} config={activeConfig} outlet={invoice?.outlet || authOutlet || undefined} />
-                )}
+                <div id="print-root">
+                    {isThermal ? (
+                        <InvoiceThermal ref={printRef} invoice={invoice} config={activeConfig} />
+                    ) : (
+                        <ManavataA4Invoice
+                            ref={printRef as any}
+                            invoice={invoice}
+                            config={activeConfig}
+                            outlet={invoice?.outlet || authOutlet || undefined}
+                            billedBy={invoice.billedByName || (invoice as any)?.createdBy?.name || activeStaff?.name || authUser?.name || authUser?.username}
+                        />
+                    )}
+                </div>
             </div>
         </div>
     )

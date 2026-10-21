@@ -14,27 +14,15 @@ export function useLoadDrafts() {
     const hasFetched = useRef(false);
 
     useEffect(() => {
-        if (!activeStaff) return; // Only load when staff is pinned in
         if (hasFetched.current) return;
-        hasFetched.current = true;
 
         const loadDrafts = async () => {
             try {
                 const { outlet } = useAuthStore.getState();
-                if (!outlet) return;
-
                 const currentDrafts = useBillingStore.getState().drafts;
                 const currentActiveId = useBillingStore.getState().activeDraftId;
 
-                const { getHeaders, assertOk, API_URL } = await import('@/lib/apiClient');
-                // We hit the backend to get drafts for this outlet
-                const res = await fetch(`${API_URL}/sales/drafts/?outletId=${outlet.id}`, {
-                    headers: getHeaders()
-                });
-                if (!res.ok) throw new Error('Failed to load drafts');
-                const data = await res.json(); // Expected to be an array of DraftInvoiceSerializer
-
-                if (!Array.isArray(data) || data.length === 0) {
+                if (!outlet) {
                     if (Object.keys(currentDrafts).length === 0) {
                         createDraft();
                     }
@@ -42,69 +30,98 @@ export function useLoadDrafts() {
                     return;
                 }
 
-                const newDrafts: Record<string, DraftBill> = { ...currentDrafts };
-                let firstId: string | null = currentActiveId;
-
-                data.forEach((draft: any) => {
-                    if (newDrafts[draft.id]) return;
-                    if (!firstId) firstId = draft.id;
-                    const items: CartItem[] = draft.items.map((item: any) => ({
-                        batchId: item.batch,
-                        productId: '', // We don't have full product info, but we can reconstruct some if needed or wait for re-hydration. For a complete system, the backend should return hydrated product info.
-                        qtyStrips: item.qty_strips,
-                        qtyLoose: item.qty_loose,
-                        discountPct: item.discount_pct,
-                        // Defaults for required cart item fields since we only saved basic info:
-                        name: item.product_name || 'Restored Item',
-                        packSize: 1,
-                        packUnit: 'unit',
-                        batchNo: item.batch_no || '',
-                        expiryDate: '',
-                        scheduleType: 'OTC',
-                        mrp: 0,
-                        rate: 0,
-                        totalQty: item.qty_strips + item.qty_loose,
-                        saleMode: 'loose',
-                        gstRate: 0,
-                        taxableAmount: 0,
-                        gstAmount: 0,
-                        totalAmount: 0
-                    }));
-
-                    newDrafts[draft.id] = {
-                        id: draft.id,
-                        documentMode: 'invoice',
-                        customer: draft.customer_details || null,
-                        customerLedger: null,
-                        doctor: draft.doctor_details || null,
-                        hospitalName: draft.hospital_name || null,
-                        prescriptionNo: draft.prescription_no || null,
-                        scheduleHData: draft.schedule_h_json || null,
-                        prescriptionImageUrl: null,
-                        cart: items,
-                        payment: {
-                            method: draft.payment_mode || 'cash',
-                            amount: draft.amount_paid || 0,
-                        },
-                        extraDiscountPct: draft.extra_discount_pct || 0,
-                        status: draft.draft_status as any || 'draft',
-                        createdAt: draft.created_at,
-                        updatedAt: draft.updated_at,
-                    };
+                hasFetched.current = true;
+                const { getHeaders, API_URL } = await import('@/lib/apiClient');
+                // We hit the backend to get drafts for this outlet
+                const res = await fetch(`${API_URL}/sales/drafts/?outletId=${outlet.id}`, {
+                    headers: getHeaders()
                 });
+                if (!res.ok) throw new Error('Failed to load drafts');
+                const data = await res.json(); // Expected to be an array of DraftInvoiceSerializer
 
-                setDrafts(newDrafts, firstId);
+                const newDrafts: Record<string, DraftBill> = { ...currentDrafts };
+
+                if (Array.isArray(data) && data.length > 0) {
+                    data.forEach((draft: any) => {
+                        // If we already have this draft locally with items, preserve rich local state
+                        if (newDrafts[draft.id] && newDrafts[draft.id].cart.length > 0) return;
+
+                        const items: CartItem[] = (draft.items || []).map((item: any) => ({
+                            batchId: item.batch,
+                            productId: item.product_id || '',
+                            qtyStrips: item.qty_strips || 0,
+                            qtyLoose: item.qty_loose || 0,
+                            discountPct: Number(item.discount_pct || 0),
+                            name: item.product_name || item.name || 'Restored Item',
+                            packSize: item.pack_size || 1,
+                            packUnit: item.pack_unit || 'unit',
+                            batchNo: item.batch_no || '',
+                            expiryDate: item.expiry_date || '',
+                            scheduleType: item.schedule_type || 'OTC',
+                            mrp: Number(item.mrp || 0),
+                            rate: Number(item.rate || item.sale_rate || 0),
+                            totalQty: (item.qty_strips || 0) + (item.qty_loose || 0),
+                            saleMode: 'loose',
+                            gstRate: Number(item.gst_rate || 0),
+                            taxableAmount: Number(item.taxable_amount || 0),
+                            gstAmount: Number(item.gst_amount || 0),
+                            totalAmount: Number(item.total_amount || 0)
+                        }));
+
+                        newDrafts[draft.id] = {
+                            id: draft.id,
+                            localSessionId: newDrafts[draft.id]?.localSessionId || draft.id,
+                            documentMode: 'invoice',
+                            saleType: 'RETAIL',
+                            billingBasis: 'MRP',
+                            customer: draft.customer_details || null,
+                            customerLedger: null,
+                            doctor: draft.doctor_details || null,
+                            hospitalName: draft.hospital_name || null,
+                            prescriptionNo: draft.prescription_no || null,
+                            scheduleHData: draft.schedule_h_json || null,
+                            prescriptionImageUrl: null,
+                            cart: items,
+                            payment: {
+                                method: draft.payment_mode || 'cash',
+                                amount: draft.amount_paid || 0,
+                            },
+                            extraDiscountPct: Number(draft.extra_discount_pct || 0),
+                            status: (draft.draft_status as any) || 'draft',
+                            createdAt: draft.created_at || new Date().toISOString(),
+                            updatedAt: draft.updated_at || new Date().toISOString(),
+                        };
+                    });
+                }
+
+                const draftList = Object.values(newDrafts);
+                if (draftList.length === 0) {
+                    createDraft();
+                } else {
+                    // Sort by updatedAt / createdAt descending to find the most recently modified draft
+                    const sorted = [...draftList].sort((a, b) => {
+                        const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime();
+                        const timeB = new Date(b.updatedAt || b.createdAt || 0).getTime();
+                        return timeB - timeA;
+                    });
+                    const targetId = (currentActiveId && newDrafts[currentActiveId]) 
+                        ? currentActiveId 
+                        : sorted[0].id;
+                    setDrafts(newDrafts, targetId);
+                }
             } catch (err) {
                 console.error("Failed to load drafts from server", err);
-                // Fallback to empty draft
-                createDraft();
+                const currentDrafts = useBillingStore.getState().drafts;
+                if (Object.keys(currentDrafts).length === 0) {
+                    createDraft();
+                }
             } finally {
                 setIsLoaded(true);
             }
         };
 
         loadDrafts();
-    }, [activeStaff, setDrafts, createDraft]);
+    }, [setDrafts, createDraft]);
 
     return isLoaded;
 }

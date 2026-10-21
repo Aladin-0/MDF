@@ -19,13 +19,16 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
     title: 'MediFlow — Modern Pharmacy Management',
     description: 'Fast, reliable, and compliant pharmacy management software for India.',
+    manifest: '/manifest.json',
     appleWebApp: {
         capable: true,
-        statusBarStyle: 'default',
+        statusBarStyle: 'black-translucent',
         title: 'MediFlow',
     },
     other: {
         'mobile-web-app-capable': 'yes',
+        'apple-mobile-web-app-capable': 'yes',
+        'apple-mobile-web-app-status-bar-style': 'black-translucent',
     },
     formatDetection: {
         telephone: false,
@@ -39,6 +42,12 @@ export default function RootLayout({
 }) {
     return (
         <html lang="en">
+            <head>
+                <link rel="manifest" href="/manifest.json" />
+                <meta name="apple-mobile-web-app-capable" content="yes" />
+                <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+                <meta name="theme-color" content="#ffffff" />
+            </head>
             <body className="font-sans antialiased">
                 <ErrorBoundary>
                     <Providers>{children}</Providers>

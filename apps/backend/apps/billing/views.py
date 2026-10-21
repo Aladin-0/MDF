@@ -628,6 +628,60 @@ class SaleCreateView(APIView):
                         status=status.HTTP_400_BAD_REQUEST
                     )
 
+            # Enforce Loss-Sale Prevention & Margin Lock:
+            # Prevent items from being sold below their cost floor (PTR or landing cost)
+            extra_disc_pct = Decimal(str(request.data.get('extraDiscountPct', 0)))
+            discount_factor = Decimal('1') - (extra_disc_pct / Decimal('100')) if extra_disc_pct > Decimal('0') else Decimal('1')
+            req_sale_type = request.data.get('saleType', 'RETAIL')
+
+            for item_data in items_data:
+                batch_id = item_data.get('batchId')
+                if not batch_id:
+                    continue
+                batch_obj = Batch.objects.filter(id=batch_id, outlet=outlet).select_related('product').first()
+                if not batch_obj:
+                    continue
+
+                if req_sale_type == 'WHOLESALE':
+                    cost_floor = batch_obj.pts if (batch_obj.pts and batch_obj.pts > Decimal('0')) else (batch_obj.purchase_rate or batch_obj.landing_rate or Decimal('0'))
+                else:
+                    cost_floor = batch_obj.ptr if (batch_obj.ptr and batch_obj.ptr > Decimal('0')) else (batch_obj.landing_rate or batch_obj.purchase_rate or Decimal('0'))
+
+                if cost_floor > Decimal('0'):
+                    pack_size = Decimal(str(batch_obj.pack_size or 1))
+                    qty_strips = Decimal(str(item_data.get('qtyStrips', 0)))
+                    qty_loose = Decimal(str(item_data.get('qtyLoose', 0)))
+                    free_qty_strips = Decimal(str(item_data.get('freeQtyStrips', 0)))
+                    effective_qty = qty_strips + (qty_loose / pack_size) + free_qty_strips
+
+                    if effective_qty > Decimal('0'):
+                        taxable_amt = Decimal(str(item_data.get('taxableAmount', 0)))
+                        gst_amt = Decimal(str(item_data.get('gstAmount', 0)))
+                        item_total = taxable_amt + gst_amt
+                        if item_total <= Decimal('0') and item_data.get('totalAmount'):
+                            item_total = Decimal(str(item_data.get('totalAmount', 0)))
+                        if item_total <= Decimal('0'):
+                            rate_val = Decimal(str(item_data.get('rate', batch_obj.mrp)))
+                            disc_pct = Decimal(str(item_data.get('discountPct', 0)))
+                            item_total = (rate_val * effective_qty) * (Decimal('1') - disc_pct / Decimal('100'))
+
+                        final_item_amount = item_total * discount_factor
+                        net_rate_per_pack = final_item_amount / effective_qty
+
+                        if net_rate_per_pack < (cost_floor - Decimal('0.005')):
+                            prod_name = item_data.get('name') or item_data.get('productName') or (batch_obj.product.name if batch_obj.product else f"Batch {batch_obj.batch_no}")
+                            return Response(
+                                {
+                                    'detail': f"Loss Sale Prevented: Cannot sell {prod_name} below its purchase rate of ₹{cost_floor:.2f}.",
+                                    'code': 'LOSS_SALE_PREVENTED',
+                                    'batch_id': str(batch_obj.id),
+                                    'product_name': prod_name,
+                                    'cost_floor': float(cost_floor),
+                                    'net_rate': float(net_rate_per_pack.quantize(Decimal('0.01')))
+                                },
+                                status=status.HTTP_400_BAD_REQUEST
+                            )
+
             logger.info(f"Creating sale invoice for outlet {outlet.name}")
 
             # Entire transaction must be atomic - rollback on any failure
@@ -895,11 +949,33 @@ class SaleCreateView(APIView):
                             if pricing_check.get('block'):
                                 transaction.set_rollback(True)
                                 return Response({
+                                    "detail": pricing_check['message'],
                                     "batchId": str(batch.id),
                                     "sale_rate": pricing_check['message'],
                                     "landing_cost": str(pricing_check['landing_cost']),
                                     "mrp": str(pricing_check['mrp'])
                                 }, status=status.HTTP_400_BAD_REQUEST)
+
+                            # Margin Lock check on net selling price after discounts
+                            pack_sz = Decimal(str(batch.pack_size or 1))
+                            eff_qty = Decimal(str(qty_to_deduct)) + (Decimal(str(loose_to_deduct)) / pack_sz)
+                            if eff_qty > Decimal('0'):
+                                disc_factor = Decimal('1') - (extra_discount_pct / Decimal('100')) if extra_discount_pct > Decimal('0') else Decimal('1')
+                                item_disc = Decimal(str(item_data.get('discountPct', 0)))
+                                net_unit_price = proposed_rate * (Decimal('1') - item_disc / Decimal('100')) * disc_factor
+                                c_floor = batch.ptr if (batch.ptr and batch.ptr > Decimal('0')) else (batch.landing_rate or batch.purchase_rate or Decimal('0'))
+                                if sale_type == 'WHOLESALE' and batch.pts and batch.pts > Decimal('0'):
+                                    c_floor = batch.pts
+                                if c_floor > Decimal('0') and net_unit_price < (c_floor - Decimal('0.005')):
+                                    transaction.set_rollback(True)
+                                    prod_name = product.name if product else batch.batch_no
+                                    return Response({
+                                        "detail": f"Loss Sale Prevented: Cannot sell {prod_name} below its purchase rate of ₹{c_floor:.2f}.",
+                                        "code": "LOSS_SALE_PREVENTED",
+                                        "batchId": str(batch.id),
+                                        "cost_floor": float(c_floor),
+                                        "net_rate": float(net_unit_price.quantize(Decimal('0.01')))
+                                    }, status=status.HTTP_400_BAD_REQUEST)
 
                             # Create SaleItem — snapshot pack_size from batch (frozen at purchase time),
                             # not from product (which changes when master item is edited)

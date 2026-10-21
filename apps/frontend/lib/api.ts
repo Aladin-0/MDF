@@ -1,7 +1,22 @@
 import axios from 'axios';
 import { useAuthStore } from '../store/authStore';
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL!;
+const rawBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+
+const getBaseUrl = () => {
+    if (typeof window !== 'undefined' && window.location.hostname && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+        try {
+            const u = new URL(rawBaseUrl);
+            u.hostname = window.location.hostname;
+            return u.toString().replace(/\/$/, '');
+        } catch {
+            return rawBaseUrl;
+        }
+    }
+    return rawBaseUrl;
+};
+
+const BASE_URL = getBaseUrl();
 
 export const api = axios.create({
     baseURL: BASE_URL,

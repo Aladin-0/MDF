@@ -18,7 +18,7 @@ def test_sale_create_api(authenticated_client):
     from apps.accounts.services import LedgerService
     LedgerService.sync_customer_ledgers(outlet)
     product = MasterProductFactory()
-    batch = BatchFactory(outlet=outlet, product=product, pack_size=10, qty_strips=10, qty_loose=0, mrp=Decimal('100.00'))
+    batch = BatchFactory(outlet=outlet, product=product, pack_size=10, qty_strips=10, qty_loose=0, mrp=Decimal('100.00'), purchase_rate=Decimal('40.00'), ptr=Decimal('40.00'))
     from apps.inventory.services import post_stock_ledger_entry
     import datetime
     post_stock_ledger_entry(outlet=outlet, product=product, batch=batch, txn_type='PURCHASE_IN', txn_date=datetime.date(2025, 1, 1), voucher_type='Purchase Invoice', voucher_number='PINV-001', party_name='Supplier', qty_in=10, qty_out=0, rate=80.0)
@@ -43,3 +43,82 @@ def test_sale_create_invalid_payload(authenticated_client):
     response = authenticated_client.post(url, payload, format='json')
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     assert 'items' in response.data or 'error' in response.data or 'detail' in response.data
+
+@pytest.mark.django_db
+def test_sale_create_prevents_loss_sale_below_ptr(authenticated_client):
+    from apps.accounts.models import Staff
+    user = Staff.objects.first()
+    outlet = user.outlet
+    call_command('seed_ledgers', outlet_id=str(outlet.id))
+    customer = CustomerFactory(outlet=outlet)
+    product = MasterProductFactory(name='Paracetamol 500mg')
+    # Batch has MRP 100, PTR 80
+    batch = BatchFactory(outlet=outlet, product=product, pack_size=10, qty_strips=10, qty_loose=0, mrp=Decimal('100.00'), ptr=Decimal('80.00'), purchase_rate=Decimal('80.00'))
+    
+    url = reverse('sale-list-create')
+    # Attempt to sell at 70 (below PTR 80)
+    payload = {
+        'outletId': str(outlet.id),
+        'customerId': str(customer.id),
+        'grandTotal': '70.00',
+        'subtotal': '70.00',
+        'discountAmount': '30.00',
+        'cashPaid': '70.00',
+        'paymentMode': 'cash',
+        'invoiceDate': '2026-08-01',
+        'items': [{
+            'productId': str(product.id),
+            'batchId': str(batch.id),
+            'qtyStrips': 1,
+            'qtyLoose': 0,
+            'rate': '70.00',
+            'gstRate': '0',
+            'taxableAmount': '70.00',
+            'gstAmount': '0',
+            'totalAmount': '70.00',
+        }]
+    }
+    response = authenticated_client.post(url, payload, format='json')
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert 'Loss Sale Prevented' in response.data['detail']
+    assert 'below its purchase rate of ₹80.00' in response.data['detail']
+
+@pytest.mark.django_db
+def test_sale_create_prevents_loss_sale_via_bill_discount(authenticated_client):
+    from apps.accounts.models import Staff
+    user = Staff.objects.first()
+    outlet = user.outlet
+    call_command('seed_ledgers', outlet_id=str(outlet.id))
+    customer = CustomerFactory(outlet=outlet)
+    product = MasterProductFactory(name='Amoxicillin 250mg')
+    # Batch has MRP 100, PTR 80
+    batch = BatchFactory(outlet=outlet, product=product, pack_size=10, qty_strips=10, qty_loose=0, mrp=Decimal('100.00'), ptr=Decimal('80.00'), purchase_rate=Decimal('80.00'))
+    
+    url = reverse('sale-list-create')
+    # Item rate is 90, but extraDiscountPct is 20%, bringing net selling rate to 90 * 0.8 = 72 (below PTR 80)
+    payload = {
+        'outletId': str(outlet.id),
+        'customerId': str(customer.id),
+        'grandTotal': '72.00',
+        'subtotal': '90.00',
+        'discountAmount': '10.00',
+        'extraDiscountPct': 20.0,
+        'cashPaid': '72.00',
+        'paymentMode': 'cash',
+        'invoiceDate': '2026-08-01',
+        'items': [{
+            'productId': str(product.id),
+            'batchId': str(batch.id),
+            'qtyStrips': 1,
+            'qtyLoose': 0,
+            'rate': '90.00',
+            'gstRate': '0',
+            'taxableAmount': '90.00',
+            'gstAmount': '0',
+            'totalAmount': '90.00',
+        }]
+    }
+    response = authenticated_client.post(url, payload, format='json')
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert 'Loss Sale Prevented' in response.data['detail']
+    assert 'below its purchase rate of ₹80.00' in response.data['detail']

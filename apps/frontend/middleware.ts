@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-const PUBLIC_PATHS = ['/login', '/setup', '/sw.js', '/manifest.webmanifest']
+const PUBLIC_PATHS = ['/login', '/setup', '/sw.js', '/manifest.webmanifest', '/manifest.json']
 
 export function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl
 
     // Allow static PWA files
-    if (pathname === '/sw.js' || pathname.startsWith('/icon-') || pathname === '/favicon.ico') {
+    if (pathname === '/sw.js' || pathname === '/manifest.json' || pathname === '/manifest.webmanifest' || pathname.startsWith('/icon-') || pathname === '/favicon.ico') {
         return NextResponse.next();
     }
 
@@ -36,6 +36,6 @@ export function middleware(request: NextRequest) {
 
 export const config = {
     matcher: [
-        '/((?!api|_next/static|_next/image|favicon.ico|sw.js|manifest.webmanifest|icon-).*)',
+        '/((?!api|_next/static|_next/image|favicon.ico|sw.js|manifest.webmanifest|manifest.json|icon-).*)',
     ],
 }

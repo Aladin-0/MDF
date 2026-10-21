@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
 import {
     CartItem,
@@ -91,6 +92,10 @@ interface BillingState {
     // Session bill counter
     billsToday: number;
     incrementBillsToday: () => void;
+
+    // Hydration lifecycle
+    _hasHydrated: boolean;
+    setHasHydrated: (state: boolean) => void;
 }
 
 const initialPayment: PaymentSplit = {
@@ -100,8 +105,9 @@ const initialPayment: PaymentSplit = {
     cashReturned: 0
 };
 
-const createEmptyDraft = (id: string): DraftBill => ({
+const createEmptyDraft = (id: string, localSessionId?: string): DraftBill => ({
     id,
+    localSessionId: localSessionId || uuidv4(),
     documentMode: 'invoice',
     saleType: 'RETAIL',
     billingBasis: 'MRP',
@@ -127,12 +133,16 @@ const createEmptyDraft = (id: string): DraftBill => ({
     updatedAt: new Date().toISOString(),
 });
 
-export const useBillingStore = create<BillingState>((set, get) => ({
-    drafts: {},
-    activeDraftId: null,
+export const useBillingStore = create<BillingState>()(
+    persist(
+        (set, get) => ({
+            drafts: {},
+            activeDraftId: null,
 
-    activeStaff: null,
-    isPinVerified: false,
+            activeStaff: null,
+            isPinVerified: false,
+            _hasHydrated: false,
+            setHasHydrated: (state) => set({ _hasHydrated: state }),
 
     isCartOpen: false,
     isCustomerSelectorOpen: false,
@@ -177,8 +187,11 @@ export const useBillingStore = create<BillingState>((set, get) => ({
         const drafts = { ...state.drafts };
         if (!drafts[oldId]) return state;
         
-        const draft = drafts[oldId];
+        const draft = { ...drafts[oldId] };
         draft.id = newId;
+        if (!draft.localSessionId) {
+            draft.localSessionId = oldId;
+        }
         drafts[newId] = draft;
         delete drafts[oldId];
         
@@ -604,10 +617,19 @@ export const useBillingStore = create<BillingState>((set, get) => ({
         revisionReasonText: null,
     }),
 
-    setDrafts: (drafts, activeId) => set({
-        drafts,
-        activeDraftId: activeId || (Object.keys(drafts).length > 0 ? Object.keys(drafts)[0] : null)
-    }),
+    setDrafts: (drafts, activeId) => {
+        const draftsWithSession: Record<string, DraftBill> = {};
+        for (const [id, draft] of Object.entries(drafts)) {
+            draftsWithSession[id] = {
+                ...draft,
+                localSessionId: draft.localSessionId || draft.id || uuidv4()
+            };
+        }
+        set({
+            drafts: draftsWithSession,
+            activeDraftId: activeId || (Object.keys(draftsWithSession).length > 0 ? Object.keys(draftsWithSession)[0] : null)
+        });
+    },
 
     incrementBillsToday: () => set((state) => ({ billsToday: state.billsToday + 1 })),
 
@@ -645,6 +667,25 @@ export const useBillingStore = create<BillingState>((set, get) => ({
     toggleCart: () => set((state) => ({ isCartOpen: !state.isCartOpen })),
     setCustomerSelectorOpen: (open) => set({ isCustomerSelectorOpen: open }),
     setLastInvoice: (inv) => set({ lastInvoice: inv }),
-
-}));
+        }),
+        {
+            name: 'mediflow-billing-drafts',
+            skipHydration: true,
+            partialize: (state) => ({
+                drafts: state.drafts,
+                activeDraftId: state.activeDraftId,
+                activeStaff: state.activeStaff,
+                isPinVerified: state.isPinVerified,
+                showMarginInfo: state.showMarginInfo,
+                billsToday: state.billsToday,
+            }),
+            onRehydrateStorage: () => (state, error) => {
+                if (error) {
+                    console.warn('Billing store hydration error:', error);
+                }
+                useBillingStore.getState().setHasHydrated(true);
+            }
+        }
+    )
+);
 if (typeof window !== 'undefined') (window as any).useBillingStore = useBillingStore;

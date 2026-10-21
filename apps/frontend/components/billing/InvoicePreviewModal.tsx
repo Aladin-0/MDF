@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { SaleInvoice } from '@/types';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useAuthStore } from '@/store/authStore';
+import { useBillingStore } from '@/store/billingStore';
 import { InvoiceThermal } from './InvoiceThermal';
 import { ManavataA4Invoice } from '@/components/print/ManavataA4Invoice';
 import { cn } from '@/lib/utils';
@@ -29,6 +30,8 @@ export function InvoicePreviewModal({ isOpen, onClose, invoice, onNewBill, onEdi
     const { printerType } = useSettingsStore();
     const { settings } = useOutletSettings();
     const authOutlet = useAuthStore((s) => s.outlet || s.user?.outlet);
+    const authUser = useAuthStore((s) => s.user);
+    const activeStaff = useBillingStore((s) => s.activeStaff);
     const printRef = useRef<HTMLDivElement>(null);
     const router = useRouter();
 
@@ -89,19 +92,22 @@ export function InvoicePreviewModal({ isOpen, onClose, invoice, onNewBill, onEdi
                         @media print {
                             @page {
                                 size: ${!isThermal ? 'A4 landscape' : printerType === 'thermal_80mm' ? '80mm auto' : '57mm auto'};
-                                margin: 0mm;
+                                margin: 0mm !important;
                             }
                             html, body {
-                                -webkit-print-color-adjust: exact;
-                                print-color-adjust: exact;
+                                height: auto !important;
+                                min-height: 0 !important;
+                                -webkit-print-color-adjust: exact !important;
+                                print-color-adjust: exact !important;
                             }
                             body * { visibility: hidden; }
-                            .invoice-print-container, .invoice-print-container * { visibility: visible; }
-                            .invoice-print-container {
+                            #print-root, #print-root * { visibility: visible; }
+                            #print-root {
                                 position: absolute !important;
                                 left: 0 !important;
                                 top: 0 !important;
                                 margin: 0 !important;
+                                padding: 0 !important;
                                 width: 100% !important;
                                 max-width: none !important;
                                 height: auto !important;
@@ -177,7 +183,7 @@ export function InvoicePreviewModal({ isOpen, onClose, invoice, onNewBill, onEdi
                 >
                     {isThermal ? (
                         <div className="mx-auto bg-white shadow-xl min-h-[500px] print:shadow-none print:m-0 w-full">
-                            <div id="print-section" className="w-full bg-white text-black">
+                            <div id="print-root" className="w-full bg-white text-black">
                                 <InvoiceThermal ref={printRef} invoice={invoice} config={activeConfig} />
                             </div>
                         </div>
@@ -198,8 +204,14 @@ export function InvoicePreviewModal({ isOpen, onClose, invoice, onNewBill, onEdi
                                     transformOrigin: 'top left',
                                 }}
                             >
-                                <div id="print-section" className="w-full bg-white text-black">
-                                    <ManavataA4Invoice ref={printRef as any} invoice={invoice} config={activeConfig} outlet={invoice?.outlet || authOutlet || undefined} />
+                                <div id="print-root" className="w-full bg-white text-black">
+                                    <ManavataA4Invoice
+                                        ref={printRef as any}
+                                        invoice={invoice}
+                                        config={activeConfig}
+                                        outlet={invoice?.outlet || authOutlet || undefined}
+                                        billedBy={invoice.billedByName || (invoice as any)?.createdBy?.name || activeStaff?.name || authUser?.name || authUser?.username}
+                                    />
                                 </div>
                             </div>
                         </div>
