@@ -169,12 +169,27 @@ export function buildPurchasePayload(
     revisionReasonCode?: string,
     revisionReasonText?: string
 ): any {
+    let invoiceDate = formState.invoiceDate;
+    if (invoiceDate) {
+        const parts = invoiceDate.split('-');
+        if (parts.length === 3) {
+            let yr = parseInt(parts[0], 10);
+            const currentYr = new Date().getFullYear();
+            if (yr >= 20 && yr < 100) {
+                yr = 2000 + yr;
+                invoiceDate = `${yr}-${parts[1]}-${parts[2]}`;
+            } else if (yr < 2000 || yr > currentYr + 1) {
+                invoiceDate = `${currentYr}-${parts[1]}-${parts[2]}`;
+            }
+        }
+    }
+
     const payload: any = {
         outletId,
         partyLedgerId:    formState.partyLedgerId,
         purchaseType:     formState.purchaseType,
         invoiceNo:        formState.invoiceNo,
-        invoiceDate:      formState.invoiceDate,
+        invoiceDate:      invoiceDate,
         dueDate:          formState.purchaseType === 'credit' ? formState.dueDate : undefined,
         purchaseOrderRef: formState.purchaseOrderRef,
         godown:           formState.godown,

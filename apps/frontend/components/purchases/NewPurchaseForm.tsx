@@ -844,6 +844,8 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
                                 <Input 
                                     className="h-10 text-sm bg-white" 
                                     type="date" 
+                                    min="2020-01-01"
+                                    max="2035-12-31"
                                     ref={(e) => {
                                         dateRef.current = e;
                                         register('invoiceDate').ref(e);

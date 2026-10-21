@@ -735,6 +735,7 @@ class PurchaseListView(APIView):
         """
 
         try:
+            from django.db.models import Q, Exists, OuterRef
             outlet_id = request.query_params.get('outletId')
 
             # Validate outlet
@@ -1131,10 +1132,21 @@ class PurchaseDetailView(APIView):
             # Prefetch distributor for full response shape
             invoice = PurchaseInvoice.objects.select_related('distributor', 'created_by').prefetch_related('items', 'items__master_product').get(id=purchase_id, outlet=outlet)
         except PurchaseInvoice.DoesNotExist:
-            return Response(
-                {'detail': f'Purchase invoice {purchase_id} not found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            invoice = None
+            try:
+                import os, redis
+                r = redis.from_url(os.getenv('REDIS_URL', 'redis://redis:6379/0'))
+                mapped_id = r.get(f'legacy_purchase_map:{purchase_id}')
+                if mapped_id:
+                    invoice = PurchaseInvoice.objects.select_related('distributor', 'created_by').prefetch_related('items', 'items__master_product').get(id=mapped_id.decode(), outlet=outlet)
+            except Exception:
+                invoice = None
+
+            if not invoice:
+                return Response(
+                    {'detail': f'Purchase invoice {purchase_id} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
 
         # Resolve the party ledger linked to this distributor
         from apps.accounts.models import Ledger as AccountsLedger

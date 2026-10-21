@@ -112,6 +112,11 @@ def atomic_purchase_save(payload: Dict[str, Any], outlet_id: str, created_by_id:
         # Parse invoice date - strip any timezone suffix (Z or +05:30); app runs in IST natively.
         invoice_date_str = payload['invoiceDate'].rstrip('Z').split('+')[0]
         invoice_date = datetime.fromisoformat(invoice_date_str)
+        current_year = datetime.now().year
+        if 20 <= invoice_date.year < 100:
+            invoice_date = invoice_date.replace(year=2000 + invoice_date.year)
+        elif invoice_date.year < 2000 or invoice_date.year > current_year + 1:
+            invoice_date = invoice_date.replace(year=current_year)
 
         purchase_type = payload.get('purchaseType', 'credit')  # Default to credit
 
@@ -821,6 +826,11 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
         # ─── Step 5: Update PurchaseInvoice ───────────────────────────────────────
         invoice_date_str = payload['invoiceDate'].rstrip('Z').split('+')[0]
         invoice_date = datetime.fromisoformat(invoice_date_str)
+        current_year = datetime.now().year
+        if 20 <= invoice_date.year < 100:
+            invoice_date = invoice_date.replace(year=2000 + invoice_date.year)
+        elif invoice_date.year < 2000 or invoice_date.year > current_year + 1:
+            invoice_date = invoice_date.replace(year=current_year)
         purchase_type = payload.get('purchaseType', 'credit')
 
         due_date = None
