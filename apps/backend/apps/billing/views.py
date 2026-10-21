@@ -3781,13 +3781,16 @@ class SalesReturnPrintView(APIView):
         except SalesReturn.DoesNotExist:
             return Response({'detail': 'Return not found'}, status=status.HTTP_404_NOT_FOUND)
 
+        gross_sum = sum(item.total_amount for item in r.items.all())
+        ratio = (float(r.total_amount) / float(gross_sum)) if (r.deduction_amount > 0 and gross_sum > 0) else 1.0
+
         items = [{
             'productName': item.product_name,
             'batchNo': item.batch_no,
             'qtyReturned': item.qty_returned,
             'packSize': item.original_sale_item.pack_size if (item.original_sale_item_id and item.original_sale_item and item.original_sale_item.pack_size) else 1,
-            'returnRate': float(item.return_rate),
-            'totalAmount': float(item.total_amount),
+            'returnRate': round(float(item.return_rate) * ratio, 2),
+            'totalAmount': round(float(item.total_amount) * ratio, 2),
         } for item in r.items.select_related('original_sale_item').all()]
 
         data = {
@@ -3797,8 +3800,6 @@ class SalesReturnPrintView(APIView):
             'customerName': r.original_sale.customer.name if (r.original_sale and r.original_sale.customer) else 'Walk-in',
             'items': items,
             'totalAmount': float(r.total_amount),
-            'deductionAmount': float(r.deduction_amount or 0),
-            'grossAmount': float(sum(item.total_amount for item in r.items.all())),
             'refundMode': r.refund_mode,
             'reason': r.reason,
             'outletName': outlet.name,

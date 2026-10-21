@@ -297,43 +297,43 @@ export function SaleReturnDetailModal({ open, onOpenChange, returnId }: SaleRetu
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {data.items?.map((item: any, idx: number) => (
-                                                    <tr key={idx} className="border-b border-gray-300 last:border-b-black">
-                                                        <td className="py-1 px-1 border-r border-black text-center">{idx + 1}</td>
-                                                        <td className="py-1 px-1 border-r border-black">{item.productName}</td>
-                                                        <td className="py-1 px-1 border-r border-black">{item.batchNo}</td>
-                                                        <td className="py-1 px-1 border-r border-black text-right font-medium">
-                                                            {formatQty(
-                                                                Math.floor(item.qtyReturned / (item.packSize || 1)),
-                                                                item.qtyReturned % (item.packSize || 1),
-                                                                item.packSize || 1,
-                                                                item.packType,
-                                                                item.packUnit
-                                                            )}
-                                                        </td>
-                                                        <td className="py-1 px-1 border-r border-black text-right">{formatINR(item.returnRate)}</td>
-                                                        <td className="py-1 px-1 text-right font-medium">{formatINR(item.totalAmount)}</td>
-                                                    </tr>
-                                                ))}
+                                                {(() => {
+                                                    const grossSum = data.items?.reduce((acc: number, it: any) => acc + (Number(it.totalAmount) || 0), 0) || 0;
+                                                    const netTotal = Number(data.totalAmount) || 0;
+                                                    const hasDeduction = Number(data.deductionAmount) > 0 && grossSum > 0;
+                                                    const ratio = hasDeduction ? (netTotal / grossSum) : 1;
+
+                                                    return data.items?.map((item: any, idx: number) => {
+                                                        const effectiveAmount = hasDeduction ? (Number(item.totalAmount) * ratio) : Number(item.totalAmount);
+                                                        const effectiveRate = hasDeduction ? (Number(item.returnRate) * ratio) : Number(item.returnRate);
+
+                                                        return (
+                                                            <tr key={idx} className="border-b border-gray-300 last:border-b-black">
+                                                                <td className="py-1 px-1 border-r border-black text-center">{idx + 1}</td>
+                                                                <td className="py-1 px-1 border-r border-black">{item.productName}</td>
+                                                                <td className="py-1 px-1 border-r border-black">{item.batchNo}</td>
+                                                                <td className="py-1 px-1 border-r border-black text-right font-medium">
+                                                                    {formatQty(
+                                                                        Math.floor(item.qtyReturned / (item.packSize || 1)),
+                                                                        item.qtyReturned % (item.packSize || 1),
+                                                                        item.packSize || 1,
+                                                                        item.packType,
+                                                                        item.packUnit
+                                                                    )}
+                                                                </td>
+                                                                <td className="py-1 px-1 border-r border-black text-right">{formatINR(effectiveRate)}</td>
+                                                                <td className="py-1 px-1 text-right font-medium">{formatINR(effectiveAmount)}</td>
+                                                            </tr>
+                                                        );
+                                                    });
+                                                })()}
                                             </tbody>
                                         </table>
 
                                         <div className="flex justify-end border-b border-black pb-2 mb-2">
-                                            <div className="w-1/2 min-w-[200px] text-right space-y-1">
-                                                {Number(data.deductionAmount) > 0 && (
-                                                    <>
-                                                        <div className="flex justify-between text-[10px]">
-                                                            <span>Gross Goods Value:</span>
-                                                            <span>{formatINR((data.totalAmount || 0) + (data.deductionAmount || 0))}</span>
-                                                        </div>
-                                                        <div className="flex justify-between text-[10px]">
-                                                            <span>Deduction / Fee (-):</span>
-                                                            <span>-{formatINR(data.deductionAmount)}</span>
-                                                        </div>
-                                                    </>
-                                                )}
+                                            <div className="w-1/3 min-w-[160px] text-right">
                                                 <div className="flex justify-between font-bold text-xs pt-1 border-t border-black border-dashed mt-1">
-                                                    <span>Net Refund Total:</span>
+                                                    <span>Total Refund:</span>
                                                     <span>{formatINR(data.totalAmount)}</span>
                                                 </div>
                                             </div>
