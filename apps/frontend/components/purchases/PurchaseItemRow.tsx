@@ -36,16 +36,6 @@ export const formatExpiryForDisplay = (exp?: string): string => {
     if (mIso) {
         return `${mIso[2].padStart(2, '0')}/${mIso[1]}`;
     }
-    // MM/YY or MM-YY or MM.YY
-    const mShort = raw.match(/^(\d{1,2})[/\-.](\d{2})$/);
-    if (mShort) {
-        return `${mShort[1].padStart(2, '0')}/20${mShort[2]}`;
-    }
-    // MM/YYYY or MM-YYYY or MM.YYYY
-    const mLong = raw.match(/^(\d{1,2})[/\-.](\d{4})$/);
-    if (mLong) {
-        return `${mLong[1].padStart(2, '0')}/${mLong[2]}`;
-    }
     return raw;
 };
 
@@ -109,12 +99,12 @@ export const PURCHASE_ITEM_COLS = [
     { key: 'pkg',       width: 52  },
     { key: 'qty',       width: 60  },
     { key: 'free',      width: 52  },
-    { key: 'rate',      width: 76  },
-    { key: 'disc',      width: 60  },
-    { key: 'gst',       width: 52  },
     { key: 'mrp',       width: 76  },
+    { key: 'rate',      width: 76  },
+    { key: 'gst',       width: 52  },
     { key: 'ptr',       width: 76  },
     { key: 'pts',       width: 76  },
+    { key: 'disc',      width: 60  },
     { key: 'amount',    width: 84  },
     { key: 'expand',    width: 32  },
     { key: 'remove',    width: 32  },
@@ -504,59 +494,30 @@ export function PurchaseItemRow({
                             maxLength={7}
                             value={formatExpiryForDisplay(value.expiryDate)}
                             onChange={(e) => {
-                                const raw = e.target.value;
-                                const mShort = raw.match(/^(\d{2})\/(\d{2})$/);   // MM/YY
-                                const mLong  = raw.match(/^(\d{2})\/(\d{4})$/);   // MM/YYYY
-                                if (mShort) {
-                                    const month = parseInt(mShort[1], 10);
-                                    const year  = parseInt(mShort[2], 10) + 2000;
-                                    if (month >= 1 && month <= 12) {
-                                        onChange(index, 'expiryDate', `${year}-${mShort[1]}-01`);
-                                    } else {
-                                        onChange(index, 'expiryDate', raw);
-                                    }
-                                } else if (mLong) {
-                                    const month = parseInt(mLong[1], 10);
-                                    const year  = parseInt(mLong[2], 10);
-                                    if (month >= 1 && month <= 12) {
-                                        onChange(index, 'expiryDate', `${year}-${mLong[1]}-01`);
-                                    } else {
-                                        onChange(index, 'expiryDate', raw);
-                                    }
-                                } else {
-                                    onChange(index, 'expiryDate', raw);
+                                let rawValue = e.target.value.replace(/\D/g, ''); // Strip non-digits
+                                let formattedValue = rawValue;
+                                if (rawValue.length > 2) {
+                                    // Insert slash after month. Limit year to 4 digits.
+                                    formattedValue = `${rawValue.slice(0, 2)}/${rawValue.slice(2, 6)}`;
                                 }
+                                onChange(index, 'expiryDate', formattedValue);
                             }}
                             onBlur={() => {
                                 if (value.expiryDate) {
                                     const raw = value.expiryDate.trim();
-                                    const mDigits4 = raw.match(/^(\d{2})(\d{2})$/);
-                                    const mShort1  = raw.match(/^(\d{1})\/(\d{2})$/);
-                                    const mLong1   = raw.match(/^(\d{1})\/(\d{4})$/);
-                                    const mShort2  = raw.match(/^(\d{2})\/(\d{2})$/);
-                                    if (mDigits4) {
-                                        const m = parseInt(mDigits4[1], 10);
-                                        const y = parseInt(mDigits4[2], 10) + 2000;
+                                    const mShort = raw.match(/^(\d{1,2})\/(\d{2})$/);
+                                    const mLong  = raw.match(/^(\d{1,2})\/(\d{4})$/);
+                                    if (mShort) {
+                                        const m = parseInt(mShort[1], 10);
+                                        const y = parseInt(mShort[2], 10) + 2000;
                                         if (m >= 1 && m <= 12) {
-                                            onChange(index, 'expiryDate', `${y}-${mDigits4[1]}-01`);
+                                            onChange(index, 'expiryDate', `${y}-${String(m).padStart(2, '0')}-01`);
                                         }
-                                    } else if (mShort1) {
-                                        const m = parseInt(mShort1[1], 10);
-                                        const y = parseInt(mShort1[2], 10) + 2000;
+                                    } else if (mLong) {
+                                        const m = parseInt(mLong[1], 10);
+                                        const y = parseInt(mLong[2], 10);
                                         if (m >= 1 && m <= 12) {
-                                            onChange(index, 'expiryDate', `${y}-0${m}-01`);
-                                        }
-                                    } else if (mLong1) {
-                                        const m = parseInt(mLong1[1], 10);
-                                        const y = parseInt(mLong1[2], 10);
-                                        if (m >= 1 && m <= 12) {
-                                            onChange(index, 'expiryDate', `${y}-0${m}-01`);
-                                        }
-                                    } else if (mShort2) {
-                                        const m = parseInt(mShort2[1], 10);
-                                        const y = parseInt(mShort2[2], 10) + 2000;
-                                        if (m >= 1 && m <= 12) {
-                                            onChange(index, 'expiryDate', `${y}-${mShort2[1]}-01`);
+                                            onChange(index, 'expiryDate', `${y}-${String(m).padStart(2, '0')}-01`);
                                         }
                                     }
                                 }
@@ -619,6 +580,17 @@ export function PurchaseItemRow({
                     />
                 </td>
 
+                {/* MRP */}
+                <td className={td}>
+                    <input
+                        data-field="mrp"
+                        type="number" min={0} step="0.01"
+                        className={cellInputCls(!!errors?.mrp, 'right')}
+                        value={value.mrp || ''}
+                        onChange={(e) => handleMrpChange(e.target.value)}
+                    />
+                </td>
+
                 {/* Rate */}
                 <td className={td}>
                     <input
@@ -630,17 +602,6 @@ export function PurchaseItemRow({
                     />
                 </td>
 
-                {/* Disc% */}
-                <td className={td}>
-                    <input
-                        data-field="disc"
-                        type="number" min={0} max={100} step="0.01"
-                        className={cellInputCls(false, 'right')}
-                        value={value.discountPct || ''}
-                        onChange={(e) => num('discountPct', e.target.value)}
-                    />
-                </td>
-
                 {/* GST% */}
                 <td className={td}>
                     <input
@@ -649,17 +610,6 @@ export function PurchaseItemRow({
                         className={cellInputCls(false, 'right')}
                         value={value.gstRate || ''}
                         onChange={(e) => num('gstRate', e.target.value)}
-                    />
-                </td>
-
-                {/* MRP */}
-                <td className={td}>
-                    <input
-                        data-field="mrp"
-                        type="number" min={0} step="0.01"
-                        className={cellInputCls(!!errors?.mrp, 'right')}
-                        value={value.mrp || ''}
-                        onChange={(e) => handleMrpChange(e.target.value)}
                     />
                 </td>
 
@@ -682,6 +632,17 @@ export function PurchaseItemRow({
                         className={cellInputCls(false, 'right')}
                         value={value.pts || ''}
                         onChange={(e) => num('pts', e.target.value)}
+                    />
+                </td>
+
+                {/* Disc% */}
+                <td className={td}>
+                    <input
+                        data-field="disc"
+                        type="number" min={0} max={100} step="0.01"
+                        className={cellInputCls(false, 'right')}
+                        value={value.discountPct || ''}
+                        onChange={(e) => num('discountPct', e.target.value)}
                     />
                 </td>
 
@@ -764,7 +725,7 @@ export function PurchaseItemRow({
                             </div>
                         </div>
                     </td>
-                    <td colSpan={4} />
+                    <td colSpan={5} />
                 </tr>
             )}
         </>

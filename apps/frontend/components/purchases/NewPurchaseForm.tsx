@@ -27,7 +27,7 @@ import { useCreatePurchase, useUpdatePurchase, useCheckDuplicateInvoice, useConf
 import { LedgerPicker } from '@/components/accounts/LedgerPicker';
 import { useAuthStore } from '@/store/authStore';
 import { useSettingsStore } from '@/store/settingsStore';
-import { PurchaseItemRow } from './PurchaseItemRow';
+import { PurchaseItemRow, PURCHASE_ITEM_COLS } from './PurchaseItemRow';
 import { AddNewProductDrawer } from './AddNewProductDrawer';
 import { PurchaseItemFormData, ProductSearchResult, Ledger, PurchaseInvoiceFull } from '@/types';
 import { useOutletId } from '@/hooks/useOutletId';
@@ -1004,6 +1004,11 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
                 {/* Make this wrapper scrollable and force full width */}
                 <div className="flex-1 overflow-auto relative" ref={gridContainerRef}>
                     <table className="w-full min-w-[1280px] text-xs border-collapse">
+                        <colgroup>
+                            {PURCHASE_ITEM_COLS.map((col) => (
+                                <col key={col.key} style={{ width: col.width }} />
+                            ))}
+                        </colgroup>
                         <thead className="bg-slate-50 sticky top-0 z-20 shadow-[0_1px_2px_rgb(0,0,0,0.05)]">
                             <tr>
                                 <th className="sticky left-0 z-30 bg-slate-50 border-r border-b border-slate-200 w-8 px-2 py-2 text-center text-[11px] uppercase tracking-wider text-slate-500 font-semibold">#</th>
@@ -1014,14 +1019,14 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
                                 <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold w-16">Pkg</th>
                                 <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold w-20">Qty</th>
                                 <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Free</th>
-                                <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold w-20">Rate</th>
-                                <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Disc%</th>
-                                <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold">GST%</th>
                                 <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold">MRP</th>
+                                <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold w-20">Rate</th>
+                                <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold">GST%</th>
                                 <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold">PTR</th>
                                 <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold">PTS</th>
+                                <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Disc%</th>
                                 <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Amount</th>
-                                <th className="sticky right-0 z-30 bg-slate-50 border-l border-b border-slate-200 w-8 px-2 py-2 text-center text-[11px] uppercase tracking-wider text-slate-500 font-semibold" title="Delete">Act</th>
+                                <th colSpan={2} className="sticky right-0 z-30 bg-slate-50 border-l border-b border-slate-200 w-16 px-2 py-2 text-center text-[11px] uppercase tracking-wider text-slate-500 font-semibold" title="Actions">Act</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
