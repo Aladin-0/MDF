@@ -67,7 +67,16 @@ export default function FullScreenBillingPage() {
     // Global Keyboard Shortcuts
     useEffect(() => {
         const handleGlobalKeyDown = (e: KeyboardEvent) => {
-            // Ctrl+M to toggle margin view
+            // Prevent toggle if user is typing in an input, textarea, or select
+            const target = e.target as HTMLElement;
+            const activeEl = document.activeElement as HTMLElement;
+            const isTyping = (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) ||
+                             (activeEl && ['INPUT', 'TEXTAREA', 'SELECT'].includes(activeEl.tagName));
+            if (isTyping) {
+                return;
+            }
+
+            // Ctrl+Shift+M or Ctrl+M to toggle margin view
             if (e.ctrlKey && e.key.toLowerCase() === 'm') {
                 e.preventDefault();
                 toggleMarginInfo();

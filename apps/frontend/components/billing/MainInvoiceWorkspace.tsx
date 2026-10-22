@@ -21,6 +21,8 @@ interface MainInvoiceWorkspaceProps {
 
 export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = {}) {
     const { drafts, activeDraftId, addToCart, removeFromCart, updateCartItem, getDraftTotals, showMarginInfo, activeStaff } = useBillingStore();
+    const isCashier = activeStaff?.role === 'cashier';
+    const canViewMargins = !isCashier && showMarginInfo;
     
     // Search State
     const [searchQuery, setSearchQuery] = useState('');
@@ -888,7 +890,7 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                                                         {item.qtyLoose > 0 && (item.packType?.toLowerCase() === 'strip' || item.packType?.toLowerCase() === 'blister') ? `${item.qtyLoose}L` : ''}
                                                     </>
                                                 </div>
-                                                {showMarginInfo && (
+                                                {canViewMargins && (
                                                     <div className={cn(
                                                         "text-[10px] font-medium whitespace-nowrap mt-0.5",
                                                         lineMargin.isLossSale ? "text-red-600 font-bold" : "text-emerald-600"
@@ -904,7 +906,7 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                                                         {item.qtyStrips > 0 ? `${item.qtyStrips}S ` : ''}
                                                         {item.qtyLoose > 0 ? `${item.qtyLoose}L` : ''}
                                                     </div>
-                                                    {showMarginInfo && (
+                                                    {canViewMargins && (
                                                         <div className={cn(
                                                             "text-[10px] font-medium whitespace-nowrap mt-0.5",
                                                             lineMargin.isLossSale ? "text-red-600 font-bold" : "text-emerald-600"
@@ -966,7 +968,7 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                                     <td className="px-2 py-2 text-right"></td>
                                 )}
                                 <td colSpan={saleType === 'WHOLESALE' ? 2 : 2} className="px-2 py-2 text-right">
-                                    {showMarginInfo && marginData && (
+                                    {canViewMargins && marginData && (
                                         <div className="flex items-center justify-end gap-2 text-[11px]">
                                             <span className="font-semibold text-slate-600">Total Landing:</span>
                                             <span className="font-black text-sky-700 bg-sky-50 px-2 py-0.5 rounded border border-sky-200">
@@ -976,7 +978,7 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                                     )}
                                 </td>
                                 <td colSpan={saleType === 'WHOLESALE' ? 2 : 1} className="px-2 py-2 text-right">
-                                    {showMarginInfo && marginData && (
+                                    {canViewMargins && marginData && (
                                         <div className="flex items-center justify-end gap-2 text-[11px]">
                                             <span className="font-semibold text-slate-600">Total Profit:</span>
                                             <span className={cn(

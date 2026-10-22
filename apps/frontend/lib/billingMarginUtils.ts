@@ -30,38 +30,60 @@ export interface TotalMarginInfo {
  * and optional bill-level extra discount %.
  */
 export function calculateLineMargin(item: CartItem, extraDiscountPct: number = 0): LineMarginInfo {
-    const packSize = (item.packSize && item.packSize > 0) ? item.packSize : 1;
-    const effectivePackQty = typeof item.totalQty === 'number' && item.totalQty > 0
-        ? item.totalQty
-        : (Number(item.qtyStrips || 0) + (Number(item.qtyLoose || 0) / packSize));
+    const packSize = (Number(item.packSize) && Number(item.packSize) > 0) ? Number(item.packSize) : 1;
+    
+    // Effective pack quantity: prefer explicit strips + loose / packSize if either is non-zero,
+    // otherwise fallback to totalQty or 1.
+    const hasExplicitStripsOrLoose = (Number(item.qtyStrips || 0) > 0) || (Number(item.qtyLoose || 0) > 0);
+    const effectivePackQty = hasExplicitStripsOrLoose
+        ? (Number(item.qtyStrips || 0) + (Number(item.qtyLoose || 0) / packSize))
+        : (typeof item.totalQty === 'number' && item.totalQty > 0
+            ? Number(item.totalQty)
+            : (Number(item.qtyStrips || 0) + (Number(item.qtyLoose || 0) / packSize)));
 
-    // Cost floor: prefer item.ptr if > 0, otherwise landingRate or purchaseRate
-    const costFloor = Number(
-        (item.ptr && item.ptr > 0) 
-            ? item.ptr 
-            : (item.landingRate ?? item.purchaseRate ?? 0)
-    );
-    const landingRate = Number(item.landingRate ?? item.purchaseRate ?? costFloor);
+    // Cost floor: Force type coercion. Prefer item.ptr if > 0, otherwise pts / landingRate / purchaseRate
+    const rawPtr = Number(item.ptr);
+    const rawPts = Number(item.pts);
+    const rawLanding = Number(item.landingRate);
+    const rawPurchase = Number(item.purchaseRate);
+
+    const costFloor = (!isNaN(rawPtr) && rawPtr > 0)
+        ? rawPtr
+        : ((!isNaN(rawPts) && rawPts > 0)
+            ? rawPts
+            : ((!isNaN(rawLanding) && rawLanding > 0)
+                ? rawLanding
+                : ((!isNaN(rawPurchase) && rawPurchase > 0) ? rawPurchase : 0)));
+
+    const landingRate = (!isNaN(rawLanding) && rawLanding > 0)
+        ? rawLanding
+        : ((!isNaN(rawPurchase) && rawPurchase > 0) ? rawPurchase : costFloor);
+
     const lineLandingCost = Math.round(costFloor * effectivePackQty * 100) / 100;
 
     // Base selling amount for this line (after item-level discount)
-    let baseSellingAmount = Number(item.totalAmount || 0);
-    if (baseSellingAmount === 0 && effectivePackQty > 0) {
-        const baseRate = Number(item.rate || item.saleRate || item.mrp || 0);
-        const discPct = Number(item.discountPct || 0);
-        baseSellingAmount = baseRate * effectivePackQty * (1 - discPct / 100);
+    let baseSellingAmount = Number(item.totalAmount);
+    if (isNaN(baseSellingAmount) || baseSellingAmount <= 0) {
+        if (effectivePackQty > 0) {
+            const baseRate = Number(item.rate || item.saleRate || item.mrp || 0);
+            const discPct = Number(item.discountPct || 0);
+            baseSellingAmount = baseRate * effectivePackQty * (1 - discPct / 100);
+        } else {
+            baseSellingAmount = 0;
+        }
     }
 
     // Apply extra discount % (bill-level) proportionally
     const discountFactor = extraDiscountPct > 0 ? (1 - extraDiscountPct / 100) : 1;
     const finalRowAmount = Math.round(baseSellingAmount * discountFactor * 100) / 100;
 
+    // Unified formula: (Final Row Amount / Quantity)
     const sellingPricePerPack = effectivePackQty > 0 ? (finalRowAmount / effectivePackQty) : Number(item.rate || item.saleRate || 0);
     const margin = Math.round((sellingPricePerPack - costFloor) * 100) / 100;
     const marginPct = sellingPricePerPack > 0 ? Math.round((margin / sellingPricePerPack) * 10000) / 100 : 0;
     const lineGrossProfit = Math.round((finalRowAmount - lineLandingCost) * 100) / 100;
 
-    // Loss-Sale: Selling below cost floor (PTR / Landing Cost)
+    // Loss-Sale: Strictly flag ONLY when mathematically proven unit net rate is less than unit PTR / cost floor
     const isLossSale = costFloor > 0 && effectivePackQty > 0 && (sellingPricePerPack < (costFloor - 0.005));
 
     return {
@@ -125,8 +147,9 @@ export function calculateTotalMargin(
         ? billRevenue
         : Math.max(0, itemsSellingTotal - billDiscountAmount);
 
-    // Backwards-compatibility for subtotal tests vs grand total calculation
-    const totalProfit = billDiscountAmount > 0
+    // If extraDiscountPct was already applied inside calculateLineMargin, itemsGrossProfit
+    // already reflects that discount. Do not double-subtract billDiscountAmount unless extraDiscountPct == 0.
+    const totalProfit = (billDiscountAmount > 0 && extraDiscountPct === 0)
         ? Math.round((itemsGrossProfit - billDiscountAmount) * 100) / 100
         : (typeof billRevenue === 'number' && Math.abs(billRevenue - itemsSellingTotal) > 1 && itemsSellingTotal > billRevenue && (itemsSellingTotal - totalLandingCost) === itemsGrossProfit)
             ? itemsGrossProfit // fallback if billRevenue was passed as a denominator subtotal

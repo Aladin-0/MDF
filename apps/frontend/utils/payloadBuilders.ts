@@ -152,6 +152,39 @@ export function buildSalePayload(draft: any, scheduleHData: any, totals: any, ac
     };
 }
 
+export function normalizeExpiryDate(exp?: string): string {
+    if (!exp) return '';
+    const raw = exp.trim();
+    // MM/YY e.g. 12/26 or 12-26
+    const mShort = raw.match(/^(\d{1,2})[/\-](\d{2})$/);
+    if (mShort) {
+        const m = parseInt(mShort[1], 10);
+        const y = parseInt(mShort[2], 10) + 2000;
+        if (m >= 1 && m <= 12) {
+            return `${y}-${String(m).padStart(2, '0')}-01`;
+        }
+    }
+    // MM/YYYY e.g. 12/2026 or 12-2026
+    const mLong = raw.match(/^(\d{1,2})[/\-](\d{4})$/);
+    if (mLong) {
+        const m = parseInt(mLong[1], 10);
+        const y = parseInt(mLong[2], 10);
+        if (m >= 1 && m <= 12) {
+            return `${y}-${String(m).padStart(2, '0')}-01`;
+        }
+    }
+    // YYYY-MM
+    const mIso = raw.match(/^(\d{4})-(\d{1,2})$/);
+    if (mIso) {
+        return `${mIso[1]}-${mIso[2].padStart(2, '0')}-01`;
+    }
+    // YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+        return raw;
+    }
+    return raw;
+}
+
 export function buildPurchasePayload(
     formState: any,
     items: any[],
@@ -226,7 +259,7 @@ export function buildPurchasePayload(
                 isCustomProduct:   it.isCustom ?? false,
                 hsnCode:         it.hsnCode,
                 batchNo:         it.batchNo,
-                expiryDate:      it.expiryDate,
+                expiryDate:      normalizeExpiryDate(it.expiryDate) || it.expiryDate,
                 pkg:             effPkg,
                 qty:             it.qty,
                 actualQty:       (it.qty + it.freeQty) * effPkg,

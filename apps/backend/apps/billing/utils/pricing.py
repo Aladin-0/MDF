@@ -37,7 +37,7 @@ def get_landing_cost_for_batch(batch: Batch, pharmacy_id) -> Decimal:
 
 def validate_sale_price(sale_rate: Decimal, batch: Batch, pharmacy_id) -> dict:
     """
-    Validates a sale rate against the landing cost floor and MRP ceiling.
+    Validates a sale rate against the MRP ceiling.
     Returns:
         {
             'valid': bool,
@@ -50,20 +50,10 @@ def validate_sale_price(sale_rate: Decimal, batch: Batch, pharmacy_id) -> dict:
     landing_cost = get_landing_cost_for_batch(batch, pharmacy_id)
     mrp = batch.mrp
 
-    if sale_rate > mrp:
+    if mrp and sale_rate > (mrp + Decimal('0.005')):
         return {
             'valid': False, 'block': True,
             'message': f"Sale rate ₹{sale_rate} exceeds MRP ₹{mrp}. Cannot bill above MRP.",
-            'landing_cost': landing_cost, 'mrp': mrp
-        }
-
-    if landing_cost > Decimal('0') and sale_rate < (landing_cost - Decimal('0.005')):
-        prod_name = batch.product.name if batch.product else f"Batch {batch.batch_no}"
-        return {
-            'valid': False, 'block': True,
-            'message': (
-                f"Loss Sale Prevented: Cannot sell {prod_name} below its purchase rate of ₹{landing_cost:.2f}."
-            ),
             'landing_cost': landing_cost, 'mrp': mrp
         }
 

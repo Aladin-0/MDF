@@ -91,21 +91,21 @@ describe('Margin Visibility Features', () => {
     describe('Row-level margin badge', () => {
         it('renders margin badge when showMarginInfo is true and role is admin', () => {
             render(<MainInvoiceWorkspace />);
-            expect(screen.getByText(/Base ₹85/)).toBeInTheDocument();
-            expect(screen.getByText(/₹15/)).toBeInTheDocument();
-            expect(screen.getByText(/\(15%\)/)).toBeInTheDocument();
+            expect(screen.getByText(/Landing ₹\s*85/)).toBeInTheDocument();
+            expect(screen.getByText(/Profit ₹\s*15/)).toBeInTheDocument();
+            expect(screen.getAllByText(/\(15(\.0)?%\)/).length).toBeGreaterThan(0);
         });
 
         it('does not render margin badge when role is cashier', () => {
             useBillingStore.setState({ activeStaff: { role: 'cashier' } as any });
             render(<MainInvoiceWorkspace />);
-            expect(screen.queryByText(/Base ₹85/)).not.toBeInTheDocument();
+            expect(screen.queryByText(/Landing ₹\s*85/)).not.toBeInTheDocument();
         });
 
         it('does not render margin badge when showMarginInfo is false', () => {
             useBillingStore.setState({ showMarginInfo: false });
             render(<MainInvoiceWorkspace />);
-            expect(screen.queryByText(/Base ₹85/)).not.toBeInTheDocument();
+            expect(screen.queryByText(/Landing ₹\s*85/)).not.toBeInTheDocument();
         });
     });
 

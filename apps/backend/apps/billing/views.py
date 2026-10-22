@@ -653,13 +653,18 @@ class SaleCreateView(APIView):
                     qty_loose = Decimal(str(item_data.get('qtyLoose', 0)))
                     free_qty_strips = Decimal(str(item_data.get('freeQtyStrips', 0)))
                     effective_qty = qty_strips + (qty_loose / pack_size) + free_qty_strips
+                    if effective_qty <= Decimal('0'):
+                        total_qty_val = Decimal(str(item_data.get('totalQty', 0)))
+                        effective_qty = total_qty_val if total_qty_val > Decimal('0') else Decimal('1')
 
                     if effective_qty > Decimal('0'):
-                        taxable_amt = Decimal(str(item_data.get('taxableAmount', 0)))
-                        gst_amt = Decimal(str(item_data.get('gstAmount', 0)))
-                        item_total = taxable_amt + gst_amt
-                        if item_total <= Decimal('0') and item_data.get('totalAmount'):
+                        item_total = Decimal('0')
+                        if item_data.get('totalAmount') is not None:
                             item_total = Decimal(str(item_data.get('totalAmount', 0)))
+                        if item_total <= Decimal('0'):
+                            taxable_amt = Decimal(str(item_data.get('taxableAmount', 0)))
+                            gst_amt = Decimal(str(item_data.get('gstAmount', 0)))
+                            item_total = taxable_amt + gst_amt
                         if item_total <= Decimal('0'):
                             rate_val = Decimal(str(item_data.get('rate', batch_obj.mrp)))
                             disc_pct = Decimal(str(item_data.get('discountPct', 0)))
@@ -956,16 +961,30 @@ class SaleCreateView(APIView):
                                     "mrp": str(pricing_check['mrp'])
                                 }, status=status.HTTP_400_BAD_REQUEST)
 
-                            # Margin Lock check on net selling price after discounts
+                            # Margin Lock check on net selling price using unified formula: (Final Row Amount / Quantity)
                             pack_sz = Decimal(str(batch.pack_size or 1))
                             eff_qty = Decimal(str(qty_to_deduct)) + (Decimal(str(loose_to_deduct)) / pack_sz)
                             if eff_qty > Decimal('0'):
                                 disc_factor = Decimal('1') - (extra_discount_pct / Decimal('100')) if extra_discount_pct > Decimal('0') else Decimal('1')
-                                item_disc = Decimal(str(item_data.get('discountPct', 0)))
-                                net_unit_price = proposed_rate * (Decimal('1') - item_disc / Decimal('100')) * disc_factor
                                 c_floor = batch.ptr if (batch.ptr and batch.ptr > Decimal('0')) else (batch.landing_rate or batch.purchase_rate or Decimal('0'))
                                 if sale_type == 'WHOLESALE' and batch.pts and batch.pts > Decimal('0'):
                                     c_floor = batch.pts
+
+                                item_amt = Decimal('0')
+                                if item_data.get('totalAmount') is not None:
+                                    item_amt = Decimal(str(item_data.get('totalAmount', 0)))
+                                if item_amt <= Decimal('0'):
+                                    tax_amt = Decimal(str(item_data.get('taxableAmount', 0)))
+                                    g_amt = Decimal(str(item_data.get('gstAmount', 0)))
+                                    item_amt = tax_amt + g_amt
+                                if item_amt <= Decimal('0'):
+                                    p_rate = Decimal(str(item_data.get('rate', batch.mrp)))
+                                    d_pct = Decimal(str(item_data.get('discountPct', 0)))
+                                    item_amt = (p_rate * eff_qty) * (Decimal('1') - d_pct / Decimal('100'))
+
+                                final_row_amt = item_amt * disc_factor
+                                net_unit_price = final_row_amt / eff_qty
+
                                 if c_floor > Decimal('0') and net_unit_price < (c_floor - Decimal('0.005')):
                                     transaction.set_rollback(True)
                                     prod_name = product.name if product else batch.batch_no

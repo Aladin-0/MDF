@@ -31,7 +31,9 @@ import { PurchaseItemRow, PURCHASE_ITEM_COLS } from './PurchaseItemRow';
 import { AddNewProductDrawer } from './AddNewProductDrawer';
 import { PurchaseItemFormData, ProductSearchResult, Ledger, PurchaseInvoiceFull } from '@/types';
 import { useOutletId } from '@/hooks/useOutletId';
-import { buildPurchasePayload } from '@/utils/payloadBuilders';
+import { buildPurchasePayload, normalizeExpiryDate } from '@/utils/payloadBuilders';
+
+export const normalizeExpiry = normalizeExpiryDate;
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
@@ -53,7 +55,10 @@ const itemSchema = z.object({
     productName:     z.string().min(1, 'Product name required'),
     hsnCode:         z.string().optional().default(''),
     batchNo:         z.string().min(1, 'Batch required'),
-    expiryDate:      z.string().min(1, 'Expiry required'),
+    expiryDate:      z.string().min(1, 'Expiry required').refine((val) => {
+        const norm = normalizeExpiry(val);
+        return /^\d{4}-\d{2}-\d{2}$/.test(norm);
+    }, 'Invalid expiry format (use MM/YY or MM/YYYY)'),
     pkg:             safeNumber(1, 1),
     qty:             safePositiveNumber('Qty must be > 0'),
     freeQty:         safeNumber(0, 0),
@@ -111,35 +116,6 @@ const fmt = (n: number) =>
 const isNearExpiry = (exp: string) => {
     const norm = normalizeExpiry(exp);
     return norm ? differenceInDays(new Date(norm), new Date()) < 90 : false;
-};
-
-export const normalizeExpiry = (exp?: string): string => {
-    if (!exp) return '';
-    const raw = exp.trim();
-    // MM/YY e.g. 12/26 or 12-26
-    const mShort = raw.match(/^(\d{1,2})[/\-](\d{2})$/);
-    if (mShort) {
-        const m = parseInt(mShort[1], 10);
-        const y = parseInt(mShort[2], 10) + 2000;
-        if (m >= 1 && m <= 12) {
-            return `${y}-${String(m).padStart(2, '0')}-01`;
-        }
-    }
-    // MM/YYYY e.g. 12/2026 or 12-2026
-    const mLong = raw.match(/^(\d{1,2})[/\-](\d{4})$/);
-    if (mLong) {
-        const m = parseInt(mLong[1], 10);
-        const y = parseInt(mLong[2], 10);
-        if (m >= 1 && m <= 12) {
-            return `${y}-${String(m).padStart(2, '0')}-01`;
-        }
-    }
-    // YYYY-MM
-    const mIso = raw.match(/^(\d{4})-(\d{1,2})$/);
-    if (mIso) {
-        return `${mIso[1]}-${mIso[2].padStart(2, '0')}-01`;
-    }
-    return raw;
 };
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -583,10 +559,57 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
     }, 0);
     const nearExpiryCount  = items.filter((it) => it.expiryDate && isNearExpiry(it.expiryDate)).length;
 
+    // ── Validation Error & Cleanup Handlers ────────────────────────────────────
+
+    const onInvalid = (errors: any) => {
+        console.error("FORM VALIDATION ERRORS:", errors);
+        let errMsg = "Please check required fields in the form";
+        if (errors.partyLedgerId) {
+            errMsg = errors.partyLedgerId.message || "Select a party ledger";
+        } else if (errors.invoiceNo) {
+            errMsg = errors.invoiceNo.message || "Invoice No is required";
+        } else if (errors.items && Array.isArray(errors.items) && errors.items.length > 0) {
+            const firstErrIdx = errors.items.findIndex((row: any) => row && Object.keys(row).length > 0);
+            if (firstErrIdx >= 0) {
+                const rowErrors = errors.items[firstErrIdx];
+                const failingKeys = Object.keys(rowErrors);
+                const firstMsg = rowErrors[failingKeys[0]]?.message || failingKeys.join(", ");
+                errMsg = `Item Row ${firstErrIdx + 1}: ${firstMsg}`;
+            }
+        } else if ((errors.items as any)?.message) {
+            errMsg = (errors.items as any).message;
+        }
+        toast({
+            variant: 'destructive',
+            title: 'Form Validation Error',
+            description: errMsg
+        });
+    };
+
+    const cleanItemsBeforeSubmit = () => {
+        const validItems = items.filter(it => (it.productId && it.productId.trim() !== '') || (it.productName && it.productName.trim() !== ''));
+        if (validItems.length === 0) {
+            toast({
+                variant: 'destructive',
+                title: 'Validation Error',
+                description: 'Please add at least one product to the purchase invoice.'
+            });
+            return null;
+        }
+        if (validItems.length !== items.length) {
+            setItems(validItems);
+            setValue('items', validItems);
+        }
+        return validItems;
+    };
+
     // ── Submit ───────────────────────────────────────────────────────────────
 
     const onSubmit = async (data: FormData) => {
         try {
+            const validItems = cleanItemsBeforeSubmit();
+            if (!validItems) return;
+
             if (invoiceToEdit && invoiceToEdit.status !== 'SAVED') {
                 if (!revisionReasonCode) {
                     toast({ variant: 'destructive', title: 'Revision reason code is required.' });
@@ -600,7 +623,7 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
 
             const payload = buildPurchasePayload(
                 data,
-                items,
+                validItems,
                 outletId!,
                 goodsValue,
                 totalTradeDisc,
@@ -627,36 +650,40 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
                 if (draftKey) localStorage.removeItem(draftKey);
                 toast({
                     title:       'Purchase saved ✓',
-                    description: `Invoice ${data.invoiceNo} — ${items.length} item${items.length !== 1 ? 's' : ''}, ${totalUnits} units added to stock.`,
+                    description: `Invoice ${data.invoiceNo} — ${validItems.length} item${validItems.length !== 1 ? 's' : ''}, ${totalUnits} units added to stock.`,
                 });
             } else {
                 await createPurchase.mutateAsync(payload);
                 if (draftKey) localStorage.removeItem(draftKey);
                 toast({
                     title:       'Purchase saved ✓',
-                    description: `Invoice ${data.invoiceNo} — ${items.length} item${items.length !== 1 ? 's' : ''}, ${totalUnits} units added to stock.`,
+                    description: `Invoice ${data.invoiceNo} — ${validItems.length} item${validItems.length !== 1 ? 's' : ''}, ${totalUnits} units added to stock.`,
                 });
             }
 
             onSuccess(invoiceToEdit?.id);
         } catch (err: any) {
+            console.error("PURCHASE SUBMISSION ERROR:", err);
             const code = err?.error?.code;
             if (code === 'DUPLICATE_INVOICE') {
                 setError('invoiceNo', { message: err.error.message });
             } else if (code === 'EMPTY_ITEMS') {
                 toast({ variant: 'destructive', title: 'Add at least one item' });
             } else {
-                toast({ variant: 'destructive', title: err?.error?.message ?? 'Failed to save purchase' });
+                const msg = err?.error?.message ?? err?.message ?? err?.detail ?? 'Failed to save purchase';
+                toast({ variant: 'destructive', title: 'Submission Failed', description: msg });
             }
         }
     };
 
     useMagicSubmit(null, () => {
         if (!drawerOpen && !scannedImageModalOpen) {
+            const valid = cleanItemsBeforeSubmit();
+            if (!valid) return;
             if (formRef.current?.requestSubmit) {
                 formRef.current.requestSubmit();
             } else {
-                handleSubmit(onSubmit)();
+                handleSubmit(onSubmit, onInvalid)();
             }
         }
     });
@@ -671,7 +698,9 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
                 if (e.key === 'Enter') {
                     if (e.ctrlKey || e.metaKey) {
                         e.preventDefault();
-                        handleSubmit(onSubmit)();
+                        const valid = cleanItemsBeforeSubmit();
+                        if (!valid) return;
+                        handleSubmit(onSubmit, onInvalid)();
                         return;
                     }
                     const target = e.target as HTMLElement;
@@ -681,26 +710,7 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
                     }
                 }
             }}
-            onSubmit={handleSubmit(onSubmit, (errors) => {
-                console.error("FORM VALIDATION ERRORS:", errors);
-                let errMsg = "Please check required fields in the form";
-                if (errors.partyLedgerId) {
-                    errMsg = errors.partyLedgerId.message || "Select a party ledger";
-                } else if (errors.invoiceNo) {
-                    errMsg = errors.invoiceNo.message || "Invoice No is required";
-                } else if (errors.items && Array.isArray(errors.items) && errors.items.length > 0) {
-                    const firstRowErrors = errors.items[0] || {};
-                    const failingKeys = Object.keys(firstRowErrors);
-                    errMsg = `Item Row 1: Please check ${failingKeys.join(", ")}`;
-                } else if ((errors.items as any)?.message) {
-                    errMsg = (errors.items as any).message;
-                }
-                toast({
-                    variant: 'destructive',
-                    title: 'Form Validation Error',
-                    description: errMsg
-                });
-            })} className="flex flex-col gap-5 relative">
+            onSubmit={handleSubmit(onSubmit, onInvalid)} className="flex flex-col gap-5 relative">
 
             {ocrStatus === 'processing' && (
                 <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm rounded-xl">
@@ -1241,8 +1251,15 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
                     </div>
                     
                     <Button
-                        type="button"
-                        onClick={() => handleSubmit(onSubmit)()}
+                        type="submit"
+                        onClick={(e) => {
+                            const valid = cleanItemsBeforeSubmit();
+                            if (!valid) {
+                                e.preventDefault();
+                                return;
+                            }
+                            handleSubmit(onSubmit, onInvalid)();
+                        }}
                         disabled={isSubmitting}
                         className="h-14 md:h-auto min-h-full w-full md:w-32 flex flex-col gap-1 justify-center rounded-lg shadow-sm"
                         title="Shortcut: Ctrl + Enter"

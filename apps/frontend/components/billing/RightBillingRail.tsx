@@ -20,6 +20,8 @@ import {
 export function RightBillingRail() {
     const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
     const { drafts, activeDraftId, getDraftTotals, setDraftDocumentMode, setRevisionContext, showMarginInfo, toggleMarginInfo, activeStaff } = useBillingStore();
+    const isCashier = activeStaff?.role === 'cashier';
+    const canViewMargins = !isCashier && showMarginInfo;
     const { outlet } = useAuthStore();
     const containerRef = useRef<HTMLDivElement>(null);
     
@@ -255,7 +257,7 @@ export function RightBillingRail() {
                     </div>
 
                     {/* Accurate Landing Cost & Profit Breakdown */}
-                    {marginData && cart.length > 0 && showMarginInfo && (
+                    {marginData && cart.length > 0 && canViewMargins && (
                         <div className="pt-3 border-t border-dashed border-slate-200 space-y-2 text-xs">
                             <div className="flex justify-between text-slate-600">
                                 <span className="flex items-center gap-1.5 font-medium">
@@ -300,7 +302,7 @@ export function RightBillingRail() {
                     <span className="font-black text-3xl sm:text-4xl lg:text-5xl tracking-tight text-white" data-testid="grand-total-amount">₹ {totals.grandTotal.toFixed(2)}</span>
                 </div>
                 
-                {(showMarginInfo && marginData && cart.length > 0) && (
+                {(canViewMargins && marginData && cart.length > 0) && (
                     <div className="hidden lg:flex flex-col mb-4 bg-slate-800/90 p-3 rounded-lg border border-slate-700/80 shadow-sm">
                         <div className="flex justify-between items-center text-xs pb-2 border-b border-slate-700/70">
                             <span className="text-slate-300 font-medium flex items-center gap-1.5">
@@ -617,19 +619,21 @@ export function RightBillingRail() {
                                 <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">
                                     {totals.itemCount} items
                                 </span>
-                                <button
-                                    type="button"
-                                    onClick={toggleMarginInfo}
-                                    title={showMarginInfo ? "Hide Profit" : "Show Profit"}
-                                    aria-label={showMarginInfo ? "Hide Profit" : "Show Profit"}
-                                    className="p-1.5 rounded-md text-slate-400 hover:text-slate-600 bg-transparent transition-colors cursor-pointer"
-                                >
-                                    {showMarginInfo ? (
-                                        <Eye className="w-4 h-4 text-slate-500" />
-                                    ) : (
-                                        <EyeOff className="w-4 h-4" />
-                                    )}
-                                </button>
+                                {!isCashier && (
+                                    <button
+                                        type="button"
+                                        onClick={toggleMarginInfo}
+                                        title={showMarginInfo ? "Hide Profit" : "Show Profit"}
+                                        aria-label={showMarginInfo ? "Hide Profit" : "Show Profit"}
+                                        className="p-1.5 rounded-md text-slate-400 hover:text-slate-600 bg-transparent transition-colors cursor-pointer"
+                                    >
+                                        {showMarginInfo ? (
+                                            <Eye className="w-4 h-4 text-slate-500" />
+                                        ) : (
+                                            <EyeOff className="w-4 h-4" />
+                                        )}
+                                    </button>
+                                )}
                             </div>
                         </DialogTitle>
                     </DialogHeader>
@@ -737,7 +741,7 @@ export function RightBillingRail() {
                             </span>
                         </div>
 
-                        {marginData && cart.length > 0 && showMarginInfo && (
+                        {marginData && cart.length > 0 && canViewMargins && (
                             <div className="pt-3 border-t border-dashed border-slate-200 space-y-2 text-xs">
                                 <div className="flex justify-between text-slate-600">
                                     <span className="flex items-center gap-1.5 font-medium">

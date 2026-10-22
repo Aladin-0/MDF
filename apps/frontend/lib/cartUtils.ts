@@ -66,16 +66,21 @@ export function calculateRowTotals(
         gstAmount = sellAmount - taxableAmount;
     }
     
-    // Cost rate per pack: use landingRate if available, otherwise purchaseRate
-    const costRate = Number(currentBatch.landingRate ?? currentBatch.purchaseRate ?? 0);
+    // Cost rate per pack: use ptr (or pts in wholesale) if available, otherwise landingRate or purchaseRate
+    const rawCost = saleType === 'WHOLESALE'
+        ? (currentBatch.pts ?? currentBatch.ptr ?? currentBatch.landingRate ?? currentBatch.purchaseRate ?? 0)
+        : (currentBatch.ptr ?? currentBatch.landingRate ?? currentBatch.purchaseRate ?? 0);
+    const costRate = Number(rawCost);
     const totalCost = costRate * tQtyFractional;
     
-    // Calculate margin on pre-tax amount for accuracy, though maintaining backward compat structure
-    const marginAmount = taxableAmount - totalCost;
-    const marginPct = taxableAmount > 0 ? (marginAmount / taxableAmount) * 100 : 0;
+    // Net unit selling price using unified formula: (Final Row Amount / Quantity)
+    const netUnitSellingPrice = tQtyFractional > 0 ? (sellAmount / tQtyFractional) : 0;
+    const isNegativeMargin = costRate > 0 && tQtyFractional > 0 && (netUnitSellingPrice < (costRate - 0.005));
+    
+    const marginAmount = sellAmount - totalCost;
+    const marginPct = sellAmount > 0 ? (marginAmount / sellAmount) * 100 : 0;
 
-    const isLowMargin = marginPct < 10 && marginPct >= 0;
-    const isNegativeMargin = marginPct < 0;
+    const isLowMargin = marginPct < 10 && marginPct >= 0 && !isNegativeMargin;
     const exceedsStock = tQtyLoose > (currentBatch.qtyStrips * currentBatch.packSize + currentBatch.qtyLoose);
     const isDiscountInvalid = discountType === 'percentage' 
         ? (dVal < 0 || dVal > 100) 
