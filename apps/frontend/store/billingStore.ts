@@ -74,6 +74,7 @@ interface BillingState {
     // Global UI Actions
     setActiveStaff: (staff: StaffPinVerifyResponse) => void;
     clearPin: () => void;
+    setIsPinVerified: (verified: boolean) => void;
     setSearchQuery: (q: string) => void;
     toggleCart: () => void;
     setCustomerSelectorOpen: (open: boolean) => void;
@@ -686,6 +687,7 @@ export const useBillingStore = create<BillingState>()(
 
     setActiveStaff: (staff) => set({ activeStaff: staff, isPinVerified: true }),
     clearPin: () => set({ activeStaff: null, isPinVerified: false }),
+    setIsPinVerified: (verified) => set({ isPinVerified: verified }),
 
     setSearchQuery: (q) => set({ searchQuery: q }),
     toggleCart: () => set((state) => ({ isCartOpen: !state.isCartOpen })),

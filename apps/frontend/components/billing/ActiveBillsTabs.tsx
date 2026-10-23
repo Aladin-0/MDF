@@ -1,13 +1,13 @@
 'use client';
 
 import { useBillingStore } from '@/store/billingStore';
-import { Plus, X, Calendar, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
+import { Plus, X, Calendar, CheckCircle2, AlertCircle, RefreshCw, Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useEffect } from 'react';
 import { format } from 'date-fns';
 
 export function ActiveBillsTabs() {
-    const { drafts, activeDraftId, switchDraft, closeDraft, createDraft, activeStaff, updateDraftHeader } = useBillingStore();
+    const { drafts, activeDraftId, switchDraft, closeDraft, createDraft, activeStaff, updateDraftHeader, setIsPinVerified } = useBillingStore();
     const draftList = Object.values(drafts).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
     const activeDraft = activeDraftId ? drafts[activeDraftId] : null;
 
@@ -117,15 +117,22 @@ export function ActiveBillsTabs() {
                     </div>
                 )}
 
-                {/* Staff User ID Badge (Hidden on everything except large desktops) */}
-                <div className="hidden xl:flex items-center gap-1.5 bg-indigo-50 border border-indigo-200/80 px-2 py-1 rounded-md shadow-xs select-none">
+                {/* Touch-Friendly Cashier Quick Switch Button */}
+                <button
+                    type="button"
+                    onClick={() => setIsPinVerified(false)}
+                    aria-label="Switch Cashier (Lock Terminal)"
+                    title="Switch Cashier (Lock Terminal)"
+                    className="flex items-center gap-1.5 bg-indigo-50 border border-indigo-200/80 hover:bg-indigo-100 hover:border-indigo-300 active:scale-95 px-2 py-1 rounded-md shadow-xs transition-all cursor-pointer select-none text-left group"
+                >
                     <span className="w-4 h-4 bg-indigo-600 text-white rounded-full flex items-center justify-center font-bold text-[9px] shrink-0">
                         {activeStaff?.name?.substring(0, 1).toUpperCase() || 'U'}
                     </span>
-                    <span className="text-indigo-950 font-bold text-xs uppercase max-w-[130px] truncate">
+                    <span className="text-indigo-950 font-bold text-xs uppercase max-w-[80px] sm:max-w-[120px] truncate">
                         {activeStaff?.name || 'Staff'}
                     </span>
-                </div>
+                    <Lock className="w-3 h-3 text-indigo-400 group-hover:text-indigo-600 transition-colors shrink-0" />
+                </button>
 
                 {/* Date & Time Picker */}
                 <div className="flex items-center gap-1 text-xs font-semibold text-slate-700 bg-white border border-slate-200 px-2 py-1.5 rounded-md shadow-xs shrink-0 cursor-pointer hover:bg-slate-50 transition-colors">
