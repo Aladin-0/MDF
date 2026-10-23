@@ -117,7 +117,7 @@ describe('Loss-Sale Prevention & Margin Lock', () => {
             expect(line.margin).toBe(10);
         });
 
-        it('identifies loss sale when bill extra discount drops item rate below PTR', () => {
+        it('smart-caps bill extra discount at cost floor for legally priced items', () => {
             const item: CartItem = {
                 batchId: 'b-3',
                 productId: 'p-3',
@@ -145,10 +145,41 @@ describe('Loss-Sale Prevention & Margin Lock', () => {
             const lineNoExtra = calculateLineMargin(item, 0);
             expect(lineNoExtra.isLossSale).toBe(false);
 
-            // With 20% bill extra discount: 90 * 0.8 = 72 < PTR 80 -> loss sale!
+            // With 20% bill extra discount: 90 * 0.8 = 72, which is below PTR 80.
+            // Smart Capping intercepts and caps it at 80 (cost floor), preventing a false loss sale!
             const lineWithExtra = calculateLineMargin(item, 20);
-            expect(lineWithExtra.isLossSale).toBe(true);
-            expect(lineWithExtra.finalRowAmount).toBe(72);
+            expect(lineWithExtra.isLossSale).toBe(false);
+            expect(lineWithExtra.finalRowAmount).toBe(80);
+            expect(lineWithExtra.sellingPricePerPack).toBe(80);
+        });
+
+        it('does NOT smart-cap an item that was already priced below cost floor before extra discount', () => {
+            const illegalItem: CartItem = {
+                batchId: 'b-illegal',
+                productId: 'p-illegal',
+                name: 'Under-cost Item',
+                packSize: 1,
+                packUnit: 'strip',
+                batchNo: 'B004',
+                expiryDate: '2026-12-31',
+                scheduleType: 'OTC',
+                mrp: 100,
+                ptr: 80,
+                rate: 70, // already below PTR 80
+                qtyStrips: 1,
+                qtyLoose: 0,
+                totalQty: 1,
+                saleMode: 'strip',
+                discountPct: 0,
+                gstRate: 0,
+                taxableAmount: 70,
+                gstAmount: 0,
+                totalAmount: 70,
+            };
+
+            const line = calculateLineMargin(illegalItem, 10);
+            expect(line.isLossSale).toBe(true);
+            expect(line.finalRowAmount).toBe(63); // 70 * 0.9 = 63, not capped
         });
 
         it('detects isGlobalLoss when grandTotal is less than total landing cost', () => {

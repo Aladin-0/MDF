@@ -378,7 +378,19 @@ def atomic_sale_save(
                         c_floor = batch.purchase_rate or Decimal('0')
                     floor_label = "landing cost"
 
-                if c_floor > Decimal('0') and pricing_result['net_rate'] < (c_floor - Decimal('0.005')):
+                disc_factor = Decimal('1') - (sale_invoice.extra_discount_pct / Decimal('100')) if (sale_invoice.extra_discount_pct and sale_invoice.extra_discount_pct > Decimal('0')) else Decimal('1')
+                eff_qty = Decimal(str(alloc_billed)) + (Decimal(str(loose_to_deduct)) / Decimal(str(batch.pack_size or 1)))
+                line_cost_floor = c_floor * eff_qty
+                item_amt = pricing_result['line_total']
+                final_row_amt = item_amt * disc_factor
+
+                # Smart Cap: If item was legal before bill discount, cap the final row amount to the floor
+                if item_amt >= line_cost_floor and final_row_amt < line_cost_floor:
+                    final_row_amt = line_cost_floor
+
+                net_unit_price = (final_row_amt / eff_qty) if eff_qty > Decimal('0') else pricing_result['net_rate']
+
+                if c_floor > Decimal('0') and net_unit_price < (c_floor - Decimal('0.005')):
                     transaction.set_rollback(True)
                     prod_name = product.name if product else batch.batch_no
                     raise ValidationError(f"Loss Sale Prevented: Cannot sell {prod_name} below its {floor_label} of ₹{c_floor:.2f}.")

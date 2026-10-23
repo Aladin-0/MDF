@@ -90,7 +90,12 @@ export function calculateLineMargin(
 
     // Apply extra discount % (bill-level) proportionally
     const discountFactor = extraDiscountPct > 0 ? (1 - extraDiscountPct / 100) : 1;
-    const finalRowAmount = Math.round(baseSellingAmount * discountFactor * 100) / 100;
+    let finalRowAmount = Math.round(baseSellingAmount * discountFactor * 100) / 100;
+
+    // Smart Cap: If base amount is legal, do not let bill discount push it below cost floor
+    if (baseSellingAmount >= lineLandingCost && finalRowAmount < lineLandingCost) {
+        finalRowAmount = lineLandingCost;
+    }
 
     // Unified formula: (Final Row Amount / Quantity)
     const sellingPricePerPack = effectivePackQty > 0 ? (finalRowAmount / effectivePackQty) : Number(item.rate || item.saleRate || 0);

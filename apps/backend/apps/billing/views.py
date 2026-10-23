@@ -682,7 +682,13 @@ class SaleCreateView(APIView):
                             disc_pct = Decimal(str(item_data.get('discountPct', 0)))
                             item_total = (rate_val * effective_qty) * (Decimal('1') - disc_pct / Decimal('100'))
 
+                        line_cost_floor = cost_floor * effective_qty
                         final_item_amount = item_total * discount_factor
+
+                        # Smart Cap: If item was legal before bill discount, cap the final row amount to the floor
+                        if item_total >= line_cost_floor and final_item_amount < line_cost_floor:
+                            final_item_amount = line_cost_floor
+
                         net_rate_per_pack = final_item_amount / effective_qty
 
                         if net_rate_per_pack < (cost_floor - Decimal('0.005')):
@@ -1007,7 +1013,13 @@ class SaleCreateView(APIView):
                                     d_pct = Decimal(str(item_data.get('discountPct', 0)))
                                     item_amt = (p_rate * eff_qty) * (Decimal('1') - d_pct / Decimal('100'))
 
+                                line_cost_floor = c_floor * eff_qty
                                 final_row_amt = item_amt * disc_factor
+
+                                # Smart Cap: If item was legal before bill discount, cap the final row amount to the floor
+                                if item_amt >= line_cost_floor and final_row_amt < line_cost_floor:
+                                    final_row_amt = line_cost_floor
+
                                 net_unit_price = final_row_amt / eff_qty
 
                                 if c_floor > Decimal('0') and net_unit_price < (c_floor - Decimal('0.005')):

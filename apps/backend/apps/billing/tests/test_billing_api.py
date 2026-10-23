@@ -84,26 +84,32 @@ def test_sale_create_prevents_loss_sale_below_ptr(authenticated_client):
     assert 'below its landing cost of ₹80.00' in response.data['detail']
 
 @pytest.mark.django_db
-def test_sale_create_prevents_loss_sale_via_bill_discount(authenticated_client):
+def test_sale_create_smart_caps_discount_at_cost_floor(authenticated_client):
     from apps.accounts.models import Staff
+    from apps.accounts.services import LedgerService
+    from apps.inventory.services import post_stock_ledger_entry
+    import datetime
     user = Staff.objects.first()
     outlet = user.outlet
     call_command('seed_ledgers', outlet_id=str(outlet.id))
     customer = CustomerFactory(outlet=outlet)
+    LedgerService.sync_customer_ledgers(outlet)
     product = MasterProductFactory(name='Amoxicillin 250mg')
     # Batch has MRP 100, PTR 80
     batch = BatchFactory(outlet=outlet, product=product, pack_size=10, qty_strips=10, qty_loose=0, mrp=Decimal('100.00'), ptr=Decimal('80.00'), purchase_rate=Decimal('80.00'))
+    post_stock_ledger_entry(outlet=outlet, product=product, batch=batch, txn_type='PURCHASE_IN', txn_date=datetime.date(2025, 1, 1), voucher_type='Purchase Invoice', voucher_number='PINV-SC-001', party_name='Supplier', qty_in=10, qty_out=0, rate=80.0)
     
     url = reverse('sale-list-create')
-    # Item rate is 90, but extraDiscountPct is 20%, bringing net selling rate to 90 * 0.8 = 72 (below PTR 80)
+    # Item rate is 90 (above PTR 80). With extraDiscountPct 20%, 90 * 0.8 = 72 (< 80).
+    # Smart Cap caps final row amount at 80.00, allowing sale to succeed!
     payload = {
         'outletId': str(outlet.id),
         'customerId': str(customer.id),
-        'grandTotal': '72.00',
+        'grandTotal': '80.00',
         'subtotal': '90.00',
         'discountAmount': '10.00',
         'extraDiscountPct': 20.0,
-        'cashPaid': '72.00',
+        'cashPaid': '80.00',
         'paymentMode': 'cash',
         'invoiceDate': '2026-08-01',
         'items': [{
@@ -116,6 +122,45 @@ def test_sale_create_prevents_loss_sale_via_bill_discount(authenticated_client):
             'taxableAmount': '90.00',
             'gstAmount': '0',
             'totalAmount': '90.00',
+        }]
+    }
+    response = authenticated_client.post(url, payload, format='json')
+    assert response.status_code == status.HTTP_201_CREATED, response.data
+
+@pytest.mark.django_db
+def test_sale_create_prevents_loss_sale_when_base_item_under_cost(authenticated_client):
+    from apps.accounts.models import Staff
+    user = Staff.objects.first()
+    outlet = user.outlet
+    call_command('seed_ledgers', outlet_id=str(outlet.id))
+    customer = CustomerFactory(outlet=outlet)
+    product = MasterProductFactory(name='Under Cost Drug')
+    # Batch has MRP 100, PTR 80
+    batch = BatchFactory(outlet=outlet, product=product, pack_size=10, qty_strips=10, qty_loose=0, mrp=Decimal('100.00'), ptr=Decimal('80.00'), purchase_rate=Decimal('80.00'))
+    
+    url = reverse('sale-list-create')
+    # Item rate is 70 (already below PTR 80 before extra discount).
+    # Smart Cap should NOT apply because base amount < cost floor.
+    payload = {
+        'outletId': str(outlet.id),
+        'customerId': str(customer.id),
+        'grandTotal': '63.00',
+        'subtotal': '70.00',
+        'discountAmount': '30.00',
+        'extraDiscountPct': 10.0,
+        'cashPaid': '63.00',
+        'paymentMode': 'cash',
+        'invoiceDate': '2026-08-01',
+        'items': [{
+            'productId': str(product.id),
+            'batchId': str(batch.id),
+            'qtyStrips': 1,
+            'qtyLoose': 0,
+            'rate': '70.00',
+            'gstRate': '0',
+            'taxableAmount': '70.00',
+            'gstAmount': '0',
+            'totalAmount': '70.00',
         }]
     }
     response = authenticated_client.post(url, payload, format='json')
