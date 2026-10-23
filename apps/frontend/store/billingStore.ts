@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
+import { calculateRowTotals } from '../lib/cartUtils';
 import {
     CartItem,
     StaffPinVerifyResponse,
@@ -244,14 +245,37 @@ export const useBillingStore = create<BillingState>()(
     setSaleType: (id, type) => set((state) => {
         const draft = state.drafts[id];
         if (!draft) return state;
-        
+
+        const updatedCart = (draft.cart || []).map((item) => {
+            // 1. Swap the base rate
+            let newRate = item.rate;
+            if (type === 'WHOLESALE') {
+                newRate = (item.pts && item.pts > 0) ? item.pts : (item.ptr || item.mrp || 0);
+            } else {
+                newRate = item.mrp || 0;
+            }
+
+            // 2. Recalculate row math with the new rate
+            const updatedItem: CartItem = { ...item, rate: newRate, saleRate: newRate };
+            const rowMath = calculateRowTotals(updatedItem, draft.extraDiscountPct || 0, type);
+
+            return {
+                ...updatedItem,
+                ...rowMath,
+                totalAmount: rowMath.totalAmount ?? rowMath.sellAmount,
+                rate: rowMath.rate ?? newRate,
+            };
+        });
+
         return {
             drafts: {
                 ...state.drafts,
                 [id]: {
                     ...draft,
                     saleType: type,
-                    billingBasis: type === 'WHOLESALE' ? 'PTR' : draft.billingBasis,
+                    billingBasis: type === 'WHOLESALE' ? 'PTR' : (draft.billingBasis === 'PTR' ? 'MRP' : draft.billingBasis),
+                    cart: updatedCart,
+                    updatedAt: new Date().toISOString()
                 }
             }
         };

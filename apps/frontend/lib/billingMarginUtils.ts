@@ -29,7 +29,11 @@ export interface TotalMarginInfo {
  * properly accounting for fractional/loose packs, line-level discounts,
  * and optional bill-level extra discount %.
  */
-export function calculateLineMargin(item: CartItem, extraDiscountPct: number = 0): LineMarginInfo {
+export function calculateLineMargin(
+    item: CartItem, 
+    extraDiscountPct: number = 0,
+    saleType: 'RETAIL' | 'WHOLESALE' = 'RETAIL'
+): LineMarginInfo {
     const packSize = (Number(item.packSize) && Number(item.packSize) > 0) ? Number(item.packSize) : 1;
     
     // Effective pack quantity: prefer explicit strips + loose / packSize if either is non-zero,
@@ -41,23 +45,34 @@ export function calculateLineMargin(item: CartItem, extraDiscountPct: number = 0
             ? Number(item.totalQty)
             : (Number(item.qtyStrips || 0) + (Number(item.qtyLoose || 0) / packSize)));
 
-    // Cost floor: Force type coercion. Prefer item.ptr if > 0, otherwise pts / landingRate / purchaseRate
+    // Cost floor: Force type coercion.
+    // If saleType === 'WHOLESALE', prioritize rawPurchase (fallback to rawPts > rawLanding > rawPtr).
+    // If saleType === 'RETAIL', prioritize rawLanding (fallback to rawPtr > rawPurchase).
+    const rawLanding = Number(item.landingRate ?? (item as any).landing_rate);
     const rawPtr = Number(item.ptr);
     const rawPts = Number(item.pts);
-    const rawLanding = Number(item.landingRate);
-    const rawPurchase = Number(item.purchaseRate);
+    const rawPurchase = Number(item.purchaseRate ?? (item as any).purchase_rate);
 
-    const costFloor = (!isNaN(rawPtr) && rawPtr > 0)
-        ? rawPtr
-        : ((!isNaN(rawPts) && rawPts > 0)
-            ? rawPts
-            : ((!isNaN(rawLanding) && rawLanding > 0)
-                ? rawLanding
-                : ((!isNaN(rawPurchase) && rawPurchase > 0) ? rawPurchase : 0)));
+    let costFloor = 0;
+    if (saleType === 'WHOLESALE') {
+        costFloor = (!isNaN(rawPurchase) && rawPurchase > 0)
+            ? rawPurchase
+            : ((!isNaN(rawPts) && rawPts > 0)
+                ? rawPts
+                : ((!isNaN(rawLanding) && rawLanding > 0)
+                    ? rawLanding
+                    : ((!isNaN(rawPtr) && rawPtr > 0) ? rawPtr : 0)));
+    } else {
+        costFloor = (!isNaN(rawLanding) && rawLanding > 0)
+            ? rawLanding
+            : ((!isNaN(rawPtr) && rawPtr > 0)
+                ? rawPtr
+                : ((!isNaN(rawPurchase) && rawPurchase > 0) ? rawPurchase : 0));
+    }
 
     const landingRate = (!isNaN(rawLanding) && rawLanding > 0)
         ? rawLanding
-        : ((!isNaN(rawPurchase) && rawPurchase > 0) ? rawPurchase : costFloor);
+        : costFloor;
 
     const lineLandingCost = Math.round(costFloor * effectivePackQty * 100) / 100;
 
@@ -109,7 +124,8 @@ export function calculateTotalMargin(
     cart: CartItem[],
     billRevenue?: number,
     billDiscountAmount: number = 0,
-    extraDiscountPct: number = 0
+    extraDiscountPct: number = 0,
+    saleType: 'RETAIL' | 'WHOLESALE' = 'RETAIL'
 ): TotalMarginInfo {
     if (!cart || cart.length === 0) {
         return {
@@ -131,7 +147,7 @@ export function calculateTotalMargin(
     let hasLossSale = false;
 
     for (const item of cart) {
-        const line = calculateLineMargin(item, extraDiscountPct);
+        const line = calculateLineMargin(item, extraDiscountPct, saleType);
         totalLandingCost += line.lineLandingCost;
         itemsSellingTotal += line.finalRowAmount;
         itemsGrossProfit += line.lineGrossProfit;

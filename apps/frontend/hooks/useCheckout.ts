@@ -64,8 +64,9 @@ export function useCheckout() {
 
     // Loss-Sale Prevention: Check line-item margins and overall bill margin
     const extraDiscPct = draft?.extraDiscountPct || 0;
-    const marginData = draft ? calculateTotalMargin(draft.cart, totals?.grandTotal, totals?.extraDiscountAmount, extraDiscPct) : null;
-    const hasLossItem = draft ? draft.cart.some(item => calculateLineMargin(item, extraDiscPct).isLossSale) : false;
+    const saleType = draft?.saleType || 'RETAIL';
+    const marginData = draft ? calculateTotalMargin(draft.cart, totals?.grandTotal, totals?.extraDiscountAmount, extraDiscPct, saleType) : null;
+    const hasLossItem = draft ? draft.cart.some(item => calculateLineMargin(item, extraDiscPct, saleType).isLossSale) : false;
     const isGlobalLoss = Boolean(marginData?.isGlobalLoss || hasLossItem);
     const isLossSale = Boolean(hasLossItem || marginData?.hasLossSale);
 

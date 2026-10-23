@@ -1,4 +1,4 @@
-import { Batch } from '@/types';
+import { Batch, CartItem } from '@/types';
 import { bankersRound } from '@/utils/mathUtils';
 
 export interface RowTotals {
@@ -6,6 +6,7 @@ export interface RowTotals {
     tQtyLoose: number;
     rate: number;
     sellAmount: number;
+    totalAmount: number;
     dPct: number;
     dAmount: number;
     totalCost: number;
@@ -22,6 +23,12 @@ export interface RowTotals {
 }
 
 export function calculateRowTotals(
+    item: CartItem,
+    extraDiscountPct?: number,
+    saleType?: 'RETAIL' | 'WHOLESALE'
+): RowTotals;
+
+export function calculateRowTotals(
     currentBatch: Batch,
     qtyStripsRaw: string,
     qtyLooseRaw: string,
@@ -29,8 +36,50 @@ export function calculateRowTotals(
     discountValueRaw: string,
     gstRate: number,
     historicalBaseRate?: number,
-    saleType: 'RETAIL' | 'WHOLESALE' = 'RETAIL'
+    saleType?: 'RETAIL' | 'WHOLESALE'
+): RowTotals;
+
+export function calculateRowTotals(
+    batchOrItem: Batch | CartItem,
+    qtyStripsRawOrExtraDisc?: string | number,
+    qtyLooseRawOrSaleType?: string | 'RETAIL' | 'WHOLESALE',
+    discountTypeParam?: 'percentage' | 'amount',
+    discountValueRawParam?: string,
+    gstRateParam?: number,
+    historicalBaseRateParam?: number,
+    saleTypeParam: 'RETAIL' | 'WHOLESALE' = 'RETAIL'
 ): RowTotals {
+    let currentBatch: Batch;
+    let qtyStripsRaw: string;
+    let qtyLooseRaw: string;
+    let discountType: 'percentage' | 'amount';
+    let discountValueRaw: string;
+    let gstRate: number;
+    let historicalBaseRate: number | undefined;
+    let saleType: 'RETAIL' | 'WHOLESALE';
+
+    if (typeof qtyStripsRawOrExtraDisc !== 'string') {
+        const item = batchOrItem as CartItem;
+        currentBatch = item as unknown as Batch;
+        qtyStripsRaw = String(item.qtyStrips ?? 0);
+        qtyLooseRaw = String(item.qtyLoose ?? 0);
+        discountType = item.discountType || 'percentage';
+        discountValueRaw = discountType === 'amount'
+            ? String(item.discountAmount ?? 0)
+            : String(item.discountPct ?? 0);
+        gstRate = item.gstRate ?? item.gstPct ?? 0;
+        historicalBaseRate = item.rate;
+        saleType = (qtyLooseRawOrSaleType as 'RETAIL' | 'WHOLESALE') || 'RETAIL';
+    } else {
+        currentBatch = batchOrItem as Batch;
+        qtyStripsRaw = qtyStripsRawOrExtraDisc;
+        qtyLooseRaw = (qtyLooseRawOrSaleType as string) || '0';
+        discountType = discountTypeParam || 'percentage';
+        discountValueRaw = discountValueRawParam || '0';
+        gstRate = gstRateParam ?? 0;
+        historicalBaseRate = historicalBaseRateParam;
+        saleType = saleTypeParam;
+    }
     const s = parseInt(qtyStripsRaw) || 0;
     const l = parseInt(qtyLooseRaw) || 0;
     const dVal = parseFloat(discountValueRaw) || 0;
@@ -66,11 +115,28 @@ export function calculateRowTotals(
         gstAmount = sellAmount - taxableAmount;
     }
     
-    // Cost rate per pack: use ptr (or pts in wholesale) if available, otherwise landingRate or purchaseRate
-    const rawCost = saleType === 'WHOLESALE'
-        ? (currentBatch.pts ?? currentBatch.ptr ?? currentBatch.landingRate ?? currentBatch.purchaseRate ?? 0)
-        : (currentBatch.ptr ?? currentBatch.landingRate ?? currentBatch.purchaseRate ?? 0);
-    const costRate = Number(rawCost);
+    // Cost rate per pack: strictly branch based on Retail vs Wholesale prioritization
+    const rawLanding = Number(currentBatch.landingRate ?? (currentBatch as any).landing_rate);
+    const rawPtr = Number(currentBatch.ptr ?? (currentBatch as any).ptr);
+    const rawPts = Number(currentBatch.pts ?? (currentBatch as any).pts);
+    const rawPurchase = Number(currentBatch.purchaseRate ?? (currentBatch as any).purchase_rate);
+
+    let costRate = 0;
+    if (saleType === 'WHOLESALE') {
+        costRate = (!isNaN(rawPurchase) && rawPurchase > 0)
+            ? rawPurchase
+            : ((!isNaN(rawPts) && rawPts > 0)
+                ? rawPts
+                : ((!isNaN(rawLanding) && rawLanding > 0)
+                    ? rawLanding
+                    : ((!isNaN(rawPtr) && rawPtr > 0) ? rawPtr : 0)));
+    } else {
+        costRate = (!isNaN(rawLanding) && rawLanding > 0)
+            ? rawLanding
+            : ((!isNaN(rawPtr) && rawPtr > 0)
+                ? rawPtr
+                : ((!isNaN(rawPurchase) && rawPurchase > 0) ? rawPurchase : 0));
+    }
     const totalCost = costRate * tQtyFractional;
     
     // Net unit selling price using unified formula: (Final Row Amount / Quantity)
@@ -89,11 +155,13 @@ export function calculateRowTotals(
 
     const isValid = !isDiscountInvalid && !isQtyZero && !isNegativeMargin;
 
+    const roundedSellAmount = bankersRound(sellAmount);
     return {
         tQtyFractional,
         tQtyLoose,
         rate: bankersRound(rate),
-        sellAmount: bankersRound(sellAmount),
+        sellAmount: roundedSellAmount,
+        totalAmount: roundedSellAmount,
         dPct,
         dAmount: bankersRound(dAmount),
         totalCost: bankersRound(totalCost),

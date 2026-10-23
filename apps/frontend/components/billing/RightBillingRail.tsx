@@ -82,7 +82,13 @@ export function RightBillingRail() {
 
     const marginData = useMemo(() => {
         if (!activeDraft) return null;
-        return calculateTotalMargin(activeDraft.cart, totals.grandTotal, totals.extraDiscountAmount);
+        return calculateTotalMargin(
+            activeDraft.cart,
+            totals.grandTotal,
+            totals.extraDiscountAmount,
+            activeDraft.extraDiscountPct || 0,
+            activeDraft.saleType || 'RETAIL'
+        );
     }, [activeDraft, totals.grandTotal, totals.extraDiscountAmount]);
 
 
@@ -541,7 +547,7 @@ export function RightBillingRail() {
                         className="w-full mb-3 p-3 bg-red-600/15 border-2 border-red-500/80 rounded-lg text-red-400 text-xs font-bold text-center flex items-center justify-center gap-2 shadow-sm"
                     >
                         <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
-                        <span>Checkout Locked: One or more items are being sold below landing cost.</span>
+                        <span>Checkout Locked: One or more items are being sold below {activeDraft?.saleType === 'WHOLESALE' ? 'purchase rate' : 'landing cost'}.</span>
                     </div>
                 )}
 
@@ -572,7 +578,7 @@ export function RightBillingRail() {
                     )}
                     {(isLossSale || isGlobalLoss) && !checkoutError && (
                         <span className="text-xs font-bold text-red-400 block mb-1">
-                            Checkout Locked: One or more items are being sold below landing cost.
+                            Checkout Locked: One or more items are being sold below {activeDraft?.saleType === 'WHOLESALE' ? 'purchase rate' : 'landing cost'}.
                         </span>
                     )}
                     {cart.length === 0 && !checkoutError && (

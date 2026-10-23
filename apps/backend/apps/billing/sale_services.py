@@ -361,12 +361,27 @@ def atomic_sale_save(
                     transaction.set_rollback(True)
                     raise ValidationError(f"{pricing_check['message']}")
 
-                c_floor = batch.ptr if (batch.ptr and batch.ptr > Decimal('0')) else (batch.landing_rate or batch.purchase_rate or Decimal('0'))
-                if sale_invoice.sale_type == 'WHOLESALE' and batch.pts and batch.pts > Decimal('0'):
-                    c_floor = batch.pts
+                if sale_invoice.sale_type == 'WHOLESALE':
+                    if batch.purchase_rate and batch.purchase_rate > Decimal('0'):
+                        c_floor = batch.purchase_rate
+                    elif batch.pts and batch.pts > Decimal('0'):
+                        c_floor = batch.pts
+                    else:
+                        c_floor = batch.landing_rate or batch.ptr or Decimal('0')
+                    floor_label = "purchase rate"
+                else:
+                    if batch.landing_rate and batch.landing_rate > Decimal('0'):
+                        c_floor = batch.landing_rate
+                    elif batch.ptr and batch.ptr > Decimal('0'):
+                        c_floor = batch.ptr
+                    else:
+                        c_floor = batch.purchase_rate or Decimal('0')
+                    floor_label = "landing cost"
+
                 if c_floor > Decimal('0') and pricing_result['net_rate'] < (c_floor - Decimal('0.005')):
                     transaction.set_rollback(True)
-                    raise ValidationError(f"Loss Sale Prevented: Cannot sell {product.name} below its purchase rate of ₹{c_floor:.2f}.")
+                    prod_name = product.name if product else batch.batch_no
+                    raise ValidationError(f"Loss Sale Prevented: Cannot sell {prod_name} below its {floor_label} of ₹{c_floor:.2f}.")
 
                 tax_info = pricing_result['tax_info']
                 gst_rate_val = Decimal(str(item_data.get('gstRate', 0)))

@@ -123,7 +123,7 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
         requiresDoctorDetails: false,
     };
     const totals = (typeof getDraftTotals === 'function' ? getDraftTotals(activeDraftId) : null) || fallbackTotals;
-    const marginData = calculateTotalMargin(activeDraft.cart, totals.grandTotal, totals.extraDiscountAmount, activeDraft.extraDiscountPct || 0);
+    const marginData = calculateTotalMargin(activeDraft.cart, totals.grandTotal, totals.extraDiscountAmount, activeDraft.extraDiscountPct || 0, saleType);
 
     // --- Editor Handlers ---
     const handleSaveEdit = (oldBatchId: string, updatedItem: any) => {
@@ -792,7 +792,7 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                                     );
                                 }
 
-                                const lineMargin = calculateLineMargin(item, activeDraft?.extraDiscountPct || 0);
+                                const lineMargin = calculateLineMargin(item, activeDraft?.extraDiscountPct || 0, saleType);
 
                                 return (
                                     <tr 
@@ -936,16 +936,16 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                                                     ? "bg-red-50 text-red-600 border border-red-200" 
                                                     : "text-slate-800"
                                             )}
-                                            title={lineMargin.isLossSale ? `Rate is below PTR (₹${lineMargin.costFloor.toFixed(2)})` : undefined}
+                                            title={lineMargin.isLossSale ? `Rate is below ${activeDraft?.saleType === 'WHOLESALE' ? 'Purchase Rate' : 'Landing Cost'} (₹${(item.landingRate ?? lineMargin.costFloor).toFixed(2)})` : undefined}
                                         >
                                             <div className="flex flex-col items-end">
                                                 <span>₹{item.totalAmount.toFixed(2)}</span>
                                                 {lineMargin.isLossSale && (
                                                     <span 
                                                         className="text-[9px] font-bold text-red-600 bg-red-100 px-1 py-0.5 rounded flex items-center gap-0.5 mt-0.5"
-                                                        title={`Rate is below PTR (₹${lineMargin.costFloor.toFixed(2)})`}
+                                                        title={`Rate is below ${activeDraft?.saleType === 'WHOLESALE' ? 'Purchase Rate' : 'Landing Cost'} (₹${(item.landingRate ?? lineMargin.costFloor).toFixed(2)})`}
                                                     >
-                                                        Below PTR (₹{lineMargin.costFloor.toFixed(2)})
+                                                        {activeDraft?.saleType === 'WHOLESALE' ? 'Below Purchase Rate' : 'Below Landing Cost'} (₹{(item.landingRate ?? lineMargin.costFloor).toFixed(2)})
                                                     </span>
                                                 )}
                                             </div>

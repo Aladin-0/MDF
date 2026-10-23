@@ -643,9 +643,21 @@ class SaleCreateView(APIView):
                     continue
 
                 if req_sale_type == 'WHOLESALE':
-                    cost_floor = batch_obj.pts if (batch_obj.pts and batch_obj.pts > Decimal('0')) else (batch_obj.purchase_rate or batch_obj.landing_rate or Decimal('0'))
+                    if batch_obj.purchase_rate and batch_obj.purchase_rate > Decimal('0'):
+                        cost_floor = batch_obj.purchase_rate
+                    elif batch_obj.pts and batch_obj.pts > Decimal('0'):
+                        cost_floor = batch_obj.pts
+                    else:
+                        cost_floor = batch_obj.landing_rate or batch_obj.ptr or Decimal('0')
+                    floor_label = "purchase rate"
                 else:
-                    cost_floor = batch_obj.ptr if (batch_obj.ptr and batch_obj.ptr > Decimal('0')) else (batch_obj.landing_rate or batch_obj.purchase_rate or Decimal('0'))
+                    if batch_obj.landing_rate and batch_obj.landing_rate > Decimal('0'):
+                        cost_floor = batch_obj.landing_rate
+                    elif batch_obj.ptr and batch_obj.ptr > Decimal('0'):
+                        cost_floor = batch_obj.ptr
+                    else:
+                        cost_floor = batch_obj.purchase_rate or Decimal('0')
+                    floor_label = "landing cost"
 
                 if cost_floor > Decimal('0'):
                     pack_size = Decimal(str(batch_obj.pack_size or 1))
@@ -677,7 +689,7 @@ class SaleCreateView(APIView):
                             prod_name = item_data.get('name') or item_data.get('productName') or (batch_obj.product.name if batch_obj.product else f"Batch {batch_obj.batch_no}")
                             return Response(
                                 {
-                                    'detail': f"Loss Sale Prevented: Cannot sell {prod_name} below its purchase rate of ₹{cost_floor:.2f}.",
+                                    'detail': f"Loss Sale Prevented: Cannot sell {prod_name} below its {floor_label} of ₹{cost_floor:.2f}.",
                                     'code': 'LOSS_SALE_PREVENTED',
                                     'batch_id': str(batch_obj.id),
                                     'product_name': prod_name,
@@ -966,9 +978,22 @@ class SaleCreateView(APIView):
                             eff_qty = Decimal(str(qty_to_deduct)) + (Decimal(str(loose_to_deduct)) / pack_sz)
                             if eff_qty > Decimal('0'):
                                 disc_factor = Decimal('1') - (extra_discount_pct / Decimal('100')) if extra_discount_pct > Decimal('0') else Decimal('1')
-                                c_floor = batch.ptr if (batch.ptr and batch.ptr > Decimal('0')) else (batch.landing_rate or batch.purchase_rate or Decimal('0'))
-                                if sale_type == 'WHOLESALE' and batch.pts and batch.pts > Decimal('0'):
-                                    c_floor = batch.pts
+                                if sale_type == 'WHOLESALE':
+                                    if batch.purchase_rate and batch.purchase_rate > Decimal('0'):
+                                        c_floor = batch.purchase_rate
+                                    elif batch.pts and batch.pts > Decimal('0'):
+                                        c_floor = batch.pts
+                                    else:
+                                        c_floor = batch.landing_rate or batch.ptr or Decimal('0')
+                                    floor_label = "purchase rate"
+                                else:
+                                    if batch.landing_rate and batch.landing_rate > Decimal('0'):
+                                        c_floor = batch.landing_rate
+                                    elif batch.ptr and batch.ptr > Decimal('0'):
+                                        c_floor = batch.ptr
+                                    else:
+                                        c_floor = batch.purchase_rate or Decimal('0')
+                                    floor_label = "landing cost"
 
                                 item_amt = Decimal('0')
                                 if item_data.get('totalAmount') is not None:
@@ -989,7 +1014,7 @@ class SaleCreateView(APIView):
                                     transaction.set_rollback(True)
                                     prod_name = product.name if product else batch.batch_no
                                     return Response({
-                                        "detail": f"Loss Sale Prevented: Cannot sell {prod_name} below its purchase rate of ₹{c_floor:.2f}.",
+                                        "detail": f"Loss Sale Prevented: Cannot sell {prod_name} below its {floor_label} of ₹{c_floor:.2f}.",
                                         "code": "LOSS_SALE_PREVENTED",
                                         "batchId": str(batch.id),
                                         "cost_floor": float(c_floor),
