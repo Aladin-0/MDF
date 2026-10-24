@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
 import { calculateRowTotals } from '../lib/cartUtils';
+import { distributeSmartDiscounts } from '../lib/billingMarginUtils';
 import {
     CartItem,
     StaffPinVerifyResponse,
@@ -500,6 +501,9 @@ export const useBillingStore = create<BillingState>()(
 
         const extraDiscPct = draft.extraDiscountPct || 0;
         const discountFactor = extraDiscPct > 0 ? 1 - extraDiscPct / 100 : 1;
+        const smartAllocations = extraDiscPct > 0
+            ? distributeSmartDiscounts(draft.cart, extraDiscPct, draft.saleType || 'RETAIL')
+            : null;
 
         let totalTaxableValue = 0;
         let totalCgst = 0;
@@ -511,7 +515,7 @@ export const useBillingStore = create<BillingState>()(
         let hasScheduleH = false;
         let requiresDoctorDetails = false;
 
-        draft.cart.forEach(item => {
+        draft.cart.forEach((item, idx) => {
             // 1. Determine the effective rate (may already include item-level discount via item.rate)
             const effectiveRate = item.rate || (draft.saleType === 'WHOLESALE' ? (item.pts || item.ptr || item.mrp) : item.mrp) || 0;
             const totalQty = item.totalQty || 0;
@@ -529,18 +533,25 @@ export const useBillingStore = create<BillingState>()(
             }
             preExtraNet += rowPreExtraNet;
 
-            // Post-extra-discount values (with global bill discount factor)
+            // Post-extra-discount values (with smart capping & dynamic redistribution)
             let rowNetPayable = 0;
             let rowTaxable = 0;
             let rowTotalGst = 0;
 
-            if (draft.saleType === 'WHOLESALE') {
-                // Exclusive Tax
+            const key = item.batchId || `item-${idx}`;
+            const alloc = smartAllocations?.get(key);
+
+            if (alloc) {
+                rowNetPayable = alloc.finalRowAmount;
+                rowTaxable = alloc.finalTaxable;
+                rowTotalGst = Math.max(0, alloc.finalRowAmount - alloc.finalTaxable);
+            } else if (draft.saleType === 'WHOLESALE') {
+                // Exclusive Tax fallback
                 rowTaxable = totalQty * effectiveRate * discountFactor;
                 rowTotalGst = rowTaxable * gstDecimal;
                 rowNetPayable = rowTaxable + rowTotalGst;
             } else {
-                // Inclusive Tax
+                // Inclusive Tax fallback
                 rowNetPayable = totalQty * effectiveRate * discountFactor;
                 rowTaxable = rowNetPayable / (1 + gstDecimal);
                 rowTotalGst = rowNetPayable - rowTaxable;

@@ -664,32 +664,48 @@ class SaleCreateView(APIView):
                     qty_strips = Decimal(str(item_data.get('qtyStrips', 0)))
                     qty_loose = Decimal(str(item_data.get('qtyLoose', 0)))
                     free_qty_strips = Decimal(str(item_data.get('freeQtyStrips', 0)))
-                    effective_qty = qty_strips + (qty_loose / pack_size) + free_qty_strips
-                    if effective_qty <= Decimal('0'):
-                        total_qty_val = Decimal(str(item_data.get('totalQty', 0)))
-                        effective_qty = total_qty_val if total_qty_val > Decimal('0') else Decimal('1')
 
-                    if effective_qty > Decimal('0'):
-                        item_total = Decimal('0')
-                        if item_data.get('totalAmount') is not None:
-                            item_total = Decimal(str(item_data.get('totalAmount', 0)))
-                        if item_total <= Decimal('0'):
+                    # Revenue is generated strictly by billed quantity; free scheme quantity must not inflate the cost floor
+                    billed_qty = qty_strips + (qty_loose / pack_size)
+                    if billed_qty <= Decimal('0'):
+                        if free_qty_strips > Decimal('0'):
+                            # 100% free promotional scheme item - safe harbor exempt from loss sale lock
+                            continue
+                        total_qty_val = Decimal(str(item_data.get('totalQty', 0)))
+                        billed_qty = total_qty_val if total_qty_val > Decimal('0') else Decimal('1')
+
+                    if billed_qty > Decimal('0'):
+                        gst_rate = Decimal(str(item_data.get('gstRate', getattr(batch_obj.product, 'gst_rate', Decimal('0')) or Decimal('0'))))
+                        tax_multiplier = Decimal('1') + (gst_rate / Decimal('100'))
+                        line_cost_floor_inclusive = (cost_floor * tax_multiplier * billed_qty).quantize(Decimal('0.01'))
+
+                        rate_val = Decimal(str(item_data.get('rate', batch_obj.mrp)))
+                        disc_pct = Decimal(str(item_data.get('discountPct', 0)))
+                        rate_discounted = rate_val * (Decimal('1') - disc_pct / Decimal('100'))
+
+                        if req_sale_type == 'WHOLESALE':
+                            base_row_amount = (rate_discounted * billed_qty * tax_multiplier).quantize(Decimal('0.01'))
+                        else:
+                            base_row_amount = (rate_discounted * billed_qty).quantize(Decimal('0.01'))
+
+                        client_total = Decimal(str(item_data.get('totalAmount', 0))) if item_data.get('totalAmount') is not None else Decimal('0')
+                        if client_total <= Decimal('0'):
                             taxable_amt = Decimal(str(item_data.get('taxableAmount', 0)))
                             gst_amt = Decimal(str(item_data.get('gstAmount', 0)))
-                            item_total = taxable_amt + gst_amt
-                        if item_total <= Decimal('0'):
-                            rate_val = Decimal(str(item_data.get('rate', batch_obj.mrp)))
-                            disc_pct = Decimal(str(item_data.get('discountPct', 0)))
-                            item_total = (rate_val * effective_qty) * (Decimal('1') - disc_pct / Decimal('100'))
+                            client_total = taxable_amt + gst_amt
 
-                        line_cost_floor = cost_floor * effective_qty
-                        final_item_amount = item_total * discount_factor
+                        # If client already applied smart-capping / extra discount, respect client total to prevent double-discounting
+                        if client_total > Decimal('0') and client_total < (base_row_amount - Decimal('0.01')):
+                            final_item_amount = client_total
+                        else:
+                            final_item_amount = (base_row_amount * discount_factor).quantize(Decimal('0.01'))
 
-                        # Smart Cap: If item was legal before bill discount, cap the final row amount to the floor
-                        if item_total >= line_cost_floor and final_item_amount < line_cost_floor:
-                            final_item_amount = line_cost_floor
+                        # Smart Cap: If item was legal before bill discount, cap final row amount to cost floor
+                        if base_row_amount >= (line_cost_floor_inclusive - Decimal('0.005')) and final_item_amount < line_cost_floor_inclusive:
+                            final_item_amount = line_cost_floor_inclusive
 
-                        net_rate_per_pack = final_item_amount / effective_qty
+                        # Tax-exclusive net selling rate per pack for apples-to-apples comparison against cost_floor
+                        net_rate_per_pack = final_item_amount / (billed_qty * tax_multiplier)
 
                         if net_rate_per_pack < (cost_floor - Decimal('0.005')):
                             prod_name = item_data.get('name') or item_data.get('productName') or (batch_obj.product.name if batch_obj.product else f"Batch {batch_obj.batch_no}")
@@ -981,8 +997,17 @@ class SaleCreateView(APIView):
 
                             # Margin Lock check on net selling price using unified formula: (Final Row Amount / Quantity)
                             pack_sz = Decimal(str(batch.pack_size or 1))
-                            eff_qty = Decimal(str(qty_to_deduct)) + (Decimal(str(loose_to_deduct)) / pack_sz)
-                            if eff_qty > Decimal('0'):
+                            billed_qty = Decimal(str(qty_to_deduct)) + (Decimal(str(loose_to_deduct)) / pack_sz)
+                            free_qty_strips = Decimal(str(item_data.get('freeQtyStrips', 0)))
+
+                            # Revenue is generated strictly by billed quantity; free scheme quantity must not inflate the cost floor
+                            if billed_qty <= Decimal('0'):
+                                if free_qty_strips > Decimal('0'):
+                                    pass  # Free scheme safe-harbor
+                                else:
+                                    billed_qty = Decimal('1')
+
+                            if billed_qty > Decimal('0'):
                                 disc_factor = Decimal('1') - (extra_discount_pct / Decimal('100')) if extra_discount_pct > Decimal('0') else Decimal('1')
                                 if sale_type == 'WHOLESALE':
                                     if batch.purchase_rate and batch.purchase_rate > Decimal('0'):
@@ -1001,37 +1026,49 @@ class SaleCreateView(APIView):
                                         c_floor = batch.purchase_rate or Decimal('0')
                                     floor_label = "landing cost"
 
-                                item_amt = Decimal('0')
-                                if item_data.get('totalAmount') is not None:
-                                    item_amt = Decimal(str(item_data.get('totalAmount', 0)))
-                                if item_amt <= Decimal('0'):
-                                    tax_amt = Decimal(str(item_data.get('taxableAmount', 0)))
-                                    g_amt = Decimal(str(item_data.get('gstAmount', 0)))
-                                    item_amt = tax_amt + g_amt
-                                if item_amt <= Decimal('0'):
+                                if c_floor > Decimal('0'):
+                                    gst_rate = Decimal(str(item_data.get('gstRate', getattr(product, 'gst_rate', Decimal('0')) or Decimal('0'))))
+                                    tax_multiplier = Decimal('1') + (gst_rate / Decimal('100'))
+                                    line_cost_floor_inclusive = (c_floor * tax_multiplier * billed_qty).quantize(Decimal('0.01'))
+
                                     p_rate = Decimal(str(item_data.get('rate', batch.mrp)))
                                     d_pct = Decimal(str(item_data.get('discountPct', 0)))
-                                    item_amt = (p_rate * eff_qty) * (Decimal('1') - d_pct / Decimal('100'))
+                                    rate_discounted = p_rate * (Decimal('1') - d_pct / Decimal('100'))
 
-                                line_cost_floor = c_floor * eff_qty
-                                final_row_amt = item_amt * disc_factor
+                                    if sale_type == 'WHOLESALE':
+                                        base_item_amt = (rate_discounted * billed_qty * tax_multiplier).quantize(Decimal('0.01'))
+                                    else:
+                                        base_item_amt = (rate_discounted * billed_qty).quantize(Decimal('0.01'))
 
-                                # Smart Cap: If item was legal before bill discount, cap the final row amount to the floor
-                                if item_amt >= line_cost_floor and final_row_amt < line_cost_floor:
-                                    final_row_amt = line_cost_floor
+                                    client_item_amt = Decimal(str(item_data.get('totalAmount', 0))) if item_data.get('totalAmount') is not None else Decimal('0')
+                                    if client_item_amt <= Decimal('0'):
+                                        tax_amt = Decimal(str(item_data.get('taxableAmount', 0)))
+                                        g_amt = Decimal(str(item_data.get('gstAmount', 0)))
+                                        client_item_amt = tax_amt + g_amt
 
-                                net_unit_price = final_row_amt / eff_qty
+                                    # If client already applied smart-capping / extra discount, respect client total to prevent double-discounting
+                                    if client_item_amt > Decimal('0') and client_item_amt < (base_item_amt - Decimal('0.01')):
+                                        final_row_amt = client_item_amt
+                                    else:
+                                        final_row_amt = (base_item_amt * disc_factor).quantize(Decimal('0.01'))
 
-                                if c_floor > Decimal('0') and net_unit_price < (c_floor - Decimal('0.005')):
-                                    transaction.set_rollback(True)
-                                    prod_name = product.name if product else batch.batch_no
-                                    return Response({
-                                        "detail": f"Loss Sale Prevented: Cannot sell {prod_name} below its {floor_label} of ₹{c_floor:.2f}.",
-                                        "code": "LOSS_SALE_PREVENTED",
-                                        "batchId": str(batch.id),
-                                        "cost_floor": float(c_floor),
-                                        "net_rate": float(net_unit_price.quantize(Decimal('0.01')))
-                                    }, status=status.HTTP_400_BAD_REQUEST)
+                                    # Smart Cap: If item was legal before bill discount, cap the final row amount to the floor
+                                    if base_item_amt >= (line_cost_floor_inclusive - Decimal('0.005')) and final_row_amt < line_cost_floor_inclusive:
+                                        final_row_amt = line_cost_floor_inclusive
+
+                                    # Tax-exclusive net selling rate per pack for apples-to-apples comparison against cost_floor
+                                    net_unit_price = final_row_amt / (billed_qty * tax_multiplier)
+
+                                    if net_unit_price < (c_floor - Decimal('0.005')):
+                                        transaction.set_rollback(True)
+                                        prod_name = product.name if product else batch.batch_no
+                                        return Response({
+                                            "detail": f"Loss Sale Prevented: Cannot sell {prod_name} below its {floor_label} of ₹{c_floor:.2f}.",
+                                            "code": "LOSS_SALE_PREVENTED",
+                                            "batchId": str(batch.id),
+                                            "cost_floor": float(c_floor),
+                                            "net_rate": float(net_unit_price.quantize(Decimal('0.01')))
+                                        }, status=status.HTTP_400_BAD_REQUEST)
 
                             # Create SaleItem — snapshot pack_size from batch (frozen at purchase time),
                             # not from product (which changes when master item is edited)
@@ -1049,6 +1086,7 @@ class SaleCreateView(APIView):
                                 sale_rate=batch.mrp,
                                 rate=proposed_rate,
                                 qty_strips=qty_to_deduct,
+                                free_qty_strips=free_qty_strips,
                                 qty_loose=item_data.get('qtyLoose', 0),
                                 sale_mode=item_data.get('saleMode', 'strip'),
                                 discount_pct=Decimal(str(item_data.get('discountPct', 0))),
@@ -1121,8 +1159,11 @@ class SaleCreateView(APIView):
                     total_fractional_strips = Decimal(str(si.qty_strips)) + (Decimal(str(si.qty_loose)) / pack_size)
                     raw_total = si.rate * total_fractional_strips
                     
-                    # Apply extra discount proportionally before GST extraction
-                    discounted_total = (raw_total * discount_factor).quantize(Decimal('0.01'))
+                    # Apply extra discount proportionally before GST extraction, respecting smart-allocated total if provided
+                    if si.total_amount and si.total_amount > Decimal('0'):
+                        discounted_total = si.total_amount
+                    else:
+                        discounted_total = (raw_total * discount_factor).quantize(Decimal('0.01'))
                     gst_rate = si.gst_rate
 
                     if gst_rate > 0:

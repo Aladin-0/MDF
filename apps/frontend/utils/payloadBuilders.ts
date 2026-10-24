@@ -1,4 +1,5 @@
 import { bankersRound } from './mathUtils';
+import { distributeSmartDiscounts } from '../lib/billingMarginUtils';
 
 export function buildScheduleHPayload(customer: any, doctor: any, draft: any): any {
     if (draft?.scheduleHData) {
@@ -69,6 +70,8 @@ export function buildSalePayload(draft: any, scheduleHData: any, totals: any, ac
         finalSgst = 0;
     }
 
+    const smartAllocations = distributeSmartDiscounts(cart, extraDiscountPct, draft.saleType || 'RETAIL');
+
     return {
         outletId: resolvedOutletId,
         invoiceDate: invoiceDateIso,
@@ -86,14 +89,16 @@ export function buildSalePayload(draft: any, scheduleHData: any, totals: any, ac
         transDistance: Number(draft.transDistance) || 0,
         transMode: Number(draft.transMode) || 1,
         vehicleType: draft.vehicleType || "R",
-        items: cart.map((item: any) => {
+        items: cart.map((item: any, idx: number) => {
             const rawTotal = item.rate * item.totalQty;
             const gstRate = item.gstPct ?? item.gstRate ?? 0;
             const discountFactor = extraDiscountPct > 0 ? 1 - extraDiscountPct / 100 : 1;
-            const discountedTotal = rawTotal * discountFactor;
-            const taxable = gstRate > 0
+            const key = item.batchId || `item-${idx}`;
+            const alloc = smartAllocations.get(key);
+            const discountedTotal = alloc ? alloc.finalRowAmount : (rawTotal * discountFactor);
+            const taxable = alloc ? alloc.finalTaxable : (gstRate > 0
                 ? bankersRound(discountedTotal / (1 + gstRate / 100))
-                : bankersRound(discountedTotal);
+                : bankersRound(discountedTotal));
             const gst = bankersRound(discountedTotal - taxable);
             return {
                 batchId: item.batchId,

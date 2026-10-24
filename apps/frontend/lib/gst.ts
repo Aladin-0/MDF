@@ -75,6 +75,7 @@ export function calculateBillTotals(items: CartItem[], extraDiscPct: number = 0)
         subtotal: Number(subtotal.toFixed(2)),
         discountAmount: Number(discountAmount.toFixed(2)),
         extraDiscountAmount: Number(extraDiscountAmount.toFixed(2)),
+        preExtraNet: Number(totalRateAmount.toFixed(2)),
         taxableAmount: Number(taxableAmount.toFixed(2)),
         cgstAmount: Number(cgstAmount.toFixed(2)),
         sgstAmount: Number(sgstAmount.toFixed(2)),

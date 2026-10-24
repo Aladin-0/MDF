@@ -304,3 +304,219 @@ def test_sale_create_wholesale_prevents_loss_sale_below_purchase_rate(authentica
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     assert 'Loss Sale Prevented' in response.data['detail']
     assert 'below its purchase rate of ₹60.00' in response.data['detail']
+
+@pytest.mark.django_db
+def test_sale_create_flat_discount_reconciliation_with_smart_capping(authenticated_client):
+    from apps.accounts.models import Staff
+    from apps.accounts.services import LedgerService
+    from apps.inventory.services import post_stock_ledger_entry
+    import datetime
+
+    user = Staff.objects.first()
+    outlet = user.outlet
+    call_command('seed_ledgers', outlet_id=str(outlet.id))
+    customer = CustomerFactory(outlet=outlet)
+    LedgerService.sync_customer_ledgers(outlet)
+
+    prod_low = MasterProductFactory(name='Low Margin Drug', gst_rate=Decimal('0'))
+    batch_low = BatchFactory(
+        outlet=outlet, product=prod_low, pack_size=1, qty_strips=10, qty_loose=0,
+        mrp=Decimal('100.00'), landing_rate=Decimal('95.00')
+    )
+    post_stock_ledger_entry(
+        outlet=outlet, product=prod_low, batch=batch_low, txn_type='PURCHASE_IN',
+        txn_date=datetime.date(2025, 1, 1), voucher_type='Purchase Invoice',
+        voucher_number='PINV-LOW-01', party_name='Supplier', qty_in=10, qty_out=0, rate=95.0
+    )
+
+    prod_high = MasterProductFactory(name='High Margin Drug', gst_rate=Decimal('0'))
+    batch_high = BatchFactory(
+        outlet=outlet, product=prod_high, pack_size=1, qty_strips=10, qty_loose=0,
+        mrp=Decimal('1000.00'), landing_rate=Decimal('500.00')
+    )
+    post_stock_ledger_entry(
+        outlet=outlet, product=prod_high, batch=batch_high, txn_type='PURCHASE_IN',
+        txn_date=datetime.date(2025, 1, 1), voucher_type='Purchase Invoice',
+        voucher_number='PINV-HIGH-01', party_name='Supplier', qty_in=10, qty_out=0, rate=500.0
+    )
+
+    url = reverse('sale-list-create')
+    # Total Base: ₹1100. Customer receives flat ₹245 discount.
+    # Low margin item capped at ₹95 (absorbs ₹5 discount).
+    # High margin item absorbs remaining ₹240 discount (amount ₹760).
+    # Grand Total = 855.
+    extra_pct = Decimal(str(round((245 / 1100) * 100, 6)))
+    payload = {
+        'outletId': str(outlet.id),
+        'customerId': str(customer.id),
+        'saleType': 'RETAIL',
+        'extraDiscountPct': float(extra_pct),
+        'grandTotal': '855.00',
+        'subtotal': '855.00',
+        'discountAmount': '245.00',
+        'cashPaid': '855.00',
+        'paymentMode': 'cash',
+        'invoiceDate': '2026-08-01',
+        'items': [
+            {
+                'productId': str(prod_low.id),
+                'batchId': str(batch_low.id),
+                'qtyStrips': 1,
+                'qtyLoose': 0,
+                'rate': '100.00',
+                'gstRate': '0',
+                'taxableAmount': '95.00',
+                'gstAmount': '0',
+                'totalAmount': '95.00',
+            },
+            {
+                'productId': str(prod_high.id),
+                'batchId': str(batch_high.id),
+                'qtyStrips': 1,
+                'qtyLoose': 0,
+                'rate': '1000.00',
+                'gstRate': '0',
+                'taxableAmount': '760.00',
+                'gstAmount': '0',
+                'totalAmount': '760.00',
+            }
+        ]
+    }
+    response = authenticated_client.post(url, payload, format='json')
+    assert response.status_code == status.HTTP_201_CREATED, response.data
+    assert Decimal(str(response.data['grandTotal'])) == Decimal('855.00')
+
+@pytest.mark.django_db
+def test_sale_create_scheme_free_quantity_safe_harbor(authenticated_client):
+    from apps.accounts.models import Staff
+    from apps.accounts.services import LedgerService
+    from apps.inventory.services import post_stock_ledger_entry
+    import datetime
+
+    user = Staff.objects.first()
+    outlet = user.outlet
+    call_command('seed_ledgers', outlet_id=str(outlet.id))
+    customer = CustomerFactory(outlet=outlet)
+    LedgerService.sync_customer_ledgers(outlet)
+
+    product = MasterProductFactory(name='Scheme Medicine', gst_rate=Decimal('0'))
+    # Batch has MRP 100, landing_rate 90.00
+    batch = BatchFactory(
+        outlet=outlet, product=product, pack_size=1, qty_strips=20, qty_loose=0,
+        mrp=Decimal('100.00'), landing_rate=Decimal('90.00')
+    )
+    post_stock_ledger_entry(
+        outlet=outlet, product=product, batch=batch, txn_type='PURCHASE_IN',
+        txn_date=datetime.date(2025, 1, 1), voucher_type='Purchase Invoice',
+        voucher_number='PINV-SCH-01', party_name='Supplier', qty_in=20, qty_out=0, rate=90.0
+    )
+
+    url = reverse('sale-list-create')
+    # Buy 10 strips + 2 free strips under scheme.
+    # Billed revenue = 10 * 100 = 1000.
+    # 5% extra discount -> Net amount = 950.
+    # Billed cost floor = 10 * 90 = 900.
+    # If free strips inflated floor to 12 * 90 = 1080, it would falsely fail!
+    payload = {
+        'outletId': str(outlet.id),
+        'customerId': str(customer.id),
+        'saleType': 'RETAIL',
+        'extraDiscountPct': 5.0,
+        'grandTotal': '950.00',
+        'subtotal': '950.00',
+        'discountAmount': '50.00',
+        'cashPaid': '950.00',
+        'paymentMode': 'cash',
+        'invoiceDate': '2026-08-01',
+        'items': [{
+            'productId': str(product.id),
+            'batchId': str(batch.id),
+            'qtyStrips': 10,
+            'freeQtyStrips': 2,
+            'qtyLoose': 0,
+            'rate': '100.00',
+            'gstRate': '0',
+            'taxableAmount': '950.00',
+            'gstAmount': '0',
+            'totalAmount': '950.00',
+        }]
+    }
+    response = authenticated_client.post(url, payload, format='json')
+    assert response.status_code == status.HTTP_201_CREATED, response.data
+    assert Decimal(str(response.data['grandTotal'])) == Decimal('950.00')
+
+@pytest.mark.django_db
+def test_sale_create_pure_free_quantity_scheme_item(authenticated_client):
+    from apps.accounts.models import Staff
+    from apps.accounts.services import LedgerService
+    from apps.inventory.services import post_stock_ledger_entry
+    import datetime
+
+    user = Staff.objects.first()
+    outlet = user.outlet
+    call_command('seed_ledgers', outlet_id=str(outlet.id))
+    customer = CustomerFactory(outlet=outlet)
+    LedgerService.sync_customer_ledgers(outlet)
+
+    prod_paid = MasterProductFactory(name='Paid Medicine', gst_rate=Decimal('0'))
+    batch_paid = BatchFactory(
+        outlet=outlet, product=prod_paid, pack_size=1, qty_strips=10, qty_loose=0,
+        mrp=Decimal('200.00'), landing_rate=Decimal('150.00')
+    )
+    post_stock_ledger_entry(
+        outlet=outlet, product=prod_paid, batch=batch_paid, txn_type='PURCHASE_IN',
+        txn_date=datetime.date(2025, 1, 1), voucher_type='Purchase Invoice',
+        voucher_number='PINV-PAID-01', party_name='Supplier', qty_in=10, qty_out=0, rate=150.0
+    )
+
+    prod_free = MasterProductFactory(name='Promotional Sample Free', gst_rate=Decimal('0'))
+    batch_free = BatchFactory(
+        outlet=outlet, product=prod_free, pack_size=1, qty_strips=10, qty_loose=0,
+        mrp=Decimal('50.00'), landing_rate=Decimal('30.00')
+    )
+    post_stock_ledger_entry(
+        outlet=outlet, product=prod_free, batch=batch_free, txn_type='PURCHASE_IN',
+        txn_date=datetime.date(2025, 1, 1), voucher_type='Purchase Invoice',
+        voucher_number='PINV-FREE-01', party_name='Supplier', qty_in=10, qty_out=0, rate=30.0
+    )
+
+    url = reverse('sale-list-create')
+    payload = {
+        'outletId': str(outlet.id),
+        'customerId': str(customer.id),
+        'saleType': 'RETAIL',
+        'grandTotal': '200.00',
+        'subtotal': '200.00',
+        'discountAmount': '0.00',
+        'cashPaid': '200.00',
+        'paymentMode': 'cash',
+        'invoiceDate': '2026-08-01',
+        'items': [
+            {
+                'productId': str(prod_paid.id),
+                'batchId': str(batch_paid.id),
+                'qtyStrips': 1,
+                'qtyLoose': 0,
+                'rate': '200.00',
+                'gstRate': '0',
+                'taxableAmount': '200.00',
+                'gstAmount': '0',
+                'totalAmount': '200.00',
+            },
+            {
+                'productId': str(prod_free.id),
+                'batchId': str(batch_free.id),
+                'qtyStrips': 0,
+                'freeQtyStrips': 1,
+                'qtyLoose': 0,
+                'rate': '0.00',
+                'gstRate': '0',
+                'taxableAmount': '0.00',
+                'gstAmount': '0',
+                'totalAmount': '0.00',
+            }
+        ]
+    }
+    response = authenticated_client.post(url, payload, format='json')
+    assert response.status_code == status.HTTP_201_CREATED, response.data
+    assert Decimal(str(response.data['grandTotal'])) == Decimal('200.00')

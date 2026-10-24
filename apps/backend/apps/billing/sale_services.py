@@ -380,20 +380,26 @@ def atomic_sale_save(
 
                 disc_factor = Decimal('1') - (sale_invoice.extra_discount_pct / Decimal('100')) if (sale_invoice.extra_discount_pct and sale_invoice.extra_discount_pct > Decimal('0')) else Decimal('1')
                 eff_qty = Decimal(str(alloc_billed)) + (Decimal(str(loose_to_deduct)) / Decimal(str(batch.pack_size or 1)))
-                line_cost_floor = c_floor * eff_qty
-                item_amt = pricing_result['line_total']
-                final_row_amt = item_amt * disc_factor
 
-                # Smart Cap: If item was legal before bill discount, cap the final row amount to the floor
-                if item_amt >= line_cost_floor and final_row_amt < line_cost_floor:
-                    final_row_amt = line_cost_floor
+                # Free Scheme Safe-Harbor: If purely free quantity under promotional scheme, skip loss sale check
+                if eff_qty <= Decimal('0') and alloc_free > Decimal('0'):
+                    pass
+                elif c_floor > Decimal('0') and eff_qty > Decimal('0'):
+                    # Strictly Apples-to-Apples: pricing_result['taxable_value'] and c_floor * eff_qty are both tax-exclusive
+                    base_taxable = pricing_result['taxable_value']
+                    line_cost_floor = c_floor * eff_qty
+                    final_taxable = base_taxable * disc_factor
 
-                net_unit_price = (final_row_amt / eff_qty) if eff_qty > Decimal('0') else pricing_result['net_rate']
+                    # Smart Cap: If base item was legal before bill discount, cap final taxable amount at cost floor
+                    if base_taxable >= (line_cost_floor - Decimal('0.005')) and final_taxable < line_cost_floor:
+                        final_taxable = line_cost_floor
 
-                if c_floor > Decimal('0') and net_unit_price < (c_floor - Decimal('0.005')):
-                    transaction.set_rollback(True)
-                    prod_name = product.name if product else batch.batch_no
-                    raise ValidationError(f"Loss Sale Prevented: Cannot sell {prod_name} below its {floor_label} of ₹{c_floor:.2f}.")
+                    net_unit_price = final_taxable / eff_qty
+
+                    if net_unit_price < (c_floor - Decimal('0.005')):
+                        transaction.set_rollback(True)
+                        prod_name = product.name if product else batch.batch_no
+                        raise ValidationError(f"Loss Sale Prevented: Cannot sell {prod_name} below its {floor_label} of ₹{c_floor:.2f}.")
 
                 tax_info = pricing_result['tax_info']
                 gst_rate_val = Decimal(str(item_data.get('gstRate', 0)))

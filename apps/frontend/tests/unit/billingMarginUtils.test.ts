@@ -1,4 +1,4 @@
-import { calculateLineMargin, calculateTotalMargin } from '../../lib/billingMarginUtils';
+import { calculateLineMargin, calculateTotalMargin, distributeSmartDiscounts, getMaxAllowableBillDiscount } from '../../lib/billingMarginUtils';
 import { CartItem } from '../../types';
 
 describe('billingMarginUtils', () => {
@@ -190,5 +190,166 @@ describe('billingMarginUtils', () => {
             expect(retResPurch.isLossSale).toBe(false);
         });
     });
+
+    describe('distributeSmartDiscounts (Smart Capping & Dynamic Redistribution)', () => {
+        it('caps low-margin items at cost floor and redistributes remaining flat discount to high-margin items', () => {
+            // Cart with 2 items:
+            // Item A: Low-margin (Rate ₹100, landingRate ₹95, qty 1) -> Base ₹100, headroom ₹5
+            // Item B: High-margin (Rate ₹1000, landingRate ₹500, qty 1) -> Base ₹1000, headroom ₹500
+            // Total Base: ₹1100.
+            // Customer is offered a ₹245 flat discount: extraDiscountPct = (245 / 1100) * 100 = 22.2727%
+            // Proportional discount would give Item A: 100 * 22.2727% = ₹22.27 -> selling price ₹77.73 < ₹95 (LOSS SALE!)
+            // With Smart Cap & Redistribution:
+            // Item A is capped at ₹95 (absorbs max ₹5 discount, no loss sale!)
+            // The remaining ₹240 discount is absorbed by Item B (selling price ₹760 >= ₹500)
+            const cart = [
+                {
+                    batchId: 'batch-low-margin',
+                    rate: 100,
+                    landingRate: 95,
+                    totalQty: 1,
+                    qtyStrips: 1,
+                    qtyLoose: 0,
+                    totalAmount: 100,
+                    gstPct: 0,
+                },
+                {
+                    batchId: 'batch-high-margin',
+                    rate: 1000,
+                    landingRate: 500,
+                    totalQty: 1,
+                    qtyStrips: 1,
+                    qtyLoose: 0,
+                    totalAmount: 1000,
+                    gstPct: 0,
+                },
+            ] as unknown as CartItem[];
+
+            const flatDiscount = 245;
+            const extraDiscountPct = (flatDiscount / 1100) * 100;
+
+            const allocations = distributeSmartDiscounts(cart, extraDiscountPct, 'RETAIL');
+
+            const allocA = allocations.get('batch-low-margin')!;
+            const allocB = allocations.get('batch-high-margin')!;
+
+            // Item A should be capped at its cost floor (₹95)
+            expect(allocA.isSmartCapped).toBe(true);
+            expect(allocA.isLossSale).toBe(false);
+            expect(allocA.finalRowAmount).toBe(95);
+            expect(allocA.discountAmount).toBe(5);
+
+            // Item B should absorb the rest of the discount (₹240)
+            expect(allocB.isLossSale).toBe(false);
+            expect(allocB.finalRowAmount).toBe(760);
+            expect(allocB.discountAmount).toBe(240);
+
+            // Total discount absorbed exactly matches ₹245!
+            const totalAbsorbedDiscount = allocA.discountAmount + allocB.discountAmount;
+            expect(totalAbsorbedDiscount).toBe(flatDiscount);
+
+            // Sum of final rows equals Gross - Flat Discount (1100 - 245 = 855)
+            const totalFinalAmount = allocA.finalRowAmount + allocB.finalRowAmount;
+            expect(totalFinalAmount).toBe(855);
+        });
+
+        it('safe-harbors scheme items with free quantities so cost floor is evaluated on billed qty', () => {
+            // Item sold with scheme: Buy 10 strips, get 2 free strips.
+            // Billed strips: 10, Free strips: 2.
+            // Rate: ₹100, Landing Rate: ₹90.
+            // Revenue comes from 10 strips = ₹1000.
+            // Cost floor for 10 billed strips = ₹900.
+            // If free quantities erroneously spiked the floor to 12 * 90 = ₹1080, it would falsely fail!
+            const itemWithScheme = {
+                batchId: 'batch-scheme',
+                rate: 100,
+                landingRate: 90,
+                qtyStrips: 10,
+                qtyLoose: 0,
+                freeQtyStrips: 2,
+                totalQty: 10,
+                totalAmount: 1000,
+                gstPct: 0,
+            } as unknown as CartItem;
+
+            // With 5% extra discount:
+            // Billed total = 1000, after 5% discount = 950.
+            // 950 >= 900 (billed cost floor) -> perfectly legal and profitable!
+            const allocations = distributeSmartDiscounts([itemWithScheme], 5, 'RETAIL');
+            const alloc = allocations.get('batch-scheme')!;
+
+            expect(alloc.isLossSale).toBe(false);
+            expect(alloc.finalRowAmount).toBe(950);
+            expect(alloc.discountAmount).toBe(50);
+        });
+    });
 });
 
+
+    describe('PROACTIVE EDGE CASES', () => {
+
+        // EDGE CASE 1: 100% Free Promotional Item Safe Harbor in calculateLineMargin
+        it('[EC-1] 100% free promo item is NOT flagged as isLossSale in calculateLineMargin', () => {
+            const promoItem = {
+                batchId: 'promo-item',
+                rate: 100,
+                landingRate: 90,
+                qtyStrips: 0,
+                qtyLoose: 0,
+                freeQtyStrips: 5,
+                totalQty: 0,
+                totalAmount: 0,
+                gstPct: 0,
+            } as unknown as CartItem;
+
+            const result = calculateLineMargin(promoItem, 0, 'RETAIL');
+            expect(result.isLossSale).toBe(false);
+            expect(result.finalRowAmount).toBe(0);
+            expect(result.lineGrossProfit).toBe(0);
+        });
+
+        // EDGE CASE 2: getMaxAllowableBillDiscount computes correct ceiling
+        it('[EC-2] getMaxAllowableBillDiscount correctly computes the maximum safe flat discount', () => {
+            const cart = [
+                { batchId: 'a', rate: 200, landingRate: 180, qtyStrips: 1, qtyLoose: 0, totalQty: 1, totalAmount: 200, gstPct: 0 },
+                { batchId: 'b', rate: 1000, landingRate: 600, qtyStrips: 1, qtyLoose: 0, totalQty: 1, totalAmount: 1000, gstPct: 0 },
+            ] as unknown as CartItem[];
+
+            const result = getMaxAllowableBillDiscount(cart, 'RETAIL');
+            expect(result.totalBaseAmount).toBe(1200);
+            expect(result.maxDiscountAmount).toBe(420);
+            expect(result.maxDiscountPct).toBeCloseTo(35, 1);
+        });
+
+        // EDGE CASE 3: Impossible discount is capped at headroom
+        it('[EC-3] distributeSmartDiscounts caps impossible discount at total headroom', () => {
+            const cart = [
+                { batchId: 'low-headroom', rate: 100, landingRate: 95, qtyStrips: 1, qtyLoose: 0, totalQty: 1, totalAmount: 100, gstPct: 0 },
+            ] as unknown as CartItem[];
+
+            const allocations = distributeSmartDiscounts(cart, 50, 'RETAIL');
+            const alloc = allocations.get('low-headroom')!;
+
+            expect(alloc.finalRowAmount).toBeGreaterThanOrEqual(95);
+            expect(alloc.isLossSale).toBe(false);
+            expect(alloc.discountAmount).toBeLessThanOrEqual(5);
+        });
+
+        // EDGE CASE 4: GST derived post-cap (tax sequencing)
+        it('[EC-4] GST is derived post-cap: reflects capped row amount not discounted amount', () => {
+            // Rate=130 > floor(100*1.18=118); 20% discount -> 104 < 118 -> cap fires
+            const cart = [
+                { batchId: 'gst-item', rate: 130, landingRate: 100, qtyStrips: 1, qtyLoose: 0, totalQty: 1, totalAmount: 130, gstPct: 18 },
+            ] as unknown as CartItem[];
+
+            const allocations = distributeSmartDiscounts(cart, 20, 'RETAIL');
+            const alloc = allocations.get('gst-item')!;
+
+            expect(alloc.finalRowAmount).toBeCloseTo(118, 1);
+            expect(alloc.isSmartCapped).toBe(true);
+
+            const gstAmount = alloc.finalRowAmount - alloc.finalTaxable;
+            expect(gstAmount).toBeCloseTo(18, 0);
+            expect(alloc.finalTaxable).toBeCloseTo(100, 0);
+        });
+    });
