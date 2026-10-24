@@ -704,10 +704,11 @@ class SaleCreateView(APIView):
                         if base_row_amount >= (line_cost_floor_inclusive - Decimal('0.005')) and final_item_amount < line_cost_floor_inclusive:
                             final_item_amount = line_cost_floor_inclusive
 
-                        # Tax-exclusive net selling rate per pack for apples-to-apples comparison against cost_floor
+                        # Tax-exclusive net selling rate per pack for UI response
                         net_rate_per_pack = final_item_amount / (billed_qty * tax_multiplier)
 
-                        if net_rate_per_pack < (cost_floor - Decimal('0.005')):
+                        # Loss-Sale: Compare exact row amounts to prevent fractional reverse-division rounding drift
+                        if final_item_amount < (line_cost_floor_inclusive - Decimal('0.005')):
                             prod_name = item_data.get('name') or item_data.get('productName') or (batch_obj.product.name if batch_obj.product else f"Batch {batch_obj.batch_no}")
                             return Response(
                                 {
@@ -1056,10 +1057,11 @@ class SaleCreateView(APIView):
                                     if base_item_amt >= (line_cost_floor_inclusive - Decimal('0.005')) and final_row_amt < line_cost_floor_inclusive:
                                         final_row_amt = line_cost_floor_inclusive
 
-                                    # Tax-exclusive net selling rate per pack for apples-to-apples comparison against cost_floor
+                                    # Tax-exclusive net selling rate per pack for UI response
                                     net_unit_price = final_row_amt / (billed_qty * tax_multiplier)
 
-                                    if net_unit_price < (c_floor - Decimal('0.005')):
+                                    # Loss-Sale: Compare exact row amounts to prevent fractional reverse-division rounding drift
+                                    if final_row_amt < (line_cost_floor_inclusive - Decimal('0.005')):
                                         transaction.set_rollback(True)
                                         prod_name = product.name if product else batch.batch_no
                                         return Response({

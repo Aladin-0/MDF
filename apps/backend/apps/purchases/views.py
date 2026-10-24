@@ -1707,8 +1707,34 @@ class PurchaseOrderListView(APIView):
             return Response({'detail': 'outletId required'}, status=status.HTTP_400_BAD_REQUEST)
             
         from apps.purchases.models import PurchaseOrder
+        from django.db.models import Q
         
-        orders = PurchaseOrder.objects.filter(outlet_id=outlet_id).select_related('distributor').order_by('-created_at')
+        orders = PurchaseOrder.objects.filter(outlet_id=outlet_id).select_related('distributor')
+        
+        search = request.query_params.get('search')
+        if search:
+            search = search.strip()
+            orders = orders.filter(
+                Q(po_number__icontains=search) | Q(distributor__name__icontains=search)
+            )
+            
+        distributor_id = request.query_params.get('distributorId')
+        if distributor_id and distributor_id != 'ALL':
+            orders = orders.filter(distributor_id=distributor_id)
+            
+        start_date = request.query_params.get('startDate')
+        if start_date:
+            orders = orders.filter(order_date__gte=start_date)
+            
+        end_date = request.query_params.get('endDate')
+        if end_date:
+            orders = orders.filter(order_date__lte=end_date)
+            
+        order_status = request.query_params.get('status')
+        if order_status and order_status != 'ALL':
+            orders = orders.filter(status=order_status)
+            
+        orders = orders.order_by('-created_at')
         
         results = []
         for po in orders:
@@ -1716,7 +1742,7 @@ class PurchaseOrderListView(APIView):
                 'id': str(po.id),
                 'poNumber': po.po_number,
                 'status': po.status,
-                'distributorName': po.distributor.name,
+                'distributorName': po.distributor.name if po.distributor else '',
                 'orderDate': po.order_date.isoformat(),
                 'totalAmount': float(po.total_amount),
             })

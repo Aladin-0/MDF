@@ -396,7 +396,8 @@ def atomic_sale_save(
 
                     net_unit_price = final_taxable / eff_qty
 
-                    if net_unit_price < (c_floor - Decimal('0.005')):
+                    # Loss-Sale: Compare exact row amounts to prevent fractional reverse-division rounding drift
+                    if final_taxable < (line_cost_floor - Decimal('0.005')):
                         transaction.set_rollback(True)
                         prod_name = product.name if product else batch.batch_no
                         raise ValidationError(f"Loss Sale Prevented: Cannot sell {prod_name} below its {floor_label} of ₹{c_floor:.2f}.")

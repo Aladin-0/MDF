@@ -202,8 +202,8 @@ export function calculateLineMargin(
     const marginPct = sellingPricePerPack > 0 ? Math.round((margin / sellingPricePerPack) * 10000) / 100 : 0;
     const lineGrossProfit = Math.round((finalRowAmount - lineCostFloorInclusive) * 100) / 100;
 
-    // Loss-Sale: Strictly flag ONLY when mathematically proven unit net rate is less than unit cost floor
-    const isLossSale = costFloor > 0 && effectivePackQty > 0 && (sellingPricePerPack < (costFloor - 0.005));
+    // Loss-Sale: Compare exact row amounts to prevent fractional reverse-division rounding drift
+    const isLossSale = costFloor > 0 && effectivePackQty > 0 && (finalRowAmount < (lineCostFloorInclusive - 0.005));
 
     return {
         margin,
@@ -387,7 +387,9 @@ export function distributeSmartDiscounts(
         const finalRowAmount = Math.round(Math.max(0, meta.baseAmount - meta.discount) * 100) / 100;
         const isCapped = meta.headroom > 0 && Math.abs(finalRowAmount - meta.lineCostFloor) <= 0.01;
         const sellingPricePerPack = meta.effectiveQty > 0 ? (finalRowAmount / (meta.effectiveQty * meta.taxMultiplier)) : Number(meta.item.rate || 0);
-        const isLossSale = meta.costFloor > 0 && meta.effectiveQty > 0 && (sellingPricePerPack < (meta.costFloor - 0.005));
+        // Loss-Sale: Compare exact row amounts to prevent fractional reverse-division rounding drift
+        const isLossSale = meta.costFloor > 0 && meta.effectiveQty > 0 && (finalRowAmount < (meta.lineCostFloor - 0.005));
+        
         const finalTaxable = Math.round((finalRowAmount / meta.taxMultiplier) * 100) / 100;
 
         allocations.set(meta.key, {

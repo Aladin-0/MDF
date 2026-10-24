@@ -978,6 +978,23 @@ export interface CreatePurchasePayload {
     items: CreatePurchaseItemPayload[];
 }
 
+export interface PurchaseOrderFilters {
+    search?: string;
+    distributorId?: string;
+    startDate?: string;
+    endDate?: string;
+    status?: string;
+}
+
+export interface PurchaseOrderSummary {
+    id: string;
+    poNumber: string;
+    status: 'SAVED' | 'SENT' | 'PARTIAL' | 'COMPLETED' | 'CANCELLED' | string;
+    distributorName: string;
+    orderDate: string;
+    totalAmount: number;
+}
+
 // ─── Attendance ───────────────────────────────────────────────────────────────
 
 export interface AttendanceRecord {

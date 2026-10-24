@@ -859,8 +859,24 @@ const realStaffApi = {
 };
 
 const realPurchasesApi = {
-    getOrders: async (outletId: string): Promise<any[]> => {
-        const response = await fetch(`${API_URL}/purchases/orders/?outletId=${outletId}`, { headers: getHeaders() });
+    getOrders: async (outletId: string, filters?: { search?: string; distributorId?: string; startDate?: string; endDate?: string; status?: string }): Promise<any[]> => {
+        let url = `${API_URL}/purchases/orders/?outletId=${outletId}`;
+        if (filters?.distributorId && filters.distributorId !== 'ALL') {
+            url += `&distributorId=${encodeURIComponent(filters.distributorId)}`;
+        }
+        if (filters?.startDate) {
+            url += `&startDate=${encodeURIComponent(filters.startDate)}`;
+        }
+        if (filters?.endDate) {
+            url += `&endDate=${encodeURIComponent(filters.endDate)}`;
+        }
+        if (filters?.status && filters.status !== 'ALL') {
+            url += `&status=${encodeURIComponent(filters.status)}`;
+        }
+        if (filters?.search) {
+            url += `&search=${encodeURIComponent(filters.search)}`;
+        }
+        const response = await fetch(url, { headers: getHeaders() });
         await assertOk(response);
         const data = await response.json();
         return data.results || data || [];

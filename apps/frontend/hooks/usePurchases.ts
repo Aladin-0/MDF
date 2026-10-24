@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { purchasesApi, distributorsApi } from '@/lib/apiClient';
-import { CreatePurchasePayload, PaginatedResponse, PurchaseInvoiceFull } from '@/types';
+import { CreatePurchasePayload, PaginatedResponse, PurchaseInvoiceFull, PurchaseOrderFilters } from '@/types';
 import { useOutletId } from '@/hooks/useOutletId';
 
 export function usePurchasesList(filters?: any) {
@@ -140,11 +140,11 @@ export function useCheckDuplicateInvoice(invoiceNo: string, partyLedgerId: strin
     });
 }
 
-export function usePurchaseOrders() {
+export function usePurchaseOrders(filters?: PurchaseOrderFilters) {
     const outletId = useOutletId();
     return useQuery({
-        queryKey: ['purchaseOrders', outletId],
-        queryFn: () => purchasesApi.getOrders(outletId!),
+        queryKey: ['purchaseOrders', outletId, filters],
+        queryFn: () => purchasesApi.getOrders(outletId!, filters),
         enabled: !!outletId,
     });
 }
