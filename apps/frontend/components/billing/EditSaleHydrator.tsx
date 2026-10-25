@@ -64,25 +64,8 @@ export function EditSaleHydrator() {
                     } as any);
                 }
 
-                const totalDiscountAmount = typeof fullInvoice.discountAmount === 'number' ? fullInvoice.discountAmount : 0;
-                const totalRateAmount = fullInvoice.items?.reduce((sum: number, item: any) => {
-                    const packSize = item.packSize || 1;
-                    const qtyStrips = item.qtyStrips || 0;
-                    const qtyLoose = item.qtyLoose || 0;
-                    const qty = qtyStrips + (qtyLoose / packSize);
-                    return sum + ((item.rate || item.saleRate || 0) * qty);
-                }, 0) || 1;
-                const itemDiscountAmount = fullInvoice.items?.reduce((sum: number, item: any) => {
-                    const packSize = item.packSize || 1;
-                    const qtyStrips = item.qtyStrips || 0;
-                    const qtyLoose = item.qtyLoose || 0;
-                    const qty = qtyStrips + (qtyLoose / packSize);
-                    return sum + (((item.mrp || 0) - (item.rate || item.saleRate || 0)) * qty);
-                }, 0) || 0;
-                
-                const extraDiscountAmount = Math.max(0, totalDiscountAmount - itemDiscountAmount);
-                const extraDiscountPct = totalRateAmount > 0 ? (extraDiscountAmount / totalRateAmount) * 100 : 0;
-                store.setExtraDiscountPct(extraDiscountPct);
+                // Directly map the true percentage from the backend to prevent math desync
+                store.setExtraDiscountPct(Number(fullInvoice.extraDiscountPct) || 0);
 
                 store.setPayment({
                     method: (fullInvoice.paymentMode || 'cash') as any,

@@ -3096,6 +3096,7 @@ class SaleDetailView(APIView):
             } if invoice.customer else None,
             'subtotal': float(invoice.subtotal),
             'discountAmount': float(invoice.discount_amount),
+            'extraDiscountPct': float(invoice.extra_discount_pct or 0.0),
             'taxableAmount': float(invoice.taxable_amount),
             'cgstAmount': float(invoice.cgst_amount),
             'sgstAmount': float(invoice.sgst_amount),
