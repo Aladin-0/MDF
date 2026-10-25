@@ -47,7 +47,14 @@ export function EditSaleHydrator() {
                 if (fullInvoice.invoiceDate) {
                     const d = new Date(fullInvoice.invoiceDate);
                     store.updateDraftHeader(targetDraftId, {
-                        invoiceDate: new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+                        invoiceDate: new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16),
+                        saleType: fullInvoice.saleType || 'RETAIL', // FIX 1: Restore correct tax math
+                        billingBasis: fullInvoice.billingBasis || 'mrp'
+                    });
+                } else {
+                    store.updateDraftHeader(targetDraftId, {
+                        saleType: fullInvoice.saleType || 'RETAIL',
+                        billingBasis: fullInvoice.billingBasis || 'mrp'
                     });
                 }
 
@@ -118,6 +125,9 @@ export function EditSaleHydrator() {
                          const qtyLoose = item.qtyLoose || 0;
                          const totalQtyFractional = qtyStrips + (qtyLoose / packSize);
                          
+                         // The true base rate before any item or bill discounts
+                         const baseRate = item.saleRate || item.mrp || item.rate;
+                         
                          store.addToCart(targetDraftId, {
                              ...item,
                              qtyStrips: qtyStrips,
@@ -131,7 +141,8 @@ export function EditSaleHydrator() {
                              gstRate: item.gstRate || 0,
                              cgstRate: item.cgstRate || 0,
                              sgstRate: item.sgstRate || 0,
-                             saleRate: item.saleRate || item.rate,
+                             saleRate: baseRate,
+                             rate: baseRate, // FIX 2: Force pre-discount rate here!
                              totalQty: totalQtyFractional,
                              saleMode: item.saleMode || 'mixed',
                              mrp: item.mrp || item.rate,
