@@ -10,7 +10,8 @@ import { CartItem } from '../types';
  */
 export function getMaxAllowableBillDiscount(
     cart: CartItem[],
-    saleType: 'RETAIL' | 'WHOLESALE' = 'RETAIL'
+    saleType: 'RETAIL' | 'WHOLESALE' = 'RETAIL',
+    landingCostIncludeGst: boolean = false
 ): { maxDiscountAmount: number; totalBaseAmount: number; maxDiscountPct: number } {
     if (!cart || cart.length === 0) return { maxDiscountAmount: 0, totalBaseAmount: 0, maxDiscountPct: 0 };
 
@@ -48,7 +49,10 @@ export function getMaxAllowableBillDiscount(
 
         const gstRate = Number(item.gstRate ?? item.gstPct ?? 0);
         const taxMultiplier = 1 + (gstRate / 100);
-        const lineCostFloor = costFloor > 0 ? Math.round(costFloor * taxMultiplier * effectiveQty * 100) / 100 : 0;
+
+        // FIX: If cost floor already includes GST (toggle ON), do not multiply it again.
+        const costTaxMultiplier = landingCostIncludeGst ? 1 : taxMultiplier;
+        const lineCostFloor = costFloor > 0 ? Math.round(costFloor * costTaxMultiplier * effectiveQty * 100) / 100 : 0;
 
         let baseAmount = Number(item.totalAmount);
         if (isNaN(baseAmount) || baseAmount <= 0) {
@@ -101,7 +105,8 @@ export interface TotalMarginInfo {
 export function calculateLineMargin(
     item: CartItem, 
     extraDiscountPct: number = 0,
-    saleType: 'RETAIL' | 'WHOLESALE' = 'RETAIL'
+    saleType: 'RETAIL' | 'WHOLESALE' = 'RETAIL',
+    landingCostIncludeGst: boolean = false
 ): LineMarginInfo {
     const packSize = (Number(item.packSize) && Number(item.packSize) > 0) ? Number(item.packSize) : 1;
     
@@ -164,7 +169,10 @@ export function calculateLineMargin(
     // Tax multiplier for apples-to-apples tax inclusivity comparison
     const gstRate = Number(item.gstRate ?? item.gstPct ?? 0);
     const taxMultiplier = 1 + (gstRate / 100);
-    const lineCostFloorInclusive = Math.round(costFloor * taxMultiplier * effectivePackQty * 100) / 100;
+
+    // FIX: If cost floor already includes GST (toggle ON), do not multiply it again.
+    const costTaxMultiplier = landingCostIncludeGst ? 1 : taxMultiplier;
+    const lineCostFloorInclusive = Math.round(costFloor * costTaxMultiplier * effectivePackQty * 100) / 100;
 
     // ── EDGE CASE: 100% Free Promotional Item (Scheme Safe Harbor) ────────────
     // If billed quantity is zero but free scheme quantity is non-zero, the customer
@@ -200,7 +208,11 @@ export function calculateLineMargin(
     const sellingPricePerPack = effectivePackQty > 0 ? (finalRowAmount / (effectivePackQty * taxMultiplier)) : Number(item.rate || item.saleRate || 0);
     const margin = Math.round((sellingPricePerPack - costFloor) * 100) / 100;
     const marginPct = sellingPricePerPack > 0 ? Math.round((margin / sellingPricePerPack) * 10000) / 100 : 0;
-    const lineGrossProfit = Math.round((finalRowAmount - lineCostFloorInclusive) * 100) / 100;
+
+    // True Profit = Tax-Exclusive Revenue - Tax-Exclusive Cost
+    const finalTaxable = finalRowAmount / taxMultiplier;
+    const baseUnitCost = landingCostIncludeGst ? (costFloor / taxMultiplier) : costFloor;
+    const lineGrossProfit = Math.round((finalTaxable - (baseUnitCost * effectivePackQty)) * 100) / 100;
 
     // Loss-Sale: Compare exact row amounts to prevent fractional reverse-division rounding drift
     const isLossSale = costFloor > 0 && effectivePackQty > 0 && (finalRowAmount < (lineCostFloorInclusive - 0.005));
@@ -237,7 +249,8 @@ export interface SmartDiscountAllocation {
 export function distributeSmartDiscounts(
     cart: CartItem[],
     extraDiscountPct: number,
-    saleType: 'RETAIL' | 'WHOLESALE' = 'RETAIL'
+    saleType: 'RETAIL' | 'WHOLESALE' = 'RETAIL',
+    landingCostIncludeGst: boolean = false
 ): Map<string, SmartDiscountAllocation> {
     const allocations = new Map<string, SmartDiscountAllocation>();
     if (!cart || cart.length === 0) return allocations;
@@ -289,7 +302,10 @@ export function distributeSmartDiscounts(
 
         const gstRate = Number(item.gstRate ?? item.gstPct ?? 0);
         const taxMultiplier = 1 + (gstRate / 100);
-        const lineCostFloor = Math.round(costFloor * taxMultiplier * effectiveQty * 100) / 100;
+
+        // FIX: If cost floor already includes GST (toggle ON), do not multiply it again.
+        const costTaxMultiplier = landingCostIncludeGst ? 1 : taxMultiplier;
+        const lineCostFloor = Math.round(costFloor * costTaxMultiplier * effectiveQty * 100) / 100;
 
         let baseAmount = Number(item.totalAmount);
         if (isNaN(baseAmount) || baseAmount <= 0) {
@@ -416,7 +432,8 @@ export function calculateTotalMargin(
     billRevenue?: number,
     billDiscountAmount: number = 0,
     extraDiscountPct: number = 0,
-    saleType: 'RETAIL' | 'WHOLESALE' = 'RETAIL'
+    saleType: 'RETAIL' | 'WHOLESALE' = 'RETAIL',
+    landingCostIncludeGst: boolean = false
 ): TotalMarginInfo {
     if (!cart || cart.length === 0) {
         return {
@@ -432,7 +449,7 @@ export function calculateTotalMargin(
         };
     }
 
-    const smartAllocations = distributeSmartDiscounts(cart, extraDiscountPct, saleType);
+    const smartAllocations = distributeSmartDiscounts(cart, extraDiscountPct, saleType, landingCostIncludeGst);
 
     let totalLandingCost = 0;
     let itemsSellingTotal = 0;
@@ -444,7 +461,7 @@ export function calculateTotalMargin(
         const key = item.batchId || `item-${idx}`;
         const alloc = smartAllocations.get(key);
 
-        const line = calculateLineMargin(item, extraDiscountPct, saleType);
+        const line = calculateLineMargin(item, extraDiscountPct, saleType, landingCostIncludeGst);
         totalLandingCost += line.lineLandingCost;
 
         const rowAmount = alloc ? alloc.finalRowAmount : line.finalRowAmount;

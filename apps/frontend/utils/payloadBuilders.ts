@@ -1,5 +1,6 @@
 import { bankersRound } from './mathUtils';
 import { distributeSmartDiscounts } from '../lib/billingMarginUtils';
+import { useBillingStore } from '../store/billingStore';
 
 export function buildScheduleHPayload(customer: any, doctor: any, draft: any): any {
     if (draft?.scheduleHData) {
@@ -70,7 +71,8 @@ export function buildSalePayload(draft: any, scheduleHData: any, totals: any, ac
         finalSgst = 0;
     }
 
-    const smartAllocations = distributeSmartDiscounts(cart, extraDiscountPct, draft.saleType || 'RETAIL');
+    const landingCostIncludeGst = useBillingStore.getState().landingCostIncludeGst;
+    const smartAllocations = distributeSmartDiscounts(cart, extraDiscountPct, draft.saleType || 'RETAIL', landingCostIncludeGst);
 
     return {
         outletId: resolvedOutletId,

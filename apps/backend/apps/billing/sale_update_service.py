@@ -158,6 +158,9 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
     try:
         # Step 1: Validate and get SaleInvoice
         outlet = Outlet.objects.get(id=outlet_id)
+
+        # FIX: Establish the current accounting date for all financial ledger entries
+        current_accounting_date = datetime.now().date()
         try:
             sale_invoice = SaleInvoice.objects.select_for_update().get(id=sale_id, outlet=outlet)
         except SaleInvoice.DoesNotExist:
@@ -653,7 +656,8 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
                 description=f"{'Sale' if credit_given_val > 0 else 'Adjustment'} on {sale_invoice.invoice_no}",
                 balance_after=credit_account.total_outstanding,
                 recorded_by=billed_by,
-                date=invoice_date.date(),
+                # FIX: Post the credit adjustment to today's ledger, not backdated
+                date=current_accounting_date,
             )
 
         if new_customer:
@@ -665,14 +669,16 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
             if sale_entry:
                 LedgerEntry.objects.filter(pk=sale_entry.pk).update(
                     debit=sale_invoice.grand_total,
-                    date=invoice_d,
+                    # FIX: Shift the modified balance to today's ledger
+                    date=current_accounting_date,
                     customer=new_customer
                 )
             else:
-                last_ledger = LedgerEntry.objects.filter(outlet=outlet, customer=new_customer, date__lte=invoice_d).order_by('-date', '-created_at').first()
+                last_ledger = LedgerEntry.objects.filter(outlet=outlet, customer=new_customer, date__lte=current_accounting_date).order_by('-date', '-created_at').first()
                 running = (last_ledger.running_balance if last_ledger else Decimal('0')) + sale_invoice.grand_total
                 LedgerEntry.objects.create(
-                    outlet=outlet, entity_type='customer', customer=new_customer, date=invoice_d,
+                    outlet=outlet, entity_type='customer', customer=new_customer, 
+                    date=current_accounting_date, # FIX: Use current date
                     entry_type='sale', reference_no=sale_invoice.invoice_no, debit=sale_invoice.grand_total, credit=Decimal('0'), running_balance=running
                 )
             
@@ -682,19 +688,22 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
             if total_paid > Decimal('0'):
                 if receipt_entry:
                     LedgerEntry.objects.filter(pk=receipt_entry.pk).update(
-                        credit=total_paid, date=invoice_d, customer=new_customer
+                        credit=total_paid, 
+                        date=current_accounting_date, # FIX: Use current date
+                        customer=new_customer
                     )
                 else:
                     LedgerEntry.objects.create(
-                        outlet=outlet, entity_type='customer', customer=new_customer, date=invoice_d,
+                        outlet=outlet, entity_type='customer', customer=new_customer, 
+                        date=current_accounting_date, # FIX: Use current date
                         entry_type='receipt', reference_no=sale_invoice.invoice_no, debit=Decimal('0'), credit=total_paid, running_balance=Decimal('0')
                     )
             elif receipt_entry:
                 LedgerEntry.objects.filter(pk=receipt_entry.pk).delete()
 
-            rebuild_customer_ledger(str(outlet.id), str(new_customer.id), invoice_d)
+            rebuild_customer_ledger(str(outlet.id), str(new_customer.id), current_accounting_date)
             if old_customer and old_customer.id != new_customer.id:
-                rebuild_customer_ledger(str(outlet.id), str(old_customer.id), min(invoice_d, old_customer.created_at.date()))
+                rebuild_customer_ledger(str(outlet.id), str(old_customer.id), min(current_accounting_date, old_customer.created_at.date()))
 
         # Clear cached relationships so post_sale_invoice reads fresh InvoicePayments
         if hasattr(sale_invoice, '_prefetched_objects_cache'):

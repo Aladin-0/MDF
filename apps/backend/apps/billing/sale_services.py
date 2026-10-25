@@ -286,6 +286,9 @@ def atomic_sale_save(
         # We must call sale_invoice.save() once first to trigger .clean() and set is_interstate
         sale_invoice.save()
 
+        outlet_settings = getattr(outlet, 'settings', None)
+        landing_cost_include_gst = outlet_settings.landing_cost_include_gst if outlet_settings else False
+
         for item_data in items_data:
             batch_id = item_data.get('batchId')
             product_id = item_data.get('productId')
@@ -385,9 +388,14 @@ def atomic_sale_save(
                 if eff_qty <= Decimal('0') and alloc_free > Decimal('0'):
                     pass
                 elif c_floor > Decimal('0') and eff_qty > Decimal('0'):
-                    # Strictly Apples-to-Apples: pricing_result['taxable_value'] and c_floor * eff_qty are both tax-exclusive
+                    gst_rate_val = Decimal(str(item_data.get('gstRate', getattr(product, 'gst_rate', Decimal('0')) or Decimal('0'))))
+                    tax_multiplier = Decimal('1') + (gst_rate_val / Decimal('100'))
+
+                    # Strictly Apples-to-Apples: pricing_result['taxable_value'] is tax-exclusive.
+                    # If cost floor already includes GST (toggle ON), strip GST to compare tax-exclusive against tax-exclusive.
+                    eff_unit_cost = (c_floor / tax_multiplier) if landing_cost_include_gst else c_floor
                     base_taxable = pricing_result['taxable_value']
-                    line_cost_floor = c_floor * eff_qty
+                    line_cost_floor = eff_unit_cost * eff_qty
                     final_taxable = base_taxable * disc_factor
 
                     # Smart Cap: If base item was legal before bill discount, cap final taxable amount at cost floor

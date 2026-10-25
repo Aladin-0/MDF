@@ -633,6 +633,8 @@ class SaleCreateView(APIView):
             extra_disc_pct = Decimal(str(request.data.get('extraDiscountPct', 0)))
             discount_factor = Decimal('1') - (extra_disc_pct / Decimal('100')) if extra_disc_pct > Decimal('0') else Decimal('1')
             req_sale_type = request.data.get('saleType', 'RETAIL')
+            outlet_settings = getattr(outlet, 'settings', None)
+            landing_cost_include_gst = outlet_settings.landing_cost_include_gst if outlet_settings else False
 
             for item_data in items_data:
                 batch_id = item_data.get('batchId')
@@ -677,7 +679,10 @@ class SaleCreateView(APIView):
                     if billed_qty > Decimal('0'):
                         gst_rate = Decimal(str(item_data.get('gstRate', getattr(batch_obj.product, 'gst_rate', Decimal('0')) or Decimal('0'))))
                         tax_multiplier = Decimal('1') + (gst_rate / Decimal('100'))
-                        line_cost_floor_inclusive = (cost_floor * tax_multiplier * billed_qty).quantize(Decimal('0.01'))
+
+                        # FIX: If cost floor already includes GST (toggle ON), do not multiply it again.
+                        cost_tax_multiplier = Decimal('1') if landing_cost_include_gst else tax_multiplier
+                        line_cost_floor_inclusive = (cost_floor * cost_tax_multiplier * billed_qty).quantize(Decimal('0.01'))
 
                         rate_val = Decimal(str(item_data.get('rate', batch_obj.mrp)))
                         disc_pct = Decimal(str(item_data.get('discountPct', 0)))
@@ -1030,7 +1035,10 @@ class SaleCreateView(APIView):
                                 if c_floor > Decimal('0'):
                                     gst_rate = Decimal(str(item_data.get('gstRate', getattr(product, 'gst_rate', Decimal('0')) or Decimal('0'))))
                                     tax_multiplier = Decimal('1') + (gst_rate / Decimal('100'))
-                                    line_cost_floor_inclusive = (c_floor * tax_multiplier * billed_qty).quantize(Decimal('0.01'))
+
+                                    # FIX: If cost floor already includes GST (toggle ON), do not multiply it again.
+                                    cost_tax_multiplier = Decimal('1') if landing_cost_include_gst else tax_multiplier
+                                    line_cost_floor_inclusive = (c_floor * cost_tax_multiplier * billed_qty).quantize(Decimal('0.01'))
 
                                     p_rate = Decimal(str(item_data.get('rate', batch.mrp)))
                                     d_pct = Decimal(str(item_data.get('discountPct', 0)))

@@ -8,7 +8,7 @@ import { calculateLineMargin, calculateTotalMargin } from '@/lib/billingMarginUt
 
 export function useCheckout() {
     const router = useRouter();
-    const { drafts, activeDraftId, getDraftTotals } = useBillingStore();
+    const { drafts, activeDraftId, getDraftTotals, landingCostIncludeGst } = useBillingStore();
     const { saveBill, isLoading } = useSaveBill();
     const { toast } = useToast();
     
@@ -65,8 +65,8 @@ export function useCheckout() {
     // Loss-Sale Prevention: Check line-item margins and overall bill margin
     const extraDiscPct = draft?.extraDiscountPct || 0;
     const saleType = draft?.saleType || 'RETAIL';
-    const marginData = draft ? calculateTotalMargin(draft.cart, totals?.grandTotal, totals?.extraDiscountAmount, extraDiscPct, saleType) : null;
-    const hasLossItem = draft ? draft.cart.some(item => calculateLineMargin(item, extraDiscPct, saleType).isLossSale) : false;
+    const marginData = draft ? calculateTotalMargin(draft.cart, totals?.grandTotal, totals?.extraDiscountAmount, extraDiscPct, saleType, landingCostIncludeGst) : null;
+    const hasLossItem = draft ? draft.cart.some(item => calculateLineMargin(item, extraDiscPct, saleType, landingCostIncludeGst).isLossSale) : false;
     const isGlobalLoss = Boolean(marginData?.isGlobalLoss || hasLossItem);
     const isLossSale = Boolean(hasLossItem || marginData?.hasLossSale);
 

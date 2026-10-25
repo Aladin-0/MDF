@@ -31,6 +31,9 @@ const ROLE_PERMISSIONS: Record<StaffRole, Permission[] | ['*']> = {
     billing_staff: [
         'view_outlet', 'create_bills'
     ],
+    cashier: [
+        'view_outlet', 'create_bills'
+    ],
     view_only: [
         'view_outlet', 'view_reports'
     ],

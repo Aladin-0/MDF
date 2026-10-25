@@ -50,53 +50,53 @@ const safePositiveNumber = (errMsg: string) =>
     );
 
 const itemSchema = z.object({
-    productId:       z.string().min(1, 'Product selection from catalog is required'),
-    isCustom:        z.boolean().default(false),
-    productName:     z.string().min(1, 'Product name required'),
-    hsnCode:         z.string().optional().default(''),
-    batchNo:         z.string().min(1, 'Batch required'),
-    expiryDate:      z.string().min(1, 'Expiry required').refine((val) => {
+    productId: z.string().min(1, 'Product selection from catalog is required'),
+    isCustom: z.boolean().default(false),
+    productName: z.string().min(1, 'Product name required'),
+    hsnCode: z.string().optional().default(''),
+    batchNo: z.string().min(1, 'Batch required'),
+    expiryDate: z.string().min(1, 'Expiry required').refine((val) => {
         const norm = normalizeExpiry(val);
         return /^\d{4}-\d{2}-\d{2}$/.test(norm);
     }, 'Invalid expiry format (use MM/YY or MM/YYYY)'),
-    pkg:             safeNumber(1, 1),
-    qty:             safePositiveNumber('Qty must be > 0'),
-    freeQty:         safeNumber(0, 0),
-    purchaseRate:    safePositiveNumber('Rate must be > 0'),
-    discountPct:     safeNumber(0, 0),
+    pkg: safeNumber(1, 1),
+    qty: safePositiveNumber('Qty must be > 0'),
+    freeQty: safeNumber(0, 0),
+    purchaseRate: safePositiveNumber('Rate must be > 0'),
+    discountPct: safeNumber(0, 0),
     cashDiscountPct: safeNumber(0, 0),
-    gstRate:         safeNumber(0, 0),
-    cess:            safeNumber(0, 0),
-    mrp:             safePositiveNumber('MRP required'),
-    ptr:             safeNumber(0, 0),
-    pts:             safeNumber(0, 0),
-    saleRate:        safeNumber(0, 0),
+    gstRate: safeNumber(0, 0),
+    cess: safeNumber(0, 0),
+    mrp: safePositiveNumber('MRP required'),
+    ptr: safeNumber(0, 0),
+    pts: safeNumber(0, 0),
+    saleRate: safeNumber(0, 0),
 });
 
 const schema = z.object({
-    partyLedgerId:    z.string().min(1, 'Select a party ledger'),
-    purchaseType:     z.enum(['credit', 'cash']),
-    invoiceNo:        z.string().min(1, 'Invoice No required'),
-    invoiceDate:      z.string(),
-    dueDate:          z.string().optional(),
+    partyLedgerId: z.string().min(1, 'Select a party ledger'),
+    purchaseType: z.enum(['credit', 'cash']),
+    invoiceNo: z.string().min(1, 'Invoice No required'),
+    invoiceDate: z.string(),
+    dueDate: z.string().optional(),
     purchaseOrderRef: z.string().optional(),
-    godown:           z.string().optional(),
-    freight:          safeNumber(0, 0),
-    invoiceDiscount:  safeNumber(0, 0),
-    notes:            z.string().optional(),
-    items:            z.array(itemSchema).min(1, 'Add at least one item'),
+    godown: z.string().optional(),
+    freight: safeNumber(0, 0),
+    invoiceDiscount: safeNumber(0, 0),
+    notes: z.string().optional(),
+    items: z.array(itemSchema).min(1, 'Add at least one item'),
 });
 
 type FormData = z.infer<typeof schema>;
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const GODOWNS   = [
-    { value: 'main',         label: 'Main Store' },
+const GODOWNS = [
+    { value: 'main', label: 'Main Store' },
     { value: 'cold_storage', label: 'Cold Storage' },
-    { value: 'secondary',    label: 'Secondary Store' },
+    { value: 'secondary', label: 'Secondary Store' },
 ];
-const today      = format(new Date(), 'yyyy-MM-dd');
+const today = format(new Date(), 'yyyy-MM-dd');
 const defaultDue = format(addDays(new Date(), 30), 'yyyy-MM-dd');
 
 export const emptyItem = (): PurchaseItemFormData => ({
@@ -125,11 +125,11 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
     const poId = searchParams?.get('poId');
     const [linkedPoNo, setLinkedPoNo] = useState<string | null>(null);
 
-    const { toast }   = useToast();
-    const outletId    = useOutletId();
-    const outlet      = useAuthStore((s) => s.outlet);
+    const { toast } = useToast();
+    const outletId = useOutletId();
+    const outlet = useAuthStore((s) => s.outlet);
     const formRef = useRef<HTMLFormElement>(null);
-    const user        = useAuthStore((s) => s.user);
+    const user = useAuthStore((s) => s.user);
     const outletState = useSettingsStore((s) => s.outletState) || outlet?.state || 'Maharashtra';
 
     // M5: scope the draft key to this outlet+user so drafts never bleed between
@@ -142,8 +142,8 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
     const confirmDraft = useConfirmDraft();
     const [partyLedger, setPartyLedger] = useState<Ledger | null>(null);
 
-    const [items,             setItems]             = useState<PurchaseItemFormData[]>([emptyItem()]);
-    const [hasDraft,          setHasDraft]          = useState(false);
+    const [items, setItems] = useState<PurchaseItemFormData[]>([emptyItem()]);
+    const [hasDraft, setHasDraft] = useState(false);
 
     // Refs for enter navigation
     const partyRef = useRef<HTMLDivElement>(null);
@@ -152,20 +152,20 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
     const poRef = useRef<HTMLInputElement | null>(null);
     const notesRef = useRef<HTMLTextAreaElement | null>(null);
     const gridContainerRef = useRef<HTMLDivElement>(null);
-    
+
     useEnterNavigation([partyRef, invoiceNoRef, dateRef, poRef, notesRef, gridContainerRef]);
     useGridNavigation(gridContainerRef, () => handleAddItem());
 
-    const [ledgerAdjustment,  setLedgerAdjustment]   = useState<number>(0);
-    const [adjustmentSign,    setAdjustmentSign]     = useState<'-' | '+'>('-');
-    const [ledgerNote,        setLedgerNote]         = useState<string>('');
-    const [revisionReasonCode,setRevisionReasonCode] = useState<string>('');
-    const [revisionReasonText,setRevisionReasonText] = useState<string>('');
+    const [ledgerAdjustment, setLedgerAdjustment] = useState<number>(0);
+    const [adjustmentSign, setAdjustmentSign] = useState<'-' | '+'>('-');
+    const [ledgerNote, setLedgerNote] = useState<string>('');
+    const [revisionReasonCode, setRevisionReasonCode] = useState<string>('');
+    const [revisionReasonText, setRevisionReasonText] = useState<string>('');
 
     // ── Add-product drawer state ───────────────────────────────────────────────
-    const [drawerOpen,        setDrawerOpen]        = useState(false);
+    const [drawerOpen, setDrawerOpen] = useState(false);
     const [drawerInitialName, setDrawerInitialName] = useState('');
-    const [activeDrawerRow,   setActiveDrawerRow]   = useState(0);
+    const [activeDrawerRow, setActiveDrawerRow] = useState(0);
 
     const [ocrStatus, setOcrStatus] = useState<'idle' | 'processing' | 'ready' | 'error'>('idle');
     const [ocrError, setOcrError] = useState('');
@@ -180,19 +180,19 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
 
     const handleSelectProduct = (rowIndex: number, product: ProductSearchResult) => {
         const firstBatch = product.batches?.[0];
-        const mrp      = firstBatch?.mrp      ?? product.mrp      ?? 0;
-        const saleRate = firstBatch?.saleRate  ?? product.saleRate ?? 0;
-        const gstRate  = product.gstRate ?? 0;
+        const mrp = firstBatch?.mrp ?? product.mrp ?? 0;
+        const saleRate = firstBatch?.saleRate ?? product.saleRate ?? 0;
+        const gstRate = product.gstRate ?? 0;
         setItems((prev) => prev.map((item, i) => {
             if (i !== rowIndex) return item;
             const newPkg = typeof product.packSize === 'number' && product.packSize > 0 ? product.packSize : ('' as unknown as number);
             return {
                 ...item,
-                productId:   product.id,
+                productId: product.id,
                 productName: product.name,
-                isCustom:    false,
-                hsnCode:     product.hsnCode ?? item.hsnCode,
-                pkg:         newPkg,
+                isCustom: false,
+                hsnCode: product.hsnCode ?? item.hsnCode,
+                pkg: newPkg,
                 packUnitLabel: product.packUnit || '',
                 gstRate,
                 mrp,
@@ -219,21 +219,21 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
             godown: 'main',
             notes: '',
             purchaseType: 'credit',
-            invoiceDate:  today,
-            dueDate:      defaultDue,
-            freight:      0,
+            invoiceDate: today,
+            dueDate: defaultDue,
+            freight: 0,
             invoiceDiscount: 0,
-            items:        [emptyItem()],
+            items: [emptyItem()],
         },
     });
 
     const watchedPurchaseType = watch('purchaseType');
-    const watchedFreight      = watch('freight') ?? 0;
+    const watchedFreight = watch('freight') ?? 0;
     const watchedInvoiceDiscount = watch('invoiceDiscount') ?? 0;
-    const watchedInvoiceNo    = watch('invoiceNo');
+    const watchedInvoiceNo = watch('invoiceNo');
     const watchedPartyLedgerId = watch('partyLedgerId');
-    const watchedInvoiceDate   = watch('invoiceDate');
-    
+    const watchedInvoiceDate = watch('invoiceDate');
+
     // ─── Credit Days Logic ────────────────────────────────────────────────────────
     const [creditDays, setCreditDays] = useState<number>(30);
 
@@ -264,7 +264,7 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
         }
     }, [watchedInvoiceDate, creditDays, watchedPurchaseType, setValue]);
     // ──────────────────────────────────────────────────────────────────────────────
-    
+
     // Check for duplicate invoice
     const duplicateInvoiceQuery = useCheckDuplicateInvoice(watchedInvoiceNo, watchedPartyLedgerId);
     // Don't show duplicate warning if we are editing that exact invoice
@@ -281,20 +281,20 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
         if (invoiceToEdit.status === 'SAVED') {
             setOcrStatus('processing');
             setScannedImage((invoiceToEdit as any).invoiceImageUrl || null);
-            
+
             const pollStatus = async () => {
                 if (!outlet?.id) return;
                 try {
                     const res = await api.get(`/purchases/${invoiceToEdit.id}/ocr-status/`, {
                         params: { outletId: outlet.id }
                     });
-                    
+
                     if (res.data.status === 'processing') {
                         setTimeout(pollStatus, 2000);
                     } else if (res.data.status === 'ready') {
                         const ocrData = res.data;
                         setOcrStatus('ready');
-                        
+
                         // Set the Ledger object directly so the UI updates
                         if (ocrData.header?.partyLedger) {
                             setPartyLedger(ocrData.header.partyLedger);
@@ -325,11 +325,11 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
                             pts: item.rate || 0,
                             saleRate: item.mrp || 0,
                         }));
-                        
+
                         setItems(formItems.length ? formItems : [emptyItem()]);
-                        
+
                         reset({
-                            partyLedgerId: ocrData.header?.partyLedgerId || '', 
+                            partyLedgerId: ocrData.header?.partyLedgerId || '',
                             purchaseType: 'credit',
                             invoiceNo: ocrData.header?.invoiceNo || '',
                             invoiceDate: ocrData.header?.invoiceDate || today,
@@ -341,7 +341,7 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
                             notes: '',
                             items: formItems.length ? formItems : [emptyItem()],
                         });
-                        
+
                     } else {
                         setOcrStatus('error');
                         setOcrError(res.data.message || 'OCR failed');
@@ -410,39 +410,39 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
             fetch(`${API_URL}/purchases/orders/${poId}/?outletId=${outletId}`, {
                 headers: getHeaders()
             })
-            .then(res => {
-                if (!res.ok) throw new Error('PO fetch failed');
-                return res.json();
-            })
-            .then(data => {
-                if (data && data.items) {
-                    setLinkedPoNo(data.poNumber);
-                    setValue('purchaseOrderRef', data.id); // Save PO ID so backend can mark it
-                    
-                    const newItems = data.items.map((it: any) => {
-                        const remainingQty = it.qtyStrips - it.receivedQty;
-                        if (remainingQty <= 0) return null;
-                        
-                        return {
-                            ...emptyItem(),
-                            productId: it.productId,
-                            productName: it.productName,
-                            qty: remainingQty,
-                            purchaseRate: it.lastRate,
-                            ptr: it.lastRate,
-                        };
-                    }).filter(Boolean);
-                    
-                    if (newItems.length > 0) {
-                        setItems(newItems);
-                        toast({ title: 'PO Data Loaded', description: `Pre-filled ${newItems.length} items from ${data.poNumber}.` });
+                .then(res => {
+                    if (!res.ok) throw new Error('PO fetch failed');
+                    return res.json();
+                })
+                .then(data => {
+                    if (data && data.items) {
+                        setLinkedPoNo(data.poNumber);
+                        setValue('purchaseOrderRef', data.id); // Save PO ID so backend can mark it
+
+                        const newItems = data.items.map((it: any) => {
+                            const remainingQty = it.qtyStrips - it.receivedQty;
+                            if (remainingQty <= 0) return null;
+
+                            return {
+                                ...emptyItem(),
+                                productId: it.productId,
+                                productName: it.productName,
+                                qty: remainingQty,
+                                purchaseRate: it.lastRate,
+                                ptr: it.lastRate,
+                            };
+                        }).filter(Boolean);
+
+                        if (newItems.length > 0) {
+                            setItems(newItems);
+                            toast({ title: 'PO Data Loaded', description: `Pre-filled ${newItems.length} items from ${data.poNumber}.` });
+                        }
                     }
-                }
-            })
-            .catch(err => {
-                console.error("Failed to fetch PO", err);
-                toast({ title: 'Error', description: 'Failed to load PO data.', variant: 'destructive' });
-            });
+                })
+                .catch(err => {
+                    console.error("Failed to fetch PO", err);
+                    toast({ title: 'Error', description: 'Failed to load PO data.', variant: 'destructive' });
+                });
         }
     }, [poId, outletId, invoiceToEdit, setValue, toast]);
 
@@ -501,7 +501,7 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
 
     const handleRemoveItem = (index: number) => {
         setItems((prev) => {
-            const next   = prev.filter((_, i) => i !== index);
+            const next = prev.filter((_, i) => i !== index);
             const result = next.length ? next : [emptyItem()];
             setValue('items', result);
             return result;
@@ -512,25 +512,25 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
 
     const getEffPkg = (val: any) => typeof val === 'number' && val > 0 ? val : 1;
 
-    const goodsValue     = items.reduce((s, it) => s + it.qty * it.purchaseRate, 0);
+    const goodsValue = items.reduce((s, it) => s + it.qty * it.purchaseRate, 0);
     const totalTradeDisc = items.reduce((s, it) => s + it.qty * it.purchaseRate * (it.discountPct / 100), 0);
-    const totalCashDisc  = items.reduce((s, it) => {
+    const totalCashDisc = items.reduce((s, it) => {
         const afterTrade = it.qty * it.purchaseRate * (1 - it.discountPct / 100);
         return s + afterTrade * (it.cashDiscountPct / 100);
     }, 0);
-    
+
     const preInvoiceDiscountBase = goodsValue - totalTradeDisc - totalCashDisc;
     const invoiceDiscount = Number(watchedInvoiceDiscount) || 0;
     const invoiceDiscountPct = preInvoiceDiscountBase > 0 ? (invoiceDiscount / preInvoiceDiscountBase) : 0;
-    
-    const taxableValue   = preInvoiceDiscountBase - invoiceDiscount;
-    
-    const totalGST       = items.reduce((s, it) => {
+
+    const taxableValue = preInvoiceDiscountBase - invoiceDiscount;
+
+    const totalGST = items.reduce((s, it) => {
         const base = it.qty * it.purchaseRate * (1 - it.discountPct / 100) * (1 - it.cashDiscountPct / 100);
         const baseAfterInvoiceDisc = base * (1 - invoiceDiscountPct);
         return s + baseAfterInvoiceDisc * (it.gstRate / 100);
     }, 0);
-    const totalCess      = items.reduce((s, it) => {
+    const totalCess = items.reduce((s, it) => {
         const base = it.qty * it.purchaseRate * (1 - it.discountPct / 100) * (1 - it.cashDiscountPct / 100);
         const baseAfterInvoiceDisc = base * (1 - invoiceDiscountPct);
         return s + baseAfterInvoiceDisc * (it.cess / 100);
@@ -541,23 +541,23 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
     const isInterstate = !!(partyState && outletState &&
         partyState.trim().toLowerCase() !== outletState.trim().toLowerCase());
 
-    const sgst      = !isInterstate ? totalGST / 2 : 0;
-    const cgst      = !isInterstate ? totalGST / 2 : 0;
-    const igst      = isInterstate  ? totalGST     : 0;
-    const freight   = Number(watchedFreight) || 0;
-    const preRound     = taxableValue + totalGST + totalCess + freight;
-    const roundOff     = Math.round(preRound) - preRound;
+    const sgst = !isInterstate ? totalGST / 2 : 0;
+    const cgst = !isInterstate ? totalGST / 2 : 0;
+    const igst = isInterstate ? totalGST : 0;
+    const freight = Number(watchedFreight) || 0;
+    const preRound = taxableValue + totalGST + totalCess + freight;
+    const roundOff = Math.round(preRound) - preRound;
     const computedTotal = preRound + roundOff;
-    
+
     // + sign means addition (increase bill -> negative payload required for backend minus)
     // - sign means deduction (reduce bill -> positive payload required for backend minus)
     const effectiveAdjustment = ledgerAdjustment * (adjustmentSign === '-' ? 1 : -1);
-    const netPayable   = computedTotal - effectiveAdjustment;
+    const netPayable = computedTotal - effectiveAdjustment;
 
     const totalUnits = items.reduce((s, it) => {
         return s + it.qty * getEffPkg(it.pkg);
     }, 0);
-    const nearExpiryCount  = items.filter((it) => it.expiryDate && isNearExpiry(it.expiryDate)).length;
+    const nearExpiryCount = items.filter((it) => it.expiryDate && isNearExpiry(it.expiryDate)).length;
 
     // ── Validation Error & Cleanup Handlers ────────────────────────────────────
 
@@ -642,21 +642,21 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
             if (invoiceToEdit && invoiceToEdit.status !== 'SAVED') {
                 await updatePurchase.mutateAsync({ id: invoiceToEdit.id, payload });
                 toast({
-                    title:       'Purchase updated ✓',
+                    title: 'Purchase updated ✓',
                     description: `Invoice ${data.invoiceNo} has been modified successfully.`,
                 });
             } else if (invoiceToEdit && invoiceToEdit.status === 'SAVED') {
                 await confirmDraft.mutateAsync({ id: invoiceToEdit.id, payload });
                 if (draftKey) localStorage.removeItem(draftKey);
                 toast({
-                    title:       'Purchase saved ✓',
+                    title: 'Purchase saved ✓',
                     description: `Invoice ${data.invoiceNo} — ${validItems.length} item${validItems.length !== 1 ? 's' : ''}, ${totalUnits} units added to stock.`,
                 });
             } else {
                 await createPurchase.mutateAsync(payload);
                 if (draftKey) localStorage.removeItem(draftKey);
                 toast({
-                    title:       'Purchase saved ✓',
+                    title: 'Purchase saved ✓',
                     description: `Invoice ${data.invoiceNo} — ${validItems.length} item${validItems.length !== 1 ? 's' : ''}, ${totalUnits} units added to stock.`,
                 });
             }
@@ -692,592 +692,592 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
 
     return (
         <>
-        <form 
-            ref={formRef}
-            onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                    if (e.ctrlKey || e.metaKey) {
-                        e.preventDefault();
-                        const valid = cleanItemsBeforeSubmit();
-                        if (!valid) return;
-                        handleSubmit(onSubmit, onInvalid)();
-                        return;
+            <form
+                ref={formRef}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                        if (e.ctrlKey || e.metaKey) {
+                            e.preventDefault();
+                            const valid = cleanItemsBeforeSubmit();
+                            if (!valid) return;
+                            handleSubmit(onSubmit, onInvalid)();
+                            return;
+                        }
+                        const target = e.target as HTMLElement;
+                        if (target.tagName !== 'TEXTAREA') {
+                            // Prevent accidental submit on plain Enter from inputs
+                            e.preventDefault();
+                        }
                     }
-                    const target = e.target as HTMLElement;
-                    if (target.tagName !== 'TEXTAREA') {
-                        // Prevent accidental submit on plain Enter from inputs
-                        e.preventDefault();
-                    }
-                }
-            }}
-            onSubmit={handleSubmit(onSubmit, onInvalid)} className="flex flex-col gap-5 relative">
+                }}
+                onSubmit={handleSubmit(onSubmit, onInvalid)} className="flex flex-col gap-5 relative">
 
-            {ocrStatus === 'processing' && (
-                <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm rounded-xl">
-                    <Loader2 className="w-10 h-10 animate-spin text-primary mb-4" />
-                    <h2 className="text-lg font-semibold text-slate-800">Analyzing Scanned Invoice</h2>
-                    <p className="text-sm text-slate-500 mt-2">Extracting items, batches, and prices...</p>
-                </div>
-            )}
-            
-            {ocrStatus === 'error' && (
-                <div className="mb-4 flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
-                    <AlertTriangle className="h-4 w-4 shrink-0 text-red-600" />
-                    <p className="flex-1 text-sm text-red-800">
-                        OCR Failed: {ocrError}
-                    </p>
-                    <Button type="button" size="sm" variant="outline" onClick={() => setOcrStatus('idle')}>Dismiss</Button>
-                </div>
-            )}
-            
-            {/* View Image Dialog for Scans */}
-            {scannedImage && (
-                <Dialog open={scannedImageModalOpen} onOpenChange={setScannedImageModalOpen}>
-                    <div className="fixed bottom-6 right-6 z-40">
-                        <Button 
-                            type="button"
-                            size="lg"
-                            className="rounded-full shadow-lg gap-2"
-                            onClick={() => setScannedImageModalOpen(true)}
+                {ocrStatus === 'processing' && (
+                    <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm rounded-xl">
+                        <Loader2 className="w-10 h-10 animate-spin text-primary mb-4" />
+                        <h2 className="text-lg font-semibold text-slate-800">Analyzing Scanned Invoice</h2>
+                        <p className="text-sm text-slate-500 mt-2">Extracting items, batches, and prices...</p>
+                    </div>
+                )}
+
+                {ocrStatus === 'error' && (
+                    <div className="mb-4 flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+                        <AlertTriangle className="h-4 w-4 shrink-0 text-red-600" />
+                        <p className="flex-1 text-sm text-red-800">
+                            OCR Failed: {ocrError}
+                        </p>
+                        <Button type="button" size="sm" variant="outline" onClick={() => setOcrStatus('idle')}>Dismiss</Button>
+                    </div>
+                )}
+
+                {/* View Image Dialog for Scans */}
+                {scannedImage && (
+                    <Dialog open={scannedImageModalOpen} onOpenChange={setScannedImageModalOpen}>
+                        <div className="fixed bottom-6 right-6 z-40">
+                            <Button
+                                type="button"
+                                size="lg"
+                                className="rounded-full shadow-lg gap-2"
+                                onClick={() => setScannedImageModalOpen(true)}
+                            >
+                                <ImageIcon className="w-5 h-5" />
+                                View Scanned Invoice
+                            </Button>
+                        </div>
+                        <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
+                            <DialogHeader>
+                                <DialogTitle>Scanned Invoice Image</DialogTitle>
+                            </DialogHeader>
+                            <div className="flex-1 overflow-auto bg-slate-100 rounded-md border border-border flex items-center justify-center p-4">
+                                {/* Use standard img tag instead of next/image since the URL is external/django */}
+                                <img
+                                    src={scannedImage}
+                                    alt="Scanned Invoice"
+                                    className="max-w-full max-h-full object-contain"
+                                />
+                            </div>
+                        </DialogContent>
+                    </Dialog>
+                )}
+
+                {linkedPoNo && (
+                    <div className="bg-indigo-50 border border-indigo-100 text-indigo-700 px-4 py-3 rounded-lg flex items-center gap-3">
+                        <FileText className="w-5 h-5 text-indigo-500" />
+                        <span className="font-medium">🔗 Linked to {linkedPoNo}</span>
+                        <span className="text-sm opacity-80">Line items have been automatically populated based on remaining quantities.</span>
+                    </div>
+                )}
+
+                {/* ── Draft banner ────────────────────────────────────────── */}
+                {hasDraft && (
+                    <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                        <FileText className="h-4 w-4 shrink-0 text-amber-600" />
+                        <p className="flex-1 text-sm text-amber-800">
+                            You have an unsaved draft from a previous session.
+                        </p>
+                        <Button
+                            type="button" size="sm" variant="outline"
+                            className="h-7 border-amber-300 text-amber-700 hover:bg-amber-100"
+                            onClick={restoreDraft}
                         >
-                            <ImageIcon className="w-5 h-5" />
-                            View Scanned Invoice
+                            Restore
+                        </Button>
+                        <Button
+                            type="button" size="sm" variant="ghost"
+                            className="h-7 text-amber-500 hover:text-amber-700"
+                            onClick={() => { if (draftKey) localStorage.removeItem(draftKey); setHasDraft(false); }}
+                        >
+                            Discard
                         </Button>
                     </div>
-                    <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
-                        <DialogHeader>
-                            <DialogTitle>Scanned Invoice Image</DialogTitle>
-                        </DialogHeader>
-                        <div className="flex-1 overflow-auto bg-slate-100 rounded-md border border-border flex items-center justify-center p-4">
-                            {/* Use standard img tag instead of next/image since the URL is external/django */}
-                            <img 
-                                src={scannedImage} 
-                                alt="Scanned Invoice" 
-                                className="max-w-full max-h-full object-contain"
-                            />
-                        </div>
-                    </DialogContent>
-                </Dialog>
-            )}
+                )}
 
-            {linkedPoNo && (
-                <div className="bg-indigo-50 border border-indigo-100 text-indigo-700 px-4 py-3 rounded-lg flex items-center gap-3">
-                    <FileText className="w-5 h-5 text-indigo-500" />
-                    <span className="font-medium">🔗 Linked to {linkedPoNo}</span>
-                    <span className="text-sm opacity-80">Line items have been automatically populated based on remaining quantities.</span>
-                </div>
-            )}
-
-            {/* ── Draft banner ────────────────────────────────────────── */}
-            {hasDraft && (
-                <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-                    <FileText className="h-4 w-4 shrink-0 text-amber-600" />
-                    <p className="flex-1 text-sm text-amber-800">
-                        You have an unsaved draft from a previous session.
-                    </p>
-                    <Button
-                        type="button" size="sm" variant="outline"
-                        className="h-7 border-amber-300 text-amber-700 hover:bg-amber-100"
-                        onClick={restoreDraft}
-                    >
-                        Restore
-                    </Button>
-                    <Button
-                        type="button" size="sm" variant="ghost"
-                        className="h-7 text-amber-500 hover:text-amber-700"
-                        onClick={() => { if (draftKey) localStorage.removeItem(draftKey); setHasDraft(false); }}
-                    >
-                        Discard
-                    </Button>
-                </div>
-            )}
-
-            {/* ── Near-expiry warning ──────────────────────────────────── */}
-            {nearExpiryCount > 0 && (
-                <div className="flex items-center gap-2 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3">
-                    <AlertTriangle className="h-4 w-4 shrink-0 text-orange-500" />
-                    <p className="text-sm text-orange-700">
-                        <span className="font-semibold">{nearExpiryCount} item{nearExpiryCount > 1 ? 's' : ''}</span> expiring within 90 days — verify with distributor before accepting.
-                    </p>
-                </div>
-            )}
-
-            {/* ── Zone 1: Context Header (Top, Fixed) ───────────────────────────── */}
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-5 shadow-sm z-30 sticky top-0">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-4">
-                    
-                    {/* Column 1 */}
-                    <div className="space-y-4">
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0">
-                            <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3">Party <span className="text-red-500">*</span></Label>
-                            <div className="w-full sm:w-2/3" ref={partyRef}>
-                                <LedgerPicker
-                                    group="Sundry Creditors"
-                                    value={partyLedger}
-                                    onChange={(l) => {
-                                        setPartyLedger(l);
-                                        setValue('partyLedgerId', l?.id ?? '', { shouldValidate: true });
-                                    }}
-                                    placeholder="Select party ledger..."
-                                    className={cn("h-10 text-sm", errors.partyLedgerId && "ring-1 ring-red-400 rounded-md")}
-                                />
-                                {errors.partyLedgerId && <p className="text-[11px] text-red-500 mt-1">{errors.partyLedgerId.message}</p>}
-                            </div>
-                        </div>
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0">
-                            <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3">Godown</Label>
-                            <div className="w-full sm:w-2/3">
-                                <Select defaultValue="main" onValueChange={(v) => setValue('godown', v)}>
-                                    <SelectTrigger className="h-10 text-sm bg-white">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {GODOWNS.map((g) => (
-                                            <SelectItem key={g.value} value={g.value}>{g.label}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </div>
+                {/* ── Near-expiry warning ──────────────────────────────────── */}
+                {nearExpiryCount > 0 && (
+                    <div className="flex items-center gap-2 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3">
+                        <AlertTriangle className="h-4 w-4 shrink-0 text-orange-500" />
+                        <p className="text-sm text-orange-700">
+                            <span className="font-semibold">{nearExpiryCount} item{nearExpiryCount > 1 ? 's' : ''}</span> expiring within 90 days — verify with distributor before accepting.
+                        </p>
                     </div>
+                )}
 
-                    {/* Column 2 */}
-                    <div className="space-y-4">
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0">
-                            <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3">Invoice No <span className="text-red-500">*</span></Label>
-                            <div className="w-full sm:w-2/3">
-                                {(() => {
-                                    const { ref: formRef, ...rest } = register('invoiceNo');
-                                    return (
-                                        <Input
-                                            ref={(e) => {
-                                                invoiceNoRef.current = e;
-                                                formRef(e);
-                                            }}
-                                            className={cn("h-10 text-sm bg-white", (errors.invoiceNo || isDuplicate) && "border-red-400 focus-visible:ring-red-400")}
-                                            {...rest}
-                                            placeholder="e.g. AJD-2026-0123"
-                                        />
-                                    );
-                                })()}
-                                {errors.invoiceNo ? (
-                                    <p className="text-[11px] text-red-500 mt-1">{errors.invoiceNo.message}</p>
-                                ) : isDuplicate ? (
-                                    <p className="flex items-center gap-1 text-[11px] text-red-500 mt-1">
-                                        <AlertTriangle className="h-3 w-3" /> Duplicate!
-                                    </p>
-                                ) : null}
-                            </div>
-                        </div>
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0">
-                            <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3">Invoice Date</Label>
-                            <div className="w-full sm:w-2/3">
-                                {(() => {
-                                    const { ref: formRef, ...rest } = register('invoiceDate');
-                                    return (
-                                        <Input 
-                                            className="h-10 text-sm bg-white" 
-                                            type="date" 
-                                            min="2020-01-01"
-                                            max="2035-12-31"
-                                            ref={(e) => {
-                                                dateRef.current = e;
-                                                formRef(e);
-                                            }}
-                                            {...rest}
-                                        />
-                                    );
-                                })()}
-                            </div>
-                        </div>
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0">
-                            <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3">PO Ref</Label>
-                            <div className="w-full sm:w-2/3">
-                                {(() => {
-                                    const { ref: formRef, ...rest } = register('purchaseOrderRef');
-                                    return (
-                                        <Input 
-                                            className="h-10 text-sm bg-white" 
-                                            ref={(e) => {
-                                                poRef.current = e;
-                                                formRef(e);
-                                            }}
-                                            {...rest}
-                                            placeholder="Optional" 
-                                        />
-                                    );
-                                })()}
-                            </div>
-                        </div>
-                    </div>
+                {/* ── Zone 1: Context Header (Top, Fixed) ───────────────────────────── */}
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-5 shadow-sm z-30 sticky top-0">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-4">
 
-                    {/* Column 3 */}
-                    <div className="space-y-4">
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0">
-                            <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3">Type <span className="text-red-500">*</span></Label>
-                            <div className="w-full sm:w-2/3">
-                                <Select
-                                    defaultValue="credit"
-                                    onValueChange={(v) => {
-                                        setValue('purchaseType', v as 'cash' | 'credit');
-                                        if (v === 'cash') setValue('dueDate', undefined);
-                                        else              setValue('dueDate', defaultDue);
-                                    }}
-                                >
-                                    <SelectTrigger className="h-10 text-sm bg-white">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="credit">Credit</SelectItem>
-                                        <SelectItem value="cash">Cash</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </div>
-                        
-                        {watchedPurchaseType !== 'cash' && (
+                        {/* Column 1 */}
+                        <div className="space-y-4">
                             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0">
-                                <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3">Credit Days</Label>
-                                <div className="w-full sm:w-2/3">
-                                    <Select
-                                        value={Number.isFinite(creditDays) ? creditDays.toString() : "30"}
-                                        onValueChange={(val) => {
-                                            const parsed = parseInt(val, 10);
-                                            setCreditDays(Number.isFinite(parsed) ? parsed : 30);
+                                <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3">Party <span className="text-red-500">*</span></Label>
+                                <div className="w-full sm:w-2/3" ref={partyRef}>
+                                    <LedgerPicker
+                                        group="Sundry Creditors"
+                                        value={partyLedger}
+                                        onChange={(l) => {
+                                            setPartyLedger(l);
+                                            setValue('partyLedgerId', l?.id ?? '', { shouldValidate: true });
                                         }}
-                                    >
-                                        <SelectTrigger className="h-10 text-sm bg-white border-slate-200">
-                                            <SelectValue placeholder="Select days" />
+                                        placeholder="Select party ledger..."
+                                        className={cn("h-10 text-sm", errors.partyLedgerId && "ring-1 ring-red-400 rounded-md")}
+                                    />
+                                    {errors.partyLedgerId && <p className="text-[11px] text-red-500 mt-1">{errors.partyLedgerId.message}</p>}
+                                </div>
+                            </div>
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0">
+                                <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3">Godown</Label>
+                                <div className="w-full sm:w-2/3">
+                                    <Select defaultValue="main" onValueChange={(v) => setValue('godown', v)}>
+                                        <SelectTrigger className="h-10 text-sm bg-white">
+                                            <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {Array.from(new Set([7, 15, 30, 45, 60, 90, creditDays])).sort((a, b) => a - b).map(d => (
-                                                <SelectItem key={d} value={d.toString()}>{d} Days</SelectItem>
+                                            {GODOWNS.map((g) => (
+                                                <SelectItem key={g.value} value={g.value}>{g.label}</SelectItem>
                                             ))}
                                         </SelectContent>
                                     </Select>
-                                    <input type="hidden" {...register('dueDate')} />
                                 </div>
                             </div>
-                        )}
-                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1.5 sm:gap-0">
-                            <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3 pt-0 sm:pt-2">Notes</Label>
-                            <div className="w-full sm:w-2/3">
-                                {(() => {
-                                    const { ref: formRef, ...rest } = register('notes');
-                                    return (
-                                        <Textarea
-                                            className="resize-none text-sm h-10 min-h-[40px] py-2 bg-white"
-                                            ref={(e) => {
-                                                notesRef.current = e;
-                                                formRef(e);
-                                            }}
-                                            {...rest}
-                                            placeholder="Optional notes..."
-                                        />
-                                    );
-                                })()}
+                        </div>
+
+                        {/* Column 2 */}
+                        <div className="space-y-4">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0">
+                                <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3">Invoice No <span className="text-red-500">*</span></Label>
+                                <div className="w-full sm:w-2/3">
+                                    {(() => {
+                                        const { ref: formRef, ...rest } = register('invoiceNo');
+                                        return (
+                                            <Input
+                                                ref={(e) => {
+                                                    invoiceNoRef.current = e;
+                                                    formRef(e);
+                                                }}
+                                                className={cn("h-10 text-sm bg-white", (errors.invoiceNo || isDuplicate) && "border-red-400 focus-visible:ring-red-400")}
+                                                {...rest}
+                                                placeholder="e.g. AJD-2026-0123"
+                                            />
+                                        );
+                                    })()}
+                                    {errors.invoiceNo ? (
+                                        <p className="text-[11px] text-red-500 mt-1">{errors.invoiceNo.message}</p>
+                                    ) : isDuplicate ? (
+                                        <p className="flex items-center gap-1 text-[11px] text-red-500 mt-1">
+                                            <AlertTriangle className="h-3 w-3" /> Duplicate!
+                                        </p>
+                                    ) : null}
+                                </div>
+                            </div>
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0">
+                                <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3">Invoice Date</Label>
+                                <div className="w-full sm:w-2/3">
+                                    {(() => {
+                                        const { ref: formRef, ...rest } = register('invoiceDate');
+                                        return (
+                                            <Input
+                                                className="h-10 text-sm bg-white"
+                                                type="date"
+                                                min="2020-01-01"
+                                                max="2035-12-31"
+                                                ref={(e) => {
+                                                    dateRef.current = e;
+                                                    formRef(e);
+                                                }}
+                                                {...rest}
+                                            />
+                                        );
+                                    })()}
+                                </div>
+                            </div>
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0">
+                                <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3">PO Ref</Label>
+                                <div className="w-full sm:w-2/3">
+                                    {(() => {
+                                        const { ref: formRef, ...rest } = register('purchaseOrderRef');
+                                        return (
+                                            <Input
+                                                className="h-10 text-sm bg-white"
+                                                ref={(e) => {
+                                                    poRef.current = e;
+                                                    formRef(e);
+                                                }}
+                                                {...rest}
+                                                placeholder="Optional"
+                                            />
+                                        );
+                                    })()}
+                                </div>
                             </div>
                         </div>
-                    </div>
 
-                </div>
-            </div>
+                        {/* Column 3 */}
+                        <div className="space-y-4">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0">
+                                <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3">Type <span className="text-red-500">*</span></Label>
+                                <div className="w-full sm:w-2/3">
+                                    <Select
+                                        defaultValue="credit"
+                                        onValueChange={(v) => {
+                                            setValue('purchaseType', v as 'cash' | 'credit');
+                                            if (v === 'cash') setValue('dueDate', undefined);
+                                            else setValue('dueDate', defaultDue);
+                                        }}
+                                    >
+                                        <SelectTrigger className="h-10 text-sm bg-white">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="credit">Credit</SelectItem>
+                                            <SelectItem value="cash">Cash</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
 
-            {/* ── Zone 2: Data Engine (Middle, Scrollable Table) ───────────────────────────── */}
-            <div className="flex-1 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm flex flex-col mt-4">
-                <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-5 py-2">
-                    <div className="flex items-center gap-2">
-                        <Boxes className="h-4 w-4 text-slate-500" />
-                        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-600">Items</h3>
-                        <Badge variant="secondary" className="text-[11px] px-1.5 py-0">
-                            {items.length} row{items.length !== 1 ? 's' : ''}
-                        </Badge>
-                        {totalUnits > 0 && (
-                            <Badge variant="outline" className="text-[11px] text-slate-500 px-1.5 py-0">
-                                {totalUnits.toLocaleString('en-IN')} units
-                            </Badge>
-                        )}
-                    </div>
-                    <Button
-                        type="button" variant="outline" size="sm"
-                        className="h-7 gap-1 text-xs"
-                        onClick={handleAddItem}
-                    >
-                        <Plus className="h-3 w-3" /> Add Item
-                    </Button>
-                </div>
-
-                {errors.items && typeof errors.items.message === 'string' && (
-                    <p className="mx-5 mt-2 text-[10px] text-red-500">{errors.items.message}</p>
-                )}
-
-                {/* Make this wrapper scrollable and force full width */}
-                <div className="flex-1 overflow-auto relative" ref={gridContainerRef}>
-                    <table className="w-full min-w-[1280px] text-xs border-collapse">
-                        <colgroup>
-                            {PURCHASE_ITEM_COLS.map((col) => (
-                                <col key={col.key} style={{ width: col.width }} />
-                            ))}
-                        </colgroup>
-                        <thead className="bg-slate-50 sticky top-0 z-20 shadow-[0_1px_2px_rgb(0,0,0,0.05)]">
-                            <tr>
-                                <th className="sticky left-0 z-30 bg-slate-50 border-r border-b border-slate-200 w-8 px-2 py-2 text-center text-[11px] uppercase tracking-wider text-slate-500 font-semibold">#</th>
-                                <th className="sticky left-8 z-30 bg-slate-50 border-r border-b border-slate-200 min-w-[200px] px-2 py-2 text-left text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Product</th>
-                                <th className="border-r border-b border-slate-200 px-2 py-2 text-left text-[11px] uppercase tracking-wider text-slate-500 font-semibold">HSN</th>
-                                <th className="border-r border-b border-slate-200 px-2 py-2 text-left text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Batch</th>
-                                <th className="border-r border-b border-slate-200 px-2 py-2 text-left text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Expiry</th>
-                                <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold w-16">Pkg</th>
-                                <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold w-20">Qty</th>
-                                <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Free</th>
-                                <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold">MRP</th>
-                                <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold w-20">Rate</th>
-                                <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold">GST%</th>
-                                <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold">PTR</th>
-                                <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold">PTS</th>
-                                <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Disc%</th>
-                                <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Amount</th>
-                                <th colSpan={2} className="sticky right-0 z-30 bg-slate-50 border-l border-b border-slate-200 w-16 px-2 py-2 text-center text-[11px] uppercase tracking-wider text-slate-500 font-semibold" title="Actions">Act</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                            {items.map((item, idx) => (
-                                <PurchaseItemRow
-                                    key={idx}
-                                    index={idx}
-                                    value={item}
-                                    onChange={handleItemChange}
-                                    onRemove={handleRemoveItem}
-                                    onSelectProduct={handleSelectProduct}
-                                    onOpenAddProduct={handleOpenAddProduct}
-                                    outletId={outletId}
-                                    errors={(errors.items as any)?.[idx]}
-                                />
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            {/* ── Section C: Additional Charges & Discounts ────────────────────────── */}
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50 px-5 py-3">
-                    <Truck className="h-4 w-4 text-slate-500" />
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                        Additional Charges & Invoice Discount
-                    </h3>
-                </div>
-                <div className="grid grid-cols-1 gap-4 p-5 md:grid-cols-4">
-                    <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-slate-600">Freight / Transport (₹)</Label>
-                        <Input
-                            type="number" step="0.01" min="0"
-                            className="h-9 text-sm"
-                            placeholder="0.00"
-                            {...register('freight', { valueAsNumber: true })}
-                        />
-                    </div>
-                    <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-slate-600 flex justify-between">
-                            <span>Invoice Discount (₹)</span>
-                            {invoiceDiscountPct > 0 && (
-                                <span className="text-emerald-600">{(invoiceDiscountPct * 100).toFixed(2)}%</span>
+                            {watchedPurchaseType !== 'cash' && (
+                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0">
+                                    <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3">Credit Days</Label>
+                                    <div className="w-full sm:w-2/3">
+                                        <Select
+                                            value={Number.isFinite(creditDays) ? creditDays.toString() : "30"}
+                                            onValueChange={(val) => {
+                                                const parsed = parseInt(val, 10);
+                                                setCreditDays(Number.isFinite(parsed) ? parsed : 30);
+                                            }}
+                                        >
+                                            <SelectTrigger className="h-10 text-sm bg-white border-slate-200">
+                                                <SelectValue placeholder="Select days" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {Array.from(new Set([7, 15, 30, 45, 60, 90, creditDays])).sort((a, b) => a - b).map(d => (
+                                                    <SelectItem key={d} value={d.toString()}>{d} Days</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <input type="hidden" {...register('dueDate')} />
+                                    </div>
+                                </div>
                             )}
-                        </Label>
-                        <Input
-                            type="number" step="0.01" min="0"
-                            className="h-9 text-sm text-green-700"
-                            placeholder="0.00"
-                            {...register('invoiceDiscount', { valueAsNumber: true })}
-                        />
-                    </div>
-                </div>
-            </div>
-
-            {/* ── Section D: Ledger Adjustment ────────────────────────── */}
-            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div>
-                        <p className="text-sm font-semibold text-slate-700">Ledger Adjustment</p>
-                        <p className="text-xs text-slate-400">
-                            Apply credit from distributor account (return, advance, write-off)
-                        </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <select 
-                            className="cursor-pointer rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-100"
-                            value={adjustmentSign}
-                            onChange={(e) => {
-                                setAdjustmentSign(e.target.value as '-' | '+');
-                                // optionally re-evaluate cap if they switch from + to - 
-                                if (e.target.value === '-') setLedgerAdjustment((prev) => Math.min(prev, computedTotal));
-                            }}
-                        >
-                            <option value="-">&minus; (Subtract)</option>
-                            <option value="+">+ (Add)</option>
-                        </select>
-                        <span className="text-sm font-medium text-slate-600">₹</span>
-                        <input
-                            type="number"
-                            min={0}
-                            // Only cap at computedTotal if it's a deduction ('-')
-                            max={adjustmentSign === '-' ? computedTotal : undefined}
-                            step="0.01"
-                            className="w-36 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-right text-base font-mono shadow-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-100 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                            placeholder="0.00"
-                            value={ledgerAdjustment || ''}
-                            onChange={(e) => {
-                                const val = Math.max(0, parseFloat(e.target.value) || 0);
-                                if (adjustmentSign === '-') {
-                                    setLedgerAdjustment(Math.min(val, computedTotal));
-                                } else {
-                                    setLedgerAdjustment(val);
-                                }
-                            }}
-                        />
-                    </div>
-                </div>
-
-                {ledgerAdjustment > 0 && (
-                    <div className="mt-2">
-                        <input
-                            className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 focus:border-blue-400 focus:outline-none"
-                            placeholder="Reason (e.g. Return CN-2024-45, Advance payment)"
-                            value={ledgerNote}
-                            onChange={(e) => setLedgerNote(e.target.value)}
-                        />
-                    </div>
-                )}
-            </div>
-
-            {/* ── Reason for Modification (Edit Mode Only) ──────────────── */}
-            {invoiceToEdit && invoiceToEdit.status !== 'SAVED' && (
-                <div className="rounded-xl border border-blue-200 bg-blue-50 p-5 mt-4">
-                    <h3 className="text-sm font-semibold text-blue-900 mb-3 flex items-center gap-2">
-                        <FileText className="h-4 w-4" />
-                        Reason for Modification
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label className="text-blue-800">Action Type / Reason Code <span className="text-rose-500">*</span></Label>
-                            <select
-                                className="w-full rounded-md border border-blue-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                                value={revisionReasonCode}
-                                onChange={(e) => setRevisionReasonCode(e.target.value)}
-                            >
-                                <option value="">Select a reason...</option>
-                                <option value="ENTRY_MISTAKE">Entry Mistake</option>
-                                <option value="RATE_CORRECTION">Rate Correction</option>
-                                <option value="QTY_CORRECTION">Quantity Correction</option>
-                                <option value="DATE_CORRECTION">Date Correction</option>
-                                <option value="SUPPLIER_REQUEST">Supplier Request</option>
-                                <option value="DUPLICATE_ENTRY_FIX">Duplicate Entry Fix</option>
-                                <option value="TAX_CORRECTION">Tax Correction</option>
-                                <option value="PAYMENT_ADJUSTMENT">Payment Adjustment</option>
-                                <option value="OTHER">Other</option>
-                            </select>
+                            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1.5 sm:gap-0">
+                                <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3 pt-0 sm:pt-2">Notes</Label>
+                                <div className="w-full sm:w-2/3">
+                                    {(() => {
+                                        const { ref: formRef, ...rest } = register('notes');
+                                        return (
+                                            <Textarea
+                                                className="resize-none text-sm h-10 min-h-[40px] py-2 bg-white"
+                                                ref={(e) => {
+                                                    notesRef.current = e;
+                                                    formRef(e);
+                                                }}
+                                                {...rest}
+                                                placeholder="Optional notes..."
+                                            />
+                                        );
+                                    })()}
+                                </div>
+                            </div>
                         </div>
-                        <div className="space-y-2">
-                            <Label className="text-blue-800">Detailed Explanation <span className="text-rose-500">*</span></Label>
-                            <Textarea
-                                className="min-h-[80px] bg-white border-blue-200 focus-visible:ring-blue-500/20"
-                                placeholder="Explain why you are modifying this purchase invoice..."
-                                value={revisionReasonText}
-                                onChange={(e) => setRevisionReasonText(e.target.value)}
+
+                    </div>
+                </div>
+
+                {/* ── Zone 2: Data Engine (Middle, Scrollable Table) ───────────────────────────── */}
+                <div className="flex-1 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm flex flex-col mt-4">
+                    <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-5 py-2">
+                        <div className="flex items-center gap-2">
+                            <Boxes className="h-4 w-4 text-slate-500" />
+                            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-600">Items</h3>
+                            <Badge variant="secondary" className="text-[11px] px-1.5 py-0">
+                                {items.length} row{items.length !== 1 ? 's' : ''}
+                            </Badge>
+                            {totalUnits > 0 && (
+                                <Badge variant="outline" className="text-[11px] text-slate-500 px-1.5 py-0">
+                                    {totalUnits.toLocaleString('en-IN')} units
+                                </Badge>
+                            )}
+                        </div>
+                        <Button
+                            type="button" variant="outline" size="sm"
+                            className="h-7 gap-1 text-xs"
+                            onClick={handleAddItem}
+                        >
+                            <Plus className="h-3 w-3" /> Add Item
+                        </Button>
+                    </div>
+
+                    {errors.items && typeof errors.items.message === 'string' && (
+                        <p className="mx-5 mt-2 text-[10px] text-red-500">{errors.items.message}</p>
+                    )}
+
+                    {/* Make this wrapper scrollable and force full width */}
+                    <div className="flex-1 overflow-auto relative" ref={gridContainerRef}>
+                        <table className="w-full min-w-[1280px] text-xs border-collapse">
+                            <colgroup>
+                                {PURCHASE_ITEM_COLS.map((col) => (
+                                    <col key={col.key} style={{ width: col.width }} />
+                                ))}
+                            </colgroup>
+                            <thead className="bg-slate-50 sticky top-0 z-20 shadow-[0_1px_2px_rgb(0,0,0,0.05)]">
+                                <tr>
+                                    <th className="sticky left-0 z-30 bg-slate-50 border-r border-b border-slate-200 w-8 px-2 py-2 text-center text-[11px] uppercase tracking-wider text-slate-500 font-semibold">#</th>
+                                    <th className="sticky left-8 z-30 bg-slate-50 border-r border-b border-slate-200 min-w-[200px] px-2 py-2 text-left text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Product</th>
+                                    <th className="border-r border-b border-slate-200 px-2 py-2 text-left text-[11px] uppercase tracking-wider text-slate-500 font-semibold">HSN</th>
+                                    <th className="border-r border-b border-slate-200 px-2 py-2 text-left text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Batch</th>
+                                    <th className="border-r border-b border-slate-200 px-2 py-2 text-left text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Expiry</th>
+                                    <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold w-16">Pkg</th>
+                                    <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold w-20">Qty</th>
+                                    <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Free</th>
+                                    <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold">MRP</th>
+                                    <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold w-20">Rate</th>
+                                    <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold">GST%</th>
+                                    <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold">PTR</th>
+                                    <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold">PTS</th>
+                                    <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Disc%</th>
+                                    <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Amount</th>
+                                    <th colSpan={2} className="sticky right-0 z-30 bg-slate-50 border-l border-b border-slate-200 w-16 px-2 py-2 text-center text-[11px] uppercase tracking-wider text-slate-500 font-semibold" title="Actions">Act</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {items.map((item, idx) => (
+                                    <PurchaseItemRow
+                                        key={idx}
+                                        index={idx}
+                                        value={item}
+                                        onChange={handleItemChange}
+                                        onRemove={handleRemoveItem}
+                                        onSelectProduct={handleSelectProduct}
+                                        onOpenAddProduct={handleOpenAddProduct}
+                                        outletId={outletId}
+                                        errors={(errors.items as any)?.[idx]}
+                                    />
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                {/* ── Section C: Additional Charges & Discounts ────────────────────────── */}
+                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                    <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50 px-5 py-3">
+                        <Truck className="h-4 w-4 text-slate-500" />
+                        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                            Additional Charges & Invoice Discount
+                        </h3>
+                    </div>
+                    <div className="grid grid-cols-1 gap-4 p-5 md:grid-cols-4">
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-medium text-slate-600">Freight / Transport (₹)</Label>
+                            <Input
+                                type="number" step="0.01" min="0"
+                                className="h-9 text-sm"
+                                placeholder="0.00"
+                                {...register('freight', { valueAsNumber: true })}
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-medium text-slate-600 flex justify-between">
+                                <span>Invoice Discount (₹)</span>
+                                {invoiceDiscountPct > 0 && (
+                                    <span className="text-emerald-600">{(invoiceDiscountPct * 100).toFixed(2)}%</span>
+                                )}
+                            </Label>
+                            <Input
+                                type="number" step="0.01" min="0"
+                                className="h-9 text-sm text-green-700"
+                                placeholder="0.00"
+                                {...register('invoiceDiscount', { valueAsNumber: true })}
                             />
                         </div>
                     </div>
                 </div>
-            )}
 
-            {/* ── Zone 3: The Financial HUD (Bottom, Sticky) ───────────────────────────── */}
-            <div className="sticky bottom-0 bg-white border-t border-slate-200 shadow-[0_-4px_6px_-1px_rgb(0,0,0,0.05)] z-40 p-4 mt-4 -mx-4 md:-mx-1 flex flex-col-reverse md:flex-row justify-between items-stretch md:items-end gap-4 rounded-t-xl">
-                
-                {/* Actions Docked Left */}
-                <div className="flex items-center gap-3 pb-1 justify-between md:justify-start">
-                    <Button
-                        type="button" variant="outline" size="sm"
-                        className="flex-1 md:flex-none gap-1.5 text-slate-500 hover:text-slate-700 h-10"
-                        onClick={saveDraft}
-                        title="Shortcut: Alt + S"
-                    >
-                        <Save className="h-4 w-4" /> Save Draft <span className="text-[10px] text-slate-400 ml-1 border rounded px-1 hidden md:inline">Alt+S</span>
-                    </Button>
-                    <Button type="button" variant="outline" onClick={() => onSuccess()} className="flex-1 md:flex-none h-10">
-                        <X className="mr-1 h-4 w-4" /> Cancel
-                    </Button>
-                </div>
-
-                {/* Receipt Summary & Main Save Button Docked Right */}
-                <div className="flex flex-col md:flex-row gap-4 items-stretch">
-                    <div className="w-full md:w-72 flex flex-col gap-1.5 text-sm bg-slate-50 p-3 rounded-lg border border-slate-200">
-                        {totalTradeDisc + totalCashDisc > 0 && (
-                            <div className="flex justify-between text-slate-500 text-xs">
-                                <span>Item Discounts</span>
-                                <span className="font-mono">− {fmt(totalTradeDisc + totalCashDisc)}</span>
-                            </div>
-                        )}
-                        {invoiceDiscount > 0 && (
-                            <div className="flex justify-between text-emerald-600 text-xs">
-                                <span>Invoice Discount ({(invoiceDiscountPct * 100).toFixed(2)}%)</span>
-                                <span className="font-mono">− {fmt(invoiceDiscount)}</span>
-                            </div>
-                        )}
-                        <div className="flex justify-between text-slate-600">
-                            <span>Taxable Value</span>
-                            <span className="font-mono">{fmt(taxableValue)}</span>
-                        </div>
-                        <div className="flex justify-between text-slate-600">
-                            <span>Total GST</span>
-                            <span className="font-mono">{fmt(totalGST)}</span>
-                        </div>
-                        {ledgerAdjustment > 0 && (
-                            <div className={`flex justify-between ${adjustmentSign === '-' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                <span>Adjustment</span>
-                                <span className="font-mono">{adjustmentSign === '-' ? '−' : '+'} {fmt(ledgerAdjustment)}</span>
-                            </div>
-                        )}
-                        <Separator className="my-1 border-slate-300" />
-                        <div className="flex items-end justify-between">
-                            <span className="text-sm font-bold text-slate-800">NET PAYABLE</span>
-                            <span className="font-mono text-xl font-bold text-slate-900 leading-none">
-                                {fmt(netPayable)}
-                            </span>
-                        </div>
-                        {watchedPurchaseType === 'credit' && (
-                            <p className="text-right text-[10px] text-slate-400 mt-0.5">
-                                Due: {watch('dueDate') ?? '—'}
+                {/* ── Section D: Ledger Adjustment ────────────────────────── */}
+                <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div>
+                            <p className="text-sm font-semibold text-slate-700">Ledger Adjustment</p>
+                            <p className="text-xs text-slate-400">
+                                Apply credit from distributor account (return, advance, write-off)
                             </p>
-                        )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <select
+                                className="cursor-pointer rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-100"
+                                value={adjustmentSign}
+                                onChange={(e) => {
+                                    setAdjustmentSign(e.target.value as '-' | '+');
+                                    // optionally re-evaluate cap if they switch from + to - 
+                                    if (e.target.value === '-') setLedgerAdjustment((prev) => Math.min(prev, computedTotal));
+                                }}
+                            >
+                                <option value="-">&minus; (Subtract)</option>
+                                <option value="+">+ (Add)</option>
+                            </select>
+                            <span className="text-sm font-medium text-slate-600">₹</span>
+                            <input
+                                type="number"
+                                min={0}
+                                // Only cap at computedTotal if it's a deduction ('-')
+                                max={adjustmentSign === '-' ? computedTotal : undefined}
+                                step="0.01"
+                                className="w-36 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-right text-base font-mono shadow-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-100 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                placeholder="0.00"
+                                value={ledgerAdjustment || ''}
+                                onChange={(e) => {
+                                    const val = Math.max(0, parseFloat(e.target.value) || 0);
+                                    if (adjustmentSign === '-') {
+                                        setLedgerAdjustment(Math.min(val, computedTotal));
+                                    } else {
+                                        setLedgerAdjustment(val);
+                                    }
+                                }}
+                            />
+                        </div>
                     </div>
-                    
-                    <Button
-                        type="submit"
-                        onClick={(e) => {
-                            const valid = cleanItemsBeforeSubmit();
-                            if (!valid) {
-                                e.preventDefault();
-                                return;
-                            }
-                            handleSubmit(onSubmit, onInvalid)();
-                        }}
-                        disabled={isSubmitting}
-                        className="h-14 md:h-auto min-h-full w-full md:w-32 flex flex-col gap-1 justify-center rounded-lg shadow-sm"
-                        title="Shortcut: Ctrl + Enter"
-                    >
-                        <span className="text-sm font-semibold">{isSubmitting ? 'Saving...' : (invoiceToEdit && invoiceToEdit.status !== 'SAVED') ? 'Update' : 'Save'}</span>
-                        <span className="text-[10px] font-normal opacity-80 bg-black/20 rounded px-1.5 py-0.5 hidden md:inline-block">Ctrl + Enter</span>
-                    </Button>
+
+                    {ledgerAdjustment > 0 && (
+                        <div className="mt-2">
+                            <input
+                                className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 focus:border-blue-400 focus:outline-none"
+                                placeholder="Reason (e.g. Return CN-2024-45, Advance payment)"
+                                value={ledgerNote}
+                                onChange={(e) => setLedgerNote(e.target.value)}
+                            />
+                        </div>
+                    )}
                 </div>
-            </div>
 
-        </form>
+                {/* ── Reason for Modification (Edit Mode Only) ──────────────── */}
+                {invoiceToEdit && invoiceToEdit.status !== 'SAVED' && (
+                    <div className="rounded-xl border border-blue-200 bg-blue-50 p-5 mt-4">
+                        <h3 className="text-sm font-semibold text-blue-900 mb-3 flex items-center gap-2">
+                            <FileText className="h-4 w-4" />
+                            Reason for Modification
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label className="text-blue-800">Action Type / Reason Code <span className="text-rose-500">*</span></Label>
+                                <select
+                                    className="w-full rounded-md border border-blue-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                                    value={revisionReasonCode}
+                                    onChange={(e) => setRevisionReasonCode(e.target.value)}
+                                >
+                                    <option value="">Select a reason...</option>
+                                    <option value="ENTRY_MISTAKE">Entry Mistake</option>
+                                    <option value="RATE_CORRECTION">Rate Correction</option>
+                                    <option value="QTY_CORRECTION">Quantity Correction</option>
+                                    <option value="DATE_CORRECTION">Date Correction</option>
+                                    <option value="SUPPLIER_REQUEST">Supplier Request</option>
+                                    <option value="DUPLICATE_ENTRY_FIX">Duplicate Entry Fix</option>
+                                    <option value="TAX_CORRECTION">Tax Correction</option>
+                                    <option value="PAYMENT_ADJUSTMENT">Payment Adjustment</option>
+                                    <option value="OTHER">Other</option>
+                                </select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label className="text-blue-800">Detailed Explanation <span className="text-rose-500">*</span></Label>
+                                <Textarea
+                                    className="min-h-[80px] bg-white border-blue-200 focus-visible:ring-blue-500/20"
+                                    placeholder="Explain why you are modifying this purchase invoice..."
+                                    value={revisionReasonText}
+                                    onChange={(e) => setRevisionReasonText(e.target.value)}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                )}
 
-        <AddNewProductDrawer
-            open={drawerOpen}
-            onOpenChange={setDrawerOpen}
-            initialName={drawerInitialName}
-            onSuccess={handleProductCreated}
-        />
+                {/* ── Zone 3: The Financial HUD (Bottom, Sticky) ───────────────────────────── */}
+                <div className="sticky bottom-0 bg-white border-t border-slate-200 shadow-[0_-4px_6px_-1px_rgb(0,0,0,0.05)] z-40 p-4 mt-4 -mx-4 md:-mx-1 flex flex-col-reverse md:flex-row justify-between items-stretch md:items-end gap-4 rounded-t-xl">
+
+                    {/* Actions Docked Left */}
+                    <div className="flex items-center gap-3 pb-1 justify-between md:justify-start">
+                        <Button
+                            type="button" variant="outline" size="sm"
+                            className="flex-1 md:flex-none gap-1.5 text-slate-500 hover:text-slate-700 h-10"
+                            onClick={saveDraft}
+                            title="Shortcut: Alt + S"
+                        >
+                            <Save className="h-4 w-4" /> Save Draft <span className="text-[10px] text-slate-400 ml-1 border rounded px-1 hidden md:inline">Alt+S</span>
+                        </Button>
+                        <Button type="button" variant="outline" onClick={() => onSuccess()} className="flex-1 md:flex-none h-10">
+                            <X className="mr-1 h-4 w-4" /> Cancel
+                        </Button>
+                    </div>
+
+                    {/* Receipt Summary & Main Save Button Docked Right */}
+                    <div className="flex flex-col md:flex-row gap-4 items-stretch">
+                        <div className="w-full md:w-72 flex flex-col gap-1.5 text-sm bg-slate-50 p-3 rounded-lg border border-slate-200">
+                            {totalTradeDisc + totalCashDisc > 0 && (
+                                <div className="flex justify-between text-slate-500 text-xs">
+                                    <span>Item Discounts</span>
+                                    <span className="font-mono">− {fmt(totalTradeDisc + totalCashDisc)}</span>
+                                </div>
+                            )}
+                            {invoiceDiscount > 0 && (
+                                <div className="flex justify-between text-emerald-600 text-xs">
+                                    <span>Invoice Discount ({(invoiceDiscountPct * 100).toFixed(2)}%)</span>
+                                    <span className="font-mono">− {fmt(invoiceDiscount)}</span>
+                                </div>
+                            )}
+                            <div className="flex justify-between text-slate-600">
+                                <span>Taxable Value</span>
+                                <span className="font-mono">{fmt(taxableValue)}</span>
+                            </div>
+                            <div className="flex justify-between text-slate-600">
+                                <span>Total GST</span>
+                                <span className="font-mono">{fmt(totalGST)}</span>
+                            </div>
+                            {ledgerAdjustment > 0 && (
+                                <div className={`flex justify-between ${adjustmentSign === '-' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                    <span>Adjustment</span>
+                                    <span className="font-mono">{adjustmentSign === '-' ? '−' : '+'} {fmt(ledgerAdjustment)}</span>
+                                </div>
+                            )}
+                            <Separator className="my-1 border-slate-300" />
+                            <div className="flex items-end justify-between">
+                                <span className="text-sm font-bold text-slate-800">NET PAYABLE</span>
+                                <span className="font-mono text-xl font-bold text-slate-900 leading-none">
+                                    {fmt(netPayable)}
+                                </span>
+                            </div>
+                            {watchedPurchaseType === 'credit' && (
+                                <p className="text-right text-[10px] text-slate-400 mt-0.5">
+                                    Due: {watch('dueDate') ?? '—'}
+                                </p>
+                            )}
+                        </div>
+
+                        <Button
+                            type="submit"
+                            onClick={(e) => {
+                                const valid = cleanItemsBeforeSubmit();
+                                if (!valid) {
+                                    e.preventDefault();
+                                    return;
+                                }
+                                handleSubmit(onSubmit, onInvalid)();
+                            }}
+                            disabled={isSubmitting}
+                            className="h-14 md:h-auto min-h-full w-full md:w-32 flex flex-col gap-1 justify-center rounded-lg shadow-sm"
+                            title="Shortcut: Ctrl + Enter"
+                        >
+                            <span className="text-sm font-semibold">{isSubmitting ? 'Saving...' : (invoiceToEdit && invoiceToEdit.status !== 'SAVED') ? 'Update' : 'Save'}</span>
+                            <span className="text-[10px] font-normal opacity-80 bg-black/20 rounded px-1.5 py-0.5 hidden md:inline-block">Ctrl + Enter</span>
+                        </Button>
+                    </div>
+                </div>
+
+            </form>
+
+            <AddNewProductDrawer
+                open={drawerOpen}
+                onOpenChange={setDrawerOpen}
+                initialName={drawerInitialName}
+                onSuccess={handleProductCreated}
+            />
         </>
     );
 }

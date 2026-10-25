@@ -9,6 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { getExpiryStatus } from '@/utils/expiry';
 import { calculateLineMargin, calculateTotalMargin } from '@/lib/billingMarginUtils';
 import { useProductSearch } from '@/hooks/useProductSearch';
+import { useOutletSettings } from '@/hooks/useOutletSettings';
 import { Batch, ProductSearchResult, BillTotals } from '@/types';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -21,7 +22,17 @@ interface MainInvoiceWorkspaceProps {
 
 export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = {}) {
     const { drafts, activeDraftId, addToCart, removeFromCart, updateCartItem, getDraftTotals, showMarginInfo, activeStaff } = useBillingStore();
-    const isCashier = activeStaff?.role === 'cashier';
+    const setLandingCostIncludeGst = useBillingStore(state => state.setLandingCostIncludeGst);
+    const landingCostIncludeGst = useBillingStore(state => state.landingCostIncludeGst);
+    const { data: outletSettings } = useOutletSettings();
+
+    useEffect(() => {
+        if (outletSettings) {
+            setLandingCostIncludeGst(Boolean(outletSettings.landingCostIncludeGst ?? (outletSettings as any).landing_cost_include_gst));
+        }
+    }, [outletSettings, setLandingCostIncludeGst]);
+
+    const isCashier = activeStaff?.role === 'cashier' || activeStaff?.role === 'billing_staff';
     const canViewMargins = !isCashier && showMarginInfo;
     
     // Search State
@@ -123,7 +134,7 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
         requiresDoctorDetails: false,
     };
     const totals = (typeof getDraftTotals === 'function' ? getDraftTotals(activeDraftId) : null) || fallbackTotals;
-    const marginData = calculateTotalMargin(activeDraft.cart, totals.grandTotal, totals.extraDiscountAmount, activeDraft.extraDiscountPct || 0, saleType);
+    const marginData = calculateTotalMargin(activeDraft.cart, totals.grandTotal, totals.extraDiscountAmount, activeDraft.extraDiscountPct || 0, saleType, landingCostIncludeGst);
 
     // --- Editor Handlers ---
     const handleSaveEdit = (oldBatchId: string, updatedItem: any) => {
@@ -240,15 +251,18 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
             return; // Needs qty
         }
 
-        const canonicalPackType = quickAddBatch?.packType || quickAddProduct?.packType || '';
-        const isStripBased = canonicalPackType.toLowerCase() === 'strip' || canonicalPackType.toLowerCase() === 'blister';
-        const effectiveLoose = isStripBased ? l : 0;
+        // FIX: Allow loose quantities for ANY item where packSize > 1, ignoring packType strings.
+        const hasLoose = quickAddBatch.packSize > 1;
+        const effectiveLoose = hasLoose ? l : 0;
 
         const totalQtyLoose = (s * quickAddBatch.packSize) + effectiveLoose;
         const totalQtyFractional = s + (effectiveLoose / quickAddBatch.packSize);
         
+        // FIX: Hard block negative inventory
         if (totalQtyLoose > (quickAddBatch.qtyStrips * quickAddBatch.packSize + quickAddBatch.qtyLoose)) {
-            alert('Warning: Added quantity exceeds available stock.');
+            // Assuming useToast is imported, otherwise fallback to alert
+            alert('BLOCKED: Added quantity exceeds available stock.');
+            return; // <--- This forces the function to stop.
         }
 
         const dPct = parseFloat(discountPct) || 0;
@@ -400,7 +414,7 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                             />
                         </div>
 
-                        {((quickAddBatch?.packType || quickAddProduct?.packType)?.toLowerCase() === 'strip' || (quickAddBatch?.packType || quickAddProduct?.packType)?.toLowerCase() === 'blister') && (
+                        {quickAddBatch.packSize > 1 && (
                             <div>
                                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1 flex items-center justify-between">
                                     Loose <span className="text-[9px] font-normal text-slate-400 ml-2">of {quickAddBatch.packSize}</span>
@@ -452,8 +466,7 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                                             const s = parseInt(qtyStrips) || 0;
                                             const l = parseInt(qtyLoose) || 0;
                                             const d = parseFloat(discountPct) || 0;
-                                            const isStrip = quickAddProduct?.packType?.toLowerCase() === 'strip' || quickAddProduct?.packType?.toLowerCase() === 'blister';
-                                            const effectiveL = isStrip ? l : 0;
+                                            const effectiveL = quickAddBatch.packSize > 1 ? l : 0;
                                             const tQtyFractional = s + (effectiveL / quickAddBatch.packSize);
                                             const rate = Number(quickAddBatch.pts) > 0 ? Number(quickAddBatch.pts) : (Number(quickAddBatch.ptr) > 0 ? Number(quickAddBatch.ptr) : Number(quickAddBatch.mrp));
                                             return ((rate * (1 - d/100)) * tQtyFractional).toFixed(2);
@@ -470,8 +483,7 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                                             const s = parseInt(qtyStrips) || 0;
                                             const l = parseInt(qtyLoose) || 0;
                                             const d = parseFloat(discountPct) || 0;
-                                            const isStrip = quickAddProduct?.packType?.toLowerCase() === 'strip' || quickAddProduct?.packType?.toLowerCase() === 'blister';
-                                            const effectiveL = isStrip ? l : 0;
+                                            const effectiveL = quickAddBatch.packSize > 1 ? l : 0;
                                             const tQtyFractional = s + (effectiveL / quickAddBatch.packSize);
                                             const rate = Number(quickAddBatch.mrp) || 0;
                                             return ((rate * (1 - d/100)) * tQtyFractional).toFixed(2);
@@ -792,7 +804,7 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                                     );
                                 }
 
-                                const lineMargin = calculateLineMargin(item, activeDraft?.extraDiscountPct || 0, saleType);
+                                const lineMargin = calculateLineMargin(item, activeDraft?.extraDiscountPct || 0, saleType, landingCostIncludeGst);
 
                                 return (
                                     <tr 

@@ -6,6 +6,7 @@ export type StaffRole =
     | 'admin'
     | 'manager'
     | 'billing_staff'
+    | 'cashier'
     | 'view_only';
 
 export type DrugSchedule =
@@ -117,6 +118,8 @@ export interface AuthUser {
     id: string;
     name: string;
     phone: string;
+    username?: string;
+    email?: string;
     role: StaffRole;
     staffPin?: string;
     outletId: string;

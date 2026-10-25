@@ -39,6 +39,8 @@ interface BillingState {
     
     // UI Feature Flags
     showMarginInfo: boolean;
+    landingCostIncludeGst: boolean;
+    setLandingCostIncludeGst: (val: boolean) => void;
     
     // Actions - Draft Management
     createDraft: () => string;
@@ -160,6 +162,8 @@ export const useBillingStore = create<BillingState>()(
     backendRateErrors: {},
     
     showMarginInfo: true,
+    landingCostIncludeGst: false,
+    setLandingCostIncludeGst: (val) => set({ landingCostIncludeGst: val }),
 
     // --- Draft Management ---
 
@@ -367,10 +371,18 @@ export const useBillingStore = create<BillingState>()(
         
         let newCart = [...draft.cart];
         if (existingIndex >= 0) {
+            const old = newCart[existingIndex];
             newCart[existingIndex] = {
-                ...newCart[existingIndex],
-                ...item,
-                totalQty: item.totalQty
+                ...old,
+                ...item, // Applies latest discount/rate, but we must sum the quantities below:
+                qtyStrips: old.qtyStrips + item.qtyStrips,
+                qtyLoose: old.qtyLoose + item.qtyLoose,
+                totalQty: old.totalQty + item.totalQty,
+                freeQtyStrips: (old.freeQtyStrips || 0) + (item.freeQtyStrips || 0),
+                freeQtyLoose: (old.freeQtyLoose || 0) + (item.freeQtyLoose || 0),
+                totalAmount: old.totalAmount + item.totalAmount,
+                taxableAmount: old.taxableAmount + item.taxableAmount,
+                gstAmount: old.gstAmount + item.gstAmount,
             };
         } else {
             newCart = [...newCart, { 
@@ -502,7 +514,7 @@ export const useBillingStore = create<BillingState>()(
         const extraDiscPct = draft.extraDiscountPct || 0;
         const discountFactor = extraDiscPct > 0 ? 1 - extraDiscPct / 100 : 1;
         const smartAllocations = extraDiscPct > 0
-            ? distributeSmartDiscounts(draft.cart, extraDiscPct, draft.saleType || 'RETAIL')
+            ? distributeSmartDiscounts(draft.cart, extraDiscPct, draft.saleType || 'RETAIL', get().landingCostIncludeGst)
             : null;
 
         let totalTaxableValue = 0;
@@ -714,6 +726,7 @@ export const useBillingStore = create<BillingState>()(
                 activeStaff: state.activeStaff,
                 isPinVerified: state.isPinVerified,
                 showMarginInfo: state.showMarginInfo,
+                landingCostIncludeGst: state.landingCostIncludeGst,
                 billsToday: state.billsToday,
             }),
             onRehydrateStorage: () => (state, error) => {

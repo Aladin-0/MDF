@@ -10,6 +10,39 @@ import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import { ArrowLeft, Clock, User, AlertCircle, FileText, IndianRupee, ArrowRight } from 'lucide-react';
 import { format } from 'date-fns';
+import { InvoicePreviewModal } from '@/components/billing/InvoicePreviewModal';
+
+function adaptSnapshot(raw: any) {
+    if (!raw) return null;
+    return {
+        ...raw,
+        invoiceNo: raw.invoiceNo || raw.header?.invoice_no || raw.invoice_no || 'INV',
+        invoiceDate: raw.invoiceDate || raw.header?.invoice_date || raw.invoice_date || raw.createdAt,
+        createdAt: raw.createdAt || raw.header?.invoice_date || raw.invoice_date,
+        customer: raw.customer || (raw.header?.customer_name ? { name: raw.header.customer_name } : undefined),
+        customerName: raw.customerName || raw.header?.customer_name,
+        doctor: raw.doctor || (raw.header?.doctor_name ? { name: raw.header.doctor_name } : undefined),
+        doctorName: raw.doctorName || raw.header?.doctor_name,
+        grandTotal: raw.grandTotal ?? (raw.financial?.grand_total ? Number(raw.financial.grand_total) : 0),
+        subtotal: raw.subtotal ?? (raw.financial?.subtotal ? Number(raw.financial.subtotal) : 0),
+        taxableAmount: raw.taxableAmount ?? (raw.financial?.taxable_amount ? Number(raw.financial.taxable_amount) : 0),
+        gstAmount: raw.gstAmount ?? (raw.financial?.gst_amount ? Number(raw.financial.gst_amount) : 0),
+        amountPaid: raw.amountPaid ?? (raw.financial?.amount_paid ? Number(raw.financial.amount_paid) : 0),
+        amountDue: raw.amountDue ?? (raw.financial?.amount_due ? Number(raw.financial.amount_due) : 0),
+        items: (raw.items || []).map((it: any) => ({
+            ...it,
+            productName: it.productName || it.product_name || it.name,
+            batchNo: it.batchNo || it.batch_no,
+            expiryDate: it.expiryDate || it.expiry_date,
+            qtyStrips: it.qtyStrips ?? it.qty_strips ?? 0,
+            qtyLoose: it.qtyLoose ?? it.qty_loose ?? 0,
+            rate: Number(it.rate ?? it.sale_rate ?? 0),
+            mrp: Number(it.mrp ?? 0),
+            discountPct: Number(it.discountPct ?? it.discount_pct ?? 0),
+            totalAmount: Number(it.totalAmount ?? it.total_amount ?? 0),
+        })),
+    };
+}
 
 export default function RevisionDetailPage({ params }: { params: { invoiceId: string } }) {
     const router = useRouter();
@@ -18,6 +51,9 @@ export default function RevisionDetailPage({ params }: { params: { invoiceId: st
     const [data, setData] = useState<any>(null);
     const [error, setError] = useState('');
     const outlet = useAuthStore(s => s.user?.outlet);
+
+    // NEW: State for the invoice preview modal
+    const [previewSnapshot, setPreviewSnapshot] = useState<any>(null);
 
     useEffect(() => {
         if (!outlet) return;
@@ -131,6 +167,32 @@ export default function RevisionDetailPage({ params }: { params: { invoiceId: st
                                                     ₹{(parseFloat(rev.new_snapshot_json?.financial?.grand_total || '0') - parseFloat(rev.old_snapshot_json?.financial?.grand_total || '0')).toFixed(2)}
                                                 </span>
                                             </div>
+
+                                            {/* NEW: Action buttons for previewing snapshots */}
+                                            <div className="pt-3 mt-3 border-t border-gray-200 flex flex-wrap gap-3">
+                                                {rev.old_snapshot_json && (
+                                                    <Button 
+                                                        variant="outline" 
+                                                        size="sm" 
+                                                        className="flex-1 bg-white hover:bg-gray-100"
+                                                        onClick={() => setPreviewSnapshot(rev.old_snapshot_json)}
+                                                    >
+                                                        <FileText className="h-4 w-4 mr-2 text-gray-500" />
+                                                        Preview Original
+                                                    </Button>
+                                                )}
+                                                {rev.new_snapshot_json && (
+                                                    <Button 
+                                                        variant="outline" 
+                                                        size="sm" 
+                                                        className="flex-1 bg-white hover:bg-gray-100 border-primary/20 hover:border-primary/50 text-primary"
+                                                        onClick={() => setPreviewSnapshot(rev.new_snapshot_json)}
+                                                    >
+                                                        <FileText className="h-4 w-4 mr-2" />
+                                                        Preview Modified
+                                                    </Button>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
 
@@ -160,6 +222,13 @@ export default function RevisionDetailPage({ params }: { params: { invoiceId: st
                     </div>
                 </div>
             </div>
+
+            {/* NEW: Mount the preview modal */}
+            <InvoicePreviewModal
+                isOpen={!!previewSnapshot}
+                onClose={() => setPreviewSnapshot(null)}
+                invoice={adaptSnapshot(previewSnapshot)}
+            />
         </div>
     );
 }

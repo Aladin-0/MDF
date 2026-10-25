@@ -1,0 +1,912 @@
+# EXTRACTED BILL REVISION CODE
+
+## Target 1: The Sale Update Service (`apps/backend/apps/billing/sale_update_service.py`)
+
+```python
+from datetime import datetime, date, timedelta
+from typing import Dict, Any, List
+from decimal import Decimal, ROUND_FLOOR
+from django.db import transaction
+from django.db.models import Sum
+
+from apps.core.models import Outlet
+from apps.inventory.models import Batch, MasterProduct
+from apps.billing.models import SaleInvoice, SaleItem, ScheduleHRegister, CreditAccount, CreditTransaction, LedgerEntry, InvoicePayment
+from apps.accounts.models import Staff, Customer, Ledger, JournalEntry
+from apps.accounts.services import LedgerService
+from apps.accounts.journal_service import _get_ledger, _create_lines_and_update_balances, post_sale_invoice
+from apps.billing.services import validate_sale_price, fefo_batch_select, schedule_h_validate
+
+class SaleServiceError(Exception):
+    pass
+
+def rebuild_customer_ledger(outlet_id: str, customer_id: str, from_date: date):
+    """Recalculate running_balance for a customer from a specific date."""
+    entries = LedgerEntry.objects.filter(
+        outlet_id=outlet_id, 
+        customer_id=customer_id, 
+        date__gte=from_date
+    ).order_by('date', 'created_at')
+    
+    prev = LedgerEntry.objects.filter(
+        outlet_id=outlet_id, 
+        customer_id=customer_id, 
+        date__lt=from_date
+    ).order_by('-date', '-created_at').first()
+    
+    running = prev.running_balance if prev else Decimal('0')
+    
+    for entry in entries:
+        running = running + entry.debit - entry.credit
+        LedgerEntry.objects.filter(pk=entry.pk).update(running_balance=running)
+
+def get_sale_modification_constraints(invoice: SaleInvoice, action: str = None) -> Dict[str, Any]:
+    """
+    Returns a dictionary indicating if the invoice can be safely modified.
+    {
+        "can_edit": bool,
+        "code": str,       # Reason code if blocked, None if can_edit
+        "message": str     # Human readable reason
+    }
+    """
+    # 1. Check for Returns
+    if invoice.returns.exists() and action not in ['return_aware_correction', 'header_correction']:
+        return {
+            "can_edit": False,
+            "code": "SALE_EDIT_BLOCKED_HAS_RETURN",
+            "message": "This invoice has one or more sales returns linked to it and cannot be edited directly. Use the correction workflow."
+        }
+        
+    # 2. Check for Later Payments / Allocations
+    if hasattr(invoice, 'receipt_allocations') and invoice.receipt_allocations.exists() and action not in ['header_correction', 'paid_bill_correction']:
+        return {
+            "can_edit": False,
+            "code": "SALE_EDIT_BLOCKED_LATER_PAYMENT",
+            "message": "This invoice has later payments recorded and cannot be edited directly."
+        }
+
+    # 3. Check for fully paid credit sales
+    if invoice.credit_given > 0 and invoice.amount_due <= 0 and action not in ['header_correction', 'paid_bill_correction']:
+        return {
+            "can_edit": False,
+            "code": "SALE_EDIT_BLOCKED_FULLY_PAID",
+            "message": "This invoice is fully paid and cannot be edited directly."
+        }
+
+        
+    return {
+        "can_edit": True,
+        "code": None,
+        "message": None
+    }
+
+@transaction.atomic
+def cancel_invoice(sale_id: str, updated_by_id: str, reason: str):
+    from apps.inventory.models import StockLedger
+    from apps.billing.models import SaleInvoice, CreditTransaction
+    from apps.accounts.journal_service import reverse_journal
+    from django.utils import timezone
+
+    sale_invoice = SaleInvoice.objects.select_for_update().get(id=sale_id)
+    outlet = sale_invoice.outlet
+    
+    if sale_invoice.is_cancelled:
+        raise SaleServiceError("Invoice is already cancelled.")
+
+    if sale_invoice.irn_status == 'GENERATED':
+        if not sale_invoice.is_irn_cancelable:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError("Cannot cancel an e-Invoice after 24 hours of generation. You must issue a Sales Return / Credit Note.")
+        from apps.integrations.sandbox.einvoice import cancel_einvoice
+        cancel_einvoice(sale_invoice, reason="2", remark="Cancelled by user")
+
+    # Revert stock
+    StockLedger.objects.filter(
+        outlet=outlet,
+        voucher_number=sale_invoice.invoice_no,
+        txn_type='SALE_OUT'
+    ).delete()
+
+    old_items = sale_invoice.items.all()
+    for old_item in old_items:
+        batch = old_item.batch
+        batch.qty_strips += old_item.qty_strips
+        batch.qty_loose += old_item.qty_loose
+        if batch.pack_size:
+            while batch.qty_loose >= batch.pack_size:
+                batch.qty_strips += 1
+                batch.qty_loose -= batch.pack_size
+        batch.save(update_fields=['qty_strips', 'qty_loose'])
+        # NOTE: DO NOT delete old_item for cancellation
+
+    # Revert accounting
+    old_customer = sale_invoice.customer
+    if old_customer:
+        old_customer.total_purchases -= sale_invoice.grand_total
+        old_customer.save(update_fields=['total_purchases'])
+
+    # Reverse JournalEntry
+    reverse_journal(
+        source_type='SALE',
+        source_id=str(sale_invoice.id),
+        outlet_id=str(outlet.id),
+        narration_prefix=f"CANCELLATION REVERSAL OF"
+    )
+
+    # Reverse CreditTransactions
+    old_credit_txs = CreditTransaction.objects.filter(invoice=sale_invoice)
+    for tx in old_credit_txs:
+        account = tx.credit_account
+        account.total_outstanding -= tx.amount
+        if tx.type == 'debit':
+            account.total_borrowed -= tx.amount
+        account.save(update_fields=['total_outstanding', 'total_borrowed'])
+        CreditTransaction.objects.create(
+            credit_account=account,
+            customer=account.customer,
+            type='credit' if tx.type == 'debit' else 'debit',
+            amount=tx.amount,
+            description=f"Reversal due to invoice cancellation: {sale_invoice.invoice_no}",
+            recorded_by_id=updated_by_id,
+            balance_after=account.total_outstanding
+        )
+
+    # Mark as cancelled
+    sale_invoice.is_cancelled = True
+    sale_invoice.cancellation_reason = reason
+    sale_invoice.cancelled_at = timezone.now()
+    sale_invoice.cancelled_by_id = updated_by_id
+    sale_invoice.save(update_fields=['is_cancelled', 'cancellation_reason', 'cancelled_at', 'cancelled_by'])
+
+@transaction.atomic
+def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, updated_by_id: str) -> SaleInvoice:
+    try:
+        # Step 1: Validate and get SaleInvoice
+        outlet = Outlet.objects.get(id=outlet_id)
+        try:
+            sale_invoice = SaleInvoice.objects.select_for_update().get(id=sale_id, outlet=outlet)
+        except SaleInvoice.DoesNotExist:
+            raise SaleServiceError(f"Sale {sale_id} not found")
+        
+        revision_action = payload.get('revisionAction')
+
+        # Enforce edit constraints
+        constraints = get_sale_modification_constraints(sale_invoice, action=revision_action)
+        if not constraints["can_edit"]:
+            raise SaleServiceError(constraints["message"])
+        
+        # Determine Billed By
+        try:
+            billed_by = Staff.objects.get(id=updated_by_id)
+        except Staff.DoesNotExist:
+            billed_by = None
+
+        items_data = payload.get('items', [])
+        schedule_h_data = payload.get('scheduleHData')
+        client_grand_total = Decimal(str(payload.get('grandTotal', 0)))
+        extra_discount_pct = Decimal(str(payload.get('extraDiscountPct', 0)))
+
+        if revision_action == 'header_correction':
+            # Header corrections ONLY update non-financial header fields.
+            # They must NEVER touch stock, items, payments, or ledger entries.
+            # We validate the client is not sneaking in financial changes.
+            if abs(client_grand_total - sale_invoice.grand_total) > Decimal('0.01') and client_grand_total != Decimal('0'):
+                raise SaleServiceError(
+                    f"You cannot modify the grand total during a Header Correction. "
+                    f"(Client Total: {client_grand_total}, DB Total: {sale_invoice.grand_total})"
+                )
+
+            # Resolve customer/doctor from payload (allowed header changes)
+            party_ledger_id = payload.get('partyLedgerId')
+            customer_id = payload.get('customerId')
+            doctor_id = payload.get('doctorId')
+
+            new_customer = sale_invoice.customer  # default: keep existing
+            if party_ledger_id:
+                try:
+                    party_ledger = Ledger.objects.select_related('linked_customer').get(id=party_ledger_id, outlet=outlet)
+                    if party_ledger.linked_customer:
+                        new_customer = party_ledger.linked_customer
+                except Ledger.DoesNotExist:
+                    raise SaleServiceError(f"Ledger {party_ledger_id} not found")
+            elif customer_id:
+                try:
+                    new_customer = Customer.objects.get(id=customer_id, outlet=outlet)
+                except Customer.DoesNotExist:
+                    raise SaleServiceError(f"Customer {customer_id} not found")
+
+            from apps.accounts.models import Doctor
+            new_doctor = sale_invoice.doctor  # default: keep existing
+            if doctor_id:
+                try:
+                    new_doctor = Doctor.objects.get(id=doctor_id, outlet=outlet)
+                except Doctor.DoesNotExist:
+                    raise SaleServiceError(f"Doctor {doctor_id} not found")
+
+            # Parse invoice_date if provided
+            raw_invoice_date = payload.get('invoiceDate')
+            if raw_invoice_date:
+                invoice_date_str = str(raw_invoice_date).rstrip('Z').split('+')[0]
+                new_invoice_date = datetime.fromisoformat(invoice_date_str)
+            else:
+                new_invoice_date = sale_invoice.invoice_date
+
+            # Apply ONLY header field updates — no stock, no payments, no items
+            sale_invoice.customer = new_customer
+            sale_invoice.doctor = new_doctor
+            sale_invoice.invoice_date = new_invoice_date
+            sale_invoice.billed_by = billed_by
+            sale_invoice.sale_type = payload.get('saleType', sale_invoice.sale_type)
+            sale_invoice.billing_basis = payload.get('billingBasis', sale_invoice.billing_basis)
+            sale_invoice.save(update_fields=['customer', 'doctor', 'invoice_date', 'billed_by', 'sale_type', 'billing_basis'])
+
+            return sale_invoice
+
+        # Enforce max discount
+        if billed_by:
+            staff_max_discount = billed_by.max_discount
+            for item_data in items_data:
+                item_disc = Decimal(str(item_data.get('discountPct', 0)))
+                if item_disc > staff_max_discount:
+                    raise SaleServiceError(f"Discount {item_disc}% exceeds your maximum allowed discount of {staff_max_discount}%")
+
+        # Parse invoice_date early — it is needed in Step 6 (stock ledger posting)
+        # Frontend may not send invoiceDate on edit; fall back to the existing invoice date
+        raw_invoice_date = payload.get('invoiceDate')
+        if raw_invoice_date:
+            invoice_date_str = str(raw_invoice_date).rstrip('Z').split('+')[0]
+            invoice_date = datetime.fromisoformat(invoice_date_str)
+        else:
+            existing_dt = sale_invoice.invoice_date
+            invoice_date = existing_dt if isinstance(existing_dt, datetime) else datetime.combine(existing_dt, datetime.min.time())
+        invoice_d = invoice_date.date()
+
+        # Validate payments
+        payments_data_raw = payload.get('payments', [])
+        parsed_payments = []
+        cash_paid_val = Decimal('0')
+        upi_paid_val = Decimal('0')
+        card_paid_val = Decimal('0')
+        credit_given_val = Decimal('0')
+
+        if payments_data_raw and isinstance(payments_data_raw, list) and len(payments_data_raw) > 0:
+            for p in payments_data_raw:
+                p_amt = Decimal(str(p.get('amount', 0)))
+                if p_amt <= Decimal('0'):
+                    continue
+                p_method = str(p.get('method') or 'cash').lower()
+                if p_method == 'cash':
+                    cash_paid_val += p_amt
+                elif p_method == 'upi':
+                    upi_paid_val += p_amt
+                elif p_method == 'card':
+                    card_paid_val += p_amt
+                elif p_method == 'credit':
+                    credit_given_val += p_amt
+
+                parsed_payments.append({
+                    'method': p_method,
+                    'amount': p_amt,
+                    'reference_no': p.get('referenceNo') or p.get('reference_no'),
+                    'ledger_id': p.get('ledgerId') or p.get('ledger_id'),
+                })
+        else:
+            cash_paid_val = Decimal(str(payload.get('cashPaid', 0)))
+            upi_paid_val = Decimal(str(payload.get('upiPaid', 0)))
+            card_paid_val = Decimal(str(payload.get('cardPaid', 0)))
+            credit_given_val = Decimal(str(payload.get('creditGiven', 0)))
+            payment_sum = cash_paid_val + upi_paid_val + card_paid_val + credit_given_val
+
+            if payment_sum == Decimal('0') and client_grand_total > Decimal('0'):
+                pm = str(payload.get('paymentMode', 'cash')).lower()
+                if pm == 'cash':
+                    cash_paid_val = client_grand_total
+                elif pm == 'upi':
+                    upi_paid_val = client_grand_total
+                elif pm == 'card':
+                    card_paid_val = client_grand_total
+                elif pm == 'credit':
+                    credit_given_val = client_grand_total
+
+            if cash_paid_val > 0:
+                parsed_payments.append({'method': 'cash', 'amount': cash_paid_val})
+            if upi_paid_val > 0:
+                parsed_payments.append({'method': 'upi', 'amount': upi_paid_val})
+            if card_paid_val > 0:
+                parsed_payments.append({'method': 'card', 'amount': card_paid_val})
+            if credit_given_val > 0:
+                parsed_payments.append({'method': 'credit', 'amount': credit_given_val})
+
+        payment_sum = sum(p['amount'] for p in parsed_payments)
+        if abs(payment_sum - client_grand_total) > Decimal('0.01'):
+            if payment_sum > client_grand_total:
+                # Handle overpayment
+                customer_id_raw = payload.get('customerId')
+                party_ledger_id_raw = payload.get('partyLedgerId')
+                if not customer_id_raw and not party_ledger_id_raw and not sale_invoice.customer:
+                    raise SaleServiceError("Cannot process overpayment for walk-in customer. Please select a customer to store the advance balance.")
+                
+                overpayment = payment_sum - client_grand_total
+                credit_given_val -= overpayment
+                for p in parsed_payments:
+                    if p['method'] == 'credit':
+                        p['amount'] -= overpayment
+                        break
+            else:
+                raise SaleServiceError(f"Payment amounts ({payment_sum}) are less than grand total ({client_grand_total})")
+
+        if len(parsed_payments) > 1 or payload.get('paymentMode') == 'split':
+            resolved_payment_mode = 'split'
+        elif len(parsed_payments) == 1:
+            resolved_payment_mode = parsed_payments[0]['method']
+        else:
+            resolved_payment_mode = payload.get('paymentMode', 'cash')
+
+        # Step 2: Validate Schedule H
+        cart_items = [{'scheduleType': item.get('scheduleType', 'OTC')} for item in items_data]
+        try:
+            schedule_h_validate(cart_items, schedule_h_data)
+        except Exception as e:
+            raise SaleServiceError(str(e))
+
+        # Step 3: Identify new Customer and Doctor
+        party_ledger_id = payload.get('partyLedgerId')
+        customer_id = payload.get('customerId')
+        doctor_id = payload.get('doctorId')
+        
+        new_customer = None
+        if party_ledger_id:
+            try:
+                party_ledger = Ledger.objects.select_related('linked_customer').get(id=party_ledger_id, outlet=outlet)
+                if party_ledger.linked_customer:
+                    new_customer = party_ledger.linked_customer
+            except Ledger.DoesNotExist:
+                raise SaleServiceError(f"Ledger {party_ledger_id} not found")
+        elif customer_id:
+            try:
+                new_customer = Customer.objects.get(id=customer_id, outlet=outlet)
+            except Customer.DoesNotExist:
+                raise SaleServiceError(f"Customer {customer_id} not found")
+
+        from apps.accounts.models import Doctor
+        new_doctor = None
+        if doctor_id:
+            try:
+                new_doctor = Doctor.objects.get(id=doctor_id, outlet=outlet)
+            except Doctor.DoesNotExist:
+                raise SaleServiceError(f"Doctor {doctor_id} not found")
+
+        # Step 4: Revert old items and restore Batch stock
+        from apps.inventory.models import StockLedger
+        StockLedger.objects.filter(
+            outlet=outlet,
+            voucher_number=sale_invoice.invoice_no,
+            txn_type='SALE_OUT'
+        ).delete()
+        batches_to_rebuild = set()
+
+        old_items = list(sale_invoice.items.all())
+        existing_items_by_batch = {str(item.batch_id): item for item in old_items}
+        matched_old_item_ids = set()
+
+        # PRE-LOCK: Lock all batches (old and new) in sorted order to prevent deadlocks
+        old_batch_ids = [str(item.batch_id) for item in old_items if item.batch_id]
+        new_batch_ids = [str(item.get('batchId')) for item in items_data if item.get('batchId')]
+        all_batch_ids = list(set(old_batch_ids + new_batch_ids))
+        if all_batch_ids:
+            list(Batch.objects.select_for_update().filter(id__in=all_batch_ids, outlet=outlet).order_by('id'))
+
+        for old_item in old_items:
+            batch = old_item.batch
+            batches_to_rebuild.add(batch.pk)
+            batch.qty_strips += old_item.qty_strips
+            batch.qty_loose += old_item.qty_loose
+            # Use batch.pack_size (frozen at purchase time) when restoring stock,
+            # NOT batch.product.pack_size which changes when master item is edited.
+            if batch.pack_size:
+                while batch.qty_loose >= batch.pack_size:
+                    batch.qty_strips += 1
+                    batch.qty_loose -= batch.pack_size
+            batch.save(update_fields=['qty_strips', 'qty_loose'])
+            # Do NOT delete old_item here, we will update or delete in Step 6
+
+        # Step 5: Revert old accounting
+        old_customer = sale_invoice.customer
+        old_invoice_date = sale_invoice.invoice_date
+        if isinstance(old_invoice_date, datetime):
+            old_invoice_date = old_invoice_date.date()
+            
+        if old_customer:
+            old_customer.total_purchases -= sale_invoice.grand_total
+            old_customer.save(update_fields=['total_purchases'])
+
+        # Reverse CreditTransaction
+        old_credit_txs = CreditTransaction.objects.filter(invoice=sale_invoice)
+        for tx in old_credit_txs:
+            account = tx.credit_account
+            account.total_outstanding -= tx.amount
+            if tx.type == 'debit':
+                account.total_borrowed -= tx.amount
+            account.save(update_fields=['total_outstanding', 'total_borrowed'])
+            tx.delete()
+
+        # Reverse JournalEntry
+        old_jes = JournalEntry.objects.filter(outlet=outlet, source_type='SALE', source_id=sale_invoice.id)
+        for old_je in old_jes:
+            for line in old_je.lines.all():
+                LedgerService.update_balance(line.ledger.id, debit=line.credit_amount, credit=line.debit_amount)
+            old_je.delete()
+
+        # Step 6: Create or Update items and deduct stock
+        sale_items = []
+        for item_data in items_data:
+            batch_id = item_data.get('batchId')
+            product_id = item_data.get('productId')
+            qty_strips_needed = item_data.get('qtyStrips', 0)
+            qty_loose_needed = item_data.get('qtyLoose', 0)
+
+            product = MasterProduct.objects.get(id=product_id)
+            if batch_id:
+                batch = Batch.objects.get(id=batch_id, outlet=outlet)
+                # Use batch.pack_size (frozen at purchase time)
+                batch_pack_size = batch.pack_size or 1
+                total_loose_needed = (qty_strips_needed * batch_pack_size) + qty_loose_needed
+                total_loose_available = (batch.qty_strips * batch_pack_size) + batch.qty_loose
+                if total_loose_available < total_loose_needed:
+                    raise SaleServiceError(f"Insufficient stock in batch {batch.batch_no}")
+                batch_allocations = [{'batch': batch, 'qty_to_deduct': qty_strips_needed, 'loose_to_deduct': qty_loose_needed}]
+            else:
+                try:
+                    batch_allocations = fefo_batch_select(str(outlet.id), str(product.id), qty_strips_needed)
+                except Exception as e:
+                    raise SaleServiceError(str(e))
+                
+            for batch_alloc in batch_allocations:
+                batch = batch_alloc['batch']
+                qty_to_deduct = batch_alloc.get('qty_to_deduct', 0)
+                loose_to_deduct = batch_alloc.get('loose_to_deduct', 0)
+                
+                # Enforce return constraints
+                existing_item = existing_items_by_batch.get(str(batch.id))
+                if existing_item:
+                    pack_size = existing_item.pack_size or 1
+                    total_loose_new = (qty_to_deduct * pack_size) + loose_to_deduct
+                    if total_loose_new < existing_item.qty_returned:
+                        raise SaleServiceError(f"Cannot reduce quantity of {existing_item.product_name} below already returned quantity ({existing_item.qty_returned} units)")
+
+                batch.qty_strips -= qty_to_deduct
+                batch.qty_loose -= loose_to_deduct
+                while batch.qty_loose < 0:
+                    batch.qty_strips -= 1
+                    batch.qty_loose += (batch.pack_size or 1)
+                batch.save()
+
+                proposed_rate = Decimal(str(item_data.get('rate', batch.mrp)))
+                pricing_check = validate_sale_price(proposed_rate, batch, str(outlet.id))
+                if pricing_check.get('block'):
+                    raise SaleServiceError(pricing_check['message'])
+
+                if existing_item:
+                    existing_item.qty_strips = qty_to_deduct
+                    existing_item.qty_loose = loose_to_deduct
+                    existing_item.rate = proposed_rate
+                    existing_item.discount_pct = Decimal(str(item_data.get('discountPct', 0)))
+                    existing_item.gst_rate = Decimal(str(item_data.get('gstRate', 0)))
+                    existing_item.taxable_amount = Decimal(str(item_data.get('taxableAmount', 0)))
+                    existing_item.gst_amount = Decimal(str(item_data.get('gstAmount', 0)))
+                    existing_item.total_amount = Decimal(str(item_data.get('totalAmount', 0)))
+                    existing_item.sale_mode = item_data.get('saleMode', 'strip')
+                    existing_item.save()
+                    sale_items.append(existing_item)
+                    matched_old_item_ids.add(existing_item.id)
+                    sale_item = existing_item
+                else:
+                    sale_item = SaleItem.objects.create(
+                        invoice=sale_invoice,
+                        batch=batch,
+                        product_name=product.name,
+                        composition=product.composition,
+                        # Snapshot pack_size/pack_unit from batch (frozen at purchase time)
+                        pack_size=batch.pack_size,
+                        pack_unit=batch.pack_unit,
+                        schedule_type=product.schedule_type,
+                        batch_no=batch.batch_no,
+                        expiry_date=batch.expiry_date,
+                        mrp=batch.mrp,
+                        sale_rate=batch.mrp,
+                        rate=proposed_rate,
+                        qty_strips=qty_to_deduct,
+                        qty_loose=loose_to_deduct, # Fix: Use loose_to_deduct
+                        sale_mode=item_data.get('saleMode', 'strip'),
+                        discount_pct=Decimal(str(item_data.get('discountPct', 0))),
+                        gst_rate=Decimal(str(item_data.get('gstRate', 0))),
+                        taxable_amount=Decimal(str(item_data.get('taxableAmount', 0))),
+                        gst_amount=Decimal(str(item_data.get('gstAmount', 0))),
+                        total_amount=Decimal(str(item_data.get('totalAmount', 0))),
+                    )
+                    sale_items.append(sale_item)
+
+                if product.schedule_type in ['G', 'H', 'H1', 'X', 'C', 'Narcotic']:
+                    ScheduleHRegister.objects.update_or_create(
+                        sale_item=sale_item,
+                        defaults={
+                            'patient_name': schedule_h_data.get('patientName') if schedule_h_data else None,
+                            'patient_age': schedule_h_data.get('patientAge') if schedule_h_data else 0,
+                            'patient_address': schedule_h_data.get('patientAddress') if schedule_h_data else '',
+                            'doctor_name': schedule_h_data.get('doctorName') if schedule_h_data else None,
+                            'doctor_reg_no': schedule_h_data.get('doctorRegNo') if schedule_h_data else '',
+                            'prescription_no': schedule_h_data.get('prescriptionNo') or '' if schedule_h_data else '',
+                        }
+                    )
+
+                from apps.inventory.services import post_stock_ledger_entry
+                pack_size_dec = Decimal(str(batch.pack_size)) if batch.pack_size else Decimal('1')
+                qty_out = Decimal(str(qty_to_deduct)) + (Decimal(str(loose_to_deduct)) / pack_size_dec if loose_to_deduct else Decimal('0'))
+                
+                post_stock_ledger_entry(
+                    outlet=outlet,
+                    product=product,
+                    batch=batch,
+                    txn_type='SALE_OUT',
+                    txn_date=invoice_date.date() if isinstance(invoice_date, datetime) else invoice_date,
+                    voucher_type='Sale Invoice',
+                    voucher_number=sale_invoice.invoice_no,
+                    party_name=new_customer.name if new_customer else 'Walk-in',
+                    qty_in=Decimal('0'),
+                    qty_out=qty_out,
+                    rate=proposed_rate,
+                    source_object=sale_item,
+                )
+                batches_to_rebuild.add(batch.pk)
+
+        # Step 6.5: Cleanup unmatched old items
+        for old_item in old_items:
+            if old_item.id not in matched_old_item_ids:
+                if old_item.qty_returned > 0:
+                    raise SaleServiceError(f"Cannot remove {old_item.product_name} because {old_item.qty_returned} units have been returned.")
+                old_item.delete()
+
+        # Step 7: Update SaleInvoice
+        # (invoice_date and invoice_d already parsed at the top of this function)
+        sale_invoice.customer = new_customer
+        sale_invoice.doctor = new_doctor
+        sale_invoice.invoice_date = invoice_date
+        sale_invoice.subtotal = Decimal(str(payload.get('subtotal', 0)))
+        sale_invoice.discount_amount = Decimal(str(payload.get('discountAmount', 0)))
+        sale_invoice.extra_discount_pct = extra_discount_pct
+        sale_invoice.payment_mode = payload.get('paymentMode', 'cash')
+        sale_invoice.cash_paid = cash_paid_val
+        sale_invoice.upi_paid = upi_paid_val
+        sale_invoice.card_paid = card_paid_val
+        sale_invoice.credit_given = credit_given_val
+        sale_invoice.amount_paid = cash_paid_val + upi_paid_val + card_paid_val
+        sale_invoice.amount_due = max(Decimal('0'), client_grand_total - sale_invoice.amount_paid)
+        sale_invoice.grand_total = client_grand_total
+        sale_invoice.billed_by = billed_by
+        sale_invoice.sale_type = payload.get('saleType', sale_invoice.sale_type)
+        sale_invoice.billing_basis = payload.get('billingBasis', sale_invoice.billing_basis)
+
+        # Step 8: Re-derive GST
+        discount_factor = Decimal('1') - extra_discount_pct / Decimal('100')
+        server_taxable = Decimal('0')
+        server_cgst = Decimal('0')
+        server_sgst = Decimal('0')
+        server_igst = Decimal('0')
+        max_gst_rate = Decimal('0')
+
+        for si in sale_items:
+            pack_size = Decimal(str(si.pack_size)) if si.pack_size else Decimal('1')
+            total_fractional_strips = Decimal(str(si.qty_strips)) + (Decimal(str(si.qty_loose)) / pack_size)
+            raw_total = si.rate * total_fractional_strips
+            discounted_total = (raw_total * discount_factor).quantize(Decimal('0.01'))
+            gst_rate = si.gst_rate
+            if gst_rate > 0:
+                item_taxable = (discounted_total * Decimal('100') / (Decimal('100') + gst_rate)).quantize(Decimal('0.01'))
+                item_gst = discounted_total - item_taxable
+            else:
+                item_taxable = discounted_total
+                item_gst = Decimal('0')
+            server_taxable += item_taxable
+            item_cgst = (item_gst / 2).quantize(Decimal('0.01'), rounding=ROUND_FLOOR)
+            item_sgst = item_gst - item_cgst
+            server_cgst += item_cgst
+            server_sgst += item_sgst
+            if gst_rate > max_gst_rate:
+                max_gst_rate = gst_rate
+
+        raw_exact = server_taxable + server_cgst + server_sgst + server_igst
+        server_round_off = client_grand_total - raw_exact
+
+        sale_invoice.taxable_amount = server_taxable
+        sale_invoice.cgst_amount = server_cgst
+        sale_invoice.sgst_amount = server_sgst
+        sale_invoice.igst_amount = server_igst
+        sale_invoice.cgst = max_gst_rate / 2 if max_gst_rate > 0 else Decimal('0')
+        sale_invoice.sgst = max_gst_rate / 2 if max_gst_rate > 0 else Decimal('0')
+        sale_invoice.round_off = server_round_off
+        sale_invoice.save()
+
+        # Recreate InvoicePayment child records to match updated invoice
+        InvoicePayment.objects.filter(invoice=sale_invoice).delete()
+        for p in parsed_payments:
+            InvoicePayment.objects.create(
+                outlet=outlet,
+                invoice=sale_invoice,
+                method=p['method'],
+                amount=p['amount'],
+                reference_no=p.get('reference_no'),
+                ledger_id=p.get('ledger_id'),
+            )
+
+        # Step 9: Credit Transactions
+        if credit_given_val != 0 and new_customer:
+            credit_account, _ = CreditAccount.objects.get_or_create(outlet=outlet, customer=new_customer)
+            credit_account.total_outstanding += credit_given_val
+            if credit_given_val > 0:
+                credit_account.total_borrowed += credit_given_val
+            else:
+                credit_account.total_repaid += abs(credit_given_val)
+            credit_account.last_transaction_date = datetime.now()
+            credit_account.save()
+
+            CreditTransaction.objects.create(
+                credit_account=credit_account,
+                customer=new_customer,
+                invoice=sale_invoice,
+                type='debit' if credit_given_val > 0 else 'credit',
+                amount=abs(credit_given_val),
+                description=f"{'Sale' if credit_given_val > 0 else 'Adjustment'} on {sale_invoice.invoice_no}",
+                balance_after=credit_account.total_outstanding,
+                recorded_by=billed_by,
+                date=invoice_date.date(),
+            )
+
+        if new_customer:
+            new_customer.total_purchases += sale_invoice.grand_total
+            new_customer.save(update_fields=['total_purchases'])
+
+            # Ledger entries
+            sale_entry = LedgerEntry.objects.filter(outlet=outlet, entity_type='customer', entry_type='sale', reference_no=sale_invoice.invoice_no).first()
+            if sale_entry:
+                LedgerEntry.objects.filter(pk=sale_entry.pk).update(
+                    debit=sale_invoice.grand_total,
+                    date=invoice_d,
+                    customer=new_customer
+                )
+            else:
+                last_ledger = LedgerEntry.objects.filter(outlet=outlet, customer=new_customer, date__lte=invoice_d).order_by('-date', '-created_at').first()
+                running = (last_ledger.running_balance if last_ledger else Decimal('0')) + sale_invoice.grand_total
+                LedgerEntry.objects.create(
+                    outlet=outlet, entity_type='customer', customer=new_customer, date=invoice_d,
+                    entry_type='sale', reference_no=sale_invoice.invoice_no, debit=sale_invoice.grand_total, credit=Decimal('0'), running_balance=running
+                )
+            
+            total_paid = sale_invoice.amount_paid
+            receipt_entry = LedgerEntry.objects.filter(outlet=outlet, entity_type='customer', entry_type='receipt', reference_no=sale_invoice.invoice_no).first()
+            
+            if total_paid > Decimal('0'):
+                if receipt_entry:
+                    LedgerEntry.objects.filter(pk=receipt_entry.pk).update(
+                        credit=total_paid, date=invoice_d, customer=new_customer
+                    )
+                else:
+                    LedgerEntry.objects.create(
+                        outlet=outlet, entity_type='customer', customer=new_customer, date=invoice_d,
+                        entry_type='receipt', reference_no=sale_invoice.invoice_no, debit=Decimal('0'), credit=total_paid, running_balance=Decimal('0')
+                    )
+            elif receipt_entry:
+                LedgerEntry.objects.filter(pk=receipt_entry.pk).delete()
+
+            rebuild_customer_ledger(str(outlet.id), str(new_customer.id), invoice_d)
+            if old_customer and old_customer.id != new_customer.id:
+                rebuild_customer_ledger(str(outlet.id), str(old_customer.id), min(invoice_d, old_customer.created_at.date()))
+
+        # Clear cached relationships so post_sale_invoice reads fresh InvoicePayments
+        if hasattr(sale_invoice, '_prefetched_objects_cache'):
+            sale_invoice._prefetched_objects_cache.clear()
+
+        # Post journal
+        post_sale_invoice(sale_invoice)
+
+        from apps.inventory.services import rebuild_stock_ledger
+        for batch_id in batches_to_rebuild:
+            rebuild_stock_ledger(batch_id, min(invoice_d, old_invoice_date if 'old_invoice_date' in locals() else invoice_d))
+
+        return sale_invoice
+
+    except SaleServiceError:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise SaleServiceError(f"Unexpected error: {str(e)}")
+
+```
+
+---
+
+## Target 2: The Revise View (`SaleReviseView` in `apps/backend/apps/billing/views.py`)
+
+```python
+class SaleReviseView(APIView):
+    """
+    POST /api/v1/billing/sales/<id>/revise/
+    Direct revision of a sale invoice. Takes pre-snapshot, performs update, takes post-snapshot,
+    and records it in the BillRevision and ActivityLog.
+    """
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request, sale_id, *args, **kwargs):
+        outlet_id = request.data.get('outletId') or request.query_params.get('outletId') or request.META.get('HTTP_OUTLETID') or (
+            request.user.outlet_id if hasattr(request.user, 'outlet_id') else None
+        )
+        if not outlet_id:
+            return Response({'detail': 'outletId is required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        try:
+            invoice = SaleInvoice.objects.get(id=sale_id, outlet_id=outlet_id)
+        except SaleInvoice.DoesNotExist:
+            return Response({'detail': 'Invoice not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        if invoice.is_cancelled:
+            return Response({'detail': 'Cannot modify a cancelled invoice.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        action = request.data.get('revisionAction')
+        reason_code = request.data.get('revisionReasonCode')
+        reason_text = request.data.get('revisionReasonText')
+        items_data = request.data.get('items', [])
+
+        if not action or not reason_code or not reason_text:
+            return Response({'detail': 'Revision context (action, reasonCode, reasonText) is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not items_data and action != 'header_correction':
+            return Response(
+                {'detail': 'Invoice must contain at least one item.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        from apps.core.permissions import has_bill_revision_permission
+        
+        if action == 'direct_revise':
+            if not has_bill_revision_permission(request.user, 'can_modify_draft_bill'):
+                return Response({'detail': 'Permission denied: Missing can_modify_draft_bill.'}, status=status.HTTP_403_FORBIDDEN)
+            if invoice.amount_paid > 0:
+                return Response({'detail': 'Cannot direct revise a paid bill.'}, status=status.HTTP_400_BAD_REQUEST)
+        elif action == 'commercial_correction':
+            if not has_bill_revision_permission(request.user, 'can_modify_unpaid_bill'):
+                return Response({'detail': 'Permission denied: Missing can_modify_unpaid_bill.'}, status=status.HTTP_403_FORBIDDEN)
+            if invoice.amount_paid > 0:
+                return Response({'detail': 'Cannot commercially correct a paid bill.'}, status=status.HTTP_400_BAD_REQUEST)
+        elif action == 'paid_bill_correction':
+            if not has_bill_revision_permission(request.user, 'can_modify_paid_bill'):
+                return Response({'detail': 'Permission denied: Missing can_modify_paid_bill.'}, status=status.HTTP_403_FORBIDDEN)
+        elif action == 'return_aware_correction':
+            if not has_bill_revision_permission(request.user, 'can_modify_bill_with_return'):
+                return Response({'detail': 'Permission denied: Missing can_modify_bill_with_return.'}, status=status.HTTP_403_FORBIDDEN)
+        elif action == 'header_correction':
+            if not has_bill_revision_permission(request.user, 'can_correct_header_fields'):
+                return Response({'detail': 'Permission denied: Missing can_correct_header_fields.'}, status=status.HTTP_403_FORBIDDEN)
+        elif action == 'cancel_and_reissue':
+            if not has_bill_revision_permission(request.user, 'can_cancel_and_reissue_bill'):
+                return Response({'detail': 'Permission denied: Missing can_cancel_and_reissue_bill.'}, status=status.HTTP_403_FORBIDDEN)
+        elif action == 'standard_correction':
+            # Added for test coverage and general fallback if needed
+            pass
+        else:
+            return Response({'detail': 'Invalid revisionAction.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Eligibility check
+        if invoice.returns.exists() and action not in ['return_aware_correction', 'header_correction']:
+            return Response({'detail': f'Cannot {action.replace("_", " ")} a bill with returns.'}, status=status.HTTP_400_BAD_REQUEST)
+        if hasattr(invoice, 'receipt_allocations') and invoice.receipt_allocations.exists() and action not in ['paid_bill_correction', 'header_correction']:
+            return Response({'detail': f'Cannot {action.replace("_", " ")} a bill with later payments.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        from apps.billing.sale_update_service import atomic_sale_update, cancel_invoice, SaleServiceError
+        from apps.audit.core import orchestrator
+        from apps.audit.core.registry import SnapshotBuilderRegistry
+        from django.db import transaction
+
+        try:
+            with transaction.atomic():
+                # 1. Take pre-update snapshot
+                old_snapshot = SnapshotBuilderRegistry.build_snapshot(invoice)
+
+                if action == 'cancel_and_reissue':
+                    # 2a. Cancel the old invoice
+                    cancel_invoice(str(invoice.id), str(request.user.id), reason_text)
+                    invoice.refresh_from_db()
+
+                    # 3a. Create the replacement invoice via the creation view logic
+                    from apps.billing.views import SaleCreateView
+                    data_copy = request.data.copy()
+                    data_copy.pop('revisionAction', None)
+                    data_copy.pop('revisionReasonCode', None)
+                    data_copy.pop('revisionReasonText', None)
+
+                    create_view_instance = SaleCreateView()
+                    create_view_instance.request = request
+                    create_view_instance.format_kwarg = None
+
+                    original_data = request._full_data
+                    request._full_data = data_copy
+                    try:
+                        create_response = create_view_instance.post(request)
+                    finally:
+                        request._full_data = original_data
+
+                    if create_response.status_code != 200 and create_response.status_code != 201:
+                        raise SaleServiceError(f"Failed to create replacement invoice: {create_response.data}")
+
+                    new_invoice_id = create_response.data.get('id')
+                    updated_invoice = SaleInvoice.objects.get(id=new_invoice_id)
+                    new_snapshot = SnapshotBuilderRegistry.build_snapshot(updated_invoice)
+                    
+                    # Embed the resulting_invoice_id into the metadata so the UI/history can link them
+                    new_snapshot['_resulting_invoice_id'] = str(updated_invoice.id)
+                    
+                    revision = orchestrator.record_revision(
+                        entity=invoice,
+                        action=action,
+                        old_snapshot=old_snapshot,
+                        new_snapshot=new_snapshot,
+                        reason_code=reason_code,
+                        reason_text=reason_text
+                    )
+                    
+                    rev_id_str = str(revision.id) if revision else ''
+                    orchestrator.record_activity(
+                        module="billing",
+                        entity=invoice,
+                        action=action,
+                        reason_code=reason_code,
+                        reason_text=reason_text,
+                        metadata={"resulting_invoice_id": str(updated_invoice.id), "revision_id": rev_id_str}
+                    )
+
+                else:
+                    # 2b. Perform the actual update using existing robust method
+                    updated_invoice = atomic_sale_update(sale_id, request.data, outlet_id, str(request.user.id))
+
+                    # 3b. Refresh and take post-update snapshot
+                    updated_invoice.refresh_from_db()
+                    new_snapshot = SnapshotBuilderRegistry.build_snapshot(updated_invoice)
+
+                    # 4b. Create revision record
+                    revision = orchestrator.record_revision(
+                        entity=updated_invoice,
+                        action=action,
+                        old_snapshot=old_snapshot,
+                        new_snapshot=new_snapshot,
+                        reason_code=reason_code,
+                        reason_text=reason_text
+                    )
+                    
+                    rev_id_str = str(revision.id) if revision else ''
+                    orchestrator.record_activity(
+                        module="billing",
+                        entity=updated_invoice,
+                        action=action,
+                        reason_code=reason_code,
+                        reason_text=reason_text,
+                        metadata={"revision_id": rev_id_str}
+                    )
+
+            response_data = build_sale_response_payload(
+                updated_invoice,
+                message='Sale invoice revised successfully',
+                revision_id=rev_id_str
+            )
+            return Response(response_data, status=status.HTTP_200_OK)
+
+        except SaleServiceError as e:
+            return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except ValueError as e:
+            return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Error revising sale invoice: {e}", exc_info=True)
+            return Response({'detail': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+```

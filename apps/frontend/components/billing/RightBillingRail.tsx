@@ -19,8 +19,8 @@ import {
 
 export function RightBillingRail() {
     const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
-    const { drafts, activeDraftId, getDraftTotals, setDraftDocumentMode, setRevisionContext, showMarginInfo, toggleMarginInfo, activeStaff } = useBillingStore();
-    const isCashier = activeStaff?.role === 'cashier';
+    const { drafts, activeDraftId, getDraftTotals, setDraftDocumentMode, setRevisionContext, showMarginInfo, toggleMarginInfo, activeStaff, landingCostIncludeGst } = useBillingStore();
+    const isCashier = activeStaff?.role === 'cashier' || activeStaff?.role === 'billing_staff';
     const canViewMargins = !isCashier && showMarginInfo;
     const { outlet } = useAuthStore();
     const containerRef = useRef<HTMLDivElement>(null);
@@ -87,9 +87,10 @@ export function RightBillingRail() {
             totals.grandTotal,
             totals.extraDiscountAmount,
             activeDraft.extraDiscountPct || 0,
-            activeDraft.saleType || 'RETAIL'
+            activeDraft.saleType || 'RETAIL',
+            landingCostIncludeGst
         );
-    }, [activeDraft, totals.grandTotal, totals.extraDiscountAmount]);
+    }, [activeDraft, totals.grandTotal, totals.extraDiscountAmount, landingCostIncludeGst]);
 
 
 
