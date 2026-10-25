@@ -71,8 +71,8 @@ export function EditSaleHydrator() {
                     } as any);
                 }
 
-                // Directly map the true percentage from the backend to prevent math desync
-                store.setExtraDiscountPct(Number(fullInvoice.extraDiscountPct) || 0);
+                // FIX 1: Read both camelCase and snake_case to prevent UI hallucination
+                store.setExtraDiscountPct(Number(fullInvoice.extraDiscountPct ?? fullInvoice.extra_discount_pct ?? 0));
 
                 store.setPayment({
                     method: (fullInvoice.paymentMode || 'cash') as any,
@@ -120,36 +120,45 @@ export function EditSaleHydrator() {
 
                 if (fullInvoice.items) {
                      fullInvoice.items.forEach((item: any) => {
-                         const packSize = item.packSize || 1;
-                         const qtyStrips = item.qtyStrips || 0;
-                         const qtyLoose = item.qtyLoose || 0;
+                         const packSize = Number(item.packSize ?? item.pack_size ?? 1);
+                         const qtyStrips = Number(item.qtyStrips ?? item.qty_strips ?? 0);
+                         const qtyLoose = Number(item.qtyLoose ?? item.qty_loose ?? 0);
                          const totalQtyFractional = qtyStrips + (qtyLoose / packSize);
                          
-                         // The true base rate before any item or bill discounts
-                         const baseRate = item.saleRate || item.mrp || item.rate;
+                         const mrp = Number(item.mrp ?? 0);
+                         const ptr = Number(item.ptr ?? 0);
+                         const pts = Number(item.pts ?? 0);
+                         
+                         // FIX 2: Always force the base rate to be MRP (or PTR/PTS) before any discounts. 
+                         // This prevents the "Double Discount" trap.
+                         const isWholesale = fullInvoice.saleType === 'WHOLESALE';
+                         const baseRate = isWholesale ? (pts || ptr || mrp) : mrp;
                          
                          store.addToCart(targetDraftId, {
                              ...item,
                              qtyStrips: qtyStrips,
                              qtyLoose: qtyLoose,
                              packSize: packSize,
-                             productId: item.productId,
-                             batchId: item.batchId,
-                             batchNo: item.batchNo,
-                             expiryDate: item.expiryDate,
-                             discountPct: item.discountPct || 0,
-                             gstRate: item.gstRate || 0,
-                             cgstRate: item.cgstRate || 0,
-                             sgstRate: item.sgstRate || 0,
+                             productId: item.productId ?? item.product_id,
+                             batchId: item.batchId ?? item.batch_id,
+                             batchNo: item.batchNo ?? item.batch_no,
+                             expiryDate: item.expiryDate ?? item.expiry_date,
+                             
+                             // FIX 3: Snake_case fallbacks for API fields so discounts don't vanish
+                             discountPct: Number(item.discountPct ?? item.discount_pct ?? 0),
+                             gstRate: Number(item.gstRate ?? item.gst_rate ?? 0),
+                             cgstRate: Number(item.cgstRate ?? item.cgst_rate ?? 0),
+                             sgstRate: Number(item.sgstRate ?? item.sgst_rate ?? 0),
+                             
                              saleRate: baseRate,
-                             rate: baseRate, // FIX 2: Force pre-discount rate here!
+                             rate: baseRate, // The math engine MUST use the pre-discount baseRate
                              totalQty: totalQtyFractional,
-                             saleMode: item.saleMode || 'mixed',
-                             mrp: item.mrp || item.rate,
+                             saleMode: item.saleMode ?? item.sale_mode ?? 'mixed',
+                             mrp: mrp,
                              purchaseRate: Number(item.purchaseRate ?? item.purchase_rate ?? 0),
                              landingRate: Number(item.landingRate ?? item.landing_rate ?? item.purchaseRate ?? item.purchase_rate ?? 0),
-                             ptr: Number(item.ptr || 0),
-                             pts: Number(item.pts || 0),
+                             ptr: ptr,
+                             pts: pts,
                          });
                      });
                 }
