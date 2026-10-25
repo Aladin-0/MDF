@@ -584,43 +584,53 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
         sale_invoice.sale_type = payload.get('saleType', sale_invoice.sale_type)
         sale_invoice.billing_basis = payload.get('billingBasis', sale_invoice.billing_basis)
 
-        # Step 8: Re-derive GST
-        discount_factor = Decimal('1') - extra_discount_pct / Decimal('100')
+        # Step 8: Strict Boundary Validation & Payload Aggregation
         server_taxable = Decimal('0')
         server_cgst = Decimal('0')
         server_sgst = Decimal('0')
         server_igst = Decimal('0')
         max_gst_rate = Decimal('0')
+        computed_item_total = Decimal('0')
 
         for si in sale_items:
-            pack_size = Decimal(str(si.pack_size)) if si.pack_size else Decimal('1')
-            total_fractional_strips = Decimal(str(si.qty_strips)) + (Decimal(str(si.qty_loose)) / pack_size)
-            raw_total = si.rate * total_fractional_strips
-            discounted_total = (raw_total * discount_factor).quantize(Decimal('0.01'))
-            gst_rate = si.gst_rate
-            if gst_rate > 0:
-                item_taxable = (discounted_total * Decimal('100') / (Decimal('100') + gst_rate)).quantize(Decimal('0.01'))
-                item_gst = discounted_total - item_taxable
-            else:
-                item_taxable = discounted_total
-                item_gst = Decimal('0')
+            # 1. Trust but verify the frontend's item-level math
+            item_taxable = si.taxable_amount
+            item_gst = si.gst_amount
+            item_total = si.total_amount
+            
+            # 2. Security Check 1: Ensure row-level math isn't tampered with (Taxable + GST must = Total)
+            if abs((item_taxable + item_gst) - item_total) > Decimal('0.05'):
+                raise SaleServiceError(f"Security Block: Math mismatch for {si.product_name}. Taxable ({item_taxable}) + GST ({item_gst}) != Total ({item_total}).")
+
+            # 3. Aggregate totals securely based on validated rows
             server_taxable += item_taxable
+            
+            # Split GST into CGST/SGST securely
             item_cgst = (item_gst / 2).quantize(Decimal('0.01'), rounding=ROUND_FLOOR)
             item_sgst = item_gst - item_cgst
+            
             server_cgst += item_cgst
             server_sgst += item_sgst
-            if gst_rate > max_gst_rate:
-                max_gst_rate = gst_rate
+            computed_item_total += item_total
+            
+            if si.gst_rate > max_gst_rate:
+                max_gst_rate = si.gst_rate
 
-        raw_exact = server_taxable + server_cgst + server_sgst + server_igst
-        server_round_off = client_grand_total - raw_exact
+        # 4. Security Check 2: Invoice-Level Integrity Check
+        # Ensure the sum of all item totals matches the client's requested Grand Total
+        server_round_off = client_grand_total - computed_item_total
 
+        # Block massive round-off manipulation (e.g. attempting to bypass payment by lowering the grand total maliciously)
+        if abs(server_round_off) > Decimal('2.00'):
+            raise SaleServiceError(f"Security Block: Invalid Round Off (₹{server_round_off}). Sum of items does not match Grand Total.")
+
+        # 5. Apply validated totals to the invoice header
         sale_invoice.taxable_amount = server_taxable
         sale_invoice.cgst_amount = server_cgst
         sale_invoice.sgst_amount = server_sgst
         sale_invoice.igst_amount = server_igst
-        sale_invoice.cgst = max_gst_rate / 2 if max_gst_rate > 0 else Decimal('0')
-        sale_invoice.sgst = max_gst_rate / 2 if max_gst_rate > 0 else Decimal('0')
+        sale_invoice.cgst = max_gst_rate / 2 if max_gst_rate > Decimal('0') else Decimal('0')
+        sale_invoice.sgst = max_gst_rate / 2 if max_gst_rate > Decimal('0') else Decimal('0')
         sale_invoice.round_off = server_round_off
         sale_invoice.save()
 

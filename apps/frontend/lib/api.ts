@@ -4,10 +4,12 @@ import { useAuthStore } from '../store/authStore';
 const rawBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
 const getBaseUrl = () => {
-    if (typeof window !== 'undefined' && window.location.hostname && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    if (typeof window !== 'undefined' && window.location.hostname) {
         try {
             const u = new URL(rawBaseUrl);
-            u.hostname = window.location.hostname;
+            if (window.location.hostname !== u.hostname && (u.hostname === 'localhost' || u.hostname === '127.0.0.1' || /^10\.|^192\.168\.|^172\./.test(u.hostname))) {
+                u.hostname = window.location.hostname;
+            }
             return u.toString().replace(/\/$/, '');
         } catch {
             return rawBaseUrl;

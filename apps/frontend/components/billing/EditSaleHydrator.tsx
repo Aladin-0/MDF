@@ -134,6 +134,19 @@ export function EditSaleHydrator() {
                          const isWholesale = fullInvoice.saleType === 'WHOLESALE';
                          const baseRate = isWholesale ? (pts || ptr || mrp) : mrp;
                          
+                         const discountPct = Number(item.discountPct ?? item.discount_pct ?? 0);
+                         const gstRate = Number(item.gstRate ?? item.gst_rate ?? 0);
+                         const taxMultiplier = 1 + (gstRate / 100);
+                         
+                         // CRITICAL FIX: The DB stores item.totalAmount AFTER extraDiscountPct was applied.
+                         // distributeSmartDiscounts() uses item.totalAmount as its base and then applies
+                         // extraDiscountPct AGAIN => double discount (e.g. ₹358 bill loads as ₹306).
+                         // Solution: always pass the PRE-DISCOUNT base amount (baseRate × qty ± GST).
+                         const baseRateAfterItemDisc = baseRate * (1 - discountPct / 100);
+                         const preTotalAmount = isWholesale
+                             ? baseRateAfterItemDisc * totalQtyFractional * taxMultiplier
+                             : baseRateAfterItemDisc * totalQtyFractional;
+                         
                          store.addToCart(targetDraftId, {
                              ...item,
                              qtyStrips: qtyStrips,
@@ -145,8 +158,8 @@ export function EditSaleHydrator() {
                              expiryDate: item.expiryDate ?? item.expiry_date,
                              
                              // FIX 3: Snake_case fallbacks for API fields so discounts don't vanish
-                             discountPct: Number(item.discountPct ?? item.discount_pct ?? 0),
-                             gstRate: Number(item.gstRate ?? item.gst_rate ?? 0),
+                             discountPct: discountPct,
+                             gstRate: gstRate,
                              cgstRate: Number(item.cgstRate ?? item.cgst_rate ?? 0),
                              sgstRate: Number(item.sgstRate ?? item.sgst_rate ?? 0),
                              
@@ -159,6 +172,8 @@ export function EditSaleHydrator() {
                              landingRate: Number(item.landingRate ?? item.landing_rate ?? item.purchaseRate ?? item.purchase_rate ?? 0),
                              ptr: ptr,
                              pts: pts,
+                             // Pass pre-discount total so distributeSmartDiscounts has a clean base
+                             totalAmount: preTotalAmount,
                          });
                      });
                 }
