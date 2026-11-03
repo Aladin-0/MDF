@@ -14,6 +14,16 @@ export function useGridNavigation(containerRef: React.RefObject<HTMLElement>, on
             const activeEl = (e.target || document.activeElement) as HTMLElement;
             if (!activeEl || !container.contains(activeEl)) return;
 
+            // A search input with its results dropdown open owns the navigation keys
+            // (it uses them to move through / pick results). Never let the grid also act on them,
+            // otherwise ArrowDown on the last row adds a new row for every key press.
+            if (
+                activeEl.getAttribute?.('data-dropdown-open') === 'true' &&
+                ['ArrowDown', 'ArrowUp', 'Enter', 'Escape'].includes(e.key)
+            ) {
+                return;
+            }
+
             const rowElement = activeEl.closest('[data-cart-row]');
             if (!rowElement) return;
             

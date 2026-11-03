@@ -178,7 +178,9 @@ export function PurchaseItemRow({
     useEffect(() => {
         if (!dropdownOpen) return;
 
-        const updatePosition = () => {
+        const updatePosition = (e?: Event) => {
+            // Scrolling the results list itself must not re-anchor the dropdown
+            if (e && portalRef.current?.contains(e.target as Node)) return;
             openDropdown();
         };
 
@@ -190,6 +192,14 @@ export function PurchaseItemRow({
             window.removeEventListener('resize', updatePosition);
         };
     }, [dropdownOpen]);
+
+    // Keep the keyboard-highlighted option visible inside the scrollable results list
+    useEffect(() => {
+        if (!dropdownOpen || highlightedIndex < 0) return;
+        portalRef.current
+            ?.querySelector<HTMLElement>(`[data-result-index="${highlightedIndex}"]`)
+            ?.scrollIntoView({ block: 'nearest' });
+    }, [dropdownOpen, highlightedIndex]);
 
     const handleQueryChange = (raw: string) => {
         setQuery(raw);
@@ -315,12 +325,16 @@ export function PurchaseItemRow({
                         </div>
                     )}
 
+                    {/* Results scroll inside a box that fits exactly 4 options (4 x 62px);
+                        the "Add new product" button below stays pinned and always visible. */}
+                    <div className="max-h-[248px] overflow-y-auto overscroll-contain [scrollbar-width:thin]">
                     {!searching && results.map((product, pIdx) => (
                         <button
                             key={product.id}
                             type="button"
+                            data-result-index={pIdx}
                             className={cn(
-                                "flex w-full flex-col px-3 py-2 text-left transition-colors",
+                                "flex min-h-[62px] w-full flex-col justify-center px-3 py-2 text-left transition-colors",
                                 highlightedIndex === pIdx ? "border-l-2 border-violet-600 bg-slate-100 text-slate-900" : "border-l-2 border-transparent hover:bg-slate-50"
                             )}
                             onMouseEnter={() => setHighlightedIndex(pIdx)}
@@ -335,10 +349,12 @@ export function PurchaseItemRow({
                             </span>
                         </button>
                     ))}
+                    </div>
 
                     {/* Always show "Add new product" at bottom */}
                     <button
                         type="button"
+                        data-result-index={results.length}
                         className={cn(
                             "flex w-full items-center gap-1.5 border-t border-dashed border-slate-200 px-3 py-2 text-left transition-colors",
                             highlightedIndex === results.length ? "border-l-2 border-violet-600 bg-slate-100 text-slate-900" : "border-l-2 border-transparent hover:bg-slate-50"
@@ -393,6 +409,7 @@ export function PurchaseItemRow({
                                 data-field="product-search"
                                 className={cn(cellInputCls(!!errors?.productName), 'w-full')}
                                 value={query || value.productName}
+                                data-dropdown-open={dropdownOpen ? 'true' : 'false'}
                                 placeholder="Search product..."
                                 onChange={(e) => handleQueryChange(e.target.value)}
                                 onFocus={() => {
@@ -404,18 +421,21 @@ export function PurchaseItemRow({
                                         if (e.key === 'ArrowDown') {
                                             e.preventDefault();
                                             e.stopPropagation();
+                                            e.nativeEvent.stopImmediatePropagation();
                                             setHighlightedIndex((prev) => (prev + 1) % totalOptions);
                                             return;
                                         }
                                         if (e.key === 'ArrowUp') {
                                             e.preventDefault();
                                             e.stopPropagation();
+                                            e.nativeEvent.stopImmediatePropagation();
                                             setHighlightedIndex((prev) => (prev <= 0 ? totalOptions - 1 : prev - 1));
                                             return;
                                         }
                                         if (e.key === 'Enter') {
                                             e.preventDefault();
                                             e.stopPropagation();
+                                            e.nativeEvent.stopImmediatePropagation();
                                             if (highlightedIndex >= 0 && highlightedIndex < results.length) {
                                                 handleSelectResult(results[highlightedIndex]);
                                             } else if (highlightedIndex === results.length) {
@@ -442,6 +462,7 @@ export function PurchaseItemRow({
                                         if (e.key === 'Escape') {
                                             e.preventDefault();
                                             e.stopPropagation();
+                                            e.nativeEvent.stopImmediatePropagation();
                                             setDropdownOpen(false);
                                             return;
                                         }
