@@ -10,7 +10,7 @@ import { API_URL, getHeaders } from '@/lib/apiClient';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { format, addDays, differenceInDays } from 'date-fns';
-import { Plus, AlertTriangle, Save, X, FileText, Truck, Calculator, Boxes, Loader2, Image as ImageIcon } from 'lucide-react';
+import { Plus, AlertTriangle, Save, X, FileText, Calculator, Loader2, Image as ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -19,7 +19,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { api } from '@/lib/api';
 // Note: Select still used for Purchase Type / Godown dropdowns
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -34,6 +33,8 @@ import { useOutletId } from '@/hooks/useOutletId';
 import { buildPurchasePayload, normalizeExpiryDate } from '@/utils/payloadBuilders';
 
 export const normalizeExpiry = normalizeExpiryDate;
+
+const purchaseGridHeaderCell = 'border-r border-b-2 border-[#D8DEE8] border-b-slate-300 bg-slate-100 px-1.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-700';
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
@@ -113,6 +114,11 @@ export const emptyItem = (): PurchaseItemFormData => ({
 const fmt = (n: number) =>
     '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+const ocrNumber = (value: unknown): number => {
+    const parsed = typeof value === 'number' ? value : Number(String(value ?? '').replace(/,/g, ''));
+    return Number.isFinite(parsed) ? parsed : 0;
+};
+
 const isNearExpiry = (exp: string) => {
     const norm = normalizeExpiry(exp);
     return norm ? differenceInDays(new Date(norm), new Date()) < 90 : false;
@@ -169,6 +175,8 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
 
     const [ocrStatus, setOcrStatus] = useState<'idle' | 'processing' | 'ready' | 'error'>('idle');
     const [ocrError, setOcrError] = useState('');
+    const [ocrReviewNotes, setOcrReviewNotes] = useState<string[]>([]);
+    const [ocrRetrySequence, setOcrRetrySequence] = useState(0);
     const [scannedImage, setScannedImage] = useState<string | null>(null);
     const [scannedImageModalOpen, setScannedImageModalOpen] = useState(false);
 
@@ -274,13 +282,18 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
     useEffect(() => {
         if (!invoiceToEdit) {
             setOcrStatus('idle');
+            setOcrReviewNotes([]);
             setScannedImage(null);
             return;
         }
 
         if (invoiceToEdit.status === 'SAVED') {
             setOcrStatus('processing');
+            setOcrError('');
             setScannedImage((invoiceToEdit as any).invoiceImageUrl || null);
+            let cancelled = false;
+            let pollTimer: ReturnType<typeof setTimeout> | undefined;
+            let attempts = 0;
 
             const pollStatus = async () => {
                 if (!outlet?.id) return;
@@ -288,12 +301,20 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
                     const res = await api.get(`/purchases/${invoiceToEdit.id}/ocr-status/`, {
                         params: { outletId: outlet.id }
                     });
+                    if (cancelled) return;
 
                     if (res.data.status === 'processing') {
-                        setTimeout(pollStatus, 2000);
+                        attempts += 1;
+                        if (attempts >= 90) {
+                            setOcrStatus('error');
+                            setOcrError('Invoice scanning is taking longer than expected. You can retry without uploading again.');
+                        } else {
+                            pollTimer = setTimeout(pollStatus, 2000);
+                        }
                     } else if (res.data.status === 'ready') {
                         const ocrData = res.data;
                         setOcrStatus('ready');
+                        setScannedImage(ocrData.invoiceImageUrl ? new URL(ocrData.invoiceImageUrl, API_URL).toString() : null);
 
                         // Set the Ledger object directly so the UI updates
                         if (ocrData.header?.partyLedger) {
@@ -305,35 +326,58 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
                         const formItems: PurchaseItemFormData[] = (ocrData.items || []).map((item: any) => ({
                             productId: item.medicineMatch?.productId || '',
                             productName: item.medicineMatch?.productId ? (item.medicineMatch?.productName || item.medicineMatch?.product_name || item.name) : item.name,
-                            isCustom: !item.medicineMatch?.productId,
-                            hsnCode: item.medicineMatch?.hsnCode || item.medicineMatch?.hsn_code || item.hsnCode || '',
+                            isCustom: false,
+                            hsnCode: item.hsnCode || item.medicineMatch?.hsnCode || item.medicineMatch?.hsn_code || '',
                             batchNo: item.batchNo || '',
                             expiryDate: normalizeExpiry(item.expiry || ''),
-                            pkg: item.medicineMatch?.packSize || item.medicineMatch?.pack_size || item.packSize || 1,
+                            pkg: ocrNumber(item.medicineMatch?.packSize ?? item.medicineMatch?.pack_size ?? item.packSize) || 1,
                             packUnitLabel: item.medicineMatch?.packUnit || item.medicineMatch?.pack_unit || '',
-                            qty: item.qty || 0,
-                            freeQty: item.freeQty || 0,
-                            purchaseRate: item.rate || 0,
+                            qty: ocrNumber(item.qty),
+                            freeQty: ocrNumber(item.freeQty),
+                            purchaseRate: ocrNumber(item.rate),
                             freightPerUnit: 0,
                             otherCostPerUnit: 0,
-                            discountPct: item.discount || 0,
+                            discountPct: ocrNumber(item.discount),
                             cashDiscountPct: 0,
-                            gstRate: item.medicineMatch?.gstRate || item.medicineMatch?.gst_rate || item.gstPct || 0,
+                            gstRate: ocrNumber(item.gstPct !== '' && item.gstPct != null
+                                ? item.gstPct
+                                : (item.medicineMatch?.gstRate ?? item.medicineMatch?.gst_rate)),
                             cess: 0,
-                            mrp: item.mrp || 0,
-                            ptr: item.rate || 0,
-                            pts: item.rate || 0,
-                            saleRate: item.mrp || 0,
+                            mrp: ocrNumber(item.mrp),
+                            ptr: 0,
+                            pts: 0,
+                            saleRate: 0,
                         }));
 
                         setItems(formItems.length ? formItems : [emptyItem()]);
+                        const reviewNotes: string[] = [];
+                        if (!ocrData.header?.partyLedgerId) reviewNotes.push('Select the distributor ledger.');
+                        if (!ocrData.header?.invoiceNo) reviewNotes.push('Enter the invoice number.');
+                        if (!ocrData.header?.invoiceDate) reviewNotes.push('Enter the invoice date.');
+                        if (!formItems.length) reviewNotes.push('No medicine lines were recognized; enter them manually.');
+                        const unmatchedCount = formItems.filter((item) => !item.productId).length;
+                        if (unmatchedCount) reviewNotes.push(`Select a catalog product for ${unmatchedCount} medicine line${unmatchedCount === 1 ? '' : 's'}.`);
+                        const missingBatchCount = formItems.filter((item) => !item.batchNo).length;
+                        if (missingBatchCount) reviewNotes.push(`Enter the batch number on ${missingBatchCount} medicine line${missingBatchCount === 1 ? '' : 's'}.`);
+                        const missingExpiryCount = formItems.filter((item) => !item.expiryDate).length;
+                        if (missingExpiryCount) reviewNotes.push(`Enter the expiry date on ${missingExpiryCount} medicine line${missingExpiryCount === 1 ? '' : 's'}.`);
+                        const missingTaxCount = (ocrData.items || []).filter((item: any) =>
+                            (item.gstPct === '' || item.gstPct == null) && item.medicineMatch?.gstRate == null
+                        ).length;
+                        if (missingTaxCount) reviewNotes.push(`Verify GST on ${missingTaxCount} medicine line${missingTaxCount === 1 ? '' : 's'}.`);
+                        const amountIssues = (ocrData.items || []).filter((item: any) => item.validationOk === false).length;
+                        if (amountIssues) reviewNotes.push(`Review the amount on ${amountIssues} medicine line${amountIssues === 1 ? '' : 's'}.`);
+                        for (const warning of ocrData.warnings || []) {
+                            if (typeof warning === 'string' && !warning.startsWith('Medicine not found in inventory:')) reviewNotes.push(warning);
+                        }
+                        setOcrReviewNotes(reviewNotes);
 
                         reset({
                             partyLedgerId: ocrData.header?.partyLedgerId || '',
                             purchaseType: 'credit',
                             invoiceNo: ocrData.header?.invoiceNo || '',
-                            invoiceDate: ocrData.header?.invoiceDate || today,
-                            dueDate: defaultDue,
+                            invoiceDate: ocrData.header?.invoiceDate || '',
+                            dueDate: undefined,
                             purchaseOrderRef: '',
                             godown: 'main',
                             freight: 0,
@@ -347,12 +391,16 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
                         setOcrError(res.data.message || 'OCR failed');
                     }
                 } catch (err: any) {
+                    if (cancelled) return;
                     setOcrStatus('error');
-                    setOcrError(err.response?.data?.error?.message || err.message);
+                    setOcrError(err.error?.message || err.response?.data?.error?.message || 'Could not check invoice scan status. Please retry.');
                 }
             };
             pollStatus();
-            return;
+            return () => {
+                cancelled = true;
+                if (pollTimer) clearTimeout(pollTimer);
+            };
         }
 
         // --- NORMAL EDIT INITIALIZATION ---
@@ -401,7 +449,24 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
             notes: invoiceToEdit.notes || '',
             items: formItems,
         });
-    }, [invoiceToEdit, reset, outlet?.id]);
+    }, [invoiceToEdit, reset, outlet?.id, ocrRetrySequence]);
+
+    const retryOcr = async () => {
+        if (!invoiceToEdit || invoiceToEdit.status !== 'SAVED' || !outlet?.id) return;
+        const hasManualEntries = isDirty || !!partyLedger || items.some((item) =>
+            !!item.productId || !!item.productName || !!item.batchNo || !!item.qty || !!item.purchaseRate
+        );
+        if (hasManualEntries && !window.confirm('Replace your current purchase entries with the scanned invoice if retry succeeds?')) return;
+        setOcrStatus('processing');
+        setOcrError('');
+        try {
+            await api.post(`/purchases/${invoiceToEdit.id}/ocr-retry/`, { outletId: outlet.id });
+            setOcrRetrySequence((current) => current + 1);
+        } catch (err: any) {
+            setOcrStatus('error');
+            setOcrError(err.error?.message || 'Could not restart invoice scanning. Please try again.');
+        }
+    };
 
 
     // ── Autofill from PO Logic ───────────────────────────────────────────────
@@ -710,7 +775,7 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
                         }
                     }
                 }}
-                onSubmit={handleSubmit(onSubmit, onInvalid)} className="flex flex-col gap-5 relative">
+                onSubmit={handleSubmit(onSubmit, onInvalid)} className="relative flex min-w-0 flex-col gap-2 xl:pb-20">
 
                 {ocrStatus === 'processing' && (
                     <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm rounded-xl">
@@ -724,23 +789,35 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
                     <div className="mb-4 flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
                         <AlertTriangle className="h-4 w-4 shrink-0 text-red-600" />
                         <p className="flex-1 text-sm text-red-800">
-                            OCR Failed: {ocrError}
+                            Invoice scan failed: {ocrError}
                         </p>
+                        {invoiceToEdit?.status === 'SAVED' && <Button type="button" size="sm" variant="outline" onClick={retryOcr}>Retry scan</Button>}
                         <Button type="button" size="sm" variant="outline" onClick={() => setOcrStatus('idle')}>Dismiss</Button>
+                    </div>
+                )}
+
+                {ocrStatus === 'ready' && ocrReviewNotes.length > 0 && (
+                    <div className="border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900" role="status">
+                        <p className="font-semibold">Review the scanned invoice before saving</p>
+                        <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                            {ocrReviewNotes.slice(0, 5).map((note, index) => <li key={`${index}-${note}`}>{note}</li>)}
+                            {ocrReviewNotes.length > 5 && <li>{ocrReviewNotes.length - 5} more fields need review.</li>}
+                        </ul>
                     </div>
                 )}
 
                 {/* View Image Dialog for Scans */}
                 {scannedImage && (
                     <Dialog open={scannedImageModalOpen} onOpenChange={setScannedImageModalOpen}>
-                        <div className="fixed bottom-6 right-6 z-40">
+                        <div className="fixed bottom-32 right-6 z-40 sm:bottom-24 lg:bottom-16">
                             <Button
                                 type="button"
-                                size="lg"
-                                className="rounded-full shadow-lg gap-2"
+                                size="sm"
+                                variant="outline"
+                                className="h-8 gap-1.5 rounded border-slate-300 bg-white px-2 text-xs text-slate-700 shadow-sm"
                                 onClick={() => setScannedImageModalOpen(true)}
                             >
-                                <ImageIcon className="w-5 h-5" />
+                                <ImageIcon className="h-4 w-4" />
                                 View Scanned Invoice
                             </Button>
                         </div>
@@ -802,205 +879,188 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
                     </div>
                 )}
 
-                {/* ── Zone 1: Context Header (Top, Fixed) ───────────────────────────── */}
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-5 shadow-sm z-30 sticky top-0">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-4">
-
-                        {/* Column 1 */}
-                        <div className="space-y-4">
-                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0">
-                                <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3">Party <span className="text-red-500">*</span></Label>
-                                <div className="w-full sm:w-2/3" ref={partyRef}>
-                                    <LedgerPicker
-                                        group="Sundry Creditors"
-                                        value={partyLedger}
-                                        onChange={(l) => {
-                                            setPartyLedger(l);
-                                            setValue('partyLedgerId', l?.id ?? '', { shouldValidate: true });
-                                        }}
-                                        placeholder="Select party ledger..."
-                                        className={cn("h-10 text-sm", errors.partyLedgerId && "ring-1 ring-red-400 rounded-md")}
-                                    />
-                                    {errors.partyLedgerId && <p className="text-[11px] text-red-500 mt-1">{errors.partyLedgerId.message}</p>}
-                                </div>
+                <section aria-label="Invoice details" className="border-b border-slate-300 bg-white">
+                    <div className="grid grid-cols-1 gap-x-3 gap-y-2 px-1 py-1.5 sm:grid-cols-2 lg:grid-cols-[minmax(270px,1.9fr)_minmax(160px,1fr)_minmax(150px,0.85fr)_minmax(130px,0.75fr)]">
+                        <div className="min-w-0 space-y-0.5">
+                            <Label className="text-[11px] font-medium leading-none text-slate-600">Party <span className="text-red-500">*</span></Label>
+                            <div className="w-full min-w-0" ref={partyRef}>
+                                <LedgerPicker
+                                    group="Sundry Creditors"
+                                    value={partyLedger}
+                                    onChange={(l) => {
+                                        setPartyLedger(l);
+                                        setValue('partyLedgerId', l?.id ?? '', { shouldValidate: true });
+                                    }}
+                                    placeholder="Select party ledger..."
+                                    className={cn("h-8 text-sm [&_input]:h-8", errors.partyLedgerId && "ring-1 ring-red-400 rounded-md")}
+                                />
+                                {errors.partyLedgerId && <p className="text-[11px] text-red-500 mt-1">{errors.partyLedgerId.message}</p>}
                             </div>
-                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0">
-                                <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3">Godown</Label>
-                                <div className="w-full sm:w-2/3">
-                                    <Select defaultValue="main" onValueChange={(v) => setValue('godown', v)}>
-                                        <SelectTrigger className="h-10 text-sm bg-white">
-                                            <SelectValue />
+                        </div>
+                        <div className="min-w-0 space-y-0.5">
+                            <Label className="text-[11px] font-medium leading-none text-slate-600">Invoice No <span className="text-red-500">*</span></Label>
+                            <div className="w-full min-w-0">
+                                {(() => {
+                                    const { ref: formRef, ...rest } = register('invoiceNo');
+                                    return (
+                                        <Input
+                                            ref={(e) => {
+                                                invoiceNoRef.current = e;
+                                                formRef(e);
+                                            }}
+                                            className={cn("h-8 border-slate-300 bg-white text-sm focus-visible:ring-violet-400", (errors.invoiceNo || isDuplicate) && "border-red-400 focus-visible:ring-red-400")}
+                                            {...rest}
+                                            placeholder="e.g. AJD-2026-0123"
+                                        />
+                                    );
+                                })()}
+                                {errors.invoiceNo ? (
+                                    <p className="text-[11px] text-red-500 mt-1">{errors.invoiceNo.message}</p>
+                                ) : isDuplicate ? (
+                                    <p className="flex items-center gap-1 text-[11px] text-red-500 mt-1">
+                                        <AlertTriangle className="h-3 w-3" /> Duplicate!
+                                    </p>
+                                ) : null}
+                            </div>
+                        </div>
+                        <div className="min-w-0 space-y-0.5">
+                            <Label className="text-[11px] font-medium leading-none text-slate-600">Invoice Date</Label>
+                            <div className="w-full min-w-0">
+                                {(() => {
+                                    const { ref: formRef, ...rest } = register('invoiceDate');
+                                    return (
+                                        <Input
+                                            className="h-8 border-slate-300 bg-white text-sm focus-visible:ring-violet-400"
+                                            type="date"
+                                            min="2020-01-01"
+                                            max="2035-12-31"
+                                            ref={(e) => {
+                                                dateRef.current = e;
+                                                formRef(e);
+                                            }}
+                                            {...rest}
+                                        />
+                                    );
+                                })()}
+                            </div>
+                        </div>
+                        <div className="min-w-0 space-y-0.5">
+                            <Label className="text-[11px] font-medium leading-none text-slate-600">Purchase type <span className="text-red-500">*</span></Label>
+                            <div className="w-full min-w-0">
+                                <Select
+                                    defaultValue="credit"
+                                    onValueChange={(v) => {
+                                        setValue('purchaseType', v as 'cash' | 'credit');
+                                        if (v === 'cash') setValue('dueDate', undefined);
+                                        else setValue('dueDate', defaultDue);
+                                    }}
+                                >
+                                    <SelectTrigger className="h-8 border-slate-300 bg-white text-sm focus-visible:ring-violet-400">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="credit">Credit</SelectItem>
+                                        <SelectItem value="cash">Cash</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-slate-200 bg-slate-50/50 px-1 py-1.5">
+                        <div className="flex min-w-[190px] flex-1 items-center gap-2">
+                            <Label className="shrink-0 whitespace-nowrap text-[11px] font-medium leading-none text-slate-600">Godown</Label>
+                            <div className="min-w-0 flex-1">
+                                <Select defaultValue="main" onValueChange={(v) => setValue('godown', v)}>
+                                    <SelectTrigger className="h-8 border-slate-300 bg-white text-sm focus-visible:ring-violet-400">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {GODOWNS.map((g) => (
+                                            <SelectItem key={g.value} value={g.value}>{g.label}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                        {watchedPurchaseType !== 'cash' && (
+                            <div className="flex min-w-[190px] flex-1 items-center gap-2">
+                                <Label className="shrink-0 whitespace-nowrap text-[11px] font-medium leading-none text-slate-600">Credit Days</Label>
+                                <div className="min-w-0 flex-1">
+                                    <Select
+                                        value={Number.isFinite(creditDays) ? creditDays.toString() : "30"}
+                                        onValueChange={(val) => {
+                                            const parsed = parseInt(val, 10);
+                                            setCreditDays(Number.isFinite(parsed) ? parsed : 30);
+                                        }}
+                                    >
+                                        <SelectTrigger className="h-8 border-slate-300 bg-white text-sm focus-visible:ring-violet-400">
+                                            <SelectValue placeholder="Select days" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {GODOWNS.map((g) => (
-                                                <SelectItem key={g.value} value={g.value}>{g.label}</SelectItem>
+                                            {Array.from(new Set([7, 15, 30, 45, 60, 90, creditDays])).sort((a, b) => a - b).map(d => (
+                                                <SelectItem key={d} value={d.toString()}>{d} Days</SelectItem>
                                             ))}
                                         </SelectContent>
                                     </Select>
+                                    <input type="hidden" {...register('dueDate')} />
                                 </div>
                             </div>
-                        </div>
-
-                        {/* Column 2 */}
-                        <div className="space-y-4">
-                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0">
-                                <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3">Invoice No <span className="text-red-500">*</span></Label>
-                                <div className="w-full sm:w-2/3">
-                                    {(() => {
-                                        const { ref: formRef, ...rest } = register('invoiceNo');
-                                        return (
-                                            <Input
-                                                ref={(e) => {
-                                                    invoiceNoRef.current = e;
-                                                    formRef(e);
-                                                }}
-                                                className={cn("h-10 text-sm bg-white", (errors.invoiceNo || isDuplicate) && "border-red-400 focus-visible:ring-red-400")}
-                                                {...rest}
-                                                placeholder="e.g. AJD-2026-0123"
-                                            />
-                                        );
-                                    })()}
-                                    {errors.invoiceNo ? (
-                                        <p className="text-[11px] text-red-500 mt-1">{errors.invoiceNo.message}</p>
-                                    ) : isDuplicate ? (
-                                        <p className="flex items-center gap-1 text-[11px] text-red-500 mt-1">
-                                            <AlertTriangle className="h-3 w-3" /> Duplicate!
-                                        </p>
-                                    ) : null}
-                                </div>
-                            </div>
-                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0">
-                                <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3">Invoice Date</Label>
-                                <div className="w-full sm:w-2/3">
-                                    {(() => {
-                                        const { ref: formRef, ...rest } = register('invoiceDate');
-                                        return (
-                                            <Input
-                                                className="h-10 text-sm bg-white"
-                                                type="date"
-                                                min="2020-01-01"
-                                                max="2035-12-31"
-                                                ref={(e) => {
-                                                    dateRef.current = e;
-                                                    formRef(e);
-                                                }}
-                                                {...rest}
-                                            />
-                                        );
-                                    })()}
-                                </div>
-                            </div>
-                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0">
-                                <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3">PO Ref</Label>
-                                <div className="w-full sm:w-2/3">
-                                    {(() => {
-                                        const { ref: formRef, ...rest } = register('purchaseOrderRef');
-                                        return (
-                                            <Input
-                                                className="h-10 text-sm bg-white"
-                                                ref={(e) => {
-                                                    poRef.current = e;
-                                                    formRef(e);
-                                                }}
-                                                {...rest}
-                                                placeholder="Optional"
-                                            />
-                                        );
-                                    })()}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Column 3 */}
-                        <div className="space-y-4">
-                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0">
-                                <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3">Type <span className="text-red-500">*</span></Label>
-                                <div className="w-full sm:w-2/3">
-                                    <Select
-                                        defaultValue="credit"
-                                        onValueChange={(v) => {
-                                            setValue('purchaseType', v as 'cash' | 'credit');
-                                            if (v === 'cash') setValue('dueDate', undefined);
-                                            else setValue('dueDate', defaultDue);
-                                        }}
-                                    >
-                                        <SelectTrigger className="h-10 text-sm bg-white">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="credit">Credit</SelectItem>
-                                            <SelectItem value="cash">Cash</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            </div>
-
-                            {watchedPurchaseType !== 'cash' && (
-                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0">
-                                    <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3">Credit Days</Label>
-                                    <div className="w-full sm:w-2/3">
-                                        <Select
-                                            value={Number.isFinite(creditDays) ? creditDays.toString() : "30"}
-                                            onValueChange={(val) => {
-                                                const parsed = parseInt(val, 10);
-                                                setCreditDays(Number.isFinite(parsed) ? parsed : 30);
+                        )}
+                        <div className="flex min-w-[190px] flex-1 items-center gap-2">
+                            <Label className="shrink-0 whitespace-nowrap text-[11px] font-medium leading-none text-slate-600">PO Ref</Label>
+                            <div className="min-w-0 flex-1">
+                                {(() => {
+                                    const { ref: formRef, ...rest } = register('purchaseOrderRef');
+                                    return (
+                                        <Input
+                                            className="h-8 border-slate-300 bg-white text-sm focus-visible:ring-violet-400"
+                                            ref={(e) => {
+                                                poRef.current = e;
+                                                formRef(e);
                                             }}
-                                        >
-                                            <SelectTrigger className="h-10 text-sm bg-white border-slate-200">
-                                                <SelectValue placeholder="Select days" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {Array.from(new Set([7, 15, 30, 45, 60, 90, creditDays])).sort((a, b) => a - b).map(d => (
-                                                    <SelectItem key={d} value={d.toString()}>{d} Days</SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                        <input type="hidden" {...register('dueDate')} />
-                                    </div>
-                                </div>
-                            )}
-                            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1.5 sm:gap-0">
-                                <Label className="text-sm font-medium text-slate-700 w-full sm:w-1/3 pt-0 sm:pt-2">Notes</Label>
-                                <div className="w-full sm:w-2/3">
-                                    {(() => {
-                                        const { ref: formRef, ...rest } = register('notes');
-                                        return (
-                                            <Textarea
-                                                className="resize-none text-sm h-10 min-h-[40px] py-2 bg-white"
-                                                ref={(e) => {
-                                                    notesRef.current = e;
-                                                    formRef(e);
-                                                }}
-                                                {...rest}
-                                                placeholder="Optional notes..."
-                                            />
-                                        );
-                                    })()}
-                                </div>
+                                            {...rest}
+                                            placeholder="Optional"
+                                        />
+                                    );
+                                })()}
                             </div>
                         </div>
-
+                        <div className="flex min-w-[190px] flex-1 items-center gap-2">
+                            <Label className="shrink-0 whitespace-nowrap text-[11px] font-medium leading-none text-slate-600">Notes</Label>
+                            <div className="min-w-0 flex-1">
+                                {(() => {
+                                    const { ref: formRef, ...rest } = register('notes');
+                                    return (
+                                        <Textarea
+                                            className="h-8 min-h-8 resize-y border-slate-300 bg-white py-1 text-sm focus-visible:ring-violet-400"
+                                            ref={(e) => {
+                                                notesRef.current = e;
+                                                formRef(e);
+                                            }}
+                                            {...rest}
+                                            placeholder="Optional notes..."
+                                        />
+                                    );
+                                })()}
+                            </div>
+                        </div>
                     </div>
-                </div>
+                </section>
 
-                {/* ── Zone 2: Data Engine (Middle, Scrollable Table) ───────────────────────────── */}
-                <div className="flex-1 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm flex flex-col mt-4">
-                    <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-5 py-2">
-                        <div className="flex items-center gap-2">
-                            <Boxes className="h-4 w-4 text-slate-500" />
-                            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-600">Items</h3>
-                            <Badge variant="secondary" className="text-[11px] px-1.5 py-0">
-                                {items.length} row{items.length !== 1 ? 's' : ''}
-                            </Badge>
+                <section aria-label="Medicine entry" className="min-w-0 border-y border-slate-300 bg-white">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-1 py-1">
+                        <div className="flex items-baseline gap-2">
+                            <h3 className="text-xs font-semibold text-slate-800">Medicines</h3>
+                            <span className="text-[11px] tabular-nums text-slate-500">{items.length} row{items.length !== 1 ? 's' : ''}</span>
                             {totalUnits > 0 && (
-                                <Badge variant="outline" className="text-[11px] text-slate-500 px-1.5 py-0">
+                                <span className="text-[11px] tabular-nums text-slate-500">
                                     {totalUnits.toLocaleString('en-IN')} units
-                                </Badge>
+                                </span>
                             )}
                         </div>
                         <Button
                             type="button" variant="outline" size="sm"
-                            className="h-7 gap-1 text-xs"
+                            className="h-7 gap-1 rounded border-slate-300 bg-white px-2 text-xs font-medium text-slate-700 hover:bg-slate-100"
                             onClick={handleAddItem}
                         >
                             <Plus className="h-3 w-3" /> Add Item
@@ -1011,35 +1071,35 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
                         <p className="mx-5 mt-2 text-[10px] text-red-500">{errors.items.message}</p>
                     )}
 
-                    {/* Make this wrapper scrollable and force full width */}
-                    <div className="flex-1 overflow-auto relative" ref={gridContainerRef}>
-                        <table className="w-full min-w-[1280px] text-xs border-collapse">
+                    <div className="relative max-h-[clamp(220px,calc(100dvh-465px),615px)] overflow-auto overscroll-contain" ref={gridContainerRef}>
+                        <table aria-label="Purchase items" className="w-full min-w-[1308px] table-fixed border-separate border-spacing-0 text-xs">
                             <colgroup>
                                 {PURCHASE_ITEM_COLS.map((col) => (
-                                    <col key={col.key} style={{ width: col.width }} />
+                                    <col key={col.key} style={col.key === 'product' ? undefined : { width: col.width }} />
                                 ))}
                             </colgroup>
-                            <thead className="bg-slate-50 sticky top-0 z-20 shadow-[0_1px_2px_rgb(0,0,0,0.05)]">
+                            <thead className="sticky top-0 z-30 bg-slate-100">
                                 <tr>
-                                    <th className="sticky left-0 z-30 bg-slate-50 border-r border-b border-slate-200 w-8 px-2 py-2 text-center text-[11px] uppercase tracking-wider text-slate-500 font-semibold">#</th>
-                                    <th className="sticky left-8 z-30 bg-slate-50 border-r border-b border-slate-200 min-w-[200px] px-2 py-2 text-left text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Product</th>
-                                    <th className="border-r border-b border-slate-200 px-2 py-2 text-left text-[11px] uppercase tracking-wider text-slate-500 font-semibold">HSN</th>
-                                    <th className="border-r border-b border-slate-200 px-2 py-2 text-left text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Batch</th>
-                                    <th className="border-r border-b border-slate-200 px-2 py-2 text-left text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Expiry</th>
-                                    <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold w-16">Pkg</th>
-                                    <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold w-20">Qty</th>
-                                    <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Free</th>
-                                    <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold">MRP</th>
-                                    <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold w-20">Rate</th>
-                                    <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold">GST%</th>
-                                    <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold">PTR</th>
-                                    <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold">PTS</th>
-                                    <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Disc%</th>
-                                    <th className="border-r border-b border-slate-200 px-2 py-2 text-right text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Amount</th>
-                                    <th colSpan={2} className="sticky right-0 z-30 bg-slate-50 border-l border-b border-slate-200 w-16 px-2 py-2 text-center text-[11px] uppercase tracking-wider text-slate-500 font-semibold" title="Actions">Act</th>
+                                    <th className={cn(purchaseGridHeaderCell, 'sticky left-0 z-40 border-l border-t text-center')}>#</th>
+                                    <th className={cn(purchaseGridHeaderCell, 'border-t text-left sm:sticky sm:left-8 sm:z-40')}>Product</th>
+                                    <th className={cn(purchaseGridHeaderCell, 'border-t text-left')}>HSN</th>
+                                    <th className={cn(purchaseGridHeaderCell, 'border-t text-left')}>Batch</th>
+                                    <th className={cn(purchaseGridHeaderCell, 'border-t text-left')}>Expiry</th>
+                                    <th className={cn(purchaseGridHeaderCell, 'border-t text-right')}>Pkg</th>
+                                    <th className={cn(purchaseGridHeaderCell, 'border-t text-right')}>Qty</th>
+                                    <th className={cn(purchaseGridHeaderCell, 'border-t text-right')}>Free</th>
+                                    <th className={cn(purchaseGridHeaderCell, 'border-t text-right')}>MRP</th>
+                                    <th className={cn(purchaseGridHeaderCell, 'border-t text-right')}>Rate</th>
+                                    <th className={cn(purchaseGridHeaderCell, 'border-t text-right')}>GST%</th>
+                                    <th className={cn(purchaseGridHeaderCell, 'border-t text-right')}>PTR</th>
+                                    <th className={cn(purchaseGridHeaderCell, 'border-t text-right')}>PTS</th>
+                                    <th className={cn(purchaseGridHeaderCell, 'border-t text-right')}>Disc%</th>
+                                    <th className={cn(purchaseGridHeaderCell, 'border-t text-right')}>Amount</th>
+                                    <th className={cn(purchaseGridHeaderCell, 'border-t text-center sm:sticky sm:right-[30px] sm:z-40')} title="Pricing details" aria-label="Pricing details">⋯</th>
+                                    <th className={cn(purchaseGridHeaderCell, 'border-t text-center sm:sticky sm:right-0 sm:z-40')} title="Remove item" aria-label="Remove item">×</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-slate-100">
+                            <tbody>
                                 {items.map((item, idx) => (
                                     <PurchaseItemRow
                                         key={idx}
@@ -1056,28 +1116,22 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
                             </tbody>
                         </table>
                     </div>
-                </div>
+                </section>
 
-                {/* ── Section C: Additional Charges & Discounts ────────────────────────── */}
-                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                    <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50 px-5 py-3">
-                        <Truck className="h-4 w-4 text-slate-500" />
-                        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                            Additional Charges & Invoice Discount
-                        </h3>
-                    </div>
-                    <div className="grid grid-cols-1 gap-4 p-5 md:grid-cols-4">
-                        <div className="space-y-1.5">
-                            <Label className="text-xs font-medium text-slate-600">Freight / Transport (₹)</Label>
+                <section aria-label="Invoice adjustments" className="border-y border-slate-200 bg-white px-1 py-1">
+                    <h3 className="mb-0.5 text-[11px] font-semibold text-slate-700">Invoice adjustments</h3>
+                    <div className="grid grid-cols-1 gap-x-3 gap-y-2 md:grid-cols-2 xl:grid-cols-[minmax(250px,1fr)_minmax(260px,1fr)_minmax(350px,2fr)]">
+                        <div className="flex min-w-0 items-center gap-2">
+                            <Label className="shrink-0 whitespace-nowrap text-[11px] font-medium text-slate-600">Freight / Transport (₹)</Label>
                             <Input
                                 type="number" step="0.01" min="0"
-                                className="h-9 text-sm"
+                                className="h-8 min-w-0 flex-1 rounded border-slate-300 text-sm"
                                 placeholder="0.00"
                                 {...register('freight', { valueAsNumber: true })}
                             />
                         </div>
-                        <div className="space-y-1.5">
-                            <Label className="text-xs font-medium text-slate-600 flex justify-between">
+                        <div className="flex min-w-0 items-center gap-2">
+                            <Label className="flex shrink-0 justify-between gap-1 whitespace-nowrap text-[11px] font-medium text-slate-600">
                                 <span>Invoice Discount (₹)</span>
                                 {invoiceDiscountPct > 0 && (
                                     <span className="text-emerald-600">{(invoiceDiscountPct * 100).toFixed(2)}%</span>
@@ -1085,73 +1139,71 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
                             </Label>
                             <Input
                                 type="number" step="0.01" min="0"
-                                className="h-9 text-sm text-green-700"
+                                className="h-8 min-w-0 flex-1 rounded border-slate-300 text-sm text-slate-800"
                                 placeholder="0.00"
                                 {...register('invoiceDiscount', { valueAsNumber: true })}
                             />
                         </div>
-                    </div>
-                </div>
+                        <div className="min-w-0 border-t border-slate-200 pt-1 md:col-span-2 xl:col-span-1 xl:border-l xl:border-t-0 xl:pl-3 xl:pt-0">
+                            <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
+                                <div>
+                                    <p className="text-xs font-semibold text-slate-700">Ledger Adjustment</p>
+                                    <p className="text-[11px] text-slate-500">
+                                        Apply credit from distributor account (return, advance, write-off)
+                                    </p>
+                                </div>
+                                <div className="flex shrink-0 items-center gap-1.5">
+                                    <select
+                                        className="h-8 cursor-pointer rounded border border-slate-300 bg-white px-2 text-xs font-medium text-slate-700 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-300"
+                                        value={adjustmentSign}
+                                        onChange={(e) => {
+                                            setAdjustmentSign(e.target.value as '-' | '+');
+                                            // optionally re-evaluate cap if they switch from + to -
+                                            if (e.target.value === '-') setLedgerAdjustment((prev) => Math.min(prev, computedTotal));
+                                        }}
+                                    >
+                                        <option value="-">&minus; (Subtract)</option>
+                                        <option value="+">+ (Add)</option>
+                                    </select>
+                                    <span className="text-sm font-medium text-slate-600">₹</span>
+                                    <input
+                                        type="number"
+                                        min={0}
+                                        // Only cap at computedTotal if it's a deduction ('-')
+                                        max={adjustmentSign === '-' ? computedTotal : undefined}
+                                        step="0.01"
+                                        className="h-8 w-24 rounded border border-slate-300 bg-white px-2 text-right text-sm font-mono focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-300 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                        placeholder="0.00"
+                                        value={ledgerAdjustment || ''}
+                                        onChange={(e) => {
+                                            const val = Math.max(0, parseFloat(e.target.value) || 0);
+                                            if (adjustmentSign === '-') {
+                                                setLedgerAdjustment(Math.min(val, computedTotal));
+                                            } else {
+                                                setLedgerAdjustment(val);
+                                            }
+                                        }}
+                                    />
+                                </div>
+                            </div>
 
-                {/* ── Section D: Ledger Adjustment ────────────────────────── */}
-                <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div>
-                            <p className="text-sm font-semibold text-slate-700">Ledger Adjustment</p>
-                            <p className="text-xs text-slate-400">
-                                Apply credit from distributor account (return, advance, write-off)
-                            </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <select
-                                className="cursor-pointer rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-100"
-                                value={adjustmentSign}
-                                onChange={(e) => {
-                                    setAdjustmentSign(e.target.value as '-' | '+');
-                                    // optionally re-evaluate cap if they switch from + to - 
-                                    if (e.target.value === '-') setLedgerAdjustment((prev) => Math.min(prev, computedTotal));
-                                }}
-                            >
-                                <option value="-">&minus; (Subtract)</option>
-                                <option value="+">+ (Add)</option>
-                            </select>
-                            <span className="text-sm font-medium text-slate-600">₹</span>
-                            <input
-                                type="number"
-                                min={0}
-                                // Only cap at computedTotal if it's a deduction ('-')
-                                max={adjustmentSign === '-' ? computedTotal : undefined}
-                                step="0.01"
-                                className="w-36 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-right text-base font-mono shadow-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-100 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                placeholder="0.00"
-                                value={ledgerAdjustment || ''}
-                                onChange={(e) => {
-                                    const val = Math.max(0, parseFloat(e.target.value) || 0);
-                                    if (adjustmentSign === '-') {
-                                        setLedgerAdjustment(Math.min(val, computedTotal));
-                                    } else {
-                                        setLedgerAdjustment(val);
-                                    }
-                                }}
-                            />
+                            {ledgerAdjustment > 0 && (
+                                <div className="mt-1">
+                                    <input
+                                        className="h-7 w-full rounded border border-slate-300 bg-white px-2 text-xs text-slate-700 focus:border-violet-500 focus:outline-none"
+                                        placeholder="Reason (e.g. Return CN-2024-45, Advance payment)"
+                                        value={ledgerNote}
+                                        onChange={(e) => setLedgerNote(e.target.value)}
+                                    />
+                                </div>
+                            )}
                         </div>
                     </div>
-
-                    {ledgerAdjustment > 0 && (
-                        <div className="mt-2">
-                            <input
-                                className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 focus:border-blue-400 focus:outline-none"
-                                placeholder="Reason (e.g. Return CN-2024-45, Advance payment)"
-                                value={ledgerNote}
-                                onChange={(e) => setLedgerNote(e.target.value)}
-                            />
-                        </div>
-                    )}
-                </div>
+                </section>
 
                 {/* ── Reason for Modification (Edit Mode Only) ──────────────── */}
                 {invoiceToEdit && invoiceToEdit.status !== 'SAVED' && (
-                    <div className="rounded-xl border border-blue-200 bg-blue-50 p-5 mt-4">
+                    <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
                         <h3 className="text-sm font-semibold text-blue-900 mb-3 flex items-center gap-2">
                             <FileText className="h-4 w-4" />
                             Reason for Modification
@@ -1189,86 +1241,55 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
                     </div>
                 )}
 
-                {/* ── Zone 3: The Financial HUD (Bottom, Sticky) ───────────────────────────── */}
-                <div className="sticky bottom-0 bg-white border-t border-slate-200 shadow-[0_-4px_6px_-1px_rgb(0,0,0,0.05)] z-40 p-4 mt-4 -mx-4 md:-mx-1 flex flex-col-reverse md:flex-row justify-between items-stretch md:items-end gap-4 rounded-t-xl">
-
-                    {/* Actions Docked Left */}
-                    <div className="flex items-center gap-3 pb-1 justify-between md:justify-start">
-                        <Button
-                            type="button" variant="outline" size="sm"
-                            className="flex-1 md:flex-none gap-1.5 text-slate-500 hover:text-slate-700 h-10"
-                            onClick={saveDraft}
-                            title="Shortcut: Alt + S"
-                        >
-                            <Save className="h-4 w-4" /> Save Draft <span className="text-[10px] text-slate-400 ml-1 border rounded px-1 hidden md:inline">Alt+S</span>
-                        </Button>
-                        <Button type="button" variant="outline" onClick={() => onSuccess()} className="flex-1 md:flex-none h-10">
-                            <X className="mr-1 h-4 w-4" /> Cancel
-                        </Button>
-                    </div>
-
-                    {/* Receipt Summary & Main Save Button Docked Right */}
-                    <div className="flex flex-col md:flex-row gap-4 items-stretch">
-                        <div className="w-full md:w-72 flex flex-col gap-1.5 text-sm bg-slate-50 p-3 rounded-lg border border-slate-200">
+                {/* Transaction totals and actions remain available during long invoices. */}
+                <footer className="relative z-40 border-t border-slate-300 bg-white xl:fixed xl:inset-x-0 xl:bottom-0">
+                    <div className="mx-auto flex max-w-[1800px] flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-1.5 sm:px-6">
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs tabular-nums text-slate-600">
                             {totalTradeDisc + totalCashDisc > 0 && (
-                                <div className="flex justify-between text-slate-500 text-xs">
-                                    <span>Item Discounts</span>
-                                    <span className="font-mono">− {fmt(totalTradeDisc + totalCashDisc)}</span>
-                                </div>
+                                <span>Item discounts <strong className="font-mono text-slate-800">− {fmt(totalTradeDisc + totalCashDisc)}</strong></span>
                             )}
                             {invoiceDiscount > 0 && (
-                                <div className="flex justify-between text-emerald-600 text-xs">
-                                    <span>Invoice Discount ({(invoiceDiscountPct * 100).toFixed(2)}%)</span>
-                                    <span className="font-mono">− {fmt(invoiceDiscount)}</span>
-                                </div>
+                                <span>Invoice discount ({(invoiceDiscountPct * 100).toFixed(2)}%) <strong className="font-mono text-slate-800">− {fmt(invoiceDiscount)}</strong></span>
                             )}
-                            <div className="flex justify-between text-slate-600">
-                                <span>Taxable Value</span>
-                                <span className="font-mono">{fmt(taxableValue)}</span>
-                            </div>
-                            <div className="flex justify-between text-slate-600">
-                                <span>Total GST</span>
-                                <span className="font-mono">{fmt(totalGST)}</span>
-                            </div>
+                            <span>Taxable <strong className="font-mono text-slate-900">{fmt(taxableValue)}</strong></span>
+                            <span>GST <strong className="font-mono text-slate-900">{fmt(totalGST)}</strong></span>
                             {ledgerAdjustment > 0 && (
-                                <div className={`flex justify-between ${adjustmentSign === '-' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                    <span>Adjustment</span>
-                                    <span className="font-mono">{adjustmentSign === '-' ? '−' : '+'} {fmt(ledgerAdjustment)}</span>
-                                </div>
-                            )}
-                            <Separator className="my-1 border-slate-300" />
-                            <div className="flex items-end justify-between">
-                                <span className="text-sm font-bold text-slate-800">NET PAYABLE</span>
-                                <span className="font-mono text-xl font-bold text-slate-900 leading-none">
-                                    {fmt(netPayable)}
+                                <span className={adjustmentSign === '-' ? 'text-emerald-700' : 'text-rose-700'}>
+                                    Adjustment <strong className="font-mono">{adjustmentSign === '-' ? '−' : '+'} {fmt(ledgerAdjustment)}</strong>
                                 </span>
-                            </div>
-                            {watchedPurchaseType === 'credit' && (
-                                <p className="text-right text-[10px] text-slate-400 mt-0.5">
-                                    Due: {watch('dueDate') ?? '—'}
-                                </p>
                             )}
+                            <span className="border-l border-slate-300 pl-3 font-semibold text-slate-800">
+                                Net payable <strong className="ml-1 font-mono text-base text-slate-950">{fmt(netPayable)}</strong>
+                            </span>
+                            {watchedPurchaseType === 'credit' && <span className="text-[11px] text-slate-500">Due {watch('dueDate') ?? '—'}</span>}
                         </div>
-
-                        <Button
-                            type="submit"
-                            onClick={(e) => {
-                                const valid = cleanItemsBeforeSubmit();
-                                if (!valid) {
-                                    e.preventDefault();
-                                    return;
-                                }
-                                handleSubmit(onSubmit, onInvalid)();
-                            }}
-                            disabled={isSubmitting}
-                            className="h-14 md:h-auto min-h-full w-full md:w-32 flex flex-col gap-1 justify-center rounded-lg shadow-sm"
-                            title="Shortcut: Ctrl + Enter"
-                        >
-                            <span className="text-sm font-semibold">{isSubmitting ? 'Saving...' : (invoiceToEdit && invoiceToEdit.status !== 'SAVED') ? 'Update' : 'Save'}</span>
-                            <span className="text-[10px] font-normal opacity-80 bg-black/20 rounded px-1.5 py-0.5 hidden md:inline-block">Ctrl + Enter</span>
-                        </Button>
+                        <div className="flex shrink-0 items-center gap-1.5">
+                            <Button type="button" variant="outline" size="sm" className="h-8 rounded border-slate-300 px-2 text-xs text-slate-700" onClick={saveDraft} title="Shortcut: Alt + S">
+                                <Save className="mr-1 h-3.5 w-3.5" /> Save Draft <span className="ml-1 hidden text-[10px] text-slate-500 md:inline">Alt+S</span>
+                            </Button>
+                            <Button type="button" variant="outline" onClick={() => onSuccess()} className="h-8 rounded border-slate-300 px-2 text-xs">
+                                Cancel
+                            </Button>
+                            <Button
+                                type="submit"
+                                onClick={(e) => {
+                                    const valid = cleanItemsBeforeSubmit();
+                                    if (!valid) {
+                                        e.preventDefault();
+                                        return;
+                                    }
+                                    handleSubmit(onSubmit, onInvalid)();
+                                }}
+                                disabled={isSubmitting}
+                                className="h-8 min-w-[90px] rounded bg-violet-700 px-3 text-xs font-semibold text-white hover:bg-violet-800"
+                                title="Shortcut: Ctrl + Enter"
+                            >
+                                {isSubmitting ? 'Saving...' : (invoiceToEdit && invoiceToEdit.status !== 'SAVED') ? 'Update' : 'Save'}
+                                <span className="ml-1 hidden text-[10px] font-normal opacity-80 md:inline">Ctrl+Enter</span>
+                            </Button>
+                        </div>
                     </div>
-                </div>
+                </footer>
 
             </form>
 

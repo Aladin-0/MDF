@@ -2088,6 +2088,14 @@ class PurchaseOrderPdfExportView(APIView):
 # SCAN PURCHASE VIEWS
 # =============================================================================
 
+OCR_FAILURE_MESSAGES = {
+    'OCR_ENGINE_UNAVAILABLE': 'Invoice scanning is temporarily unavailable. Please contact support or retry later.',
+    'OCR_NO_TEXT': 'No text could be read from this image. Please retake the photo in good light and try again.',
+    'OCR_IMAGE_MISSING': 'The uploaded invoice image is unavailable. Please scan the bill again.',
+    'OCR_QUEUE_UNAVAILABLE': 'Invoice scanning could not start. Please try again shortly.',
+    'OCR_PROCESSING_FAILED': 'Invoice processing failed. Please retry the scan or enter the bill manually.',
+}
+
 class InvoiceScanUploadView(APIView):
     """
     POST /api/v1/purchases/scan/upload/
@@ -2170,7 +2178,16 @@ class InvoiceScanUploadView(APIView):
         logger.info(f"Created SAVED invoice {draft.id} for outlet {outlet.name}, dispatching OCR task")
 
         # Fire background OCR task — non-blocking
-        process_invoice_ocr.delay(str(draft.id))
+        try:
+            process_invoice_ocr.delay(str(draft.id))
+        except Exception:
+            logger.exception("Could not queue OCR for invoice %s", draft.id)
+            draft.ocr_processing_error = 'OCR_QUEUE_UNAVAILABLE'
+            draft.save(update_fields=['ocr_processing_error'])
+            return Response(
+                {'error': {'code': 'OCR_QUEUE_UNAVAILABLE', 'message': OCR_FAILURE_MESSAGES['OCR_QUEUE_UNAVAILABLE']}},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
 
         return Response(
             {
@@ -2180,6 +2197,48 @@ class InvoiceScanUploadView(APIView):
             },
             status=status.HTTP_202_ACCEPTED
         )
+
+
+class InvoiceOCRRetryView(APIView):
+    """Requeue OCR for a failed, unposted scanned invoice without creating another draft."""
+    permission_classes = [CanCreatePurchases]
+
+    def post(self, request, purchase_id, *args, **kwargs):
+        from apps.purchases.tasks import process_invoice_ocr
+
+        outlet_id = request.data.get('outletId') or request.query_params.get('outletId')
+        try:
+            invoice = PurchaseInvoice.objects.get(id=purchase_id, outlet_id=outlet_id, status='SAVED')
+        except PurchaseInvoice.DoesNotExist:
+            return Response(
+                {'error': {'code': 'NOT_FOUND', 'message': 'Scanned invoice not found'}},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if not invoice.invoice_image:
+            return Response(
+                {'error': {'code': 'OCR_IMAGE_MISSING', 'message': OCR_FAILURE_MESSAGES['OCR_IMAGE_MISSING']}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if invoice.ocr_raw_data is not None:
+            return Response({'status': 'ready'}, status=status.HTTP_200_OK)
+        if invoice.ocr_processing_error is None:
+            return Response({'status': 'processing'}, status=status.HTTP_202_ACCEPTED)
+
+        invoice.ocr_processing_error = None
+        invoice.ocr_confidence = None
+        invoice.save(update_fields=['ocr_processing_error', 'ocr_confidence'])
+        try:
+            process_invoice_ocr.delay(str(invoice.id))
+        except Exception:
+            logger.exception("Could not requeue OCR for invoice %s", invoice.id)
+            invoice.ocr_processing_error = 'OCR_QUEUE_UNAVAILABLE'
+            invoice.save(update_fields=['ocr_processing_error'])
+            return Response(
+                {'error': {'code': 'OCR_QUEUE_UNAVAILABLE', 'message': OCR_FAILURE_MESSAGES['OCR_QUEUE_UNAVAILABLE']}},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response({'status': 'processing'}, status=status.HTTP_202_ACCEPTED)
 
 
 class InvoiceOCRStatusView(APIView):
@@ -2255,9 +2314,13 @@ class InvoiceOCRStatusView(APIView):
 
         # OCR failed
         if invoice.ocr_processing_error and invoice.ocr_raw_data is None:
+            code = invoice.ocr_processing_error
+            if code not in OCR_FAILURE_MESSAGES:
+                code = 'OCR_PROCESSING_FAILED'
             return Response({
                 'status': 'error',
-                'message': invoice.ocr_processing_error,
+                'code': code,
+                'message': OCR_FAILURE_MESSAGES[code],
             })
 
         # OCR complete — build review payload
@@ -2308,8 +2371,10 @@ class InvoiceOCRStatusView(APIView):
                     'productId': med_match.get('product_id'),
                     'productName': med_match.get('product_name', item.get('name', '')),
                     'confidence': round(med_match.get('confidence', 0), 2),
+                    'hsnCode': med_match.get('hsn_code'),
                     'gstRate': med_match.get('gst_rate'),
                     'packSize': med_match.get('pack_size'),
+                    'packUnit': med_match.get('pack_unit'),
                 },
                 'validationOk': item.get('_validation_ok', True),
                 # Unknown columns flagged for review
@@ -2320,17 +2385,12 @@ class InvoiceOCRStatusView(APIView):
 
         # Resolve the party ledger linked to this distributor
         from apps.accounts.models import Ledger as AccountsLedger
-        import logging
-        logger = logging.getLogger(__name__)
         party_ledger = None
         if invoice.distributor:
             party_ledger = AccountsLedger.objects.filter(
                 outlet_id=outlet_id,
                 linked_distributor=invoice.distributor
             ).first()
-            logger.info(f"DEBUG OCR: outlet_id={outlet_id}, distributor={invoice.distributor.id}, party_ledger={party_ledger}")
-        else:
-            logger.info(f"DEBUG OCR: invoice.distributor is None")
 
         return Response({
             'status': 'ready',
@@ -2354,9 +2414,14 @@ class InvoiceOCRStatusView(APIView):
                 'partyLedger': {
                     'id': str(party_ledger.id),
                     'name': party_ledger.name,
-                    'group': party_ledger.group.name if party_ledger.group else None,
+                    'groupId': str(party_ledger.group_id),
+                    'groupName': party_ledger.group.name,
+                    'nature': party_ledger.group.nature,
+                    'openingBalance': float(party_ledger.opening_balance),
+                    'balanceType': party_ledger.balance_type,
                     'currentBalance': float(party_ledger.current_balance),
-                    'state': party_ledger.state or '',
+                    'isSystem': party_ledger.is_system,
+                    'createdAt': party_ledger.created_at.isoformat(),
                 } if party_ledger else None,
                 'distributorIsNew': dist_match.get('is_new', True),
                 'matchTier': dist_match.get('match_tier'),

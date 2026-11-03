@@ -131,6 +131,7 @@ export function PurchasesList({
         } catch (err: any) {
             console.error('OCR Upload Error:', err);
             const msg =
+                err.error?.message ||
                 err.response?.data?.error?.message ||
                 err.response?.data?.message ||
                 (err.code === 'ECONNABORTED' ? 'Upload timed out. Please check your internet connection and try again.' : err.message);
@@ -277,25 +278,29 @@ export function PurchasesList({
                         className="w-full sm:w-auto"
                     />
                     
-                    <input 
-                        type="file" 
-                        accept="image/jpeg,image/png,image/webp" 
-                        capture="environment"
-                        ref={fileInputRef} 
-                        onChange={handleFileUpload} 
-                        className="hidden" 
-                    />
-                    <Button 
-                        variant="default" 
-                        size="sm" 
-                        className="h-10 sm:h-9 gap-1.5 w-full sm:w-auto bg-primary text-primary-foreground shadow-sm" 
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={isUploading}
-                    >
-                        {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Scan className="w-4 h-4" />}
-                        <span className="hidden sm:inline">Scan Bill</span>
-                        <span className="inline sm:hidden font-semibold">Tap to Scan Invoice</span>
-                    </Button>
+                    {onScanSuccess && (
+                        <>
+                            <input
+                                type="file"
+                                accept="image/jpeg,image/png,image/webp"
+                                capture="environment"
+                                ref={fileInputRef}
+                                onChange={handleFileUpload}
+                                className="hidden"
+                            />
+                            <Button
+                                variant="default"
+                                size="sm"
+                                className="h-10 sm:h-9 gap-1.5 w-full sm:w-auto bg-primary text-primary-foreground shadow-sm"
+                                onClick={() => fileInputRef.current?.click()}
+                                disabled={isUploading}
+                            >
+                                {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Scan className="w-4 h-4" />}
+                                <span className="hidden sm:inline">Scan Bill</span>
+                                <span className="inline sm:hidden font-semibold">Tap to Scan Invoice</span>
+                            </Button>
+                        </>
+                    )}
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap">

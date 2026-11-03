@@ -13,6 +13,8 @@ def process_invoice_ocr(draft_id: str):
         
         if not invoice.invoice_image:
             logger.error(f"No image found for invoice {draft_id}")
+            invoice.ocr_processing_error = 'OCR_IMAGE_MISSING'
+            invoice.save(update_fields=['ocr_processing_error'])
             return
             
         result = process_invoice_image(invoice.invoice_image.path, str(invoice.outlet_id))
@@ -37,11 +39,11 @@ def process_invoice_ocr(draft_id: str):
         invoice.save()
         logger.info(f"Successfully processed OCR for {draft_id}")
         
-    except Exception as e:
-        logger.exception(f"Failed to process OCR for {draft_id}: {e}")
+    except Exception:
+        logger.exception("Failed to process OCR for %s", draft_id)
         try:
             invoice = PurchaseInvoice.objects.get(id=draft_id)
-            invoice.ocr_processing_error = str(e)
-            invoice.save()
+            invoice.ocr_processing_error = 'OCR_PROCESSING_FAILED'
+            invoice.save(update_fields=['ocr_processing_error'])
         except Exception:
             pass

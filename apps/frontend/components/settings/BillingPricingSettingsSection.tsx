@@ -42,7 +42,7 @@ export function BillingPricingSettingsSection() {
                         description="Turn ON only if your pharmacy does NOT claim GST Input Tax Credit (ITC) — for example, if you are on the composition scheme or sell exempt items. For most GST-registered pharmacies, keep this OFF (GST is recovered as ITC credit and is not your cost)."
                         checked={includeGst}
                         disabled={isLoading}
-                        onCheckedChange={(val) => handleUpdate('landing_cost_include_gst', val)}
+                        onCheckedChange={(val) => handleUpdate('landingCostIncludeGst', val)}
                         warningMessage=""
                     />
                 </div>
@@ -53,7 +53,7 @@ export function BillingPricingSettingsSection() {
                         description="When ON, per-unit freight entered during purchase is added to the minimum sale price floor. Recommended ON for accurate cost tracking."
                         checked={includeFreight}
                         disabled={isLoading}
-                        onCheckedChange={(val) => handleUpdate('landing_cost_include_freight', val)}
+                        onCheckedChange={(val) => handleUpdate('landingCostIncludeFreight', val)}
                     />
                 </div>
             </div>

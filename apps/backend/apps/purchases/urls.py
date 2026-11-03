@@ -18,6 +18,7 @@ from apps.purchases.views import (
     PurchaseOrderPdfExportView,
     InvoiceScanUploadView,
     InvoiceOCRStatusView,
+    InvoiceOCRRetryView,
     InvoiceDraftConfirmView,
 )
 from apps.purchases.models import PurchaseInvoice
@@ -80,6 +81,7 @@ urlpatterns = [
     # --- Scan Purchase endpoints ---
     path('scan/upload/', InvoiceScanUploadView.as_view(), name='purchase-scan-upload'),
     path('<uuid:purchase_id>/ocr-status/', InvoiceOCRStatusView.as_view(), name='purchase-ocr-status'),
+    path('<uuid:purchase_id>/ocr-retry/', InvoiceOCRRetryView.as_view(), name='purchase-ocr-retry'),
     path('<uuid:purchase_id>/confirm/', InvoiceDraftConfirmView.as_view(), name='purchase-draft-confirm'),
 
     # --- Existing endpoints ---

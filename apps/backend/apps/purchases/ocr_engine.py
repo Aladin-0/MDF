@@ -17,6 +17,7 @@ import re
 import os
 import logging
 from datetime import datetime
+from difflib import SequenceMatcher
 
 import numpy as np
 
@@ -88,7 +89,7 @@ COLUMN_SYNONYM_MAP = {
     "hsn code": "hsn_code", "hsn no": "hsn_code",
 
     # Pack Size
-    "pack": "pack_size", "packing": "pack_size", "size": "pack_size",
+    "pack": "pack_size", "pkg": "pack_size", "packing": "pack_size", "size": "pack_size",
     "pack size": "pack_size", "unit": "pack_size", "uom": "pack_size",
     "uqc": "pack_size",
 }
@@ -120,6 +121,8 @@ def preprocess_image(image_path: str) -> np.ndarray:
     Apply OpenCV preprocessing to maximise OCR accuracy on mobile photos.
     Steps: load → auto-rotate (EXIF + content analysis) → grayscale → denoise → adaptive threshold → deskew
     """
+    import cv2
+
     # Step 1: Load with PIL first to honour EXIF orientation tag
     try:
         from PIL import Image as PilImage, ExifTags
@@ -180,6 +183,8 @@ def preprocess_image(image_path: str) -> np.ndarray:
 def _deskew(image: np.ndarray) -> np.ndarray:
     """Detect and correct skew angle using Hough line transform."""
     try:
+        import cv2
+
         edges = cv2.Canny(image, 50, 150, apertureSize=3)
         lines = cv2.HoughLines(edges, 1, np.pi / 180, 200)
         if lines is None:
@@ -214,12 +219,11 @@ def _deskew(image: np.ndarray) -> np.ndarray:
 # 2. OCR TEXT EXTRACTION
 # ---------------------------------------------------------------------------
 def extract_text_blocks(image_path: str) -> list[dict]:
-    import numpy as np
-    import cv2
     """
     Run RapidOCR on the preprocessed image.
     Returns list of {text, x, y, w, h, confidence} dicts sorted top→bottom left→right.
     """
+    import cv2
     try:
         from rapidocr_onnxruntime import RapidOCR
         engine = RapidOCR()
@@ -285,9 +289,9 @@ def extract_text_blocks(image_path: str) -> list[dict]:
         blocks.sort(key=lambda b: (round(b['y'] / 20) * 20, b['x']))
         return blocks
 
-    except Exception as e:
-        logger.error(f"OCR extraction failed: {e}")
-        return []
+    except Exception:
+        logger.exception("OCR extraction failed")
+        raise
 
 
 # ---------------------------------------------------------------------------
@@ -515,12 +519,17 @@ def detect_column_map(table_blocks: list[dict], learned_map: dict = None) -> dic
     if not table_blocks:
         return {}
 
-    rows = _group_into_rows(table_blocks, row_threshold=60)
     col_map = {}
     found_header = False
     header_y_max = 0
 
-    for row_idx, row_blocks in enumerate(rows):
+    # Anchor the heading band on its Product/Particulars label. OCR can place
+    # neighbouring labels 20px apart, while the first item may start 27px below.
+    name_headings = [b for b in table_blocks if any(word in b['text'].lower()
+                     for word in ('product name', 'product', 'medicine', 'particulars', 'description', 'drug name', 'item name'))]
+    for heading in sorted(name_headings, key=lambda b: b['y']):
+        row_blocks = [b for b in table_blocks if abs(b['y'] - heading['y']) <= 22]
+        row_text = ' '.join(block['text'] for block in row_blocks).lower()
         score = 0
         for block in row_blocks:
             key = block['text'].lower().strip().rstrip('.:')
@@ -534,7 +543,7 @@ def detect_column_map(table_blocks: list[dict], learned_map: dict = None) -> dic
                     score += 1
                     break
                     
-        # If this row looks like a header row (at least 2 matches), accumulate its mappings
+        # Use one header row; later rows must never add product values as column labels.
         if score >= 2:
             found_header = True
             for block in row_blocks:
@@ -562,14 +571,11 @@ def detect_column_map(table_blocks: list[dict], learned_map: dict = None) -> dic
                 if standard:
                     x_bucket = round(block['x'] / 30) * 30  # 30px bucket
                     col_map[x_bucket] = standard
-        elif found_header:
-            # We already accumulated the header row(s). A score < 2 means we hit the actual items.
-            # Break now so we don't accidentally accumulate fake headers from the footer.
             break
 
     if not found_header:
         logger.warning("Column header row not found; using learned map or defaults")
-        return {'col_map': learned_map or {}, 'header_y_max': 0}
+        return {'col_map': learned_map or {}, 'header_y_max': 0, 'header_text': ''}
 
     # If OCR completely missed the 'QTY' text block, interpolate its position
     if 'qty' not in col_map.values():
@@ -590,7 +596,7 @@ def detect_column_map(table_blocks: list[dict], learned_map: dict = None) -> dic
             col_map[qty_bucket] = 'qty'
             logger.info(f"Interpolated missing 'qty' bucket at {qty_bucket}")
 
-    return {'col_map': col_map, 'header_y_max': header_y_max}
+    return {'col_map': col_map, 'header_y_max': header_y_max, 'header_text': row_text}
 
 
 def _group_into_rows(blocks: list[dict], row_threshold: int = 15) -> list[list[dict]]:
@@ -619,6 +625,14 @@ def _group_into_rows(blocks: list[dict], row_threshold: int = 15) -> list[list[d
 # ---------------------------------------------------------------------------
 # 6. LINE ITEM EXTRACTION
 # ---------------------------------------------------------------------------
+def _ocr_cell_number(value):
+    """Read a single OCR numeric cell without merging neighbouring columns."""
+    cleaned = str(value).replace(',', '').replace('₹', '').strip().strip(" .:;()'\"")
+    if re.fullmatch(r'[+-]?\d+(?:\.\d+)?', cleaned):
+        return float(cleaned)
+    return None
+
+
 def extract_line_items(table_blocks: list[dict], col_map_result: dict) -> list[dict]:
     """
     Extract product line items from the table zone using the column position map.
@@ -629,24 +643,45 @@ def extract_line_items(table_blocks: list[dict], col_map_result: dict) -> list[d
 
     col_map = col_map_result['col_map']
     header_y_max = col_map_result.get('header_y_max', 0)
+    header_text = col_map_result.get('header_text', '').lower()
+    anchors = {field: max(int(x) for x, mapped in col_map.items() if mapped == field)
+               for field in set(col_map.values())}
+    product_right = anchors.get('pack_size') or anchors.get('mrp') or float('inf')
+    rate_x = anchors.get('rate', 0)
 
-    # CRITICAL: Ignore any blocks that are vertically at or above the headers
-    # This prevents the distributor name / address / phone from bleeding into items
-    valid_blocks = [b for b in table_blocks if b['y'] > header_y_max + 10]
+    footer_markers = [b['y'] for b in table_blocks if b['y'] > header_y_max and (
+        re.search(r'\b(?:SUB\s*TOTAL|GRAND\s*TOTAL|TOTAL\s*QTY|TOTALQTY|BANK|BALDAT|BALAMT|GST\s*PAY|NET\s*PAY|RUPEES|RECEIVER|AUTHORI[ZS]ED)\b', b['text'].upper())
+        or ('GST' in b['text'].upper() and 'SGST' in b['text'].upper())
+    )]
+    footer_y = min(footer_markers, default=float('inf'))
+    valid_blocks = [b for b in table_blocks if header_y_max + 8 < b['y'] < footer_y]
 
-    rows = _group_into_rows(valid_blocks)
+    # Product names are more stable row anchors than OCR Y coordinates of the
+    # far-right amounts. Assign each cell to the nearest product row.
+    name_candidates = sorted(
+        [b for b in valid_blocks if b['x'] < product_right
+         and len(re.findall(r'[A-Za-z]', b['text'])) >= 2],
+        key=lambda b: b['y'],
+    )
+    name_groups = _group_into_rows(name_candidates, row_threshold=12)
+    row_centres = [sum(b['y'] for b in group) / len(group) for group in name_groups]
+    rows = [[] for _ in row_centres]
+    for block in valid_blocks:
+        if row_centres:
+            closest = min(range(len(row_centres)), key=lambda i: (abs(block['y'] - row_centres[i]), -i))
+            if abs(block['y'] - row_centres[closest]) <= 20:
+                rows[closest].append(block)
+    rows = [sorted(row, key=lambda b: b['x']) for row in rows]
 
     items = []
     current_item = {}
 
-    for row_idx, row_blocks in enumerate(rows):
-        # We no longer skip the header row because 2-line items sometimes merge with the header
-        # Instead, we rely on the numeric checks below to filter out pure header rows.
-
-        # Skip rows that look like subtotals / section headers
+    for row_blocks in rows:
         row_text = ' '.join(b['text'] for b in row_blocks).upper()
-        if any(kw in row_text for kw in ['TOTAL', 'SUBTOTAL', 'SGST', 'CGST', 'IGST', 'ROUND', 'NET PAY', 'RUPEES', 'GST0', 'GST 5', 'GST12', 'GST 18', 'STORE', 'UBIN']):
-            logger.info(f"Skipping subtotal/footer row: {row_text[:50]}")
+        if re.search(r'\b(?:SUB\s*TOTAL|GRAND\s*TOTAL|TOTAL\s*QTY|TOTALQTY|BANK|BALDAT|BALAMT|GST\s*PAY|NET\s*PAY|RUPEES|RECEIVER|AUTHORI[ZS]ED)\b', row_text) or ('GST' in row_text and 'SGST' in row_text):
+            logger.info("Reached invoice footer after %s item rows", len(items) + bool(current_item))
+            break
+        if any(kw in row_text for kw in ['SUBTOTAL', 'ROUND OFF', 'GST0', 'GST 5', 'GST12', 'GST 18']):
             continue
         # Skip rows with no numeric content (likely sub-headers)
         if not any(re.search(r'\d', b['text']) for b in row_blocks):
@@ -682,15 +717,62 @@ def extract_line_items(table_blocks: list[dict], col_map_result: dict) -> list[d
                 # Unmatched column — store as extra for review
                 item[f'_col_{x_bucket}'] = block['text'].strip()
 
-        # Fallback: if 'name' is missing but 'hsn_code' is present and contains letters, it's likely a merged block
-        if not item.get('name') and item.get('hsn_code'):
-            if re.search(r'[A-Za-z]', item['hsn_code']):
-                item['name'] = item['hsn_code']
+        # OCR often merges "Qty+free Product Name" into one heading. Locate the
+        # actual text cells rather than using that heading's left edge as name.
+        name_blocks = [b for b in row_blocks
+                       if b['x'] < product_right and len(re.findall(r'[A-Za-z]', b['text'])) >= 2]
+        item.pop('name', None)
+        if name_blocks:
+            item['name'] = ' '.join(b['text'].strip() for b in sorted(name_blocks, key=lambda b: b['x']))
+            name_x = min(b['x'] for b in name_blocks)
+            qty_blocks = [b for b in row_blocks if b['x'] < name_x]
+            for block in qty_blocks:
+                qty_match = re.search(r'(\d+)\s*\+\s*(\d*)', block['text'])
+                if qty_match:
+                    item['qty'] = qty_match.group(1)
+                    item['free_qty'] = qty_match.group(2) or '0'
+                    break
+
+            hsn_blocks = [b for b in row_blocks
+                          if name_x < b['x'] < anchors.get('mrp', float('inf'))
+                          and re.fullmatch(r'\d{6,8}', b['text'].strip())]
+            if hsn_blocks:
+                item['hsn_code'] = hsn_blocks[-1]['text'].strip()
+
+            expiry_blocks = [b for b in row_blocks
+                             if name_x < b['x'] < anchors.get('mrp', float('inf'))
+                             and re.fullmatch(r'(?:\d{1,2}[/\-.]\d{2,4}|\d{4}-\d{2}(?:-\d{2})?)', b['text'].strip())]
+            if expiry_blocks:
+                item['expiry'] = expiry_blocks[0]['text'].strip()
+            else:
+                item.pop('expiry', None)
+
+            numeric_tail = [(b['x'], number) for b in row_blocks
+                            if b['x'] > rate_x and (number := _ocr_cell_number(b['text'])) is not None]
+            if numeric_tail:
+                numeric_tail.sort()
+                amount_x, amount = numeric_tail[-1]
+                item['amount'] = amount
+                before_amount = [(x, n) for x, n in numeric_tail[:-1] if x < amount_x]
+                if 'sgst' in header_text and 'cgst' in header_text and len(before_amount) >= 2:
+                    tax_parts = [n for _, n in before_amount[-2:]]
+                    if all(0 <= n <= 28 for n in tax_parts):
+                        item['gst_pct'] = round(sum(tax_parts), 2)
+                if 'dis' in header_text and before_amount:
+                    discount = before_amount[0][1]
+                    if 0 <= discount <= 100:
+                        item['discount'] = discount
+
+            # A printed HSN is not an expiry, and an item serial is not GST.
+            if 'gst_pct' in item:
+                gst_value = _ocr_cell_number(item['gst_pct'])
+                if gst_value is None or not 0 <= gst_value <= 28:
+                    item.pop('gst_pct', None)
 
         # Stateful merging for multi-line items (e.g., Name on L1, Batch/Rate on L2)
         if item.get('name'):
             # This is a new item! Push the previous one if it's valid.
-            if current_item and (current_item.get('name') or current_item.get('qty')):
+            if current_item and current_item.get('name'):
                 items.append(_clean_item(current_item))
             current_item = item
         else:
@@ -701,7 +783,7 @@ def extract_line_items(table_blocks: list[dict], col_map_result: dict) -> list[d
                         current_item[k] = v
 
     # Push the last item
-    if current_item and (current_item.get('name') or current_item.get('qty')):
+    if current_item and current_item.get('name'):
         items.append(_clean_item(current_item))
 
     return items
@@ -716,13 +798,18 @@ def _clean_item(item: dict) -> dict:
         item['name'] = re.sub(r'^\d{4,8}\s*', '', item['name'])
 
     # Clean numeric fields
-    for field in ['qty', 'free_qty', 'mrp', 'rate', 'discount', 'gst_pct', 'amount', 'pack_size']:
+    for field in ['qty', 'free_qty', 'mrp', 'rate', 'discount', 'gst_pct', 'amount']:
         if field in item:
-            clean = re.sub(r'[^\d.]', '', item[field])
+            clean = re.sub(r'[^\d.]', '', str(item[field]))
             try:
                 item[field] = float(clean) if '.' in clean else int(clean)
             except (ValueError, TypeError):
                 pass  # Leave as string for review screen to handle
+
+    if 'pack_size' in item:
+        pack = _ocr_cell_number(item['pack_size'])
+        if pack is not None and pack > 0:
+            item['pack_size'] = int(pack) if pack.is_integer() else pack
 
     # Normalise expiry date
     if 'expiry' in item:
@@ -744,10 +831,12 @@ def _clean_item(item: dict) -> dict:
 def _validate_item_math(item: dict) -> bool:
     """Cross-check line item math for the review screen confidence indicator."""
     try:
-        qty = float(item.get('qty', 0))
-        rate = float(item.get('rate', 0))
-        disc = float(item.get('discount', 0))
-        amount = float(item.get('amount', 0))
+        qty = float(item.get('qty') or 0)
+        rate = float(item.get('rate') or 0)
+        disc = float(item.get('discount') or 0)
+        amount = float(item.get('amount') or 0)
+        if amount > 0 and rate > 0 and qty <= 0:
+            return False
         if qty > 0 and rate > 0 and amount > 0:
             expected = qty * rate * (1 - disc / 100)
             tolerance = amount * 0.02  # 2% tolerance for rounding
@@ -926,18 +1015,23 @@ def match_medicine(product_name: str, outlet_id) -> dict:
         'id', 'name', 'hsn_code', 'gst_rate', 'pack_size', 'pack_unit'
     ))
 
-    best_match = None
-    best_ratio = 0
+    candidates = []
+    normalized_name = re.sub(r'[^A-Z0-9 ]', ' ', clean_name)
+    if re.search(r'[A-Z]{3}', normalized_name):
+        for product in products:
+            catalog_name = re.sub(r'[^A-Z0-9 ]', ' ', product['name'].upper())
+            set_ratio = fuzz.token_set_ratio(normalized_name, catalog_name) / 100.0
+            sort_ratio = fuzz.token_sort_ratio(normalized_name, catalog_name) / 100.0
+            score = 0.4 * set_ratio + 0.6 * sort_ratio
+            candidates.append((score, set_ratio, sort_ratio, product))
 
-    for product in products:
-        # token_set_ratio handles unordered/partial word overlaps beautifully
-        ratio = fuzz.token_set_ratio(clean_name, product['name'].upper()) / 100.0
-        if ratio > best_ratio:
-            best_ratio = ratio
-            best_match = product
-
-    # Lower threshold slightly since token_set_ratio is more rigorous than SequenceMatcher
-    if best_ratio >= 0.75 and best_match:
+    candidates.sort(key=lambda candidate: candidate[0], reverse=True)
+    best_ratio = candidates[0][0] if candidates else 0
+    next_ratio = candidates[1][0] if len(candidates) > 1 else 0
+    # A generic subset such as "SHAVING CREAM" must not resolve a branded item.
+    if (candidates and candidates[0][1] >= 0.85 and candidates[0][2] >= 0.78
+            and best_ratio - next_ratio >= 0.05):
+        best_match = candidates[0][3]
         return {
             'matched': True,
             'confidence': best_ratio,
@@ -1003,7 +1097,7 @@ def process_invoice_image(image_path: str, outlet_id: str) -> dict:
 
         if not blocks:
             return {
-                'error': 'No text extracted from image. Please retake the photo with better lighting.',
+                'error': 'OCR_NO_TEXT',
                 'header': {}, 'items': [], 'totals': {}, 'distributor_match': {},
                 'confidence': 0, 'warnings': ['OCR returned no results']
             }
@@ -1037,7 +1131,7 @@ def process_invoice_image(image_path: str, outlet_id: str) -> dict:
 
         # Step 5: Detect column layout
         col_map_result = detect_column_map(blocks, learned_col_map)
-        if not col_map_result:
+        if not col_map_result.get('col_map'):
             warnings.append("Could not detect table columns — manual entry required for line items")
 
         # Step 6: Extract line items
@@ -1074,12 +1168,19 @@ def process_invoice_image(image_path: str, outlet_id: str) -> dict:
             'warnings': warnings,
         }
 
-    except Exception as e:
-        logger.exception(f"OCR processing failed for {image_path}: {e}")
+    except (ImportError, OSError):
+        logger.exception("OCR engine is unavailable for %s", image_path)
         return {
-            'error': str(e),
+            'error': 'OCR_ENGINE_UNAVAILABLE',
             'header': {}, 'items': [], 'totals': {}, 'distributor_match': {},
-            'confidence': 0, 'warnings': [f'Processing error: {str(e)}']
+            'confidence': 0, 'warnings': []
+        }
+    except Exception:
+        logger.exception("OCR processing failed for %s", image_path)
+        return {
+            'error': 'OCR_PROCESSING_FAILED',
+            'header': {}, 'items': [], 'totals': {}, 'distributor_match': {},
+            'confidence': 0, 'warnings': []
         }
 
 

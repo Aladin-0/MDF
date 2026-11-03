@@ -76,15 +76,14 @@ const calcPTS = (ptr: number, stockistMargin = 5) =>
 
 const cellInputCls = (err = false, align: 'left' | 'right' = 'left') =>
     cn(
-        // reset browser defaults
-        'w-full h-7 rounded-md border bg-white px-1.5 text-xs outline-none',
-        'transition-colors',
+        // The table cell supplies the grid line and focus outline.
+        'h-8 w-full min-w-0 rounded-none border-0 bg-transparent px-1.5 text-xs font-medium tabular-nums text-slate-900 outline-none placeholder:text-slate-500',
         // spinner removal — works on plain <input>, not shadcn
         '[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none',
         align === 'right' && 'text-right',
         err
-            ? 'border-red-300 focus:border-red-400 focus:ring-1 focus:ring-red-200'
-            : 'border-slate-200 focus:border-blue-400 focus:ring-1 focus:ring-blue-100',
+            ? 'bg-red-50 ring-1 ring-inset ring-red-400'
+            : 'focus:bg-transparent',
     );
 
 // ─── Column definitions (single source of truth for widths) ──────────────────
@@ -92,22 +91,22 @@ const cellInputCls = (err = false, align: 'left' | 'right' = 'left') =>
 
 export const PURCHASE_ITEM_COLS = [
     { key: '#',         width: 32  },
-    { key: 'product',   width: 180 },
+    { key: 'product',   width: 230 },
     { key: 'hsn',       width: 80  },
-    { key: 'batch',     width: 96  },
-    { key: 'expiry',    width: 80  },
-    { key: 'pkg',       width: 52  },
-    { key: 'qty',       width: 60  },
+    { key: 'batch',     width: 104 },
+    { key: 'expiry',    width: 90  },
+    { key: 'pkg',       width: 60  },
+    { key: 'qty',       width: 72  },
     { key: 'free',      width: 52  },
-    { key: 'mrp',       width: 76  },
-    { key: 'rate',      width: 76  },
+    { key: 'mrp',       width: 84  },
+    { key: 'rate',      width: 88  },
     { key: 'gst',       width: 52  },
-    { key: 'ptr',       width: 76  },
-    { key: 'pts',       width: 76  },
+    { key: 'ptr',       width: 70  },
+    { key: 'pts',       width: 70  },
     { key: 'disc',      width: 60  },
-    { key: 'amount',    width: 84  },
-    { key: 'expand',    width: 32  },
-    { key: 'remove',    width: 32  },
+    { key: 'amount',    width: 104 },
+    { key: 'expand',    width: 30  },
+    { key: 'remove',    width: 30  },
 ];
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -275,7 +274,7 @@ export function PurchaseItemRow({
 
     const expStatus = getExpiryStatus(value.expiryDate);
     const total     = computeTotal(value);
-    const rowBg     = index % 2 === 0 ? 'bg-white' : 'bg-slate-50/30';
+    const rowBg     = index % 2 === 0 ? 'bg-white' : 'bg-slate-50/40';
     const effPkg    = typeof value.pkg === 'number' && value.pkg > 0 ? value.pkg : 1;
 
     const handleMrpChange = (raw: string) => {
@@ -287,8 +286,8 @@ export function PurchaseItemRow({
         }
     };
 
-    // td padding kept uniform
-    const td = 'px-1.5 py-1.5 align-middle';
+    // One cell-level border system keeps the header and editable rows aligned.
+    const td = 'h-9 border-r border-b border-[#D8DEE8] px-0.5 py-0.5 align-middle hover:bg-slate-50 focus-within:bg-white focus-within:shadow-[inset_0_0_0_2px_#7c3aed]';
 
     return (
         <>
@@ -296,7 +295,7 @@ export function PurchaseItemRow({
             {dropdownOpen && !value.productId && dropdownStyle && createPortal(
                 <div
                     ref={portalRef}
-                    className="z-[9999] w-80 min-w-[280px] rounded-xl border-2 border-slate-200 bg-white/95 backdrop-blur-sm shadow-2xl ring-1 ring-slate-200/50"
+                    className="z-[9999] w-[min(420px,calc(100vw-2rem))] min-w-[280px] rounded-sm border border-slate-300 bg-white shadow-lg"
                     style={{
                         position: 'fixed',
                         top: `${dropdownStyle.top}px`,
@@ -322,7 +321,7 @@ export function PurchaseItemRow({
                             type="button"
                             className={cn(
                                 "flex w-full flex-col px-3 py-2 text-left transition-colors",
-                                highlightedIndex === pIdx ? "bg-blue-100 text-blue-900 ring-1 ring-blue-300" : "hover:bg-blue-50"
+                                highlightedIndex === pIdx ? "border-l-2 border-violet-600 bg-slate-100 text-slate-900" : "border-l-2 border-transparent hover:bg-slate-50"
                             )}
                             onMouseEnter={() => setHighlightedIndex(pIdx)}
                             onMouseDown={(e) => { e.preventDefault(); handleSelectResult(product); }}
@@ -342,13 +341,13 @@ export function PurchaseItemRow({
                         type="button"
                         className={cn(
                             "flex w-full items-center gap-1.5 border-t border-dashed border-slate-200 px-3 py-2 text-left transition-colors",
-                            highlightedIndex === results.length ? "bg-blue-100 text-blue-900 ring-1 ring-blue-300" : "hover:bg-blue-50"
+                            highlightedIndex === results.length ? "border-l-2 border-violet-600 bg-slate-100 text-slate-900" : "border-l-2 border-transparent hover:bg-slate-50"
                         )}
                         onMouseEnter={() => setHighlightedIndex(results.length)}
                         onMouseDown={(e) => { e.preventDefault(); handleAddNew(); }}
                     >
-                        <Plus className="h-3 w-3 text-blue-600" />
-                        <span className="text-xs font-medium text-blue-600">
+                        <Plus className="h-3 w-3 text-violet-700" />
+                        <span className="text-xs font-medium text-violet-700">
                             {query ? `Add "${query}" as new product` : 'Add new product'}
                         </span>
                     </button>
@@ -356,20 +355,20 @@ export function PurchaseItemRow({
                 document.body,
             )}
 
-            <tr data-cart-row={index} className={cn('group border-b border-slate-100 transition-colors hover:bg-blue-50/20', rowBg)}>
+            <tr data-cart-row={index} className={cn('group hover:bg-slate-50 focus-within:bg-slate-50', rowBg)}>
 
                 {/* # */}
-                <td className={cn(td, 'text-center text-[11px] font-medium text-slate-400')}>
+                <td className={cn(td, 'sticky left-0 z-10 border-l text-center text-[11px] font-medium text-slate-500 group-hover:bg-slate-50 group-focus-within:bg-slate-50', rowBg)}>
                     {index + 1}
                 </td>
 
                 {/* Product */}
-                <td className={cn(td, 'overflow-visible')}>
+                <td className={cn(td, 'sm:sticky sm:left-8 sm:z-10 group-hover:bg-slate-50 group-focus-within:bg-slate-50', rowBg)}>
                     <div ref={wrapperRef} className="relative">
                         {value.productId ? (
                             /* Product already selected — show name + reset button */
-                            <div className="flex items-center gap-1">
-                                <span className="flex-1 truncate rounded-md border border-slate-200 bg-slate-50 px-1.5 py-1 text-xs text-slate-800">
+                            <div className="flex min-w-0 items-center gap-1">
+                                <span className="min-w-0 flex-1 truncate px-1.5 text-xs font-semibold text-slate-900" title={value.productName}>
                                     {value.productName}
                                 </span>
                                 <span
@@ -535,7 +534,7 @@ export function PurchaseItemRow({
                 </td>
 
                 {/* Pkg */}
-                <td className={cn(td, 'align-top')}>
+                <td className={td}>
                     <input
                         data-field="pkg"
                         type="number" min={1}
@@ -545,14 +544,14 @@ export function PurchaseItemRow({
                         onChange={(e) => num('pkg', e.target.value)}
                     />
                     {value.packUnitLabel && (
-                        <p className="mt-0.5 text-right text-[9px] leading-none text-slate-400 truncate w-full" title={value.packUnitLabel}>
+                        <p className="w-full truncate text-right text-[10px] leading-none text-slate-500" title={value.packUnitLabel}>
                             {value.packUnitLabel}
                         </p>
                     )}
                 </td>
 
                 {/* Qty */}
-                <td className={cn(td, 'align-top')}>
+                <td className={td}>
                     <input
                         data-field="qty"
                         type="number" min={0}
@@ -562,7 +561,7 @@ export function PurchaseItemRow({
                         onChange={(e) => num('qty', e.target.value)}
                     />
                     {effPkg > 1 && value.qty > 0 && (
-                        <p className="mt-0.5 text-right text-[10px] leading-none text-slate-400">
+                        <p className="text-right text-[10px] leading-none text-slate-500">
                             ={effPkg * value.qty}u
                         </p>
                     )}
@@ -647,8 +646,8 @@ export function PurchaseItemRow({
                 </td>
 
                 {/* Amount */}
-                <td className={cn(td, 'text-right')}>
-                    <span className="whitespace-nowrap font-mono text-xs font-semibold text-slate-800">
+                <td className={cn(td, 'bg-slate-100/70 px-1.5 text-right group-hover:bg-slate-100/70')}>
+                    <span className="whitespace-nowrap font-mono text-xs font-semibold tabular-nums text-slate-900">
                         {total.toLocaleString('en-IN', {
                             minimumFractionDigits: 2,
                             maximumFractionDigits: 2,
@@ -657,13 +656,15 @@ export function PurchaseItemRow({
                 </td>
 
                 {/* Expand */}
-                <td className={cn(td, 'text-center')}>
+                <td className={cn(td, 'text-center sm:sticky sm:right-[30px] sm:z-10 group-hover:bg-slate-50 group-focus-within:bg-slate-50', rowBg)}>
                     <Button
                         type="button" variant="ghost" size="icon"
-                        title="PTR / PTS / Cash Disc / Cess"
+                        title={expanded ? 'Hide pricing details' : 'Show pricing details'}
+                        aria-label={expanded ? `Hide pricing details for item ${index + 1}` : `Show pricing details for item ${index + 1}`}
+                        aria-expanded={expanded}
                         className={cn(
-                            'h-6 w-6 text-slate-400 hover:text-blue-500',
-                            expanded && 'bg-blue-50 text-blue-500',
+                            'h-6 w-6 text-slate-500 hover:bg-slate-100 hover:text-slate-900',
+                            expanded && 'bg-slate-100 text-slate-900',
                         )}
                         onClick={() => setExpanded((x) => !x)}
                     >
@@ -674,10 +675,12 @@ export function PurchaseItemRow({
                 </td>
 
                 {/* Remove */}
-                <td className={cn(td, 'text-center')}>
+                <td className={cn(td, 'text-center sm:sticky sm:right-0 sm:z-10 group-hover:bg-slate-50 group-focus-within:bg-slate-50', rowBg)}>
                     <Button
                         type="button" variant="ghost" size="icon"
-                        className="h-6 w-6 text-slate-400 opacity-0 transition-opacity group-hover:opacity-100 hover:text-red-500"
+                        className="h-7 w-7 text-slate-400 hover:bg-red-50 hover:text-red-600 focus-visible:ring-2 focus-visible:ring-red-300"
+                        aria-label={`Remove item ${index + 1}`}
+                        title={`Remove item ${index + 1}`}
                         onClick={() => onRemove(index)}
                     >
                         <X className="h-3 w-3" />
@@ -687,11 +690,10 @@ export function PurchaseItemRow({
 
             {/* ── Expanded row ──────────────────────────────────────────── */}
             {expanded && (
-                <tr className={cn('border-b border-dashed border-blue-100', rowBg)}>
-                    <td />
-                    <td colSpan={11} className="px-3 pb-3 pt-1.5">
-                        <div className="flex flex-wrap items-center gap-4 rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-2.5">
-                            <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-blue-600">
+                <tr className="bg-slate-100/70">
+                    <td colSpan={17} className="border-x border-b-2 border-x-[#D8DEE8] border-b-slate-300 px-2 py-1.5">
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 pl-7">
+                            <span className="shrink-0 border-r border-slate-300 pr-3 text-[11px] font-semibold text-slate-700">
                                 Pricing Details
                             </span>
 
@@ -709,7 +711,7 @@ export function PurchaseItemRow({
                                         className={cn(
                                             cellInputCls(false, 'right'),
                                             width,
-                                            'h-6',
+                                            'h-7 border border-slate-300 bg-white focus:ring-2 focus:ring-inset focus:ring-violet-600',
                                         )}
                                         value={(value[field] as number) || ''}
                                         onChange={(e) => num(field, e.target.value)}
@@ -717,7 +719,7 @@ export function PurchaseItemRow({
                                 </div>
                             ))}
 
-                            <div className="flex items-center gap-1.5 ml-auto border-l border-blue-200 pl-4">
+                            <div className="flex items-center gap-1.5 border-l border-slate-300 pl-4">
                                 <span className="text-[11px] text-slate-500 font-medium whitespace-nowrap">Landing Cost Floor:</span>
                                 <span className="text-xs font-bold text-slate-700 whitespace-nowrap">
                                     ₹{landingRate.toFixed(2)}
@@ -725,7 +727,6 @@ export function PurchaseItemRow({
                             </div>
                         </div>
                     </td>
-                    <td colSpan={5} />
                 </tr>
             )}
         </>

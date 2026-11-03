@@ -435,7 +435,7 @@ class TaxSlab(models.Model):
                 return {Decimal(str(r)) for r in rates}
         except Exception:
             pass
-        return {Decimal('0.00'), Decimal('5.00'), Decimal('18.00')}
+        return {Decimal('0.00'), Decimal('5.00'), Decimal('12.00'), Decimal('18.00'), Decimal('28.00')}
 
     @classmethod
     def get_all_rates(cls) -> list:

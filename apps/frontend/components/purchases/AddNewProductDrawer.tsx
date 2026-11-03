@@ -119,22 +119,34 @@ export function AddNewProductDrawer({ open, onOpenChange, initialName, onSuccess
             const product = await productsApi.create(payload);
             onSuccess(product);
             onOpenChange(false);
-        } catch (err: unknown) {
-            if (err instanceof Error) {
+        } catch (err: any) {
+            let errorObj: Record<string, any> | null = null;
+            if (err && typeof err === 'object' && err.errors && typeof err.errors === 'object') {
+                errorObj = err.errors;
+            } else if (err instanceof Error) {
                 try {
-                    const body = JSON.parse(err.message);
-                    if (body?.errors) {
-                        const fieldErrs: FieldErrors = {};
-                        for (const [k, v] of Object.entries(body.errors)) {
-                            fieldErrs[k as keyof FieldErrors] = String(v);
-                        }
-                        setErrors(fieldErrs);
-                        return;
-                    }
+                    const parsed = JSON.parse(err.message);
+                    if (parsed?.errors) errorObj = parsed.errors;
                 } catch {
                     // not JSON
                 }
-                setServerError(err.message || 'Failed to create product');
+            }
+
+            if (errorObj) {
+                const fieldErrs: FieldErrors = {};
+                for (const [k, v] of Object.entries(errorObj)) {
+                    fieldErrs[k as keyof FieldErrors] = Array.isArray(v) ? v.join(', ') : String(v);
+                }
+                setErrors(fieldErrs);
+                const firstMsg = Object.values(fieldErrs)[0];
+                setServerError(firstMsg || 'Failed to create product');
+                return;
+            }
+
+            if (err?.detail) {
+                setServerError(String(err.detail));
+            } else if (err instanceof Error && err.message) {
+                setServerError(err.message);
             } else {
                 setServerError('Failed to create product');
             }

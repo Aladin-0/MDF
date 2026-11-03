@@ -74,15 +74,20 @@ export function getMaxAllowableBillDiscount(
 }
 
 export interface LineMarginInfo {
-    margin: number;             // Margin per pack: sellingPricePerPack - costFloor
-    marginPct: number;          // Margin %: (margin / sellingPricePerPack) * 100
-    lineGrossProfit: number;    // Line total profit: lineSellingAmount - lineLandingCost
+    margin: number;             // Margin per pack: sellingPricePerPack - costFloor (or itemProfit)
+    marginPct: number;          // Margin %: (rowProfit / salesAmount) * 100
+    lineGrossProfit: number;    // Line total profit: alias for rowProfit
+    rowProfit: number;          // Row total profit based on apples-to-apples tax comparison
+    itemProfit: number;         // Unit profit per pack: rowProfit / quantity
+    rowTaxableAmount: number;   // Base price before tax
+    rowTotalAmount: number;     // Final net payable including tax
     lineLandingCost: number;    // Line total landing cost: costFloor * effectivePackQty
     landingRate: number;        // Landing cost per pack
     costFloor: number;          // Cost floor per pack: item.ptr ?? landingRate ?? purchaseRate
-    sellingPricePerPack: number;// Actual selling price per pack (after item and bill discount)
+    sellingPricePerPack: number;// Actual selling price per pack (apples-to-apples basis)
     finalRowAmount: number;     // Final row amount (after item and bill discount)
-    isLossSale: boolean;        // true if unit selling price is strictly less than costFloor
+    isLossSale: boolean;        // true if unit selling price is strictly less than costFloor (rowProfit < 0)
+    isBelowLandingCost: boolean;// true if rowProfit < 0 (checkout lock flag)
 }
 
 export interface TotalMarginInfo {
@@ -186,12 +191,17 @@ export function calculateLineMargin(
             margin: 0,
             marginPct: 0,
             lineGrossProfit: 0,
+            rowProfit: 0,
+            itemProfit: 0,
+            rowTaxableAmount: 0,
+            rowTotalAmount: 0,
             lineLandingCost: 0,
             landingRate,
             costFloor,
             sellingPricePerPack: 0,
             finalRowAmount: 0,
             isLossSale: false, // Safe harbor: promotional gift, not a loss sale
+            isBelowLandingCost: false,
         };
     }
     // ── END Safe Harbor ───────────────────────────────────────────────────────
@@ -203,30 +213,63 @@ export function calculateLineMargin(
         finalRowAmount = lineCostFloorInclusive;
     }
 
-    // Post-Cap: Tax-exclusive net selling price per pack for apples-to-apples comparison against costFloor.
-    // Derived from post-cap finalRowAmount to guarantee GST sequencing is correct.
-    const sellingPricePerPack = effectivePackQty > 0 ? (finalRowAmount / (effectivePackQty * taxMultiplier)) : Number(item.rate || item.saleRate || 0);
-    const margin = Math.round((sellingPricePerPack - costFloor) * 100) / 100;
-    const marginPct = sellingPricePerPack > 0 ? Math.round((margin / sellingPricePerPack) * 10000) / 100 : 0;
+    // Quantities & Core Values
+    const quantity = effectivePackQty;
+    const landingCost = costFloor;
+    const totalCost = landingCost * quantity;
+    const rowTotalAmount = finalRowAmount;
+    const rowTaxableAmount = taxMultiplier > 0 ? (rowTotalAmount / taxMultiplier) : rowTotalAmount;
 
-    // True Profit = Tax-Exclusive Revenue - Tax-Exclusive Cost
-    const finalTaxable = finalRowAmount / taxMultiplier;
-    const baseUnitCost = landingCostIncludeGst ? (costFloor / taxMultiplier) : costFloor;
-    const lineGrossProfit = Math.round((finalTaxable - (baseUnitCost * effectivePackQty)) * 100) / 100;
+    // ── Conditional Apples-to-Apples Profit & Margin Calculation ──────────────
+    let rowProfit = 0;
+    let marginPct = 0;
 
-    // Loss-Sale: Compare exact row amounts to prevent fractional reverse-division rounding drift
-    const isLossSale = costFloor > 0 && effectivePackQty > 0 && (finalRowAmount < (lineCostFloorInclusive - 0.005));
+    if (landingCostIncludeGst) {
+        // 1. If landingCostIncludeGst is TRUE (Tax-Inclusive Comparison):
+        // rowProfit = rowTotalAmount - (landingCost * quantity) (where rowTotalAmount is final net payable incl tax)
+        rowProfit = Math.round((rowTotalAmount - totalCost) * 100) / 100;
+        // marginPct = (rowProfit / rowTotalAmount) * 100 (safely handle division by zero)
+        marginPct = rowTotalAmount > 0 
+            ? Math.round(((rowProfit / rowTotalAmount) * 100) * 100) / 100 
+            : 0;
+    } else {
+        // 2. If landingCostIncludeGst is FALSE (Tax-Exclusive Comparison):
+        // rowProfit = rowTaxableAmount - (landingCost * quantity) (where rowTaxableAmount is base price before tax)
+        rowProfit = Math.round((rowTaxableAmount - totalCost) * 100) / 100;
+        // marginPct = (rowProfit / rowTaxableAmount) * 100 (safely handle division by zero)
+        marginPct = rowTaxableAmount > 0 
+            ? Math.round(((rowProfit / rowTaxableAmount) * 100) * 100) / 100 
+            : 0;
+    }
+
+    const itemProfit = quantity > 0 ? Math.round((rowProfit / quantity) * 100) / 100 : 0;
+    const margin = itemProfit;
+
+    // ── Checkout Lock & Warning Flag ──────────────────────────────────────────
+    // Strictly lock and flag if rowProfit < 0 (using -0.005 threshold to prevent floating-point rounding false alarms on break-even)
+    const isBelowLandingCost = landingCost > 0 && quantity > 0 && (rowProfit < -0.005);
+    const isLossSale = isBelowLandingCost;
+
+    // Selling price per pack: apples-to-apples basis corresponding to landingCost
+    const sellingPricePerPack = quantity > 0 
+        ? Math.round((landingCostIncludeGst ? (rowTotalAmount / quantity) : (rowTaxableAmount / quantity)) * 100) / 100
+        : Number(item.rate || item.saleRate || 0);
 
     return {
         margin,
         marginPct,
-        lineGrossProfit,
-        lineLandingCost,
+        lineGrossProfit: rowProfit,
+        lineLandingCost: Math.round(totalCost * 100) / 100,
         landingRate,
-        costFloor,
-        sellingPricePerPack: Math.round(sellingPricePerPack * 100) / 100,
-        finalRowAmount,
+        costFloor: landingCost,
+        sellingPricePerPack,
+        finalRowAmount: rowTotalAmount,
         isLossSale,
+        rowProfit,
+        itemProfit,
+        rowTaxableAmount: Math.round(rowTaxableAmount * 100) / 100,
+        rowTotalAmount: Math.round(rowTotalAmount * 100) / 100,
+        isBelowLandingCost,
     };
 }
 
@@ -468,7 +511,7 @@ export function calculateTotalMargin(
         const rowLoss = alloc ? alloc.isLossSale : line.isLossSale;
 
         itemsSellingTotal += rowAmount;
-        itemsGrossProfit += (rowAmount - line.lineLandingCost);
+        itemsGrossProfit += line.rowProfit;
         if (rowLoss) {
             hasLossSale = true;
         }
