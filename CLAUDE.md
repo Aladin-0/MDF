@@ -4,6 +4,10 @@ Before any task, read PROJECT_MAP.md and graphify-out/GRAPH_REPORT.md. Use /grap
 
 PROJECT_MAP.md is ~2,200 lines: don't read it whole. Read its "How to use this file" TOC, sections 1–3 and 11.1, then only the section you need (use Read offset/limit with the TOC line numbers).
 
+## Deploying to production
+
+Before any server/deploy task, read `docs/DEPLOYMENT_GUIDE.md` (server layout, shared-server safety rules, backup, deploy, verify and rollback steps). ALWAYS use the server's own configuration files (`docker-compose.yml`, `.env`, `apps/backend/.env`, `apps/frontend/.env.local`, `settings/base.py`, `nginx/nginx.conf`) exactly as they are on the server — they differ from git on purpose and production runs correctly with them; never overwrite them, and take a backup before every deploy. The server also hosts the separate saudapakka project — never touch it. Never store the SSH password in files; ask the user.
+
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
