@@ -73,7 +73,7 @@ class DirectReviseTestCase(BaseRevisionTestCase):
     def test_add_item_in_direct_revise(self):
         invoice = make_test_invoice(self.outlet, self.billing_staff, self.customer, items=[{'batch': self.batch, 'qty': 5, 'rate': 10}], status='finalized', paid=0)
         from apps.billing.tests.factories import make_test_medicine
-        product2, batch2 = make_test_medicine(self.outlet, 'Crocin', 5, 5, 100)
+        product2, batch2 = make_test_medicine(self.outlet, 'Crocin', 100, 5, 5)  # cost 4 < the 5 it is billed at
         self.authenticate_as(self.billing_staff)
         payload = {'customerId': str(self.customer.id), 'revisionAction': 'commercial_correction', 'revisionReasonCode': 'DOCTOR_CHANGED_PRESCRIPTION', 'revisionReasonText': 'test', 'grandTotal': 60, 'subtotal': 60, 'cashPaid': 60, 'items': [{'productId': str(self.medicine.id), 'batchId': str(self.batch.id), 'productName': self.medicine.name, 'batchNo': self.batch.batch_no, 'qtyStrips': 5, 'rate': 10, 'totalAmount': 50}, {'productId': str(product2.id), 'batchId': str(batch2.id), 'productName': product2.name, 'batchNo': batch2.batch_no, 'qtyStrips': 2, 'rate': 5, 'totalAmount': 10}]}
         url = reverse('sale-revise', kwargs={'sale_id': invoice.id})
@@ -85,7 +85,7 @@ class DirectReviseTestCase(BaseRevisionTestCase):
 
     def test_remove_item_in_direct_revise(self):
         from apps.billing.tests.factories import make_test_medicine
-        product2, batch2 = make_test_medicine(self.outlet, 'Crocin', 5, 5, 100)
+        product2, batch2 = make_test_medicine(self.outlet, 'Crocin', 100, 5, 5)  # cost 4 < the 5 it is billed at
         invoice = make_test_invoice(self.outlet, self.billing_staff, self.customer, items=[{'batch': self.batch, 'qty': 5, 'rate': 10}, {'batch': batch2, 'qty': 2, 'rate': 10}], status='finalized', paid=0)
         self.authenticate_as(self.billing_staff)
         payload = {'customerId': str(self.customer.id), 'revisionAction': 'commercial_correction', 'revisionReasonCode': 'DOCTOR_CHANGED_PRESCRIPTION', 'revisionReasonText': 'test', 'grandTotal': 50, 'subtotal': 50, 'cashPaid': 50, 'items': [{'productId': str(self.medicine.id), 'batchId': str(self.batch.id), 'productName': self.medicine.name, 'batchNo': self.batch.batch_no, 'qtyStrips': 5, 'rate': 10, 'totalAmount': 50}]}

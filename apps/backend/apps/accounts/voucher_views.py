@@ -334,7 +334,9 @@ class LedgerStatementView(APIView):
                 'date': str(je.date),
                 'voucherNo': v_no,
                 'voucherType': SOURCE_TYPE_TO_VOUCHER.get(je.source_type, 'journal'),
-                'description': je.narration or line.description,
+                # The line's own text is more specific ("Payment (Cash) for INV-1") than the
+                # entry header ("Sale Invoice INV-1 on 2026-08-01"); same precedence as voucher lines.
+                'description': line.description or je.narration,
                 'debit': float(line.debit_amount),
                 'credit': float(line.credit_amount),
                 'sourceType': je.source_type,

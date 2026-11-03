@@ -13,6 +13,11 @@ jest.mock('@/hooks/useProductSearch', () => ({
     useProductSearch: () => ({ data: [], isFetching: false }),
 }));
 
+// The workspace reads outlet settings through React Query; this suite only exercises row rendering.
+jest.mock('@/hooks/useOutletSettings', () => ({
+    useOutletSettings: () => ({ data: undefined }),
+}));
+
 describe('MainInvoiceWorkspace', () => {
     it('renders without crashing when cart item expiryDate is null', () => {
         (useBillingStore as unknown as jest.Mock).mockReturnValue({

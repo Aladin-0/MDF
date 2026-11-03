@@ -26,7 +26,7 @@ class SaleEditMigrationTests(BaseRevisionTestCase):
 
     def get_put_payload(self, invoice):
         item = invoice.items.first()
-        return {'outletId': str(self.outlet.id), 'revisionAction': 'standard_correction', 'revisionReasonCode': 'correction', 'revisionReasonText': 'Test reason', 'grandTotal': float(invoice.grand_total) + 10, 'subtotal': float(invoice.subtotal) + 10, 'cashPaid': float(invoice.grand_total) + 10, 'items': [{'productId': str(item.batch.product_id), 'batchId': str(item.batch_id), 'qtyStrips': item.qty_strips, 'qtyLoose': item.qty_loose, 'rate': float(item.rate) + 1, 'taxableAmount': float(item.taxable_amount) + 10, 'gstAmount': float(item.gst_amount), 'totalAmount': float(item.total_amount) + 10}]}
+        return {'outletId': str(self.outlet.id), 'revisionAction': 'standard_correction', 'revisionReasonCode': 'correction', 'revisionReasonText': 'Test reason', 'grandTotal': float(invoice.grand_total) + 10, 'subtotal': float(invoice.subtotal) + 10, 'cashPaid': float(invoice.grand_total) + 10, 'items': [{'productId': str(item.batch.product_id), 'batchId': str(item.batch_id), 'qtyStrips': item.qty_strips, 'qtyLoose': item.qty_loose, 'rate': float(item.rate) + 10, 'taxableAmount': float(item.taxable_amount) + 10, 'gstAmount': float(item.gst_amount), 'totalAmount': float(item.total_amount) + 10}]}
 
     def test_sale_detail_put_happy_path(self):
         url = reverse('sale-detail', kwargs={'sale_id': self.invoice.id})

@@ -29,12 +29,23 @@ class PacketBTests(APITestCase):
         self.staff = Staff.objects.create_user(phone='9999999999', password='test_password', name='Test Staff', outlet=self.outlet, can_edit_sales=True)
         self.client.force_authenticate(user=self.staff)
 
-    def test_missing_gst_ledger_raises_error(self):
+    def test_missing_gst_ledgers_are_auto_provisioned_when_posting(self):
+        """GST 2.0 contract (see journal_service.post_sale_invoice): a missing GST payable ledger never
+        blocks or corrupts a sale; it is re-provisioned and the journal still balances."""
+        from apps.accounts.models import JournalEntry, JournalLine
         sale = SaleInvoice.objects.create(outlet=self.outlet, invoice_no='INV-B-001', invoice_date=timezone.now(), subtotal=Decimal('100.00'), taxable_amount=Decimal('100.00'), cgst_amount=Decimal('9.00'), sgst_amount=Decimal('9.00'), grand_total=Decimal('118.00'), cash_paid=Decimal('118.00'), amount_paid=Decimal('118.00'))
         SaleItem.objects.create(invoice=sale, batch=self.batch, product_name=self.product.name, qty_strips=1, rate=Decimal('100.00'), gst_rate=Decimal('18.00'), taxable_amount=Decimal('100.00'), gst_amount=Decimal('18.00'), total_amount=Decimal('118.00'), pack_size=10, expiry_date='2026-12-31', mrp=Decimal('100.00'), sale_rate=Decimal('90.00'))
-        with self.assertRaises(ValueError) as cm:
-            post_sale_invoice(sale)
-        self.assertIn('Required GST ledgers not found', str(cm.exception))
+        self.assertFalse(Ledger.objects.filter(outlet=self.outlet, name__icontains='GST').exists())
+
+        post_sale_invoice(sale)
+
+        entry = JournalEntry.objects.get(outlet=self.outlet, source_type='SALE', source_id=sale.id)
+        lines = JournalLine.objects.filter(journal_entry=entry)
+        self.assertEqual(sum(l.debit_amount for l in lines), Decimal('118.00'))
+        self.assertEqual(sum(l.credit_amount for l in lines), Decimal('118.00'))
+        gst_credit = sum(l.credit_amount for l in lines if 'GST' in l.ledger.name.upper())
+        self.assertEqual(gst_credit, Decimal('18.00'))
+        self.assertTrue(Ledger.objects.filter(outlet=self.outlet, name__icontains='GST').exists())
 
     def test_select_for_update_called_on_create(self):
         """
@@ -64,31 +75,41 @@ class PacketBTests(APITestCase):
         mock_qs.get.return_value = self.batch
         sale = SaleInvoice.objects.create(outlet=self.outlet, invoice_no='INV-B-UPDATE-001', invoice_date=timezone.now(), subtotal=Decimal('100.00'), taxable_amount=Decimal('100.00'), cgst_amount=Decimal('9.00'), sgst_amount=Decimal('9.00'), grand_total=Decimal('118.00'), cash_paid=Decimal('118.00'), amount_paid=Decimal('118.00'))
         SaleItem.objects.create(invoice=sale, batch=self.batch, product_name=self.product.name, qty_strips=1, rate=Decimal('100.00'), gst_rate=Decimal('18.00'), taxable_amount=Decimal('100.00'), gst_amount=Decimal('18.00'), total_amount=Decimal('118.00'), pack_size=10, expiry_date='2026-12-31', mrp=Decimal('100.00'), sale_rate=Decimal('90.00'))
-        request_data = {'grandTotal': '118.00', 'cashPaid': '118.00', 'items': [{'productId': str(self.product.id), 'batchId': str(self.batch.id), 'qtyStrips': 1, 'qtyLoose': 0, 'rate': '100.00'}]}
+        request_data = {'grandTotal': '100.00', 'cashPaid': '100.00', 'items': [{'productId': str(self.product.id), 'batchId': str(self.batch.id), 'qtyStrips': 1, 'qtyLoose': 0, 'rate': '100.00'}]}
         with patch('apps.billing.sale_update_service.SaleInvoice.objects.select_for_update') as mock_sale_select:
             mock_sale_qs = mock_sale_select.return_value
             mock_sale_qs.get.return_value = sale
             atomic_sale_update(sale_id=str(sale.id), payload=request_data, outlet_id=str(self.outlet.id), updated_by_id=None)
         self.assertTrue(mock_select_for_update.called)
 
-    def test_missing_gst_ledger_returns_400_on_create(self):
-        request_data = {'outletId': str(self.outlet.id), 'grandTotal': '118.00', 'cashPaid': '118.00', 'billedBy': str(self.staff.id), 'items': [{'productId': str(self.product.id), 'batchId': str(self.batch.id), 'qtyStrips': 1, 'qtyLoose': 0, 'rate': '100.00', 'gstRate': 18, 'gstAmount': 15.25, 'taxableAmount': 84.75, 'totalAmount': 100.0}]}
+    def test_create_succeeds_and_reprovisions_missing_gst_ledgers(self):
+        request_data = {'outletId': str(self.outlet.id), 'grandTotal': '100.00', 'cashPaid': '100.00', 'billedBy': str(self.staff.id), 'items': [{'productId': str(self.product.id), 'batchId': str(self.batch.id), 'qtyStrips': 1, 'qtyLoose': 0, 'rate': '100.00', 'gstRate': 18, 'gstAmount': 15.25, 'taxableAmount': 84.75, 'totalAmount': 100.0}]}
         url = reverse('sale-list-create')
         response = self.client.post(url, request_data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('Required GST ledgers not found', response.data.get('detail', ''))
-        self.assertEqual(SaleInvoice.objects.count(), 0)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        sale = SaleInvoice.objects.get()
+        self.assertEqual(sale.cgst_amount + sale.sgst_amount, Decimal('15.25'))
+        self.assertTrue(Ledger.objects.filter(outlet=self.outlet, name__icontains='GST').exists())
 
-    def test_missing_gst_ledger_returns_400_on_modify(self):
+    def test_create_rejects_grand_total_that_disagrees_with_its_lines(self):
+        """The client billed 118 for a line worth 100: refused, nothing persisted, stock untouched."""
+        request_data = {'outletId': str(self.outlet.id), 'grandTotal': '118.00', 'cashPaid': '118.00', 'billedBy': str(self.staff.id), 'items': [{'productId': str(self.product.id), 'batchId': str(self.batch.id), 'qtyStrips': 1, 'qtyLoose': 0, 'rate': '100.00', 'gstRate': 18, 'gstAmount': 15.25, 'taxableAmount': 84.75, 'totalAmount': 100.0}]}
+        response = self.client.post(reverse('sale-list-create'), request_data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data.get('code'), 'INVALID_ROUND_OFF')
+        self.assertEqual(SaleInvoice.objects.count(), 0)
+        self.batch.refresh_from_db()
+        self.assertEqual(self.batch.qty_strips, 100)
+
+    def test_modify_succeeds_and_reprovisions_missing_gst_ledgers(self):
         sale = SaleInvoice.objects.create(outlet=self.outlet, invoice_no='INV-B-API-UPDATE-001', invoice_date=timezone.now(), subtotal=Decimal('100.00'), taxable_amount=Decimal('100.00'), cgst_amount=Decimal('0.00'), sgst_amount=Decimal('0.00'), grand_total=Decimal('100.00'), cash_paid=Decimal('100.00'), amount_paid=Decimal('100.00'))
         SaleItem.objects.create(invoice=sale, batch=self.batch, product_name=self.product.name, qty_strips=1, rate=Decimal('100.00'), gst_rate=Decimal('0.00'), taxable_amount=Decimal('100.00'), gst_amount=Decimal('0.00'), total_amount=Decimal('100.00'), pack_size=10, expiry_date='2026-12-31', mrp=Decimal('100.00'), sale_rate=Decimal('90.00'))
-        request_data = {'outletId': str(self.outlet.id), 'grandTotal': '118.00', 'cashPaid': '118.00', 'items': [{'productId': str(self.product.id), 'batchId': str(self.batch.id), 'qtyStrips': 1, 'qtyLoose': 0, 'rate': '100.00', 'gstRate': 18, 'gstAmount': 15.25, 'taxableAmount': 84.75, 'totalAmount': 100.0}]}
+        request_data = {'outletId': str(self.outlet.id), 'grandTotal': '100.00', 'cashPaid': '100.00', 'items': [{'productId': str(self.product.id), 'batchId': str(self.batch.id), 'qtyStrips': 1, 'qtyLoose': 0, 'rate': '100.00', 'gstRate': 18, 'gstAmount': 15.25, 'taxableAmount': 84.75, 'totalAmount': 100.0}]}
         url = reverse('sale-detail', kwargs={'sale_id': str(sale.id)})
         response = self.client.put(url, request_data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('Required GST ledgers not found', response.data.get('detail', ''))
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         sale.refresh_from_db()
-        self.assertEqual(sale.cgst_amount, Decimal('0.00'))
+        self.assertEqual(sale.cgst_amount + sale.sgst_amount, Decimal('15.25'))
 
 class DeadlockRegressionTests(APITestCase):
     """

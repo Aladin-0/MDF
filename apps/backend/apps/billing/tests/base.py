@@ -16,7 +16,9 @@ class BaseRevisionTestCase(APITestCase):
     def setUpTestData(cls):
         cls.outlet = make_test_outlet()
         cls.customer = make_test_customer(cls.outlet)
-        cls.medicine, cls.batch = make_test_medicine(cls.outlet)
+        # Cost (purchase_rate = 0.8 x sale_rate = 8) sits below the rates these revision tests bill at (10),
+        # so the loss-sale guard (which now also protects revisions) does not fire on valid sales.
+        cls.medicine, cls.batch = make_test_medicine(cls.outlet, sale_rate=10.0)
 
         cls.billing_staff = make_test_staff(
             cls.outlet,

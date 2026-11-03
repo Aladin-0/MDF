@@ -27,6 +27,7 @@ from apps.billing.services import (
     UnitIntegrityError,
 )
 from apps.billing.utils.pricing import validate_sale_price
+from apps.billing.utils.item_amounts import MAX_ROUND_OFF, resolve_item_amounts
 from apps.inventory.models import Batch, MasterProduct
 from apps.accounts.models import Staff, Customer, Ledger
 from apps.accounts.journal_service import post_sale_invoice, _get_ledger
@@ -1013,8 +1014,41 @@ class SaleCreateView(APIView):
                                 else:
                                     billed_qty = Decimal('1')
 
+                            # The row amount the SERVER bills for this allocation (tax-inclusive). It is both what
+                            # the loss-sale rule below judges and what gets persisted, so the stored lines can
+                            # never disagree with the grand total (previously the client's pre-discount row
+                            # total was stored while the discounted amount was only used for validation, and the
+                            # difference was booked as "round off").
+                            final_row_amt = None
                             if billed_qty > Decimal('0'):
                                 disc_factor = Decimal('1') - (extra_discount_pct / Decimal('100')) if extra_discount_pct > Decimal('0') else Decimal('1')
+                                gst_rate = Decimal(str(item_data.get('gstRate', getattr(product, 'gst_rate', Decimal('0')) or Decimal('0'))))
+                                tax_multiplier = Decimal('1') + (gst_rate / Decimal('100'))
+
+                                p_rate = Decimal(str(item_data.get('rate', batch.mrp)))
+                                d_pct = Decimal(str(item_data.get('discountPct', 0)))
+                                rate_discounted = p_rate * (Decimal('1') - d_pct / Decimal('100'))
+
+                                if sale_type == 'WHOLESALE':
+                                    base_item_amt = (rate_discounted * billed_qty * tax_multiplier).quantize(Decimal('0.01'))
+                                else:
+                                    base_item_amt = (rate_discounted * billed_qty).quantize(Decimal('0.01'))
+
+                                client_item_amt = Decimal(str(item_data.get('totalAmount', 0))) if item_data.get('totalAmount') is not None else Decimal('0')
+                                if client_item_amt <= Decimal('0'):
+                                    tax_amt = Decimal(str(item_data.get('taxableAmount', 0)))
+                                    g_amt = Decimal(str(item_data.get('gstAmount', 0)))
+                                    client_item_amt = tax_amt + g_amt
+
+                                # If the client already applied smart-capping / extra discount, respect its total to
+                                # prevent double-discounting. A client total describes the WHOLE line, so it can only
+                                # stand in for a single allocation; a FEFO line split over batches is priced per batch.
+                                if (len(batch_allocations) == 1 and client_item_amt > Decimal('0')
+                                        and client_item_amt < (base_item_amt - Decimal('0.01'))):
+                                    final_row_amt = client_item_amt
+                                else:
+                                    final_row_amt = (base_item_amt * disc_factor).quantize(Decimal('0.01'))
+
                                 if sale_type == 'WHOLESALE':
                                     if batch.purchase_rate and batch.purchase_rate > Decimal('0'):
                                         c_floor = batch.purchase_rate
@@ -1033,33 +1067,9 @@ class SaleCreateView(APIView):
                                     floor_label = "landing cost"
 
                                 if c_floor > Decimal('0'):
-                                    gst_rate = Decimal(str(item_data.get('gstRate', getattr(product, 'gst_rate', Decimal('0')) or Decimal('0'))))
-                                    tax_multiplier = Decimal('1') + (gst_rate / Decimal('100'))
-
                                     # FIX: If cost floor already includes GST (toggle ON), do not multiply it again.
                                     cost_tax_multiplier = Decimal('1') if landing_cost_include_gst else tax_multiplier
                                     line_cost_floor_inclusive = (c_floor * cost_tax_multiplier * billed_qty).quantize(Decimal('0.01'))
-
-                                    p_rate = Decimal(str(item_data.get('rate', batch.mrp)))
-                                    d_pct = Decimal(str(item_data.get('discountPct', 0)))
-                                    rate_discounted = p_rate * (Decimal('1') - d_pct / Decimal('100'))
-
-                                    if sale_type == 'WHOLESALE':
-                                        base_item_amt = (rate_discounted * billed_qty * tax_multiplier).quantize(Decimal('0.01'))
-                                    else:
-                                        base_item_amt = (rate_discounted * billed_qty).quantize(Decimal('0.01'))
-
-                                    client_item_amt = Decimal(str(item_data.get('totalAmount', 0))) if item_data.get('totalAmount') is not None else Decimal('0')
-                                    if client_item_amt <= Decimal('0'):
-                                        tax_amt = Decimal(str(item_data.get('taxableAmount', 0)))
-                                        g_amt = Decimal(str(item_data.get('gstAmount', 0)))
-                                        client_item_amt = tax_amt + g_amt
-
-                                    # If client already applied smart-capping / extra discount, respect client total to prevent double-discounting
-                                    if client_item_amt > Decimal('0') and client_item_amt < (base_item_amt - Decimal('0.01')):
-                                        final_row_amt = client_item_amt
-                                    else:
-                                        final_row_amt = (base_item_amt * disc_factor).quantize(Decimal('0.01'))
 
                                     # Smart Cap: If item was legal before bill discount, cap the final row amount to the floor
                                     if base_item_amt >= (line_cost_floor_inclusive - Decimal('0.005')) and final_row_amt < line_cost_floor_inclusive:
@@ -1079,6 +1089,16 @@ class SaleCreateView(APIView):
                                             "cost_floor": float(c_floor),
                                             "net_rate": float(net_unit_price.quantize(Decimal('0.01')))
                                         }, status=status.HTTP_400_BAD_REQUEST)
+
+                            # Persisted amounts: the client's own taxable/GST split is kept when it already agrees
+                            # with the server row amount (the POS sends paisa-exact values); otherwise derive from it.
+                            item_amounts = resolve_item_amounts(
+                                item_data, getattr(product, 'gst_rate', 0), pack_size=batch.pack_size, sale_type=sale_type,
+                            )
+                            if final_row_amt is not None and abs(final_row_amt - item_amounts['total']) > Decimal('0.005'):
+                                item_amounts = resolve_item_amounts(
+                                    {'totalAmount': final_row_amt, 'gstRate': item_amounts['gst_rate']},
+                                )
 
                             # Create SaleItem — snapshot pack_size from batch (frozen at purchase time),
                             # not from product (which changes when master item is edited)
@@ -1100,10 +1120,10 @@ class SaleCreateView(APIView):
                                 qty_loose=item_data.get('qtyLoose', 0),
                                 sale_mode=item_data.get('saleMode', 'strip'),
                                 discount_pct=Decimal(str(item_data.get('discountPct', 0))),
-                                gst_rate=Decimal(str(item_data.get('gstRate', 0))),
-                                taxable_amount=Decimal(str(item_data.get('taxableAmount', 0))),
-                                gst_amount=Decimal(str(item_data.get('gstAmount', 0))),
-                                total_amount=Decimal(str(item_data.get('totalAmount', 0))),
+                                gst_rate=item_amounts['gst_rate'],
+                                taxable_amount=item_amounts['taxable'],
+                                gst_amount=item_amounts['gst'],
+                                total_amount=item_amounts['total'],
                             )
 
                             sale_items.append(sale_item)
@@ -1217,12 +1237,21 @@ class SaleCreateView(APIView):
                 raw_exact = server_taxable + server_cgst + server_sgst + server_igst
                 server_round_off = client_grand_total - raw_exact
 
-                # Sanity check: round_off should never exceed ±₹1
-                if abs(server_round_off) > Decimal('1.00'):
+                # Integrity check: the grand total must agree with the lines it is made of. This used
+                # to only log a warning, so a client could bill any total; the revise path already
+                # refuses the same mismatch (same limit, one shared constant).
+                if abs(server_round_off) > MAX_ROUND_OFF:
                     logger.warning(
-                        f"Large round-off ₹{server_round_off} for invoice {invoice_no}: "
-                        f"client_grand_total={client_grand_total}, server_exact={raw_exact}"
+                        f"Rejected invoice {invoice_no}: round-off ₹{server_round_off}, "
+                        f"client_grand_total={client_grand_total}, server_exact={raw_exact}, "
+                        f"rows={[(str(si.rate), si.qty_strips, str(si.total_amount)) for si in sale_items]}"
                     )
+                    transaction.set_rollback(True)
+                    return Response({
+                        'detail': f"Security Block: Invalid Round Off (₹{server_round_off}). "
+                                  f"Sum of items does not match Grand Total.",
+                        'code': 'INVALID_ROUND_OFF',
+                    }, status=status.HTTP_400_BAD_REQUEST)
 
                 # Update invoice with server-computed GST values
                 sale_invoice.taxable_amount = server_taxable

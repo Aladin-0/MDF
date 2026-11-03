@@ -25,7 +25,7 @@ def low_stock_product(db):
 
 @pytest.fixture
 def strip_batch(db, inventory_outlet, strip_product):
-    batch = BatchFactory(outlet=inventory_outlet, product=strip_product, batch_no='STRIP-B1', pack_type='strip', pack_size=10, pack_unit='tablet', qty_strips=100, qty_loose=0, mrp=50.0, expiry_date=timezone.now().date() + timedelta(days=365))
+    batch = BatchFactory(outlet=inventory_outlet, product=strip_product, batch_no='STRIP-B1', pack_type='strip', pack_size=10, pack_unit='tablet', qty_strips=100, qty_loose=0, mrp=50.0, purchase_rate=40.0, expiry_date=timezone.now().date() + timedelta(days=365))
     StockLedgerFactory(outlet=inventory_outlet, product=strip_product, batch=batch, txn_type='OPENING', txn_date=timezone.now().date(), voucher_type='Opening Stock', qty_in=100.0, qty_out=0.0, rate=40.0, value_in=4000.0, value_out=0.0, running_qty=100.0, running_value=4000.0)
     return batch
 

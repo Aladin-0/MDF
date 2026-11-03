@@ -334,7 +334,7 @@ class SaleReviseAPITests(APITestCase):
         
         url = reverse('sale-revise', kwargs={'sale_id': self.invoice.id})
         
-        # The new payload will just have 1 strip
+        # The new payload will just have 1 strip (billed at 90, above the batch's 80 cost: the loss-sale guard applies to reissues)
         payload = {
             'outletId': str(self.outlet.id),
             'customerId': str(self.customer.id),
@@ -342,18 +342,18 @@ class SaleReviseAPITests(APITestCase):
             'revisionAction': 'cancel_and_reissue',
             'revisionReasonCode': 'OTHER',
             'revisionReasonText': 'Wrong patient entirely, cancelling and reissuing',
-            'grandTotal': 50.00,
-            'cashPaid': 50.00,
+            'grandTotal': 90.00,
+            'cashPaid': 90.00,
             'paymentMode': 'cash',
-            'cashPaid': 50.00,
+            'cashPaid': 90.00,
             'items': [
                 {
                     'batchId': str(self.batch.id),
                     'productId': str(self.product.id),
                     'qtyStrips': 1,
                     'qtyLoose': 0,
-                    'rate': 50.00,
-                    'totalAmount': 50.00
+                    'rate': 90.00,
+                    'totalAmount': 90.00
                 }
             ]
         }
@@ -368,7 +368,7 @@ class SaleReviseAPITests(APITestCase):
         self.assertNotEqual(str(self.invoice.id), new_invoice_id)
         
         new_invoice = SaleInvoice.objects.get(id=new_invoice_id)
-        self.assertEqual(new_invoice.grand_total, 50.00)
+        self.assertEqual(new_invoice.grand_total, 90.00)
         
         # Assert old invoice cancelled
         self.invoice.refresh_from_db()

@@ -62,3 +62,46 @@ def validate_sale_price(sale_rate: Decimal, batch: Batch, pharmacy_id) -> dict:
         'message': '',
         'landing_cost': landing_cost, 'mrp': mrp
     }
+
+
+def line_cost_floor(batch: Batch, sale_type: str, qty_strips, qty_loose, gst_rate,
+                    landing_cost_include_gst: bool = False) -> dict:
+    """
+    Minimum tax-inclusive amount a billed line may total without being a loss sale.
+
+    Same rule the sale-create view enforces, exposed once so revisions cannot bypass it:
+      * RETAIL    : floor per pack = landing_rate, else ptr, else purchase_rate  ("landing cost")
+      * WHOLESALE : floor per pack = purchase_rate, else pts, else landing_rate/ptr ("purchase rate")
+      * GST is added on top of the floor unless the outlet's landing cost already includes GST.
+      * Only *billed* quantity counts; free-scheme quantity never inflates the floor.
+
+    Returns ``{'cost_floor', 'label', 'line_floor', 'billed_qty'}``; ``line_floor`` is 0 when there
+    is nothing to protect (no cost recorded, or a 100% free line).
+    """
+    zero = Decimal('0')
+    if (sale_type or 'RETAIL').upper() == 'WHOLESALE':
+        if batch.purchase_rate and batch.purchase_rate > zero:
+            cost_floor = batch.purchase_rate
+        elif batch.pts and batch.pts > zero:
+            cost_floor = batch.pts
+        else:
+            cost_floor = batch.landing_rate or batch.ptr or zero
+        label = 'purchase rate'
+    else:
+        if batch.landing_rate and batch.landing_rate > zero:
+            cost_floor = batch.landing_rate
+        elif batch.ptr and batch.ptr > zero:
+            cost_floor = batch.ptr
+        else:
+            cost_floor = batch.purchase_rate or zero
+        label = 'landing cost'
+
+    pack_size = Decimal(str(batch.pack_size or 1))
+    billed_qty = Decimal(str(qty_strips or 0)) + Decimal(str(qty_loose or 0)) / pack_size
+    if cost_floor <= zero or billed_qty <= zero:
+        return {'cost_floor': cost_floor, 'label': label, 'line_floor': zero, 'billed_qty': billed_qty}
+
+    tax_multiplier = Decimal('1') + Decimal(str(gst_rate or 0)) / Decimal('100')
+    cost_tax_multiplier = Decimal('1') if landing_cost_include_gst else tax_multiplier
+    line_floor = (cost_floor * cost_tax_multiplier * billed_qty).quantize(Decimal('0.01'))
+    return {'cost_floor': cost_floor, 'label': label, 'line_floor': line_floor, 'billed_qty': billed_qty}

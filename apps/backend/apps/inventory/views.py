@@ -614,17 +614,30 @@ class ProductSearchView(APIView):
 
         from django.db.models import Case, When, Value, IntegerField, Q
 
-        # ── 2. GIN Trigram Indexed Search ──────────────────────────────
-        # Use existing pg_trgm GIN indexes on name, composition, manufacturer.
-        # Filter first so Postgres performs a fast Bitmap Index Scan instead of full Seq Scan.
-        matched_qs = MasterProduct.objects.filter(is_discontinued=False).filter(
-            Q(name__icontains=query) |
-            Q(composition__icontains=query) |
-            Q(manufacturer__icontains=query)
-        ).annotate(
+        # ── 2. Matching ────────────────────────────────────────────────
+        # Pharmacists type fragments in any order ("650 dolo") and make typos ("amoxcilin").
+        #  a) Every word of the query must appear in name / composition / manufacturer, in any
+        #     order (served by the trigram GIN indexes on those columns).
+        #  b) Only when (a) finds nothing, fall back to pg_trgm word-similarity so a misspelt
+        #     name still surfaces. Matching the whole query as one substring (the old behaviour)
+        #     could do neither.
+        import re
+        from django.db.models import FloatField
+        from django.db.models.functions import Greatest
+        from django.contrib.postgres.search import TrigramWordSimilarity
+
+        tokens = [t for t in re.split(r'\s+', query.strip()) if t]
+        any_field = Q()
+        name_all = Q()
+        for tok in tokens:
+            any_field &= (Q(name__icontains=tok) | Q(composition__icontains=tok) | Q(manufacturer__icontains=tok))
+            name_all &= Q(name__icontains=tok)
+
+        active_products = MasterProduct.objects.filter(is_discontinued=False)
+        matched_qs = active_products.filter(any_field).annotate(
             match_priority=Case(
                 When(name__istartswith=query, then=Value(3)),
-                When(name__icontains=query, then=Value(2)),
+                When(name_all, then=Value(2)),
                 When(composition__icontains=query, then=Value(1)),
                 default=Value(0),
                 output_field=IntegerField()
@@ -632,6 +645,17 @@ class ProductSearchView(APIView):
         ).order_by('-match_priority', 'name')
 
         candidate_products = list(matched_qs[:40])
+        if not candidate_products:
+            FUZZY_MIN_SIMILARITY = 0.4
+            candidate_products = list(
+                active_products.annotate(
+                    similarity=Greatest(
+                        TrigramWordSimilarity(query, 'name'),
+                        TrigramWordSimilarity(query, 'composition'),
+                        output_field=FloatField(),
+                    )
+                ).filter(similarity__gte=FUZZY_MIN_SIMILARITY).order_by('-similarity', 'name')[:40]
+            )
         if not candidate_products:
             cache.set(cache_key, [], 60)
             return Response({'data': []}, status=status.HTTP_200_OK)

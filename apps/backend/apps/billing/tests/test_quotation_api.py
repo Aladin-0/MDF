@@ -48,7 +48,7 @@ class QuotationAPITestCase(BaseRevisionTestCase):
 
     def test_convert_quotation_to_invoice(self):
         initial_stock = Batch.objects.get(id=self.batch.id).qty_strips
-        payload = {'outletId': str(self.outlet.id), 'customer': str(self.customer.id), 'subtotal': '90.00', 'grand_total': '90.00', 'items': [{'batch': str(self.batch.id), 'qty_strips': 1, 'rate': '90.00'}]}
+        payload = {'outletId': str(self.outlet.id), 'customer': str(self.customer.id), 'subtotal': '90.00', 'grand_total': '90.00', 'items': [{'batch': str(self.batch.id), 'qty_strips': 1, 'rate': '90.00', 'discount_pct': '10.00', 'taxable_amount': '90.00', 'gst_amount': '0.00', 'total_amount': '90.00'}]}
         create_res = self.client.post(self.quotation_url, payload, format='json')
         self.assertEqual(create_res.status_code, status.HTTP_201_CREATED, create_res.data)
         quotation_id = create_res.data['id']
@@ -75,7 +75,7 @@ class QuotationAPITestCase(BaseRevisionTestCase):
         product_h = MasterProduct.objects.create(name='Sched H Drug', drug_type='allopathy', schedule_type='H', pack_size=10, pack_unit='tablet', mrp=Decimal('100.0'))
         batch_h = Batch.objects.create(outlet=self.outlet, product=product_h, batch_no='BATCH-H-1', expiry_date='2030-12-31', pack_size=10, qty_strips=10, mrp=Decimal('100.0'), purchase_rate=Decimal('80.0'))
         doctor = Doctor.objects.create(outlet=self.outlet, name='Dr. Smith', phone='9998887776', registration_no='REG123')
-        payload = {'outletId': str(self.outlet.id), 'customer': str(self.customer.id), 'subtotal': '90.00', 'grand_total': '90.00', 'items': [{'batch': str(batch_h.id), 'qty_strips': 1, 'rate': '90.00'}]}
+        payload = {'outletId': str(self.outlet.id), 'customer': str(self.customer.id), 'subtotal': '90.00', 'grand_total': '90.00', 'items': [{'batch': str(batch_h.id), 'qty_strips': 1, 'rate': '90.00', 'discount_pct': '10.00', 'taxable_amount': '90.00', 'gst_amount': '0.00', 'total_amount': '90.00'}]}
         create_res = self.client.post(self.quotation_url, payload, format='json')
         self.assertEqual(create_res.status_code, status.HTTP_201_CREATED, create_res.data)
         quotation_id = create_res.data['id']
@@ -92,7 +92,7 @@ class QuotationAPITestCase(BaseRevisionTestCase):
         self.assertEqual(h_reg.doctor_name, 'Dr. Smith')
 
     def test_cannot_edit_converted_quotation(self):
-        payload = {'outletId': str(self.outlet.id), 'customer': str(self.customer.id), 'subtotal': '90.00', 'grand_total': '90.00', 'items': [{'batch': str(self.batch.id), 'qty_strips': 1, 'rate': '90.00'}]}
+        payload = {'outletId': str(self.outlet.id), 'customer': str(self.customer.id), 'subtotal': '90.00', 'grand_total': '90.00', 'items': [{'batch': str(self.batch.id), 'qty_strips': 1, 'rate': '90.00', 'discount_pct': '10.00', 'taxable_amount': '90.00', 'gst_amount': '0.00', 'total_amount': '90.00'}]}
         create_res = self.client.post(self.quotation_url, payload, format='json')
         self.assertEqual(create_res.status_code, status.HTTP_201_CREATED, create_res.data)
         quotation_id = create_res.data['id']
@@ -103,7 +103,7 @@ class QuotationAPITestCase(BaseRevisionTestCase):
         self.assertEqual(update_res.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_walk_in_customer_quotation(self):
-        payload = {'outletId': str(self.outlet.id), 'customer_name_override': 'Walkin John', 'customer_phone': '1234567890', 'subtotal': '90.00', 'grand_total': '90.00', 'items': [{'batch': str(self.batch.id), 'qty_strips': 1, 'rate': '90.00'}]}
+        payload = {'outletId': str(self.outlet.id), 'customer_name_override': 'Walkin John', 'customer_phone': '1234567890', 'subtotal': '90.00', 'grand_total': '90.00', 'items': [{'batch': str(self.batch.id), 'qty_strips': 1, 'rate': '90.00', 'discount_pct': '10.00', 'taxable_amount': '90.00', 'gst_amount': '0.00', 'total_amount': '90.00'}]}
         response = self.client.post(self.quotation_url, payload, format='json')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
         quotation = Quotation.objects.get(id=response.data['id'])

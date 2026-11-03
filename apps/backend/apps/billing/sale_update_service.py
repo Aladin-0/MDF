@@ -11,6 +11,8 @@ from apps.accounts.models import Staff, Customer, Ledger, JournalEntry
 from apps.accounts.services import LedgerService
 from apps.accounts.journal_service import _get_ledger, _create_lines_and_update_balances, post_sale_invoice
 from apps.billing.services import validate_sale_price, fefo_batch_select, schedule_h_validate
+from apps.billing.utils.item_amounts import resolve_item_amounts, split_amounts, MAX_ROUND_OFF
+from apps.billing.utils.pricing import line_cost_floor
 
 class SaleServiceError(Exception):
     pass
@@ -158,6 +160,7 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
     try:
         # Step 1: Validate and get SaleInvoice
         outlet = Outlet.objects.get(id=outlet_id)
+        landing_cost_include_gst = bool(getattr(getattr(outlet, 'settings', None), 'landing_cost_include_gst', False))
 
         # FIX: Establish the current accounting date for all financial ledger entries
         current_accounting_date = datetime.now().date()
@@ -459,7 +462,20 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
                 except Exception as e:
                     raise SaleServiceError(str(e))
                 
-            for batch_alloc in batch_allocations:
+            # Resolve the row's money once (deriving anything the client omitted), then apportion it
+            # across the batches FEFO may have used so the parts add back to the line total.
+            row_amounts = resolve_item_amounts(
+                item_data, getattr(product, 'gst_rate', 0),
+                pack_size=batch_allocations[0]['batch'].pack_size,
+                sale_type=payload.get('saleType', sale_invoice.sale_type),
+            )
+            alloc_amounts = split_amounts(row_amounts, [
+                Decimal(str(a.get('qty_to_deduct', 0))) + Decimal(str(a.get('loose_to_deduct', 0))) / Decimal(str(a['batch'].pack_size or 1))
+                for a in batch_allocations
+            ])
+
+            for alloc_idx, batch_alloc in enumerate(batch_allocations):
+                amounts = alloc_amounts[alloc_idx]
                 batch = batch_alloc['batch']
                 qty_to_deduct = batch_alloc.get('qty_to_deduct', 0)
                 loose_to_deduct = batch_alloc.get('loose_to_deduct', 0)
@@ -484,15 +500,28 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
                 if pricing_check.get('block'):
                     raise SaleServiceError(pricing_check['message'])
 
+                # Loss-sale guard: a revision must not do what the create path forbids (selling a
+                # line below its cost floor). Previously only the MRP ceiling was checked here, so a
+                # bill could be revised to a loss after being legally created.
+                floor = line_cost_floor(
+                    batch, payload.get('saleType', sale_invoice.sale_type), qty_to_deduct, loose_to_deduct,
+                    amounts['gst_rate'], landing_cost_include_gst,
+                )
+                if floor['line_floor'] > 0 and amounts['total'] < floor['line_floor'] - Decimal('0.005'):
+                    raise SaleServiceError(
+                        f"Loss Sale Prevented: Cannot sell {product.name} below its {floor['label']} "
+                        f"of ₹{floor['cost_floor']:.2f}."
+                    )
+
                 if existing_item:
                     existing_item.qty_strips = qty_to_deduct
                     existing_item.qty_loose = loose_to_deduct
                     existing_item.rate = proposed_rate
                     existing_item.discount_pct = Decimal(str(item_data.get('discountPct', 0)))
-                    existing_item.gst_rate = Decimal(str(item_data.get('gstRate', 0)))
-                    existing_item.taxable_amount = Decimal(str(item_data.get('taxableAmount', 0)))
-                    existing_item.gst_amount = Decimal(str(item_data.get('gstAmount', 0)))
-                    existing_item.total_amount = Decimal(str(item_data.get('totalAmount', 0)))
+                    existing_item.gst_rate = amounts['gst_rate']
+                    existing_item.taxable_amount = amounts['taxable']
+                    existing_item.gst_amount = amounts['gst']
+                    existing_item.total_amount = amounts['total']
                     existing_item.sale_mode = item_data.get('saleMode', 'strip')
                     existing_item.save()
                     sale_items.append(existing_item)
@@ -517,10 +546,10 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
                         qty_loose=loose_to_deduct, # Fix: Use loose_to_deduct
                         sale_mode=item_data.get('saleMode', 'strip'),
                         discount_pct=Decimal(str(item_data.get('discountPct', 0))),
-                        gst_rate=Decimal(str(item_data.get('gstRate', 0))),
-                        taxable_amount=Decimal(str(item_data.get('taxableAmount', 0))),
-                        gst_amount=Decimal(str(item_data.get('gstAmount', 0))),
-                        total_amount=Decimal(str(item_data.get('totalAmount', 0))),
+                        gst_rate=amounts['gst_rate'],
+                        taxable_amount=amounts['taxable'],
+                        gst_amount=amounts['gst'],
+                        total_amount=amounts['total'],
                     )
                     sale_items.append(sale_item)
 
@@ -621,7 +650,7 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
         server_round_off = client_grand_total - computed_item_total
 
         # Block massive round-off manipulation (e.g. attempting to bypass payment by lowering the grand total maliciously)
-        if abs(server_round_off) > Decimal('2.00'):
+        if abs(server_round_off) > MAX_ROUND_OFF:
             raise SaleServiceError(f"Security Block: Invalid Round Off (₹{server_round_off}). Sum of items does not match Grand Total.")
 
         # 5. Apply validated totals to the invoice header

@@ -67,7 +67,7 @@ def test_bottle_purchase_and_billing(api_client, test_data):
     search_data = response.json()
     assert len(search_data['data']) > 0
     assert search_data['data'][0]['has_stock'] == True
-    sale_payload = {'outletId': str(test_data['outlet'].id), 'invoiceDate': timezone.now().isoformat(), 'customerId': str(test_data['customer'].id), 'subtotal': 150.0, 'taxableAmount': 133.93, 'cgstAmount': 8.04, 'sgstAmount': 8.04, 'igstAmount': 0, 'grandTotal': 150.0, 'amountPaid': 150.0, 'cashPaid': 150.0, 'upiPaid': 0, 'cardPaid': 0, 'items': [{'productId': str(test_data['product'].id), 'batchId': str(batch.id), 'qtyStrips': 2, 'qtyLoose': 0, 'rate': 150.0, 'mrp': 150.0, 'saleRate': 150.0, 'gstRate': 12.0, 'discountPct': 0.0, 'taxableAmount': 267.86, 'gstAmount': 32.14, 'totalAmount': 300.0}]}
+    sale_payload = {'outletId': str(test_data['outlet'].id), 'invoiceDate': timezone.now().isoformat(), 'customerId': str(test_data['customer'].id), 'subtotal': 300.0, 'taxableAmount': 267.86, 'cgstAmount': 16.07, 'sgstAmount': 16.07, 'igstAmount': 0, 'grandTotal': 300.0, 'amountPaid': 300.0, 'cashPaid': 300.0, 'upiPaid': 0, 'cardPaid': 0, 'items': [{'productId': str(test_data['product'].id), 'batchId': str(batch.id), 'qtyStrips': 2, 'qtyLoose': 0, 'rate': 150.0, 'mrp': 150.0, 'saleRate': 150.0, 'gstRate': 12.0, 'discountPct': 0.0, 'taxableAmount': 267.86, 'gstAmount': 32.14, 'totalAmount': 300.0}]}
     sale_url = '/api/v1/sales/'
     response = api_client.post(sale_url, sale_payload, format='json')
     assert response.status_code == 201, f'Sale failed: {response.content}'
