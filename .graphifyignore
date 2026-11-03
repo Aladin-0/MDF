@@ -1,0 +1,64 @@
+# Heavy / generated / non-architectural content excluded from the Graphify index
+# (node_modules, venv, .next, .turbo, dist, build, __pycache__ are skipped by default)
+
+# Data dumps & exports
+live_data.json
+partial_dump.json
+prod_dump.json
+*.json.bak
+gstr3b_*.json
+apps/backend/prod_dump.json
+apps/backend/gstr3b_*.json
+*.csv
+*.xls
+*.xlsx
+*.dump
+*.sql
+
+# Logs, uploads, media, collected static
+logs/
+**/logs/
+*.log
+apps/backend/media/
+apps/backend/staticfiles/
+apps/backend/purchase_invoices/
+apps/backend/resources/
+artifacts/
+apps/artifacts/
+
+# Lock files & minified / compiled assets
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+*.min.js
+*.min.css
+*.map
+tsconfig.tsbuildinfo
+
+# Test output / reports / debug HTML
+apps/frontend/playwright-report/
+apps/frontend/test-results/
+apps/frontend/checkout-debug.html
+apps/backend/error.html
+apps/backend/parsed_failures.md
+
+# Images / binary assets
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.ico
+*.pdf
+
+# Scratch and design mockups
+scratch/
+invociedesign/
+
+# Historical audit / hotfix narratives & code-extract dumps (stale; code is source of truth)
+/*_REPORT.md
+/EXTRACTED_*.md
+/ERP_REPORT_AUDIT_PLAN.md
+/PRODUCTION_EDIT_BILL_LOGS.md
+docs/ca_review/
+apps/docs/
+apps/backend/docs/
