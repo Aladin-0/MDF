@@ -5,14 +5,14 @@ from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from django.db.models import Sum, F, Q, FloatField, ExpressionWrapper
+from django.db.models import Sum, F, Q, FloatField, ExpressionWrapper, Case, When
 from django.db.models.functions import Coalesce, NullIf
 from django.utils.timezone import make_aware, get_current_timezone
 from django.http import HttpResponse
 
 from apps.core.permissions import IsAuthenticated
 from apps.core.models import Outlet
-from apps.billing.models import SaleInvoice, SaleItem, ExpenseEntry, SalesReturn, ReceiptEntry
+from apps.billing.models import SaleInvoice, SaleItem, ExpenseEntry, SalesReturn, SalesReturnItem, ReceiptEntry
 from apps.purchases.models import PurchaseInvoice
 from apps.inventory.models import Batch
 from apps.accounts.models import Partner
@@ -169,7 +169,7 @@ def get_daily_snapshot_data(outlet_id, start_date_str, end_date_str=None):
     # Customer Jama (POS Receipts in Cash)
     jama_manual = float(ReceiptEntry.objects.filter(outlet_id=outlet_id, date__range=(start_date, end_date), payment_mode='cash').aggregate(total=Sum('total_amount'))['total'] or 0.0)
 
-    # COGS
+    # COGS for Outgoing Sales
     sale_items = SaleItem.objects.filter(invoice__in=sales)
     cogs = float(sale_items.aggregate(
         total=Sum(
@@ -180,7 +180,26 @@ def get_daily_snapshot_data(outlet_id, start_date_str, end_date_str=None):
             )
         )
     )['total'] or 0.0)
-    gross_profit = net_sales - cogs
+
+    # COGS Reversal for Returned Items
+    return_items = SalesReturnItem.objects.filter(sales_return__in=returns)
+    
+    # FAILSAFE: If strips and loose are 0, use qty_returned directly
+    returns_cogs = float(return_items.aggregate(
+        total=Sum(
+            ExpressionWrapper(
+                Case(
+                    When(qty_returned_strips=0, qty_returned_loose=0, then=F('qty_returned')),
+                    default=(F('qty_returned_strips') * Coalesce(NullIf(F('batch__pack_size'), 0), 1) + F('qty_returned_loose'))
+                ) * 
+                (F('batch__purchase_rate') / Coalesce(NullIf(F('batch__pack_size'), 0), 1)),
+                output_field=FloatField()
+            )
+        )
+    )['total'] or 0.0)
+
+    # Re-add the inventory asset cost of the returned items back to the profit pool
+    gross_profit = net_sales - (cogs - returns_cogs)
 
     # --- Purchases ---
     purchases = PurchaseInvoice.objects.filter(outlet_id=outlet_id, invoice_date__range=(start_date, end_date))
@@ -395,6 +414,7 @@ def get_daily_snapshot_data(outlet_id, start_date_str, end_date_str=None):
         
         d_net_sales = d_sales - d_returns
         
+        # Outgoing COGS
         d_cogs = 0.0
         d_sale_items = SaleItem.objects.filter(invoice__in=d_sales_qs)
         for item in d_sale_items:
@@ -403,7 +423,22 @@ def get_daily_snapshot_data(outlet_id, start_date_str, end_date_str=None):
             if pack_size > 0:
                 d_cogs += float(item.batch.purchase_rate / pack_size) * total_loose
                 
-        d_gross_profit = d_net_sales - d_cogs
+        # Returned COGS Reversal
+        d_returns_cogs = 0.0
+        d_return_items = SalesReturnItem.objects.filter(sales_return__outlet_id=outlet_id, sales_return__return_date=current_date)
+        for r_item in d_return_items:
+            pack_size = r_item.batch.pack_size or 1
+            total_returned_loose = (r_item.qty_returned_strips * pack_size) + r_item.qty_returned_loose
+            
+            # FAILSAFE: If strips and loose are 0, use qty_returned
+            if total_returned_loose == 0:
+                total_returned_loose = r_item.qty_returned
+                
+            if pack_size > 0:
+                d_returns_cogs += float(r_item.batch.purchase_rate / pack_size) * total_returned_loose
+                
+        # Calculate true daily gross profit
+        d_gross_profit = d_net_sales - (d_cogs - d_returns_cogs)
         d_net_profit = d_gross_profit - float(fixed_exp.per_day)
         
         # Look up partner percentages for this day from history

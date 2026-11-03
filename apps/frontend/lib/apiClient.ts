@@ -1410,6 +1410,174 @@ const realReportsApi = {
         const response = await fetch(`${API_URL}/reports/batch-wise/?${searchParams.toString()}`, { headers: getHeaders() });
         await assertOk(response);
         return response.json();
+    },
+    exportErpReport: async (
+        outletId: string,
+        params: {
+            reportType: string;
+            format: string;
+            lessReturns?: boolean;
+            startDate: string;
+            endDate: string;
+        }
+    ): Promise<Blob> => {
+        let endpoint = '/reports/erp/sales-book/export/';
+        if (params.reportType === 'gross-profit') {
+            endpoint = '/reports/erp/gross-profit/export/';
+        } else if (params.reportType === 'sales-return-book') {
+            endpoint = '/reports/erp/sales-return-book/export/';
+        } else if (params.reportType === 'gross-loss-return') {
+            endpoint = '/reports/erp/gross-loss-return/export/';
+        } else if (params.reportType === 'purchase-book' || params.reportType === 'consolidated-purchase-book') {
+            endpoint = '/reports/erp/purchase-book/export/';
+        } else if (params.reportType === 'purchase-return-book') {
+            endpoint = '/reports/erp/purchase-return-book/export/';
+        }
+
+        const searchParams = new URLSearchParams({
+            outletId,
+            startDate: params.startDate,
+            endDate: params.endDate,
+            format: params.format,
+        });
+        if (params.lessReturns !== undefined) {
+            searchParams.append('lessReturns', String(params.lessReturns));
+        }
+        if (params.reportType === 'consolidated-purchase-book') {
+            searchParams.append('variant', 'consolidated');
+        }
+
+        const response = await fetch(`${API_URL}${endpoint}?${searchParams.toString()}`, {
+            headers: getHeaders(),
+        });
+        await assertOk(response);
+        return await response.blob();
+    },
+    getErpSalesBook: async (
+        outletId: string,
+        params: {
+            format?: string;
+            lessReturns?: boolean;
+            startDate: string;
+            endDate: string;
+        }
+    ): Promise<any> => {
+        const searchParams = new URLSearchParams({
+            outletId,
+            startDate: params.startDate,
+            endDate: params.endDate,
+            format: params.format || 'detailed',
+            lessReturns: String(params.lessReturns ?? true),
+        });
+        const response = await fetch(`${API_URL}/reports/erp/sales-book/?${searchParams.toString()}`, {
+            headers: getHeaders(),
+        });
+        await assertOk(response);
+        return response.json();
+    },
+    getErpGrossProfit: async (
+        outletId: string,
+        params: {
+            format?: string;
+            lessReturns?: boolean;
+            startDate: string;
+            endDate: string;
+        }
+    ): Promise<any> => {
+        const searchParams = new URLSearchParams({
+            outletId,
+            startDate: params.startDate,
+            endDate: params.endDate,
+            format: params.format || 'detailed',
+            lessReturns: String(params.lessReturns ?? true),
+        });
+        const response = await fetch(`${API_URL}/reports/erp/gross-profit/?${searchParams.toString()}`, {
+            headers: getHeaders(),
+        });
+        await assertOk(response);
+        return response.json();
+    },
+    getErpSalesReturnBook: async (
+        outletId: string,
+        params: {
+            format?: string;
+            startDate: string;
+            endDate: string;
+        }
+    ): Promise<any> => {
+        const searchParams = new URLSearchParams({
+            outletId,
+            startDate: params.startDate,
+            endDate: params.endDate,
+            format: params.format || 'detailed',
+        });
+        const response = await fetch(`${API_URL}/reports/erp/sales-return-book/?${searchParams.toString()}`, {
+            headers: getHeaders(),
+        });
+        await assertOk(response);
+        return response.json();
+    },
+    getErpGrossLossOnReturn: async (
+        outletId: string,
+        params: {
+            format?: 'detailed' | 'summarised';
+            startDate: string;
+            endDate: string;
+        }
+    ): Promise<any> => {
+        const searchParams = new URLSearchParams({
+            outletId,
+            startDate: params.startDate,
+            endDate: params.endDate,
+            format: params.format || 'detailed',
+        });
+        const response = await fetch(`${API_URL}/reports/erp/gross-loss-return/?${searchParams.toString()}`, {
+            headers: getHeaders(),
+        });
+        await assertOk(response);
+        return response.json();
+    },
+    getErpPurchaseBook: async (
+        outletId: string,
+        params: {
+            format?: string;
+            lessReturns?: boolean;
+            startDate: string;
+            endDate: string;
+        }
+    ): Promise<any> => {
+        const searchParams = new URLSearchParams({
+            outletId,
+            startDate: params.startDate,
+            endDate: params.endDate,
+            format: params.format || 'detailed',
+            lessReturns: String(params.lessReturns ?? false),
+        });
+        const response = await fetch(`${API_URL}/reports/erp/purchase-book/?${searchParams.toString()}`, {
+            headers: getHeaders(),
+        });
+        await assertOk(response);
+        return response.json();
+    },
+    getErpPurchaseReturnBook: async (
+        outletId: string,
+        params: {
+            format?: string;
+            startDate: string;
+            endDate: string;
+        }
+    ): Promise<any> => {
+        const searchParams = new URLSearchParams({
+            outletId,
+            startDate: params.startDate,
+            endDate: params.endDate,
+            format: params.format || 'detailed',
+        });
+        const response = await fetch(`${API_URL}/reports/erp/purchase-return-book/?${searchParams.toString()}`, {
+            headers: getHeaders(),
+        });
+        await assertOk(response);
+        return response.json();
     }
 };
 
@@ -2102,3 +2270,10 @@ export const chainApi = realChainApi;
 export const voucherApi = realVoucherApi;
 export const doctorsApi = realDoctorsApi;
 export const gstApi = realGstApi;
+export const exportErpReport = realReportsApi.exportErpReport;
+export const getErpSalesBook = realReportsApi.getErpSalesBook;
+export const getErpGrossProfit = realReportsApi.getErpGrossProfit;
+export const getErpSalesReturnBook = realReportsApi.getErpSalesReturnBook;
+export const getErpGrossLossOnReturn = realReportsApi.getErpGrossLossOnReturn;
+export const getErpPurchaseBook = realReportsApi.getErpPurchaseBook;
+export const getErpPurchaseReturnBook = realReportsApi.getErpPurchaseReturnBook;

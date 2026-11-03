@@ -9,8 +9,36 @@ from apps.reports.views import (
 from apps.reports import dashboard_views
 
 from apps.reports.daily_snapshot_views import DailySnapshotView, DailySnapshotExportView, DailyCashReportView, FixedMonthlyExpenseView
+from apps.reports.erp_views import (
+    ConsolidatedSalesBookView,
+    ConsolidatedSalesBookExportView,
+    GrossProfitReportView,
+    GrossProfitReportExportView,
+    SalesReturnBookView,
+    SalesReturnBookExportView,
+    GrossLossOnReturnView,
+    GrossLossOnReturnExportView,
+    PurchaseBookView,
+    PurchaseBookExportView,
+    PurchaseReturnBookView,
+    PurchaseReturnBookExportView,
+)
 
 urlpatterns = [
+    # Marg ERP-Style Reports (Phase 1 Engine & Phase 2 Exporter)
+    path('erp/sales-book/', ConsolidatedSalesBookView.as_view(), name='erp-sales-book'),
+    path('erp/sales-book/export/', ConsolidatedSalesBookExportView.as_view(), name='erp-sales-book-export'),
+    path('erp/gross-profit/', GrossProfitReportView.as_view(), name='erp-gross-profit'),
+    path('erp/gross-profit/export/', GrossProfitReportExportView.as_view(), name='erp-gross-profit-export'),
+    path('erp/sales-return-book/', SalesReturnBookView.as_view(), name='erp-sales-return-book'),
+    path('erp/sales-return-book/export/', SalesReturnBookExportView.as_view(), name='erp-sales-return-book-export'),
+    path('erp/gross-loss-return/', GrossLossOnReturnView.as_view(), name='erp-gross-loss-return'),
+    path('erp/gross-loss-return/export/', GrossLossOnReturnExportView.as_view(), name='erp-gross-loss-return-export'),
+    path('erp/purchase-book/', PurchaseBookView.as_view(), name='erp-purchase-book'),
+    path('erp/purchase-book/export/', PurchaseBookExportView.as_view(), name='erp-purchase-book-export'),
+    path('erp/purchase-return-book/', PurchaseReturnBookView.as_view(), name='erp-purchase-return-book'),
+    path('erp/purchase-return-book/export/', PurchaseReturnBookExportView.as_view(), name='erp-purchase-return-book-export'),
+
     path('daily-snapshot/', DailySnapshotView.as_view(), name='daily-snapshot'),
     path('daily-snapshot/export/', DailySnapshotExportView.as_view(), name='daily-snapshot-export'),
     path('daily-snapshot/cash/', DailyCashReportView.as_view(), name='daily-snapshot-cash'),
@@ -29,7 +57,6 @@ urlpatterns = [
     path('schedule/', ScheduleReportView.as_view(), name='schedule-report'),
     path('batch-wise/', BatchWiseReportView.as_view(), name='batch-wise-report'),
     path('batch-wise/export/', BatchWiseReportExportView.as_view(), name='batch-wise-report-export'),
-
 
     # GST Dashboard MVP endpoints removed to gst_urls.py
 ]
