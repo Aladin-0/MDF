@@ -89,7 +89,10 @@ api.interceptors.response.use(
         const apiError = {
             code: error.response?.data?.error?.code || 'UNKNOWN_ERROR',
             message: error.response?.data?.error?.message || error.message || 'An unexpected error occurred',
-            details: error.response?.data?.error?.details
+            details: error.response?.data?.error?.details,
+            // the plain sentence the server sent back (DRF's {detail}) and the HTTP status, for screens that want to show them
+            detail: typeof error.response?.data?.detail === 'string' ? error.response.data.detail as string : undefined,
+            status: error.response?.status as number | undefined,
         };
 
         return Promise.reject({ error: apiError });

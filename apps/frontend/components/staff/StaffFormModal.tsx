@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import {
     Dialog, DialogContent, DialogHeader,
     DialogTitle, DialogFooter
@@ -16,53 +16,19 @@ import {
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { useCreateStaff, useUpdateStaff } from '@/hooks/useStaff';
+import { useAuthStore } from '@/store/authStore';
+import {
+    ASSIGNABLE_ROLES, ROLE_LABELS, UI_FLAGS, type UiFlag, type StaffFormValues,
+    buildStaffPayload, customisedFlags, defaultFormValues, presetFor, staffToFormValues,
+} from './staffPermissions';
 import { cn } from '@/lib/utils';
-import { Info } from 'lucide-react';
+import { Info, AlertTriangle } from 'lucide-react';
 import {
     Tooltip,
     TooltipContent,
     TooltipProvider,
     TooltipTrigger,
 } from '@/components/ui/tooltip';
-
-const ROLES = [
-    { value: 'admin', label: 'Admin' },
-    { value: 'manager', label: 'Manager' },
-    { value: 'billing_staff', label: 'Billing Staff' },
-    { value: 'view_only', label: 'View Only' },
-    { value: 'custom', label: 'Custom' },
-];
-
-const ROLE_PERMISSIONS: Record<string, any> = {
-    admin: {
-        canEditSales: true, canModifyPaidBill: true, canModifyDraftUnpaidBill: true, canCorrectHeaderFields: true, canCorrectQuantities: true,
-        canOverridePricing: true, canCorrectCustomer: true,
-        canCreatePurchases: true, canViewPurchaseRates: true, canEditPurchases: true, canModifyPaidPurchases: true,
-        canEditVouchers: true, canModifySettledVouchers: true, canEditReturns: true, canModifySettledReturns: true,
-        canAccessReports: true, canVoidRecords: true, canViewAuditHistory: true, canExportGst: true, canManagePartners: true,
-    },
-    manager: {
-        canEditSales: true, canModifyPaidBill: true, canModifyDraftUnpaidBill: true, canCorrectHeaderFields: true, canCorrectQuantities: true,
-        canOverridePricing: true, canCorrectCustomer: true,
-        canCreatePurchases: true, canViewPurchaseRates: true, canEditPurchases: true, canModifyPaidPurchases: true,
-        canEditVouchers: true, canModifySettledVouchers: true, canEditReturns: true, canModifySettledReturns: true,
-        canAccessReports: true, canVoidRecords: false, canViewAuditHistory: true, canExportGst: true, canManagePartners: false,
-    },
-    billing_staff: {
-        canEditSales: true, canModifyPaidBill: false, canModifyDraftUnpaidBill: true, canCorrectHeaderFields: false, canCorrectQuantities: false,
-        canOverridePricing: false, canCorrectCustomer: false,
-        canCreatePurchases: false, canViewPurchaseRates: false, canEditPurchases: false, canModifyPaidPurchases: false,
-        canEditVouchers: false, canModifySettledVouchers: false, canEditReturns: false, canModifySettledReturns: false,
-        canAccessReports: false, canVoidRecords: false, canViewAuditHistory: false, canExportGst: false, canManagePartners: false,
-    },
-    view_only: {
-        canEditSales: false, canModifyPaidBill: false, canModifyDraftUnpaidBill: false, canCorrectHeaderFields: false, canCorrectQuantities: false,
-        canOverridePricing: false, canCorrectCustomer: false,
-        canCreatePurchases: false, canViewPurchaseRates: false, canEditPurchases: false, canModifyPaidPurchases: false,
-        canEditVouchers: false, canModifySettledVouchers: false, canEditReturns: false, canModifySettledReturns: false,
-        canAccessReports: true, canVoidRecords: false, canViewAuditHistory: false, canExportGst: false, canManagePartners: false,
-    }
-};
 
 interface StaffFormModalProps {
     open: boolean;
@@ -74,187 +40,68 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
     const isEdit = !!editingStaff;
     const createMutation = useCreateStaff();
     const updateMutation = useUpdateStaff();
+    const currentUser = useAuthStore((s) => s.user);
 
-    const { register, handleSubmit, reset, setValue, watch, getValues, control, formState: { errors } } =
-        useForm({
-            defaultValues: {
-                name: '',
-                role: 'billing_staff',
-                phone: '',
-                email: '',
-                password: '',
-                confirmPassword: '',
-                pin: '',
-                confirmPin: '',
-                joinDate: new Date().toISOString().split('T')[0],
-                salary: '',
-                shiftStartTime: '',
-                shiftEndTime: '',
-                weeklyOffDay: null as number | null,
-                maxDiscount: 0,
-                canEditSales: false,
-                canModifyPaidBill: false,
-                canModifyDraftUnpaidBill: false,
-                canCorrectHeaderFields: false,
-                canCorrectQuantities: false,
-                
-                canOverridePricing: false,
-                canCorrectCustomer: false,
+    const { register, handleSubmit, reset, setValue, watch, formState: { errors, dirtyFields } } =
+        useForm<StaffFormValues>({ defaultValues: defaultFormValues() });
 
-                canCreatePurchases: false,
-                canViewPurchaseRates: false,
-                canEditPurchases: false,
-                canModifyPaidPurchases: false,
-
-                canEditVouchers: false,
-                canModifySettledVouchers: false,
-                canEditReturns: false,
-                canModifySettledReturns: false,
-
-                canAccessReports: false,
-                canVoidRecords: false,
-                canViewAuditHistory: false,
-                canExportGst: false,
-                canManagePartners: false,
-            }
-        });
-
-    // Pre-fill when editing
+    // Load the form when it OPENS or a different person is picked. (It used to reload on every
+    // refetch of the staff list, which wiped whatever the admin had typed so far.)
     useEffect(() => {
-        if (editingStaff) {
-            reset({
-                name: editingStaff.name,
-                role: editingStaff.role,
-                phone: editingStaff.phone ?? '',
-                email: editingStaff.email ?? '',
-                password: '',
-                confirmPassword: '',
-                pin: '',
-                confirmPin: '',
-                joinDate: editingStaff.joinDate ?? '',
-                salary: editingStaff.salary ?? '',
-                shiftStartTime: editingStaff.shiftStartTime ?? '',
-                shiftEndTime: editingStaff.shiftEndTime ?? '',
-                weeklyOffDay: editingStaff.weeklyOffDay ?? null,
-                maxDiscount: editingStaff.maxDiscount ?? 0,
-                canEditSales: editingStaff.canEditSales ?? false,
-                canModifyPaidBill: editingStaff.canModifyPaidBill ?? false,
-                canModifyDraftUnpaidBill: (editingStaff.canModifyDraftBill || editingStaff.canModifyUnpaidBill) ?? false,
-                canCorrectHeaderFields: editingStaff.canCorrectHeaderFields ?? false,
-                canCorrectQuantities: editingStaff.canCorrectQuantities ?? false,
-                
-                canOverridePricing: (editingStaff.canEditRate || editingStaff.canCorrectRatesDiscounts) ?? false,
-                canCorrectCustomer: editingStaff.canCorrectCustomer ?? false,
+        if (open) reset(editingStaff ? staffToFormValues(editingStaff) : defaultFormValues());
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open, editingStaff?.id, reset]);
 
-                canCreatePurchases: editingStaff.canCreatePurchases ?? false,
-                canViewPurchaseRates: editingStaff.canViewPurchaseRates ?? false,
-                canEditPurchases: editingStaff.canEditPurchases ?? false,
-                canModifyPaidPurchases: editingStaff.canModifyPaidPurchases ?? false,
+    const role = watch('role');
+    const values = watch();
 
-                canEditVouchers: editingStaff.canEditVouchers ?? false,
-                canModifySettledVouchers: editingStaff.canModifySettledVouchers ?? false,
-                canEditReturns: (editingStaff.canEditSaleReturns || editingStaff.canEditPurchaseReturns) ?? false,
-                canModifySettledReturns: editingStaff.canModifySettledReturns ?? false,
+    // What the server will and will not allow, stated up front instead of failing on save.
+    const editingSelf = isEdit && currentUser?.id === editingStaff?.id;
+    const targetIsSuperAdmin = isEdit && editingStaff?.role === 'super_admin';
+    const blockedBySuperAdmin = targetIsSuperAdmin && currentUser?.role !== 'super_admin';
+    const roleLocked = editingSelf || targetIsSuperAdmin;
+    const roleOptions = targetIsSuperAdmin ? [...ASSIGNABLE_ROLES, 'super_admin' as const] : ASSIGNABLE_ROLES;
 
-                canAccessReports: editingStaff.canAccessReports ?? false,
-                canVoidRecords: editingStaff.canVoidRecords ?? false,
-                canViewAuditHistory: editingStaff.canViewAuditHistory ?? false,
-                canExportGst: editingStaff.canExportGst ?? false,
-                canManagePartners: editingStaff.canManagePartners ?? false,
-            });
-        } else {
-            reset();
-        }
-    }, [editingStaff, reset]);
+    const customised = customisedFlags(role, values);
+    const bypassesFlags = role === 'admin' || role === 'super_admin';
 
-    const onSubmit = (submittedData: any) => {
-        const data = { ...getValues(), ...submittedData };
-        // Strip confirm fields — never sent to backend
-        delete data.confirmPassword;
-        delete data.confirmPin;
-        // On edit, omit password/pin if left blank (backend keeps existing)
-        if (isEdit && !data.password) delete data.password;
-        if (isEdit && !data.pin) delete data.pin;
-
-        // Map unified UI fields back to backend payload
-        data.canEditRate = data.canOverridePricing;
-        data.canCorrectRatesDiscounts = data.canOverridePricing;
-
-        data.canModifyDraftBill = data.canModifyDraftUnpaidBill;
-        data.canModifyUnpaidBill = data.canModifyDraftUnpaidBill;
-        
-        data.canEditSaleReturns = data.canEditReturns;
-        data.canEditPurchaseReturns = data.canEditReturns;
-        
-        data.canViewBillRevisionHistory = data.canViewAuditHistory;
-        data.canCancelAndReissueBill = data.canVoidRecords;
-        data.canModifyBillWithReturn = data.canEditSales; // Covered by master
-
-        // Remove virtual fields from payload
-        delete data.canOverridePricing;
-        delete data.canModifyDraftUnpaidBill;
-        delete data.canEditReturns;
-
+    const onSubmit = (submitted: StaffFormValues) => {
+        const payload = buildStaffPayload(submitted, { isEdit, dirty: dirtyFields as Record<string, any> });
         if (isEdit) {
-            updateMutation.mutate(
-                { id: editingStaff.id, data },
-                { onSuccess: onClose }
-            );
+            if (Object.keys(payload).length === 0) { onClose(); return; }   // nothing changed
+            updateMutation.mutate({ id: editingStaff.id, data: payload }, { onSuccess: onClose });
         } else {
-            createMutation.mutate(data, { onSuccess: onClose });
+            createMutation.mutate(payload, { onSuccess: onClose });
         }
     };
 
     const isPending = createMutation.isPending || updateMutation.isPending;
 
+    // Every change marks the field dirty so an edit sends it (and only it).
+    const setFlag = (key: UiFlag, value: boolean) => setValue(key, value, { shouldDirty: true });
+
+    // Picking a role is the ONLY thing that changes the role. It also loads that role's default permissions.
     const handleRoleChange = (roleValue: string) => {
-        setValue('role', roleValue);
-        if (roleValue !== 'custom' && ROLE_PERMISSIONS[roleValue]) {
-            const perms = ROLE_PERMISSIONS[roleValue];
-            Object.keys(perms).forEach(k => {
-                setValue(k as any, perms[k]);
-            });
-        }
+        setValue('role', roleValue, { shouldDirty: true });
+        const preset = presetFor(roleValue);
+        if (preset) UI_FLAGS.forEach((k) => setFlag(k, preset[k]));
     };
 
-    const evaluateRoleMatch = (currentValues: any) => {
-        let matchedRole = 'custom';
-        const rolesToCheck = ['admin', 'manager', 'billing_staff', 'view_only'];
-
-        for (const role of rolesToCheck) {
-            const preset = ROLE_PERMISSIONS[role];
-            let isMatch = true;
-            for (const key of Object.keys(preset)) {
-                if (currentValues[key] !== preset[key]) {
-                    isMatch = false;
-                    break;
-                }
-            }
-            if (isMatch) {
-                matchedRole = role;
-                break;
-            }
-        }
-        setValue('role', matchedRole);
+    const resetToPreset = () => {
+        const preset = presetFor(role);
+        if (preset) UI_FLAGS.forEach((k) => setFlag(k, preset[k]));
     };
 
-    const handleChildChange = (key: string, value: boolean) => {
-        setValue(key as any, value);
-        evaluateRoleMatch(getValues());
-    };
+    // A toggle never touches the role.
+    const handleChildChange = (key: string, value: boolean) => setFlag(key as UiFlag, value);
 
     const handleMasterChange = (masterKey: string, value: boolean, childKeys: string[]) => {
-        setValue(masterKey as any, value);
-        if (value) {
-            childKeys.forEach(k => setValue(k as any, true));
-        } else {
-            childKeys.forEach(k => setValue(k as any, false));
-        }
-        evaluateRoleMatch(getValues());
+        setFlag(masterKey as UiFlag, value);
+        childKeys.forEach((k) => setFlag(k as UiFlag, value));
     };
 
     return (
-        <Dialog open={open} onOpenChange={onClose}>
+        <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
             <DialogContent className="max-w-5xl max-h-[90vh] p-0 overflow-hidden flex flex-col">
                 <DialogHeader className="px-6 py-4 border-b shrink-0 bg-white sticky top-0 z-10">
                     <DialogTitle>
@@ -263,6 +110,11 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                 </DialogHeader>
 
                 <div className="flex-1 overflow-y-auto px-6 py-4">
+                    {blockedBySuperAdmin && (
+                        <p className="mb-4 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                            This is a Super Admin account. Only a Super Admin can change it.
+                        </p>
+                    )}
                     <form id="staff-form" onSubmit={handleSubmit(onSubmit)} className="space-y-6">
 
                     {/* Basic Info */}
@@ -286,29 +138,40 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                             <div className="space-y-1">
                                 <Label>Role *</Label>
                                 <Select
-                                    value={watch('role')}
+                                    value={role}
                                     onValueChange={handleRoleChange}
+                                    disabled={roleLocked}
                                 >
                                     <SelectTrigger>
                                         <SelectValue placeholder="Select role" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {ROLES.map(r => (
-                                            <SelectItem key={r.value} value={r.value}>
-                                                {r.label}
+                                        {roleOptions.map(r => (
+                                            <SelectItem key={r} value={r}>
+                                                {ROLE_LABELS[r]}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
+                                <p className="text-[11px] text-slate-500">
+                                    {editingSelf
+                                        ? 'You cannot change your own role.'
+                                        : targetIsSuperAdmin
+                                            ? 'Super Admin accounts are managed separately.'
+                                            : 'Choosing a role loads its default permissions. You can adjust them below.'}
+                                </p>
                             </div>
 
                             <div className="space-y-1">
                                 <Label>Phone *</Label>
                                 <Input
-                                    {...register('phone', { required: 'Phone is required' })}
+                                    {...register('phone', { required: isEdit ? false : 'Phone is required' })}
                                     placeholder="9876543210"
                                     maxLength={10}
+                                    disabled={isEdit}
+                                    title={isEdit ? 'The phone number is the login ID and cannot be changed here' : undefined}
                                 />
+                                {isEdit && <p className="text-[11px] text-slate-500">Login ID: it cannot be changed.</p>}
                                 {errors.phone && (
                                     <p className="text-xs text-red-500">{errors.phone.message as string}</p>
                                 )}
@@ -435,7 +298,7 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                             <div className="space-y-1">
                                 <Label>Max Discount Allowed (%)</Label>
                                 <Input
-                                    {...register('maxDiscount', { min: 0, max: 100 })}
+                                    {...register('maxDiscount', { valueAsNumber: true, min: 0, max: 100 })}
                                     type="number"
                                     placeholder="0"
                                     min={0}
@@ -453,26 +316,13 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                             Employment Details
                         </p>
 
-                        <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1">
-                                <Label>Join Date</Label>
-                                <Input
-                                    {...register('joinDate')}
-                                    type="date"
-                                />
-                            </div>
+                        {isEdit && editingStaff?.joiningDate && (
+                            <p className="text-xs text-slate-500">
+                                Joined {new Date(editingStaff.joiningDate).toLocaleDateString()}
+                            </p>
+                        )}
 
-                            <div className="space-y-1">
-                                <Label>Monthly Salary (₹)</Label>
-                                <Input
-                                    {...register('salary')}
-                                    type="number"
-                                    placeholder="25000"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-3 gap-3 mt-3">
+                        <div className="grid grid-cols-3 gap-3">
                             <div className="space-y-1">
                                 <Label>Shift Start Time</Label>
                                 <Input
@@ -518,6 +368,22 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
                             Permissions
                         </p>
+                        {bypassesFlags ? (
+                            <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-md px-3 py-2">
+                                {ROLE_LABELS[role]} accounts always have every permission; the switches below do not limit them.
+                            </p>
+                        ) : customised.length > 0 ? (
+                            <div className="flex items-center justify-between gap-3 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                                <span className="flex items-center gap-2">
+                                    <AlertTriangle className="h-4 w-4 shrink-0" />
+                                    Customised: {customised.length} permission{customised.length === 1 ? '' : 's'} differ from the {ROLE_LABELS[role]} defaults.
+                                    The role stays {ROLE_LABELS[role]}.
+                                </span>
+                                <button type="button" onClick={resetToPreset} className="font-semibold underline whitespace-nowrap">
+                                    Reset to defaults
+                                </button>
+                            </div>
+                        ) : null}
                         <TooltipProvider>
 
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -787,19 +653,7 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                                             <p className="text-sm font-medium leading-none">Export GST Reports</p>
                                             <p className="text-xs text-muted-foreground mt-1">Allow downloading of official GSTR-1 and tax files.</p>
                                         </div>
-                                        <Controller
-                                            name="canExportGst"
-                                            control={control}
-                                            render={({ field }) => (
-                                                <Switch 
-                                                    checked={field.value} 
-                                                    onCheckedChange={(v) => {
-                                                        field.onChange(v);
-                                                        handleChildChange('canExportGst', v);
-                                                    }} 
-                                                />
-                                            )}
-                                        />
+                                        <Switch checked={watch('canExportGst')} onCheckedChange={(v) => handleChildChange('canExportGst', v)} />
                                     </div>
                                 </div>
                             </div>
@@ -813,7 +667,7 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                     <Button type="button" variant="outline" onClick={onClose}>
                         Cancel
                     </Button>
-                    <Button type="submit" form="staff-form" disabled={isPending}>
+                    <Button type="submit" form="staff-form" disabled={isPending || blockedBySuperAdmin}>
                         {isPending
                             ? (isEdit ? 'Saving...' : 'Creating...')
                             : (isEdit ? 'Save Changes' : 'Create Staff Member')

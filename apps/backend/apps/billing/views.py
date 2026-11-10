@@ -7,7 +7,7 @@ from django.utils import timezone
 from django.db.models import Sum, Count, Q, F
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from apps.core.permissions import IsAuthenticated, IsManagerOrAbove, CanEditSalesInvoice, IsBillingStaffOrAbove
+from apps.core.permissions import IsAuthenticated, IsManagerOrAbove, CanEditSalesInvoice, IsBillingStaffOrAbove, IsAdminStaff, assert_outlet_access
 from rest_framework import status
 from rest_framework.filters import OrderingFilter
 from decimal import Decimal, ROUND_FLOOR
@@ -21,6 +21,7 @@ from apps.billing.models import (
 from apps.billing.services import (
     fefo_batch_select,
     schedule_h_validate,
+    schedule_cart_from_catalogue,
     generate_invoice_number,
     InsufficientStockError,
     ScheduleHViolationError,
@@ -94,13 +95,16 @@ class EwayBillPdfDownloadView(APIView):
 
 class PatchEwbView(APIView):
     """Dev/test endpoint: directly set eway_bill_no on a SaleInvoice to simulate EWB generation."""
-    permission_classes = []
+    # Was `permission_classes = []` = NO authentication at all: anyone could rewrite an invoice's
+    # e-way bill number and mark its e-invoice status GENERATED. Now admins only, own outlet only.
+    permission_classes = [IsAdminStaff]
 
     def post(self, request, sale_id, *args, **kwargs):
         try:
             invoice = SaleInvoice.objects.get(id=sale_id)
         except SaleInvoice.DoesNotExist:
             return Response({'detail': 'Invoice not found'}, status=status.HTTP_404_NOT_FOUND)
+        assert_outlet_access(request.user, invoice.outlet_id)
 
         eway_bill_no = request.data.get('eway_bill_no')
         if not eway_bill_no:
@@ -112,6 +116,8 @@ class PatchEwbView(APIView):
         return Response({'detail': 'EWB patched', 'eway_bill_no': invoice.eway_bill_no})
 
 class RetryEinvoiceView(APIView):
+    permission_classes = [IsBillingStaffOrAbove]
+
     def post(self, request, sale_id):
         from apps.billing.sale_services import process_pending_irn
         from apps.billing.models import SaleInvoice
@@ -121,6 +127,7 @@ class RetryEinvoiceView(APIView):
             invoice = SaleInvoice.objects.get(id=sale_id)
         except SaleInvoice.DoesNotExist:
             return Response({'detail': 'Invoice not found'}, status=status.HTTP_404_NOT_FOUND)
+        assert_outlet_access(request.user, invoice.outlet_id)
 
         if invoice.irn_status not in ['FAILED', 'PENDING'] or invoice.irn:
             return Response({'detail': 'Invoice already has an IRN or is not in a failed state.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -167,6 +174,9 @@ def build_sale_response_payload(sale_invoice, message=None, revision_id=None):
         'invoiceNo': sale_invoice.invoice_no,
         'invoiceDate': sale_invoice.invoice_date.isoformat() if sale_invoice.invoice_date else None,
         'customerId': str(sale_invoice.customer.id) if sale_invoice.customer else None,
+        'patientId': str(sale_invoice.patient_id) if sale_invoice.patient_id else None,
+        'walkInName': sale_invoice.walk_in_name or None,
+        'patientMemberName': sale_invoice.patient.name if sale_invoice.patient_id else None,
         'customer': {
             'id': str(sale_invoice.customer.id),
             'name': sale_invoice.customer.name,
@@ -222,6 +232,7 @@ def build_sale_response_payload(sale_invoice, message=None, revision_id=None):
         'igst': float(sale_invoice.igst),
         'roundOff': float(sale_invoice.round_off),
         'grandTotal': float(sale_invoice.grand_total),
+        'updatedAt': sale_invoice.updated_at.isoformat() if sale_invoice.updated_at else None,
         'paymentMode': sale_invoice.payment_mode,
         'sale_type': getattr(sale_invoice, 'sale_type', 'RETAIL'),
         'billing_basis': getattr(sale_invoice, 'billing_basis', 'MRP'),
@@ -418,22 +429,8 @@ class SaleCreateView(APIView):
                                 customer.gstin = ledger.gstin
                                 customer.save(update_fields=['gstin'])
                         else:
-                            phone_number = ledger.phone or f"L-{ledger.id}"[:20]
-                            customer, created = Customer.objects.get_or_create(
-                                outlet=outlet,
-                                phone=phone_number,
-                                defaults={
-                                    'name': ledger.name or 'Walk-in Customer',
-                                    'address': ledger.address or '',
-                                    'gstin': ledger.gstin or None,
-                                }
-                            )
-                            if not created and ledger.gstin and not customer.gstin:
-                                customer.gstin = ledger.gstin
-                                customer.save(update_fields=['gstin'])
-
-                            ledger.linked_customer = customer
-                            ledger.save(update_fields=['linked_customer'])
+                            from apps.accounts.family_accounts import customer_for_ledger
+                            customer = customer_for_ledger(outlet, ledger)
                     except Ledger.DoesNotExist:
                         # Also check if partyLedgerId was provided and can resolve customer
                         if party_ledger_id and party_ledger_id != customer_id:
@@ -448,22 +445,8 @@ class SaleCreateView(APIView):
                                         customer.gstin = party_ledger.gstin
                                         customer.save(update_fields=['gstin'])
                                 else:
-                                    phone_number = party_ledger.phone or f"L-{party_ledger.id}"[:20]
-                                    customer, created = Customer.objects.get_or_create(
-                                        outlet=outlet,
-                                        phone=phone_number,
-                                        defaults={
-                                            'name': party_ledger.name or 'Walk-in Customer',
-                                            'address': party_ledger.address or '',
-                                            'gstin': party_ledger.gstin or None,
-                                        }
-                                    )
-                                    if not created and party_ledger.gstin and not customer.gstin:
-                                        customer.gstin = party_ledger.gstin
-                                        customer.save(update_fields=['gstin'])
-
-                                    party_ledger.linked_customer = customer
-                                    party_ledger.save(update_fields=['linked_customer'])
+                                    from apps.accounts.family_accounts import customer_for_ledger
+                                    customer = customer_for_ledger(outlet, party_ledger)
                             except (Ledger.DoesNotExist, ValueError, AttributeError):
                                 return Response(
                                     {'detail': f'Customer {customer_id} not found'},
@@ -496,23 +479,21 @@ class SaleCreateView(APIView):
                         customer.gstin = party_ledger.gstin
                         customer.save(update_fields=['gstin'])
                 else:
-                    phone_number = party_ledger.phone or f"L-{party_ledger.id}"[:20]
-                    customer, created = Customer.objects.get_or_create(
-                        outlet=outlet,
-                        phone=phone_number,
-                        defaults={
-                            'name': party_ledger.name or 'Walk-in Customer',
-                            'address': party_ledger.address or '',
-                            'gstin': party_ledger.gstin or None,
-                        }
-                    )
-                    
-                    if not created and party_ledger.gstin and not customer.gstin:
-                        customer.gstin = party_ledger.gstin
-                        customer.save(update_fields=['gstin'])
+                    from apps.accounts.family_accounts import customer_for_ledger
+                    customer = customer_for_ledger(outlet, party_ledger)
 
-                    party_ledger.linked_customer = customer
-                    party_ledger.save(update_fields=['linked_customer'])
+            # Family accounts: a picked member is billed through their account; the account itself needs a patient.
+            patient = None
+            if customer is not None:
+                from apps.accounts.family_accounts import resolve_bill_parties, FamilyAccountError
+                try:
+                    if request.data.get('saleType') == 'WHOLESALE':
+                        # wholesale sells to ONE party: the account owner is billed and no family patient is recorded
+                        customer, patient = customer.financial_customer, None
+                    else:
+                        customer, patient = resolve_bill_parties(customer, request.data.get('patientId'))
+                except FamilyAccountError as fam_err:
+                    return Response({'detail': str(fam_err), 'code': 'FAMILY_ACCOUNT'}, status=status.HTTP_400_BAD_REQUEST)
 
             # Determine if this sale involves credit tender
             raw_pm = str(request.data.get('paymentMode') or '').lower()
@@ -536,8 +517,13 @@ class SaleCreateView(APIView):
                     cand_address = (request.data.get('customerAddress') or (schedule_h_data or {}).get('patientAddress') or '').strip()
 
                     if cand_phone and re.match(r'^[6-9]\d{9}$', cand_phone):
-                        # Match existing customer by phone first to avoid duplicate entities
-                        customer = Customer.objects.filter(outlet=outlet, phone=cand_phone).first()
+                        # Match an existing customer by phone AND name: families share one mobile number, so the phone alone
+                        # would put a new person's credit sale on whoever happens to be first with that number.
+                        same_phone = Customer.objects.filter(outlet=outlet, phone=cand_phone, is_family_account=False)
+                        if cand_name:
+                            customer = same_phone.filter(name__iexact=cand_name).first()
+                        else:
+                            customer = same_phone.first() if same_phone.count() == 1 else None
                         if not customer:
                             customer = Customer.objects.create(
                                 outlet=outlet,
@@ -572,7 +558,8 @@ class SaleCreateView(APIView):
             billed_by_id = request.data.get('billedBy')
             try:
                 if billed_by_id:
-                    billed_by = Staff.objects.get(id=billed_by_id)
+                    # Same outlet and still active: this used to accept ANY staff id from any outlet
+                    billed_by = Staff.objects.get(id=billed_by_id, outlet=outlet, is_active=True)
                 else:
                     billed_by = Staff.objects.get(id=request.user.id)
             except (Staff.DoesNotExist, AttributeError):
@@ -733,11 +720,7 @@ class SaleCreateView(APIView):
             # Entire transaction must be atomic - rollback on any failure
             with transaction.atomic():
                 # Step 1: Validate Schedule H requirements BEFORE any stock deduction
-                cart_items = []
-                for item in items_data:
-                    cart_items.append({
-                        'scheduleType': item.get('scheduleType', 'OTC'),
-                    })
+                cart_items = schedule_cart_from_catalogue(items_data)
 
                 try:
                     schedule_h_validate(cart_items, schedule_h_data)
@@ -871,6 +854,9 @@ class SaleCreateView(APIView):
                     invoice_no=invoice_no,
                     invoice_date=invoice_date,
                     customer=customer,
+                    patient=patient,
+                    # a non-valued customer: a name only, kept on the bill (no mobile number, no profile)
+                    walk_in_name=('' if customer else str(request.data.get('walkInName') or '').strip()[:255]),
                     doctor_id=doctor_id,
                     hospital_name=hospital_name,
                     prescription_no=request.data.get('prescriptionNo'),
@@ -1387,7 +1373,7 @@ class SaleCreateView(APIView):
                 try:
                     from apps.billing.models import Quotation
                     from django.utils import timezone
-                    quotation = Quotation.objects.get(id=quotation_id)
+                    quotation = Quotation.objects.get(id=quotation_id, outlet=outlet)
                     quotation.status = 'converted'
                     quotation.converted_at = timezone.now()
                     quotation.converted_to_invoice_id = sale_invoice.id
@@ -1531,8 +1517,12 @@ class SaleListView(APIView):
         if customer_id:
             from apps.accounts.models import Customer
             try:
-                customer_obj = Customer.objects.get(id=customer_id)
-                invoices = invoices.filter(customer_id=customer_id)
+                customer_obj = Customer.objects.get(id=customer_id, outlet=outlet)
+                # A family account sees every bill on it; a person sees the bills made FOR them (patient) plus their own
+                # with no patient. Bills of a member are filed under the account, so customer_id alone showed them nothing.
+                from django.db.models import Q as _Q
+                invoices = invoices.filter(_Q(customer_id=customer_id) if customer_obj.is_family_account
+                                           else _Q(patient_id=customer_id) | _Q(customer_id=customer_id, patient__isnull=True))
             except Customer.DoesNotExist:
                 pass
 
@@ -1778,6 +1768,9 @@ class SaleListView(APIView):
                 'invoiceDate': invoice.invoice_date.isoformat(),
                 'saleType': invoice.sale_type,
                 'customerId': str(invoice.customer.id) if invoice.customer else None,
+                'patientId': str(invoice.patient_id) if invoice.patient_id else None,
+                'walkInName': invoice.walk_in_name or None,
+                'patientMemberName': invoice.patient.name if invoice.patient_id else None,
                 'customer': {
                     'id': str(invoice.customer.id),
                     'name': invoice.customer.name,
@@ -2083,6 +2076,8 @@ class SaleItemsView(APIView):
     def get(self, request, sale_id, *args, **kwargs):
         try:
             invoice = SaleInvoice.objects.get(id=sale_id)
+            # items include landingCost: another outlet's invoice must not be readable by id
+            assert_outlet_access(request.user, invoice.outlet_id)
         except (SaleInvoice.DoesNotExist, ValueError):
             # Check if this sale_id is a JournalEntry / JournalLine or Voucher
             from apps.accounts.models import JournalLine, JournalEntry, Voucher
@@ -3116,7 +3111,12 @@ class SaleDetailView(APIView):
             'invoiceNo': invoice.invoice_no,
             'invoiceDate': invoice.invoice_date.isoformat(),
             'saleType': invoice.sale_type,
+            'billingBasis': invoice.billing_basis,
+            'updatedAt': invoice.updated_at.isoformat() if invoice.updated_at else None,
             'customerId': str(invoice.customer.id) if invoice.customer else None,
+            'patientId': str(invoice.patient_id) if invoice.patient_id else None,
+            'walkInName': invoice.walk_in_name or None,
+            'patientMemberName': invoice.patient.name if invoice.patient_id else None,
             'customer': {
                 'id': str(invoice.customer.id),
                 'name': invoice.customer.name,
@@ -3180,7 +3180,7 @@ class SaleDetailView(APIView):
             return Response({'detail': 'outletId is required'}, status=status.HTTP_400_BAD_REQUEST)
 
         updated_by_id = str(request.user.id)
-        from apps.billing.sale_update_service import atomic_sale_update, SaleServiceError
+        from apps.billing.sale_update_service import atomic_sale_update, SaleServiceError, StaleSaleEdit
         from apps.audit.core import orchestrator
         from apps.audit.core.registry import SnapshotBuilderRegistry
         from django.db import transaction
@@ -3190,6 +3190,18 @@ class SaleDetailView(APIView):
                 # 1. Take pre-update snapshot
                 from apps.billing.models import SaleInvoice
                 invoice_obj = SaleInvoice.objects.select_for_update().get(id=sale_id, outlet_id=outlet_id)
+
+                # A plain PUT is subject to the same rights as POST /revise/: it used to apply any edit for
+                # anyone holding the generic can_edit_sales flag, skipping the per-action rights (so a paid
+                # bill could be rewritten without "modify paid bill"). The generic edit is treated as the
+                # specific action it amounts to for this bill (paid -> paid_bill_correction, ...).
+                from apps.billing.sale_update_service import check_revision_allowed, check_correction_scope, RevisionNotAllowed
+                try:
+                    effective_action = check_revision_allowed(request.user, invoice_obj, request.data.get('revisionAction'))
+                    check_correction_scope(request.user, invoice_obj, request.data, effective_action)
+                except RevisionNotAllowed as denied:
+                    return Response({'detail': denied.message}, status=denied.status_code)
+
                 old_snapshot = SnapshotBuilderRegistry.build_snapshot(invoice_obj)
 
                 # 2. Perform business logic update
@@ -3229,6 +3241,8 @@ class SaleDetailView(APIView):
                 revision_id=rev_id_str
             )
             return Response(response_data, status=status.HTTP_200_OK)
+        except StaleSaleEdit as e:
+            return Response({'detail': str(e), 'code': 'stale_edit_conflict'}, status=status.HTTP_409_CONFLICT)
         except SaleServiceError as e:
             return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
@@ -3266,8 +3280,11 @@ class SaleReviseView(APIView):
         reason_text = request.data.get('revisionReasonText')
         items_data = request.data.get('items', [])
 
+        reason_text = (reason_text or '').strip() if isinstance(reason_text, str) else reason_text
         if not action or not reason_code or not reason_text:
             return Response({'detail': 'Revision context (action, reasonCode, reasonText) is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        if len(str(reason_code)) > 50 or len(str(action)) > 50:
+            return Response({'detail': 'revisionAction / revisionReasonCode are too long (max 50 characters).'}, status=status.HTTP_400_BAD_REQUEST)
 
         if not items_data and action != 'header_correction':
             return Response(
@@ -3275,43 +3292,26 @@ class SaleReviseView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        from apps.core.permissions import has_bill_revision_permission
-        
-        if action == 'direct_revise':
-            if not has_bill_revision_permission(request.user, 'can_modify_draft_bill'):
-                return Response({'detail': 'Permission denied: Missing can_modify_draft_bill.'}, status=status.HTTP_403_FORBIDDEN)
-            if invoice.amount_paid > 0:
-                return Response({'detail': 'Cannot direct revise a paid bill.'}, status=status.HTTP_400_BAD_REQUEST)
-        elif action == 'commercial_correction':
-            if not has_bill_revision_permission(request.user, 'can_modify_unpaid_bill'):
-                return Response({'detail': 'Permission denied: Missing can_modify_unpaid_bill.'}, status=status.HTTP_403_FORBIDDEN)
-            if invoice.amount_paid > 0:
-                return Response({'detail': 'Cannot commercially correct a paid bill.'}, status=status.HTTP_400_BAD_REQUEST)
-        elif action == 'paid_bill_correction':
-            if not has_bill_revision_permission(request.user, 'can_modify_paid_bill'):
-                return Response({'detail': 'Permission denied: Missing can_modify_paid_bill.'}, status=status.HTTP_403_FORBIDDEN)
-        elif action == 'return_aware_correction':
-            if not has_bill_revision_permission(request.user, 'can_modify_bill_with_return'):
-                return Response({'detail': 'Permission denied: Missing can_modify_bill_with_return.'}, status=status.HTTP_403_FORBIDDEN)
-        elif action == 'header_correction':
-            if not has_bill_revision_permission(request.user, 'can_correct_header_fields'):
-                return Response({'detail': 'Permission denied: Missing can_correct_header_fields.'}, status=status.HTTP_403_FORBIDDEN)
-        elif action == 'cancel_and_reissue':
-            if not has_bill_revision_permission(request.user, 'can_cancel_and_reissue_bill'):
-                return Response({'detail': 'Permission denied: Missing can_cancel_and_reissue_bill.'}, status=status.HTTP_403_FORBIDDEN)
-        elif action == 'standard_correction':
-            # Added for test coverage and general fallback if needed
-            pass
-        else:
-            return Response({'detail': 'Invalid revisionAction.'}, status=status.HTTP_400_BAD_REQUEST)
+        from apps.billing.sale_update_service import (
+            check_revision_allowed, check_correction_scope, revision_state_block, RevisionNotAllowed,
+        )
+        try:
+            check_revision_allowed(request.user, invoice, action)
+        except RevisionNotAllowed as denied:
+            return Response({'detail': denied.message}, status=denied.status_code)
 
-        # Eligibility check
-        if invoice.returns.exists() and action not in ['return_aware_correction', 'header_correction']:
-            return Response({'detail': f'Cannot {action.replace("_", " ")} a bill with returns.'}, status=status.HTTP_400_BAD_REQUEST)
-        if hasattr(invoice, 'receipt_allocations') and invoice.receipt_allocations.exists() and action not in ['paid_bill_correction', 'header_correction']:
-            return Response({'detail': f'Cannot {action.replace("_", " ")} a bill with later payments.'}, status=status.HTTP_400_BAD_REQUEST)
+        blocked = revision_state_block(invoice, action)
+        if blocked:
+            return Response({'detail': blocked}, status=status.HTTP_400_BAD_REQUEST)
 
-        from apps.billing.sale_update_service import atomic_sale_update, cancel_invoice, SaleServiceError
+        # What the edit changes (customer / quantities / rates) is checked last: a bill that cannot be edited at all
+        # in its current state is reported as such first.
+        try:
+            check_correction_scope(request.user, invoice, request.data, action)
+        except RevisionNotAllowed as denied:
+            return Response({'detail': denied.message}, status=denied.status_code)
+
+        from apps.billing.sale_update_service import atomic_sale_update, cancel_invoice, SaleServiceError, StaleSaleEdit
         from apps.audit.core import orchestrator
         from apps.audit.core.registry import SnapshotBuilderRegistry
         from django.db import transaction
@@ -3323,7 +3323,8 @@ class SaleReviseView(APIView):
 
                 if action == 'cancel_and_reissue':
                     # 2a. Cancel the old invoice
-                    cancel_invoice(str(invoice.id), str(request.user.id), reason_text)
+                    cancel_invoice(str(invoice.id), str(request.user.id), reason_text,
+                                   expected_updated_at=request.data.get('expectedUpdatedAt'))
                     invoice.refresh_from_db()
 
                     # 3a. Create the replacement invoice via the creation view logic
@@ -3408,6 +3409,8 @@ class SaleReviseView(APIView):
             )
             return Response(response_data, status=status.HTTP_200_OK)
 
+        except StaleSaleEdit as e:
+            return Response({'detail': str(e), 'code': 'stale_edit_conflict'}, status=status.HTTP_409_CONFLICT)
         except SaleServiceError as e:
             return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except ValueError as e:
@@ -3806,7 +3809,7 @@ class CustomerLedgerView(APIView):
 
 class UpdateCreditLimitView(APIView):
     """PATCH /api/v1/credit/{id}/limit/"""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsManagerOrAbove]
 
     def patch(self, request, pk, *args, **kwargs):
         outlet_id = request.data.get('outletId') or request.query_params.get('outletId') or (
@@ -4159,7 +4162,7 @@ from apps.inventory.models import MasterProduct, Batch
 
 class MargMigrationView(APIView):
     """POST /api/v1/migrate/marg/ — bulk import CSV from Marg ERP"""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminStaff]
 
     @db_transaction.atomic
     def post(self, request, *args, **kwargs):
@@ -4427,31 +4430,12 @@ class SaleModificationOptionsView(APIView):
         
         is_paid = invoice.amount_paid > 0
         has_returns = invoice.has_return
-        is_draft = invoice.amount_paid == 0 and not has_returns
-        
-        allowed_actions = []
+
+        # Same rules the revise/PUT endpoints enforce: what is offered is what will be accepted.
+        from apps.billing.sale_update_service import allowed_revision_actions
+        allowed_actions = allowed_revision_actions(user, invoice)
         block_reason = None
-        
-        from apps.core.permissions import has_bill_revision_permission
-        
-        if has_bill_revision_permission(user, 'can_modify_draft_bill') and is_draft:
-            allowed_actions.append('direct_revise')
-            
-        if has_bill_revision_permission(user, 'can_modify_unpaid_bill') and invoice.amount_paid == 0:
-             allowed_actions.append('commercial_correction')
-             
-        if has_bill_revision_permission(user, 'can_modify_paid_bill') and is_paid:
-             allowed_actions.append('paid_bill_correction')
-             
-        if has_bill_revision_permission(user, 'can_modify_bill_with_return') and has_returns:
-             allowed_actions.append('return_aware_correction')
-             
-        if has_bill_revision_permission(user, 'can_cancel_and_reissue_bill'):
-             allowed_actions.append('cancel_and_reissue')
-             
-        if has_bill_revision_permission(user, 'can_correct_header_fields'):
-             allowed_actions.append('header_correction')
-             
+
         if not allowed_actions:
              block_reason = "You do not have the required permissions to modify this invoice based on its current state."
 
@@ -4490,7 +4474,11 @@ class SaleRevisionListView(APIView):
         
         from django.core.exceptions import ValidationError
         try:
-            revisions = DocumentRevisionV2.objects.filter(tenant_id=outlet_id)
+            # Sales history only: this table also holds purchase, voucher, return and debit-note revisions, which
+            # appeared in this list as nameless rows.
+            from django.contrib.contenttypes.models import ContentType
+            revisions = DocumentRevisionV2.objects.filter(
+                tenant_id=outlet_id, content_type=ContentType.objects.get_for_model(SaleInvoice))
         except ValidationError:
             return Response({'detail': 'Invalid outletId'}, status=400)
         

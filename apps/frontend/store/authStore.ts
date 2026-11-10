@@ -16,6 +16,13 @@ interface AuthState {
     logout: () => void;
     _hasHydrated: boolean;
     setHasHydrated: (state: boolean) => void;
+    /**
+     * False on every page load (never persisted); becomes true once <SessionSync/> has had its first
+     * answer from the server. Until then a cached user may be out of date, so access decisions that
+     * would DENY must wait instead of bouncing someone who was granted access since they last logged in.
+     */
+    permissionsFresh: boolean;
+    setPermissionsFresh: (fresh: boolean) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -35,8 +42,11 @@ export const useAuthStore = create<AuthState>()(
                 user: null,
                 outlet: null,
                 isAuthenticated: false,
-                error: null
+                error: null,
+                permissionsFresh: false,
             }),
+            permissionsFresh: false,
+            setPermissionsFresh: (permissionsFresh) => set({ permissionsFresh }),
             _hasHydrated: false,
             setHasHydrated: (state) => set({ _hasHydrated: state })
         }),

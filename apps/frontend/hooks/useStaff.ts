@@ -5,6 +5,8 @@ import { staffApi } from '@/lib/apiClient';
 import { useOutletId } from '@/hooks/useOutletId';
 import { useAuthStore } from '@/store/authStore';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/apiError';
+import { PERMISSIONS_STALE_EVENT } from '@/lib/sessionEvents';
 
 export function useStaffList() {
     const outletId = useOutletId();
@@ -26,7 +28,7 @@ export function useCreateStaff() {
             toast.success('Staff member created successfully');
         },
         onError: (err: any) => {
-            toast.error(err?.message || 'Failed to create staff');
+            toast.error(apiErrorMessage(err, 'Failed to create staff'));
         },
     });
 }
@@ -39,16 +41,16 @@ export function useUpdateStaff() {
         onSuccess: (response, variables) => {
             queryClient.invalidateQueries({ queryKey: ['staff'] });
             
-            // Sync local auth store if the logged-in user edited themselves
-            const authStore = useAuthStore.getState();
-            if (authStore.user?.id === variables.id && response?.data) {
-                authStore.setUser({ ...authStore.user, ...response.data });
+            // If the signed-in user edited themselves, re-fetch their rights from the server. (This used
+            // to merge the raw staff record into the session, which left the permission list stale.)
+            if (useAuthStore.getState().user?.id === variables.id && typeof window !== 'undefined') {
+                window.dispatchEvent(new Event(PERMISSIONS_STALE_EVENT));
             }
 
             toast.success('Staff member updated successfully');
         },
         onError: (err: any) => {
-            toast.error(err?.message || 'Failed to update staff');
+            toast.error(apiErrorMessage(err, 'Failed to update staff'));
         },
     });
 }
@@ -62,7 +64,7 @@ export function useDeleteStaff() {
             toast.success('Staff member deactivated');
         },
         onError: (err: any) => {
-            toast.error(err?.message || 'Failed to deactivate staff');
+            toast.error(apiErrorMessage(err, 'Failed to deactivate staff'));
         },
     });
 }

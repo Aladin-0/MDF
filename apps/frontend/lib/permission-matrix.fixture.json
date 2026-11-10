@@ -1,0 +1,1336 @@
+[
+ {
+  "role": "super_admin",
+  "flags": {
+   "canCreatePurchases": false,
+   "canEditPurchases": false,
+   "canEditSales": false,
+   "canViewPurchaseRates": false,
+   "canAccessReports": false,
+   "canViewAuditHistory": false,
+   "canManagePartners": false,
+   "canExportGst": false
+  },
+  "permissions": [
+   "cancel_purchase_orders",
+   "create_bills",
+   "create_purchases",
+   "edit_purchases",
+   "edit_sales",
+   "edit_vouchers",
+   "export_reports",
+   "manage_outlets",
+   "manage_partners",
+   "manage_po_settings",
+   "manage_products",
+   "manage_settings",
+   "manage_staff",
+   "override_credit",
+   "send_purchase_orders",
+   "view_accounts",
+   "view_all_outlets",
+   "view_audit_history",
+   "view_outlet",
+   "view_purchase_rates",
+   "view_purchases",
+   "view_reports"
+  ]
+ },
+ {
+  "role": "super_admin",
+  "flags": {
+   "canCreatePurchases": true,
+   "canEditPurchases": false,
+   "canEditSales": false,
+   "canViewPurchaseRates": false,
+   "canAccessReports": false,
+   "canViewAuditHistory": false,
+   "canManagePartners": false,
+   "canExportGst": false
+  },
+  "permissions": [
+   "cancel_purchase_orders",
+   "create_bills",
+   "create_purchases",
+   "edit_purchases",
+   "edit_sales",
+   "edit_vouchers",
+   "export_reports",
+   "manage_outlets",
+   "manage_partners",
+   "manage_po_settings",
+   "manage_products",
+   "manage_settings",
+   "manage_staff",
+   "override_credit",
+   "send_purchase_orders",
+   "view_accounts",
+   "view_all_outlets",
+   "view_audit_history",
+   "view_outlet",
+   "view_purchase_rates",
+   "view_purchases",
+   "view_reports"
+  ]
+ },
+ {
+  "role": "super_admin",
+  "flags": {
+   "canCreatePurchases": false,
+   "canEditPurchases": true,
+   "canEditSales": false,
+   "canViewPurchaseRates": false,
+   "canAccessReports": false,
+   "canViewAuditHistory": false,
+   "canManagePartners": false,
+   "canExportGst": false
+  },
+  "permissions": [
+   "cancel_purchase_orders",
+   "create_bills",
+   "create_purchases",
+   "edit_purchases",
+   "edit_sales",
+   "edit_vouchers",
+   "export_reports",
+   "manage_outlets",
+   "manage_partners",
+   "manage_po_settings",
+   "manage_products",
+   "manage_settings",
+   "manage_staff",
+   "override_credit",
+   "send_purchase_orders",
+   "view_accounts",
+   "view_all_outlets",
+   "view_audit_history",
+   "view_outlet",
+   "view_purchase_rates",
+   "view_purchases",
+   "view_reports"
+  ]
+ },
+ {
+  "role": "super_admin",
+  "flags": {
+   "canCreatePurchases": false,
+   "canEditPurchases": false,
+   "canEditSales": true,
+   "canViewPurchaseRates": false,
+   "canAccessReports": false,
+   "canViewAuditHistory": false,
+   "canManagePartners": false,
+   "canExportGst": false
+  },
+  "permissions": [
+   "cancel_purchase_orders",
+   "create_bills",
+   "create_purchases",
+   "edit_purchases",
+   "edit_sales",
+   "edit_vouchers",
+   "export_reports",
+   "manage_outlets",
+   "manage_partners",
+   "manage_po_settings",
+   "manage_products",
+   "manage_settings",
+   "manage_staff",
+   "override_credit",
+   "send_purchase_orders",
+   "view_accounts",
+   "view_all_outlets",
+   "view_audit_history",
+   "view_outlet",
+   "view_purchase_rates",
+   "view_purchases",
+   "view_reports"
+  ]
+ },
+ {
+  "role": "super_admin",
+  "flags": {
+   "canCreatePurchases": false,
+   "canEditPurchases": false,
+   "canEditSales": false,
+   "canViewPurchaseRates": true,
+   "canAccessReports": false,
+   "canViewAuditHistory": false,
+   "canManagePartners": false,
+   "canExportGst": false
+  },
+  "permissions": [
+   "cancel_purchase_orders",
+   "create_bills",
+   "create_purchases",
+   "edit_purchases",
+   "edit_sales",
+   "edit_vouchers",
+   "export_reports",
+   "manage_outlets",
+   "manage_partners",
+   "manage_po_settings",
+   "manage_products",
+   "manage_settings",
+   "manage_staff",
+   "override_credit",
+   "send_purchase_orders",
+   "view_accounts",
+   "view_all_outlets",
+   "view_audit_history",
+   "view_outlet",
+   "view_purchase_rates",
+   "view_purchases",
+   "view_reports"
+  ]
+ },
+ {
+  "role": "super_admin",
+  "flags": {
+   "canCreatePurchases": false,
+   "canEditPurchases": false,
+   "canEditSales": false,
+   "canViewPurchaseRates": false,
+   "canAccessReports": true,
+   "canViewAuditHistory": false,
+   "canManagePartners": false,
+   "canExportGst": false
+  },
+  "permissions": [
+   "cancel_purchase_orders",
+   "create_bills",
+   "create_purchases",
+   "edit_purchases",
+   "edit_sales",
+   "edit_vouchers",
+   "export_reports",
+   "manage_outlets",
+   "manage_partners",
+   "manage_po_settings",
+   "manage_products",
+   "manage_settings",
+   "manage_staff",
+   "override_credit",
+   "send_purchase_orders",
+   "view_accounts",
+   "view_all_outlets",
+   "view_audit_history",
+   "view_outlet",
+   "view_purchase_rates",
+   "view_purchases",
+   "view_reports"
+  ]
+ },
+ {
+  "role": "super_admin",
+  "flags": {
+   "canCreatePurchases": false,
+   "canEditPurchases": false,
+   "canEditSales": false,
+   "canViewPurchaseRates": false,
+   "canAccessReports": false,
+   "canViewAuditHistory": true,
+   "canManagePartners": false,
+   "canExportGst": false
+  },
+  "permissions": [
+   "cancel_purchase_orders",
+   "create_bills",
+   "create_purchases",
+   "edit_purchases",
+   "edit_sales",
+   "edit_vouchers",
+   "export_reports",
+   "manage_outlets",
+   "manage_partners",
+   "manage_po_settings",
+   "manage_products",
+   "manage_settings",
+   "manage_staff",
+   "override_credit",
+   "send_purchase_orders",
+   "view_accounts",
+   "view_all_outlets",
+   "view_audit_history",
+   "view_outlet",
+   "view_purchase_rates",
+   "view_purchases",
+   "view_reports"
+  ]
+ },
+ {
+  "role": "super_admin",
+  "flags": {
+   "canCreatePurchases": false,
+   "canEditPurchases": false,
+   "canEditSales": false,
+   "canViewPurchaseRates": false,
+   "canAccessReports": false,
+   "canViewAuditHistory": false,
+   "canManagePartners": true,
+   "canExportGst": false
+  },
+  "permissions": [
+   "cancel_purchase_orders",
+   "create_bills",
+   "create_purchases",
+   "edit_purchases",
+   "edit_sales",
+   "edit_vouchers",
+   "export_reports",
+   "manage_outlets",
+   "manage_partners",
+   "manage_po_settings",
+   "manage_products",
+   "manage_settings",
+   "manage_staff",
+   "override_credit",
+   "send_purchase_orders",
+   "view_accounts",
+   "view_all_outlets",
+   "view_audit_history",
+   "view_outlet",
+   "view_purchase_rates",
+   "view_purchases",
+   "view_reports"
+  ]
+ },
+ {
+  "role": "super_admin",
+  "flags": {
+   "canCreatePurchases": false,
+   "canEditPurchases": false,
+   "canEditSales": false,
+   "canViewPurchaseRates": false,
+   "canAccessReports": false,
+   "canViewAuditHistory": false,
+   "canManagePartners": false,
+   "canExportGst": true
+  },
+  "permissions": [
+   "cancel_purchase_orders",
+   "create_bills",
+   "create_purchases",
+   "edit_purchases",
+   "edit_sales",
+   "edit_vouchers",
+   "export_reports",
+   "manage_outlets",
+   "manage_partners",
+   "manage_po_settings",
+   "manage_products",
+   "manage_settings",
+   "manage_staff",
+   "override_credit",
+   "send_purchase_orders",
+   "view_accounts",
+   "view_all_outlets",
+   "view_audit_history",
+   "view_outlet",
+   "view_purchase_rates",
+   "view_purchases",
+   "view_reports"
+  ]
+ },
+ {
+  "role": "super_admin",
+  "flags": {
+   "canCreatePurchases": true,
+   "canEditPurchases": true,
+   "canEditSales": true,
+   "canViewPurchaseRates": true,
+   "canAccessReports": true,
+   "canViewAuditHistory": true,
+   "canManagePartners": true,
+   "canExportGst": true
+  },
+  "permissions": [
+   "cancel_purchase_orders",
+   "create_bills",
+   "create_purchases",
+   "edit_purchases",
+   "edit_sales",
+   "edit_vouchers",
+   "export_reports",
+   "manage_outlets",
+   "manage_partners",
+   "manage_po_settings",
+   "manage_products",
+   "manage_settings",
+   "manage_staff",
+   "override_credit",
+   "send_purchase_orders",
+   "view_accounts",
+   "view_all_outlets",
+   "view_audit_history",
+   "view_outlet",
+   "view_purchase_rates",
+   "view_purchases",
+   "view_reports"
+  ]
+ },
+ {
+  "role": "admin",
+  "flags": {
+   "canCreatePurchases": false,
+   "canEditPurchases": false,
+   "canEditSales": false,
+   "canViewPurchaseRates": false,
+   "canAccessReports": false,
+   "canViewAuditHistory": false,
+   "canManagePartners": false,
+   "canExportGst": false
+  },
+  "permissions": [
+   "cancel_purchase_orders",
+   "create_bills",
+   "create_purchases",
+   "edit_purchases",
+   "edit_sales",
+   "edit_vouchers",
+   "export_reports",
+   "manage_partners",
+   "manage_po_settings",
+   "manage_products",
+   "manage_settings",
+   "manage_staff",
+   "override_credit",
+   "send_purchase_orders",
+   "view_accounts",
+   "view_audit_history",
+   "view_outlet",
+   "view_purchase_rates",
+   "view_purchases",
+   "view_reports"
+  ]
+ },
+ {
+  "role": "admin",
+  "flags": {
+   "canCreatePurchases": true,
+   "canEditPurchases": false,
+   "canEditSales": false,
+   "canViewPurchaseRates": false,
+   "canAccessReports": false,
+   "canViewAuditHistory": false,
+   "canManagePartners": false,
+   "canExportGst": false
+  },
+  "permissions": [
+   "cancel_purchase_orders",
+   "create_bills",
+   "create_purchases",
+   "edit_purchases",
+   "edit_sales",
+   "edit_vouchers",
+   "export_reports",
+   "manage_partners",
+   "manage_po_settings",
+   "manage_products",
+   "manage_settings",
+   "manage_staff",
+   "override_credit",
+   "send_purchase_orders",
+   "view_accounts",
+   "view_audit_history",
+   "view_outlet",
+   "view_purchase_rates",
+   "view_purchases",
+   "view_reports"
+  ]
+ },
+ {
+  "role": "admin",
+  "flags": {
+   "canCreatePurchases": false,
+   "canEditPurchases": true,
+   "canEditSales": false,
+   "canViewPurchaseRates": false,
+   "canAccessReports": false,
+   "canViewAuditHistory": false,
+   "canManagePartners": false,
+   "canExportGst": false
+  },
+  "permissions": [
+   "cancel_purchase_orders",
+   "create_bills",
+   "create_purchases",
+   "edit_purchases",
+   "edit_sales",
+   "edit_vouchers",
+   "export_reports",
+   "manage_partners",
+   "manage_po_settings",
+   "manage_products",
+   "manage_settings",
+   "manage_staff",
+   "override_credit",
+   "send_purchase_orders",
+   "view_accounts",
+   "view_audit_history",
+   "view_outlet",
+   "view_purchase_rates",
+   "view_purchases",
+   "view_reports"
+  ]
+ },
+ {
+  "role": "admin",
+  "flags": {
+   "canCreatePurchases": false,
+   "canEditPurchases": false,
+   "canEditSales": true,
+   "canViewPurchaseRates": false,
+   "canAccessReports": false,
+   "canViewAuditHistory": false,
+   "canManagePartners": false,
+   "canExportGst": false
+  },
+  "permissions": [
+   "cancel_purchase_orders",
+   "create_bills",
+   "create_purchases",
+   "edit_purchases",
+   "edit_sales",
+   "edit_vouchers",
+   "export_reports",
+   "manage_partners",
+   "manage_po_settings",
+   "manage_products",
+   "manage_settings",
+   "manage_staff",
+   "override_credit",
+   "send_purchase_orders",
+   "view_accounts",
+   "view_audit_history",
+   "view_outlet",
+   "view_purchase_rates",
+   "view_purchases",
+   "view_reports"
+  ]
+ },
+ {
+  "role": "admin",
+  "flags": {
+   "canCreatePurchases": false,
+   "canEditPurchases": false,
+   "canEditSales": false,
+   "canViewPurchaseRates": true,
+   "canAccessReports": false,
+   "canViewAuditHistory": false,
+   "canManagePartners": false,
+   "canExportGst": false
+  },
+  "permissions": [
+   "cancel_purchase_orders",
+   "create_bills",
+   "create_purchases",
+   "edit_purchases",
+   "edit_sales",
+   "edit_vouchers",
+   "export_reports",
+   "manage_partners",
+   "manage_po_settings",
+   "manage_products",
+   "manage_settings",
+   "manage_staff",
+   "override_credit",
+   "send_purchase_orders",
+   "view_accounts",
+   "view_audit_history",
+   "view_outlet",
+   "view_purchase_rates",
+   "view_purchases",
+   "view_reports"
+  ]
+ },
+ {
+  "role": "admin",
+  "flags": {
+   "canCreatePurchases": false,
+   "canEditPurchases": false,
+   "canEditSales": false,
+   "canViewPurchaseRates": false,
+   "canAccessReports": true,
+   "canViewAuditHistory": false,
+   "canManagePartners": false,
+   "canExportGst": false
+  },
+  "permissions": [
+   "cancel_purchase_orders",
+   "create_bills",
+   "create_purchases",
+   "edit_purchases",
+   "edit_sales",
+   "edit_vouchers",
+   "export_reports",
+   "manage_partners",
+   "manage_po_settings",
+   "manage_products",
+   "manage_settings",
+   "manage_staff",
+   "override_credit",
+   "send_purchase_orders",
+   "view_accounts",
+   "view_audit_history",
+   "view_outlet",
+   "view_purchase_rates",
+   "view_purchases",
+   "view_reports"
+  ]
+ },
+ {
+  "role": "admin",
+  "flags": {
+   "canCreatePurchases": false,
+   "canEditPurchases": false,
+   "canEditSales": false,
+   "canViewPurchaseRates": false,
+   "canAccessReports": false,
+   "canViewAuditHistory": true,
+   "canManagePartners": false,
+   "canExportGst": false
+  },
+  "permissions": [
+   "cancel_purchase_orders",
+   "create_bills",
+   "create_purchases",
+   "edit_purchases",
+   "edit_sales",
+   "edit_vouchers",
+   "export_reports",
+   "manage_partners",
+   "manage_po_settings",
+   "manage_products",
+   "manage_settings",
+   "manage_staff",
+   "override_credit",
+   "send_purchase_orders",
+   "view_accounts",
+   "view_audit_history",
+   "view_outlet",
+   "view_purchase_rates",
+   "view_purchases",
+   "view_reports"
+  ]
+ },
+ {
+  "role": "admin",
+  "flags": {
+   "canCreatePurchases": false,
+   "canEditPurchases": false,
+   "canEditSales": false,
+   "canViewPurchaseRates": false,
+   "canAccessReports": false,
+   "canViewAuditHistory": false,
+   "canManagePartners": true,
+   "canExportGst": false
+  },
+  "permissions": [
+   "cancel_purchase_orders",
+   "create_bills",
+   "create_purchases",
+   "edit_purchases",
+   "edit_sales",
+   "edit_vouchers",
+   "export_reports",
+   "manage_partners",
+   "manage_po_settings",
+   "manage_products",
+   "manage_settings",
+   "manage_staff",
+   "override_credit",
+   "send_purchase_orders",
+   "view_accounts",
+   "view_audit_history",
+   "view_outlet",
+   "view_purchase_rates",
+   "view_purchases",
+   "view_reports"
+  ]
+ },
+ {
+  "role": "admin",
+  "flags": {
+   "canCreatePurchases": false,
+   "canEditPurchases": false,
+   "canEditSales": false,
+   "canViewPurchaseRates": false,
+   "canAccessReports": false,
+   "canViewAuditHistory": false,
+   "canManagePartners": false,
+   "canExportGst": true
+  },
+  "permissions": [
+   "cancel_purchase_orders",
+   "create_bills",
+   "create_purchases",
+   "edit_purchases",
+   "edit_sales",
+   "edit_vouchers",
+   "export_reports",
+   "manage_partners",
+   "manage_po_settings",
+   "manage_products",
+   "manage_settings",
+   "manage_staff",
+   "override_credit",
+   "send_purchase_orders",
+   "view_accounts",
+   "view_audit_history",
+   "view_outlet",
+   "view_purchase_rates",
+   "view_purchases",
+   "view_reports"
+  ]
+ },
+ {
+  "role": "admin",
+  "flags": {
+   "canCreatePurchases": true,
+   "canEditPurchases": true,
+   "canEditSales": true,
+   "canViewPurchaseRates": true,
+   "canAccessReports": true,
+   "canViewAuditHistory": true,
+   "canManagePartners": true,
+   "canExportGst": true
+  },
+  "permissions": [
+   "cancel_purchase_orders",
+   "create_bills",
+   "create_purchases",
+   "edit_purchases",
+   "edit_sales",
+   "edit_vouchers",
+   "export_reports",
+   "manage_partners",
+   "manage_po_settings",
+   "manage_products",
+   "manage_settings",
+   "manage_staff",
+   "override_credit",
+   "send_purchase_orders",
+   "view_accounts",
+   "view_audit_history",
+   "view_outlet",
+   "view_purchase_rates",
+   "view_purchases",
+   "view_reports"
+  ]
+ },
+ {
+  "role": "manager",
+  "flags": {
+   "canCreatePurchases": false,
+   "canEditPurchases": false,
+   "canEditSales": false,
+   "canViewPurchaseRates": false,
+   "canAccessReports": false,
+   "canViewAuditHistory": false,
+   "canManagePartners": false,
+   "canExportGst": false
+  },
+  "permissions": [
+   "create_bills",
+   "manage_products",
+   "override_credit",
+   "view_accounts",
+   "view_outlet",
+   "view_purchases"
+  ]
+ },
+ {
+  "role": "manager",
+  "flags": {
+   "canCreatePurchases": true,
+   "canEditPurchases": false,
+   "canEditSales": false,
+   "canViewPurchaseRates": false,
+   "canAccessReports": false,
+   "canViewAuditHistory": false,
+   "canManagePartners": false,
+   "canExportGst": false
+  },
+  "permissions": [
+   "create_bills",
+   "create_purchases",
+   "manage_products",
+   "override_credit",
+   "send_purchase_orders",
+   "view_accounts",
+   "view_outlet",
+   "view_purchases"
+  ]
+ },
+ {
+  "role": "manager",
+  "flags": {
+   "canCreatePurchases": false,
+   "canEditPurchases": true,
+   "canEditSales": false,
+   "canViewPurchaseRates": false,
+   "canAccessReports": false,
+   "canViewAuditHistory": false,
+   "canManagePartners": false,
+   "canExportGst": false
+  },
+  "permissions": [
+   "cancel_purchase_orders",
+   "create_bills",
+   "edit_purchases",
+   "manage_products",
+   "override_credit",
+   "view_accounts",
+   "view_outlet",
+   "view_purchases"
+  ]
+ },
+ {
+  "role": "manager",
+  "flags": {
+   "canCreatePurchases": false,
+   "canEditPurchases": false,
+   "canEditSales": true,
+   "canViewPurchaseRates": false,
+   "canAccessReports": false,
+   "canViewAuditHistory": false,
+   "canManagePartners": false,
+   "canExportGst": false
+  },
+  "permissions": [
+   "create_bills",
+   "edit_sales",
+   "manage_products",
+   "override_credit",
+   "view_accounts",
+   "view_outlet",
+   "view_purchases"
+  ]
+ },
+ {
+  "role": "manager",
+  "flags": {
+   "canCreatePurchases": false,
+   "canEditPurchases": false,
+   "canEditSales": false,
+   "canViewPurchaseRates": true,
+   "canAccessReports": false,
+   "canViewAuditHistory": false,
+   "canManagePartners": false,
+   "canExportGst": false
+  },
+  "permissions": [
+   "create_bills",
+   "manage_products",
+   "override_credit",
+   "view_accounts",
+   "view_outlet",
+   "view_purchase_rates",
+   "view_purchases"
+  ]
+ },
+ {
+  "role": "manager",
+  "flags": {
+   "canCreatePurchases": false,
+   "canEditPurchases": false,
+   "canEditSales": false,
+   "canViewPurchaseRates": false,
+   "canAccessReports": true,
+   "canViewAuditHistory": false,
+   "canManagePartners": false,
+   "canExportGst": false
+  },
+  "permissions": [
+   "create_bills",
+   "manage_products",
+   "override_credit",
+   "view_accounts",
+   "view_outlet",
+   "view_purchases",
+   "view_reports"
+  ]
+ },
+ {
+  "role": "manager",
+  "flags": {
+   "canCreatePurchases": false,
+   "canEditPurchases": false,
+   "canEditSales": false,
+   "canViewPurchaseRates": false,
+   "canAccessReports": false,
+   "canViewAuditHistory": true,
+   "canManagePartners": false,
+   "canExportGst": false
+  },
+  "permissions": [
+   "create_bills",
+   "manage_products",
+   "override_credit",
+   "view_accounts",
+   "view_audit_history",
+   "view_outlet",
+   "view_purchases"
+  ]
+ },
+ {
+  "role": "manager",
+  "flags": {
+   "canCreatePurchases": false,
+   "canEditPurchases": false,
+   "canEditSales": false,
+   "canViewPurchaseRates": false,
+   "canAccessReports": false,
+   "canViewAuditHistory": false,
+   "canManagePartners": true,
+   "canExportGst": false
+  },
+  "permissions": [
+   "create_bills",
+   "manage_partners",
+   "manage_products",
+   "override_credit",
+   "view_accounts",
+   "view_outlet",
+   "view_purchases"
+  ]
+ },
+ {
+  "role": "manager",
+  "flags": {
+   "canCreatePurchases": false,
+   "canEditPurchases": false,
+   "canEditSales": false,
+   "canViewPurchaseRates": false,
+   "canAccessReports": false,
+   "canViewAuditHistory": false,
+   "canManagePartners": false,
+   "canExportGst": true
+  },
+  "permissions": [
+   "create_bills",
+   "export_reports",
+   "manage_products",
+   "override_credit",
+   "view_accounts",
+   "view_outlet",
+   "view_purchases"
+  ]
+ },
+ {
+  "role": "manager",
+  "flags": {
+   "canCreatePurchases": true,
+   "canEditPurchases": true,
+   "canEditSales": true,
+   "canViewPurchaseRates": true,
+   "canAccessReports": true,
+   "canViewAuditHistory": true,
+   "canManagePartners": true,
+   "canExportGst": true
+  },
+  "permissions": [
+   "cancel_purchase_orders",
+   "create_bills",
+   "create_purchases",
+   "edit_purchases",
+   "edit_sales",
+   "export_reports",
+   "manage_partners",
+   "manage_products",
+   "override_credit",
+   "send_purchase_orders",
+   "view_accounts",
+   "view_audit_history",
+   "view_outlet",
+   "view_purchase_rates",
+   "view_purchases",
+   "view_reports"
+  ]
+ },
+ {
+  "role": "billing_staff",
+  "flags": {
+   "canCreatePurchases": false,
+   "canEditPurchases": false,
+   "canEditSales": false,
+   "canViewPurchaseRates": false,
+   "canAccessReports": false,
+   "canViewAuditHistory": false,
+   "canManagePartners": false,
+   "canExportGst": false
+  },
+  "permissions": [
+   "create_bills",
+   "view_outlet"
+  ]
+ },
+ {
+  "role": "billing_staff",
+  "flags": {
+   "canCreatePurchases": true,
+   "canEditPurchases": false,
+   "canEditSales": false,
+   "canViewPurchaseRates": false,
+   "canAccessReports": false,
+   "canViewAuditHistory": false,
+   "canManagePartners": false,
+   "canExportGst": false
+  },
+  "permissions": [
+   "create_bills",
+   "create_purchases",
+   "manage_products",
+   "send_purchase_orders",
+   "view_outlet",
+   "view_purchases"
+  ]
+ },
+ {
+  "role": "billing_staff",
+  "flags": {
+   "canCreatePurchases": false,
+   "canEditPurchases": true,
+   "canEditSales": false,
+   "canViewPurchaseRates": false,
+   "canAccessReports": false,
+   "canViewAuditHistory": false,
+   "canManagePartners": false,
+   "canExportGst": false
+  },
+  "permissions": [
+   "cancel_purchase_orders",
+   "create_bills",
+   "edit_purchases",
+   "manage_products",
+   "view_outlet",
+   "view_purchases"
+  ]
+ },
+ {
+  "role": "billing_staff",
+  "flags": {
+   "canCreatePurchases": false,
+   "canEditPurchases": false,
+   "canEditSales": true,
+   "canViewPurchaseRates": false,
+   "canAccessReports": false,
+   "canViewAuditHistory": false,
+   "canManagePartners": false,
+   "canExportGst": false
+  },
+  "permissions": [
+   "create_bills",
+   "edit_sales",
+   "view_outlet"
+  ]
+ },
+ {
+  "role": "billing_staff",
+  "flags": {
+   "canCreatePurchases": false,
+   "canEditPurchases": false,
+   "canEditSales": false,
+   "canViewPurchaseRates": true,
+   "canAccessReports": false,
+   "canViewAuditHistory": false,
+   "canManagePartners": false,
+   "canExportGst": false
+  },
+  "permissions": [
+   "create_bills",
+   "view_outlet",
+   "view_purchase_rates",
+   "view_purchases"
+  ]
+ },
+ {
+  "role": "billing_staff",
+  "flags": {
+   "canCreatePurchases": false,
+   "canEditPurchases": false,
+   "canEditSales": false,
+   "canViewPurchaseRates": false,
+   "canAccessReports": true,
+   "canViewAuditHistory": false,
+   "canManagePartners": false,
+   "canExportGst": false
+  },
+  "permissions": [
+   "create_bills",
+   "view_outlet",
+   "view_reports"
+  ]
+ },
+ {
+  "role": "billing_staff",
+  "flags": {
+   "canCreatePurchases": false,
+   "canEditPurchases": false,
+   "canEditSales": false,
+   "canViewPurchaseRates": false,
+   "canAccessReports": false,
+   "canViewAuditHistory": true,
+   "canManagePartners": false,
+   "canExportGst": false
+  },
+  "permissions": [
+   "create_bills",
+   "view_audit_history",
+   "view_outlet"
+  ]
+ },
+ {
+  "role": "billing_staff",
+  "flags": {
+   "canCreatePurchases": false,
+   "canEditPurchases": false,
+   "canEditSales": false,
+   "canViewPurchaseRates": false,
+   "canAccessReports": false,
+   "canViewAuditHistory": false,
+   "canManagePartners": true,
+   "canExportGst": false
+  },
+  "permissions": [
+   "create_bills",
+   "manage_partners",
+   "view_outlet"
+  ]
+ },
+ {
+  "role": "billing_staff",
+  "flags": {
+   "canCreatePurchases": false,
+   "canEditPurchases": false,
+   "canEditSales": false,
+   "canViewPurchaseRates": false,
+   "canAccessReports": false,
+   "canViewAuditHistory": false,
+   "canManagePartners": false,
+   "canExportGst": true
+  },
+  "permissions": [
+   "create_bills",
+   "export_reports",
+   "view_outlet"
+  ]
+ },
+ {
+  "role": "billing_staff",
+  "flags": {
+   "canCreatePurchases": true,
+   "canEditPurchases": true,
+   "canEditSales": true,
+   "canViewPurchaseRates": true,
+   "canAccessReports": true,
+   "canViewAuditHistory": true,
+   "canManagePartners": true,
+   "canExportGst": true
+  },
+  "permissions": [
+   "cancel_purchase_orders",
+   "create_bills",
+   "create_purchases",
+   "edit_purchases",
+   "edit_sales",
+   "export_reports",
+   "manage_partners",
+   "manage_products",
+   "send_purchase_orders",
+   "view_audit_history",
+   "view_outlet",
+   "view_purchase_rates",
+   "view_purchases",
+   "view_reports"
+  ]
+ },
+ {
+  "role": "view_only",
+  "flags": {
+   "canCreatePurchases": false,
+   "canEditPurchases": false,
+   "canEditSales": false,
+   "canViewPurchaseRates": false,
+   "canAccessReports": false,
+   "canViewAuditHistory": false,
+   "canManagePartners": false,
+   "canExportGst": false
+  },
+  "permissions": [
+   "view_outlet"
+  ]
+ },
+ {
+  "role": "view_only",
+  "flags": {
+   "canCreatePurchases": true,
+   "canEditPurchases": false,
+   "canEditSales": false,
+   "canViewPurchaseRates": false,
+   "canAccessReports": false,
+   "canViewAuditHistory": false,
+   "canManagePartners": false,
+   "canExportGst": false
+  },
+  "permissions": [
+   "create_purchases",
+   "manage_products",
+   "send_purchase_orders",
+   "view_outlet",
+   "view_purchases"
+  ]
+ },
+ {
+  "role": "view_only",
+  "flags": {
+   "canCreatePurchases": false,
+   "canEditPurchases": true,
+   "canEditSales": false,
+   "canViewPurchaseRates": false,
+   "canAccessReports": false,
+   "canViewAuditHistory": false,
+   "canManagePartners": false,
+   "canExportGst": false
+  },
+  "permissions": [
+   "cancel_purchase_orders",
+   "edit_purchases",
+   "manage_products",
+   "view_outlet",
+   "view_purchases"
+  ]
+ },
+ {
+  "role": "view_only",
+  "flags": {
+   "canCreatePurchases": false,
+   "canEditPurchases": false,
+   "canEditSales": true,
+   "canViewPurchaseRates": false,
+   "canAccessReports": false,
+   "canViewAuditHistory": false,
+   "canManagePartners": false,
+   "canExportGst": false
+  },
+  "permissions": [
+   "edit_sales",
+   "view_outlet"
+  ]
+ },
+ {
+  "role": "view_only",
+  "flags": {
+   "canCreatePurchases": false,
+   "canEditPurchases": false,
+   "canEditSales": false,
+   "canViewPurchaseRates": true,
+   "canAccessReports": false,
+   "canViewAuditHistory": false,
+   "canManagePartners": false,
+   "canExportGst": false
+  },
+  "permissions": [
+   "view_outlet",
+   "view_purchase_rates",
+   "view_purchases"
+  ]
+ },
+ {
+  "role": "view_only",
+  "flags": {
+   "canCreatePurchases": false,
+   "canEditPurchases": false,
+   "canEditSales": false,
+   "canViewPurchaseRates": false,
+   "canAccessReports": true,
+   "canViewAuditHistory": false,
+   "canManagePartners": false,
+   "canExportGst": false
+  },
+  "permissions": [
+   "view_outlet",
+   "view_reports"
+  ]
+ },
+ {
+  "role": "view_only",
+  "flags": {
+   "canCreatePurchases": false,
+   "canEditPurchases": false,
+   "canEditSales": false,
+   "canViewPurchaseRates": false,
+   "canAccessReports": false,
+   "canViewAuditHistory": true,
+   "canManagePartners": false,
+   "canExportGst": false
+  },
+  "permissions": [
+   "view_audit_history",
+   "view_outlet"
+  ]
+ },
+ {
+  "role": "view_only",
+  "flags": {
+   "canCreatePurchases": false,
+   "canEditPurchases": false,
+   "canEditSales": false,
+   "canViewPurchaseRates": false,
+   "canAccessReports": false,
+   "canViewAuditHistory": false,
+   "canManagePartners": true,
+   "canExportGst": false
+  },
+  "permissions": [
+   "manage_partners",
+   "view_outlet"
+  ]
+ },
+ {
+  "role": "view_only",
+  "flags": {
+   "canCreatePurchases": false,
+   "canEditPurchases": false,
+   "canEditSales": false,
+   "canViewPurchaseRates": false,
+   "canAccessReports": false,
+   "canViewAuditHistory": false,
+   "canManagePartners": false,
+   "canExportGst": true
+  },
+  "permissions": [
+   "export_reports",
+   "view_outlet"
+  ]
+ },
+ {
+  "role": "view_only",
+  "flags": {
+   "canCreatePurchases": true,
+   "canEditPurchases": true,
+   "canEditSales": true,
+   "canViewPurchaseRates": true,
+   "canAccessReports": true,
+   "canViewAuditHistory": true,
+   "canManagePartners": true,
+   "canExportGst": true
+  },
+  "permissions": [
+   "cancel_purchase_orders",
+   "create_purchases",
+   "edit_purchases",
+   "edit_sales",
+   "export_reports",
+   "manage_partners",
+   "manage_products",
+   "send_purchase_orders",
+   "view_audit_history",
+   "view_outlet",
+   "view_purchase_rates",
+   "view_purchases",
+   "view_reports"
+  ]
+ }
+]

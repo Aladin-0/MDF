@@ -7,12 +7,28 @@ import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow 
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { PackageX, ShoppingCart } from 'lucide-react';
+import { ListPlus, PackageX } from 'lucide-react';
+import { useState } from 'react';
+import { usePermissions } from '@/hooks/usePermissions';
+import { useToast } from '@/hooks/use-toast';
+import { poApi } from '@/lib/poApi';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
 
 export function LowStockTable({ onReorderClick }: any) {
     const outletId = useOutletId();
+    const { hasPermission } = usePermissions();
+    const { toast } = useToast();
+    const [added, setAdded] = useState<Set<string>>(new Set());
+    const canOrder = hasPermission('create_purchases');
+
+    const addToShortbook = async (product: any, qty: number) => {
+        try {
+            await poApi.shortbookAdd(outletId!, { productId: product.id, qty: Math.max(1, Math.ceil(qty)), source: 'low_stock' });
+            setAdded((s) => new Set(s).add(product.id));
+            toast({ title: 'Added to the Shortbook', description: product.name });
+        } catch (e: any) { toast({ variant: 'destructive', title: 'Could not add to the Shortbook', description: e.message }); }
+    };
 
     // Fetch ALL low-stock products (large page size to avoid truncation at 50)
     const { data: raw, isLoading } = useQuery({
@@ -36,7 +52,7 @@ export function LowStockTable({ onReorderClick }: any) {
                     </div>
                 </div>
                 <div>
-                    <Button onClick={onReorderClick}>Create Purchase Order</Button>
+                    {canOrder && <Button onClick={onReorderClick}>Create Purchase Order</Button>}
                 </div>
             </div>
 
@@ -96,10 +112,12 @@ export function LowStockTable({ onReorderClick }: any) {
                                             </span>
                                         </TableCell>
                                         <TableCell className="text-right">
-                                            <Button size="sm" onClick={onReorderClick}>
-                                                <ShoppingCart className="w-3 h-3 mr-2" />
-                                                Order Now
-                                            </Button>
+                                            {canOrder && (
+                                                <Button size="sm" variant={added.has(product.id) ? 'outline' : 'default'} disabled={added.has(product.id)} onClick={() => addToShortbook(product, shortage || 1)}>
+                                                    <ListPlus className="w-3 h-3 mr-2" />
+                                                    {added.has(product.id) ? 'In Shortbook' : 'Add to Shortbook'}
+                                                </Button>
+                                            )}
                                         </TableCell>
                                     </TableRow>
                                 );

@@ -12,6 +12,8 @@ import {
     AttendanceRecord,
 } from '../types';
 import { toast } from 'sonner';
+import { mapAuthUser } from './authMapper';
+import { PERMISSIONS_STALE_EVENT } from './sessionEvents';
 
 const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -67,6 +69,11 @@ function handle401() {
 export async function assertOk(response: Response): Promise<void> {
     if (response.ok) return;
     if (response.status === 401) handle401();
+    // A 403 usually means this user's rights changed on the server: refresh them now instead of
+    // leaving buttons on screen that will keep failing.
+    if (response.status === 403 && typeof window !== 'undefined') {
+        window.dispatchEvent(new Event(PERMISSIONS_STALE_EVENT));
+    }
     
     let errorData;
     const text = await response.text();
@@ -124,31 +131,10 @@ const realAuthApi = {
         await assertOk(response);
         const data = await response.json();
         authToken = data.access;
-        const u = data.user;
         return {
             access: data.access,
             refresh: data.refresh,
-            user: {
-                id: u.id,
-                name: u.name,
-                phone: u.phone,
-                role: u.role,
-                maxDiscount: u.maxDiscount,
-                canEditRate: u.canEditRate,
-                canViewPurchaseRates: u.canViewPurchaseRates,
-                canCreatePurchases: u.canCreatePurchases,
-                canAccessReports: u.canAccessReports,
-                outletId: u.outletId,
-                organizationId: u.organizationId ?? undefined,
-                isSuperAdmin: u.isSuperAdmin ?? false,
-                outlet: {
-                    ...u.outlet,
-                    id: u.outlet.id,
-                    name: u.outlet.name,
-                    city: u.outlet.city,
-                    state: u.outlet.state,
-                } as any,
-            },
+            user: mapAuthUser(data.user),
         };
     },
     logout: async (): Promise<void> => {
@@ -163,31 +149,10 @@ const realAuthApi = {
         await assertOk(response);
         const data = await response.json();
         authToken = data.access;
-        const u = data.user;
         return {
             access: data.access,
             refresh: data.refresh,
-            user: {
-                id: u.id,
-                name: u.name,
-                phone: u.phone,
-                role: u.role,
-                maxDiscount: u.maxDiscount,
-                canEditRate: u.canEditRate,
-                canViewPurchaseRates: u.canViewPurchaseRates,
-                canCreatePurchases: u.canCreatePurchases,
-                canAccessReports: u.canAccessReports,
-                outletId: u.outletId,
-                organizationId: u.organizationId ?? undefined,
-                isSuperAdmin: u.isSuperAdmin ?? false,
-                outlet: {
-                    ...u.outlet,
-                    id: u.outlet.id,
-                    name: u.outlet.name,
-                    city: u.outlet.city,
-                    state: u.outlet.state,
-                } as any,
-            },
+            user: mapAuthUser(data.user),
         };
     },
     refresh: async (refreshToken: string): Promise<{ access: string }> => {
@@ -207,21 +172,7 @@ const realAuthApi = {
         });
         await assertOk(response);
         const data = await response.json();
-        return {
-            id: data.id,
-            name: data.name,
-            phone: data.phone,
-            role: data.role,
-            maxDiscount: data.maxDiscount,
-            canEditRate: data.canEditRate,
-            canViewPurchaseRates: data.canViewPurchaseRates,
-            canCreatePurchases: data.canCreatePurchases,
-            canAccessReports: data.canAccessReports,
-            outletId: data.outletId,
-            organizationId: data.organizationId ?? undefined,
-            isSuperAdmin: data.isSuperAdmin ?? false,
-            outlet: data.outlet,
-        };
+        return mapAuthUser(data);
     },
     changePin: async (currentPin: string, newPin: string) => {
         const response = await fetch(`${API_URL}/auth/me/pin/`, {
@@ -1840,7 +1791,7 @@ const realVoucherApi = {
         const data = await response.json();
         return data.data || [];
     },
-    getLedgerStatement: async (ledgerId: string, from?: string, to?: string, ordering?: string, page?: number, pageSize?: number) => {
+    getLedgerStatement: async (ledgerId: string, from?: string, to?: string, ordering?: string, page?: number, pageSize?: number, search?: string) => {
         let url = `${API_URL}/ledgers/${ledgerId}/statement/`;
         const params: string[] = [];
         if (from) params.push(`from=${from}`);
@@ -1848,10 +1799,26 @@ const realVoucherApi = {
         if (ordering) params.push(`ordering=${encodeURIComponent(ordering)}`);
         if (page && page > 1) params.push(`page=${page}`);
         if (pageSize) params.push(`page_size=${pageSize}`);
+        if (search && search.trim()) params.push(`search=${encodeURIComponent(search.trim())}`);
         if (params.length) url += '?' + params.join('&');
         const response = await fetch(url, { headers: getHeaders() });
         await assertOk(response);
         return response.json();
+    },
+    /**
+     * The WHOLE statement, oldest first, for screens that list every entry (trial balance / balance sheet drill-downs).
+     * A single call returns at most one page, so a busy ledger (Cash, with every cash sale) used to be cut off silently.
+     */
+    getLedgerStatementAll: async (ledgerId: string, from?: string, to?: string) => {
+        const first = await realVoucherApi.getLedgerStatement(ledgerId, from, to, 'asc', 1, 2000);
+        let transactions = [...(first.transactions || [])];
+        let more = !!first.pagination?.has_more;
+        for (let page = 2; more && page <= 30; page++) {                         // 30 x 2000 = 60,000 entries is the safety stop
+            const next = await realVoucherApi.getLedgerStatement(ledgerId, from, to, 'asc', page, 2000);
+            transactions = transactions.concat(next.transactions || []);
+            more = !!next.pagination?.has_more;
+        }
+        return { ...first, transactions, pagination: first.pagination ? { ...first.pagination, page: 1, has_more: false } : first.pagination };
     },
     syncLedgers: async (outletId: string) => {
         const response = await fetch(`${API_URL}/ledgers/sync/`, {

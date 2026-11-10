@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { useCreateCustomer, useUpdateCustomer } from '@/hooks/useCustomers';
@@ -16,6 +16,8 @@ import { useOutletId } from '@/hooks/useOutletId';
 import { buildCustomerPayload } from '@/utils/payloadBuilders';
 import { Customer, INDIAN_STATES } from '@/types';
 import { cn } from '@/lib/utils';
+import { FamilyFields, FamilyFormValues } from './FamilyFields';
+import { apiErrorMessage } from '@/lib/apiError';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -34,7 +36,7 @@ type FormState = {
     dlNo20b: string;
     dlNo21b: string;
     dlExpiry: string;
-};
+} & FamilyFormValues;
 
 type FieldErrors = Partial<Record<keyof FormState, string>>;
 
@@ -53,6 +55,12 @@ const defaultForm = (): FormState => ({
     dlNo20b: '',
     dlNo21b: '',
     dlExpiry: '',
+    gender: '',
+    relationship: '',
+    isFamilyAccount: false,
+    accountHolderId: '',
+    accountHolderName: '',
+    accountMode: 'own',
 });
 
 // ─── Validation ───────────────────────────────────────────────────────────────
@@ -72,6 +80,8 @@ function validate(form: FormState): FieldErrors {
         errors.gstin = 'Invalid GSTIN format (e.g. 27AABCA1234A1Z5)';
     }
 
+    if (form.accountMode === 'join' && !form.accountHolderId) errors.accountHolderId = 'Choose whose account this person bills under, or pick "Own account".';
+
     const cl = parseFloat(form.creditLimit);
     if (isNaN(cl) || cl < 0) errors.creditLimit = 'Must be 0 or more';
 
@@ -87,6 +97,10 @@ function CustomerFormFields({
     form,
     errors,
     onChange,
+    onPatch,
+    outletId,
+    isEditing,
+    isMember,
     onToggleChronic,
     isSaving,
     onSave,
@@ -96,6 +110,10 @@ function CustomerFormFields({
     form: FormState;
     errors: FieldErrors;
     onChange: (field: keyof FormState, value: string) => void;
+    onPatch: (patch: Partial<FormState>) => void;
+    outletId: string;
+    isEditing: boolean;
+    isMember: boolean;
     onToggleChronic: (val: boolean) => void;
     isSaving: boolean;
     onSave: () => void;
@@ -104,7 +122,7 @@ function CustomerFormFields({
 }) {
     return (
         <Card className="border-blue-200 shadow-sm">
-            <CardHeader className="pb-4 pt-5 px-6 border-b border-slate-100">
+            <CardHeader className="pb-4 pt-5 px-4 sm:px-6 border-b border-slate-100">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -118,13 +136,17 @@ function CustomerFormFields({
                         className="h-7 w-7 text-slate-400 hover:text-slate-600"
                         onClick={onCancel}
                         disabled={isSaving}
+                        aria-label="Close"
                     >
                         <X className="h-4 w-4" />
                     </Button>
                 </div>
             </CardHeader>
 
-            <CardContent className="px-6 py-5 space-y-6">
+            <CardContent className="px-4 sm:px-6 py-5 space-y-6">
+                {/* One column on a phone, two from tablet up: person + address on the left, family + credit on the right */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+                <div className="space-y-6 min-w-0">
 
                 {/* Basic Info */}
                 <div className="space-y-3">
@@ -142,7 +164,7 @@ function CustomerFormFields({
                         {errors.name && <p className="text-xs text-red-500">{errors.name}</p>}
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                             <Label className="text-sm">Phone <span className="text-red-500">*</span></Label>
                             <Input
@@ -177,7 +199,7 @@ function CustomerFormFields({
                         {errors.gstin && <p className="text-xs text-red-500">{errors.gstin}</p>}
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                             <Label className="text-sm">DL No. 20B</Label>
                             <Input
@@ -237,7 +259,7 @@ function CustomerFormFields({
                         />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                             <Label className="text-sm">City</Label>
                             <Input
@@ -272,15 +294,20 @@ function CustomerFormFields({
                     </div>
                 </div>
 
+                </div>
+
+                <div className="space-y-6 min-w-0">
+                <FamilyFields values={form} onPatch={onPatch} outletId={outletId} personName={form.name} isEditing={isEditing} isMember={isMember} error={errors.accountHolderId} />
+
                 <Separator />
 
-                {/* Credit Settings */}
-                <div className="space-y-3">
+                {/* Credit Settings (a family member's credit is the account's, so there is nothing to set here) */}
+                {(isMember || form.accountMode === 'join') ? null : (<div className="space-y-3">
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
                         <CreditCard className="w-3 h-3 inline mr-1" />Credit Settings
                     </p>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                             <Label className="text-sm">Credit Limit (₹)</Label>
                             <Input
@@ -309,14 +336,16 @@ function CustomerFormFields({
                             {errors.fixedDiscount && <p className="text-xs text-red-500">{errors.fixedDiscount}</p>}
                         </div>
                     </div>
+                </div>)}
+                </div>
                 </div>
 
                 {/* Actions */}
-                <div className="flex gap-2 pt-2">
-                    <Button variant="outline" className="flex-1" onClick={onCancel} disabled={isSaving}>
+                <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-4 border-t border-slate-100">
+                    <Button variant="outline" className="sm:min-w-[120px]" onClick={onCancel} disabled={isSaving}>
                         Cancel
                     </Button>
-                    <Button className="flex-1" onClick={onSave} disabled={isSaving}>
+                    <Button className="sm:min-w-[160px]" onClick={onSave} disabled={isSaving}>
                         {isSaving ? (
                             <span className="flex items-center gap-2">
                                 <span className="h-3.5 w-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
@@ -372,6 +401,12 @@ export default function CustomerForm({ open, onClose, customer }: CustomerFormPr
                     dlNo20b: customer.dlNo20b ?? '',
                     dlNo21b: customer.dlNo21b ?? '',
                     dlExpiry: (customer as any).dlExpiry ?? '',
+                    gender: customer.gender ?? '',
+                    relationship: customer.relationship ?? '',
+                    isFamilyAccount: !!customer.isFamilyAccount,
+                    accountHolderId: customer.accountId ?? '',
+                    accountHolderName: customer.accountName ?? '',
+                    accountMode: customer.isFamilyMember ? 'join' : customer.isSharedAccountRecord ? 'shared' : 'own',
                 });
             } else {
                 setForm(defaultForm());
@@ -384,6 +419,8 @@ export default function CustomerForm({ open, onClose, customer }: CustomerFormPr
         setForm((p) => ({ ...p, [field]: value }));
         if (errors[field]) setErrors((p) => ({ ...p, [field]: undefined }));
     };
+
+    const onPatch = (patch: Partial<FormState>) => setForm((p) => ({ ...p, ...patch }));
 
     const onToggleChronic = (val: boolean) => {
         setForm((p) => ({ ...p, isChronic: val }));
@@ -413,7 +450,8 @@ export default function CustomerForm({ open, onClose, customer }: CustomerFormPr
             }
             onClose();
         } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : 'Something went wrong';
+            // axios keeps the server's reason in response.data.detail (its own message is just "status code 400")
+            const msg = (err as any)?.response?.data?.detail ?? apiErrorMessage(err);
             toast({ variant: 'destructive', title: 'Error', description: msg });
         }
     };
@@ -421,22 +459,27 @@ export default function CustomerForm({ open, onClose, customer }: CustomerFormPr
     const isSaving = createMutation.isPending || updateMutation.isPending;
 
     return (
-        <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-            <SheetContent side="right" className="w-full sm:w-[480px] p-0 overflow-y-auto">
-                <SheetHeader className="sr-only">
-                    <SheetTitle>{customer ? 'Edit Customer' : 'Add Customer'}</SheetTitle>
-                </SheetHeader>
+        // A centred popup (it used to slide in as a side panel)
+        <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+            <DialogContent hideClose className="w-[calc(100vw-1rem)] sm:w-[calc(100vw-3rem)] max-w-4xl max-h-[92vh] overflow-y-auto p-0 gap-0 border-0 bg-transparent shadow-none">
+                <DialogHeader className="sr-only">
+                    <DialogTitle>{customer ? 'Edit Customer' : 'Add Customer'}</DialogTitle>
+                </DialogHeader>
                 <CustomerFormFields
                     form={form}
                     errors={errors}
                     onChange={onChange}
+                    onPatch={onPatch}
+                    outletId={outletId}
+                    isEditing={!!customer}
+                    isMember={!!customer?.isFamilyMember}
                     onToggleChronic={onToggleChronic}
                     isSaving={isSaving}
                     onSave={handleSave}
                     onCancel={onClose}
                     title={customer ? 'Edit Customer' : 'Add Customer'}
                 />
-            </SheetContent>
-        </Sheet>
+            </DialogContent>
+        </Dialog>
     );
 }

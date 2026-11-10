@@ -1,4 +1,10 @@
 from django.urls import path
+from apps.purchases.po_views import (
+    PurchaseOrderListView, PurchaseOrderDetailView, PurchaseOrderSendView, PurchaseOrderCancelView, PurchaseOrderCloseShortView,
+    PurchaseOrderDuplicateView, PurchaseOrderOpenView, PurchaseOrderItemsView, PurchaseOrderByDistributorView,
+    PurchaseOrderSuggestionsView, PurchaseOrderBulkCreateView, ShortbookListView, ShortbookDetailView, ShortbookBulkView, ShortbookProductInfoView,
+    ShortbookCreatePOsView, PurchaseOrderSettingsView, PublicPurchaseOrderView,
+)
 from apps.purchases.views import (
     DistributorListView,
     DistributorDetailView,
@@ -10,10 +16,6 @@ from apps.purchases.views import (
     PaymentListView,
     DistributorOutstandingView,
     PurchaseInvoiceSearchView,
-    PurchaseOrderBulkCreateView,
-    PurchaseOrderSuggestionsView,
-    PurchaseOrderListView,
-    PurchaseOrderDetailView,
     PurchaseOrderExcelExportView,
     PurchaseOrderPdfExportView,
     InvoiceScanUploadView,
@@ -25,7 +27,7 @@ from apps.purchases.models import PurchaseInvoice
 from apps.accounts.models import Ledger
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from apps.core.permissions import IsAuthenticated, MethodPermissionMixin
 from rest_framework import status
 from apps.core.models import Outlet
 
@@ -60,7 +62,13 @@ class CheckPurchaseInvoiceView(APIView):
 
 
 # Create a combined view that handles both GET and POST on root purchases/ endpoint
-class PurchasesView(PurchaseListView, PurchaseCreateView):
+class PurchasesView(MethodPermissionMixin, PurchaseListView, PurchaseCreateView):
+    # POST must use CanCreatePurchases (the list view's CanAccessPurchases lets any manager create)
+    method_permissions = {
+        'GET': PurchaseListView.permission_classes,
+        'POST': PurchaseCreateView.permission_classes,
+    }
+
     def get(self, request, *args, **kwargs):
         return PurchaseListView.get(self, request, *args, **kwargs)
 
@@ -69,7 +77,12 @@ class PurchasesView(PurchaseListView, PurchaseCreateView):
 
 
 # Combined GET + POST on payments endpoint
-class PaymentListCreateView(PaymentListView, DistributorPaymentView):
+class PaymentListCreateView(MethodPermissionMixin, PaymentListView, DistributorPaymentView):
+    method_permissions = {
+        'GET': PaymentListView.permission_classes,
+        'POST': DistributorPaymentView.permission_classes,
+    }
+
     def get(self, request, *args, **kwargs):
         return PaymentListView.get(self, request, *args, **kwargs)
 
@@ -88,6 +101,20 @@ urlpatterns = [
     path('check-invoice/', CheckPurchaseInvoiceView.as_view(), name='purchase-check-invoice'),
     path('invoices/search/', PurchaseInvoiceSearchView.as_view(), name='purchase-invoice-search'),
     path('orders/', PurchaseOrderListView.as_view(), name='purchase-order-list'),
+    path('orders/open/', PurchaseOrderOpenView.as_view(), name='purchase-order-open'),
+    path('orders/items/', PurchaseOrderItemsView.as_view(), name='purchase-order-items'),
+    path('orders/by-distributor/', PurchaseOrderByDistributorView.as_view(), name='purchase-order-by-distributor'),
+    path('orders/<uuid:pk>/send/', PurchaseOrderSendView.as_view(), name='purchase-order-send'),
+    path('orders/<uuid:pk>/cancel/', PurchaseOrderCancelView.as_view(), name='purchase-order-cancel'),
+    path('orders/<uuid:pk>/close-short/', PurchaseOrderCloseShortView.as_view(), name='purchase-order-close-short'),
+    path('orders/<uuid:pk>/duplicate/', PurchaseOrderDuplicateView.as_view(), name='purchase-order-duplicate'),
+    path('shortbook/', ShortbookListView.as_view(), name='shortbook-list'),
+    path('shortbook/bulk/', ShortbookBulkView.as_view(), name='shortbook-bulk'),
+    path('shortbook/product-info/', ShortbookProductInfoView.as_view(), name='shortbook-product-info'),
+    path('shortbook/create-pos/', ShortbookCreatePOsView.as_view(), name='shortbook-create-pos'),
+    path('shortbook/<uuid:pk>/', ShortbookDetailView.as_view(), name='shortbook-detail'),
+    path('settings/po/', PurchaseOrderSettingsView.as_view(), name='po-settings'),
+    path('public/po/<str:token>/', PublicPurchaseOrderView.as_view(), name='po-public'),
     path('orders/<uuid:pk>/', PurchaseOrderDetailView.as_view(), name='purchase-order-detail'),
     path('orders/<uuid:pk>/export/excel/', PurchaseOrderExcelExportView.as_view(), name='purchase-order-export-excel'),
     path('orders/<uuid:pk>/export/pdf/', PurchaseOrderPdfExportView.as_view(), name='purchase-order-export-pdf'),

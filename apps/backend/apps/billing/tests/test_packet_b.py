@@ -26,7 +26,7 @@ class PacketBTests(APITestCase):
         call_command('seed_ledgers')
         Ledger.objects.filter(name__icontains='GST').delete()
         from apps.accounts.models import Staff
-        self.staff = Staff.objects.create_user(phone='9999999999', password='test_password', name='Test Staff', outlet=self.outlet, can_edit_sales=True)
+        self.staff = Staff.objects.create_user(phone='9999999999', password='test_password', name='Test Staff', outlet=self.outlet, can_edit_sales=True, can_modify_paid_bill=True)  # the sale edited below is fully paid: PUT now enforces the per-action right
         self.client.force_authenticate(user=self.staff)
 
     def test_missing_gst_ledgers_are_auto_provisioned_when_posting(self):

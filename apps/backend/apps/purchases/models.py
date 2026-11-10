@@ -81,6 +81,13 @@ class PurchaseOrder(models.Model):
         ('PARTIAL', 'Partially Received'),
         ('COMPLETED', 'Completed'),
         ('CANCELLED', 'Cancelled'),
+        ('EXPIRED', 'Expired'),
+    ]
+    # SAVED is the stored value for a Draft (kept so no data has to be rewritten); screens show it as "Draft".
+    STATUS_LABELS = {'SAVED': 'Draft', 'SENT': 'Sent', 'PARTIAL': 'Partial', 'COMPLETED': 'Completed',
+                     'CANCELLED': 'Cancelled', 'EXPIRED': 'Expired'}
+    SEND_CHANNEL_CHOICES = [
+        ('whatsapp_link', 'WhatsApp link'), ('pdf_whatsapp', 'PDF via WhatsApp'), ('email', 'Email'), ('manual', 'Ordered by phone'),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -97,6 +104,19 @@ class PurchaseOrder(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # ── Lifecycle (every change of `status` goes through purchases/po_services.transition) ──
+    notes = models.TextField(blank=True, default='')
+    sent_via = models.CharField(max_length=20, choices=SEND_CHANNEL_CHOICES, blank=True, default='')
+    sent_by = models.ForeignKey('accounts.Staff', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    expires_at = models.DateTimeField(null=True, blank=True, help_text='A SENT PO with nothing received expires here')
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    cancel_reason = models.CharField(max_length=255, blank=True, default='')
+    cancelled_by = models.ForeignKey('accounts.Staff', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    closed_at = models.DateTimeField(null=True, blank=True, help_text='When it reached COMPLETED / CANCELLED / EXPIRED')
+    closed_short = models.BooleanField(default=False, help_text='Completed by "Close short" (not everything arrived)')
+    share_token = models.CharField(max_length=64, unique=True, null=True, blank=True, help_text='Secret of the public read-only link')
+    version = models.IntegerField(default=1, help_text='Optimistic lock: an edit must send the version it loaded')
+
     objects = OutletFilteredManager()
 
     class Meta:
@@ -106,6 +126,11 @@ class PurchaseOrder(models.Model):
             models.Index(fields=['outlet', 'status']),
             models.Index(fields=['po_number']),
         ]
+        constraints = [models.UniqueConstraint(fields=['outlet', 'po_number'], name='uniq_po_number_per_outlet')]
+
+    @property
+    def status_label(self):
+        return self.STATUS_LABELS.get(self.status, self.status)
 
     def __str__(self):
         return f"PO {self.po_number} - {self.distributor.name}"
@@ -122,6 +147,8 @@ class PurchaseOrderItem(models.Model):
     last_rate = models.DecimalField(max_digits=10, decimal_places=2, default=0, help_text='PTR at time of order')
     unit_ptr_estimated = models.DecimalField(max_digits=10, decimal_places=2, default=0, help_text='Estimated PTR per pack')
     taxable_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text='Estimated amount')
+    pack_size_snapshot = models.CharField(max_length=50, blank=True, default='', help_text='e.g. "10 strip": kept so a reopened PO still shows the pack it was ordered in')
+    shortbook_item = models.ForeignKey('ShortbookItem', on_delete=models.SET_NULL, null=True, blank=True, related_name='po_lines')
 
     class Meta:
         db_table = 'purchases_purchaseorderitem'
@@ -129,6 +156,63 @@ class PurchaseOrderItem(models.Model):
     def __str__(self):
         return f"{self.product.name} (Qty: {self.qty_strips})"
 
+
+
+class POSequence(models.Model):
+    """One counter per outlet per day, read under a row lock so two people saving at once can never get the same PO number."""
+    outlet = models.ForeignKey('core.Outlet', on_delete=models.CASCADE, related_name='po_sequences')
+    date = models.DateField()
+    last_no = models.IntegerField(default=0)
+
+    class Meta:
+        db_table = 'purchases_posequence'
+        constraints = [models.UniqueConstraint(fields=['outlet', 'date'], name='uniq_po_sequence_outlet_date')]
+
+
+class POEvent(models.Model):
+    """Audit trail of a purchase order: who did what, when. Feeds the activity timeline."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    purchase_order = models.ForeignKey(PurchaseOrder, on_delete=models.CASCADE, related_name='events')
+    action = models.CharField(max_length=30)
+    user = models.ForeignKey('accounts.Staff', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    payload = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'purchases_poevent'
+        ordering = ['created_at']
+
+
+class ShortbookItem(models.Model):
+    """Something the pharmacy needs to order. Items land here from low stock, billing shortages, customer requests or by hand."""
+    SOURCE_CHOICES = [('low_stock', 'Low stock'), ('billing', 'Billing'), ('customer', 'Customer request'), ('manual', 'Manual')]
+    STATUS_CHOICES = [('PENDING', 'Pending'), ('IN_DRAFT', 'In draft PO'), ('ORDERED', 'Ordered'), ('RECEIVED', 'Received'), ('REMOVED', 'Removed')]
+    OPEN_STATUSES = ('PENDING', 'IN_DRAFT', 'ORDERED')
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    outlet = models.ForeignKey('core.Outlet', on_delete=models.CASCADE, related_name='shortbook_items')
+    product = models.ForeignKey('inventory.MasterProduct', on_delete=models.PROTECT, related_name='shortbook_items')
+    qty_needed = models.IntegerField(default=1)
+    source = models.CharField(max_length=20, choices=SOURCE_CHOICES, default='manual')
+    suggested_distributor = models.ForeignKey(Distributor, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    note = models.CharField(max_length=255, blank=True, default='')
+    customer_name = models.CharField(max_length=255, blank=True, default='')
+    customer_phone = models.CharField(max_length=20, blank=True, default='')
+    created_by = models.ForeignKey('accounts.Staff', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    objects = OutletFilteredManager()
+
+    class Meta:
+        db_table = 'purchases_shortbookitem'
+        ordering = ['-created_at']
+        constraints = [
+            # one open row per product per outlet: adding a product that is already there raises its quantity instead
+            models.UniqueConstraint(fields=['outlet', 'product'], condition=models.Q(status__in=['PENDING', 'IN_DRAFT', 'ORDERED']),
+                                    name='uniq_open_shortbook_item'),
+        ]
 
 
 class PurchaseInvoice(models.Model):
@@ -221,6 +305,8 @@ class PurchaseInvoice(models.Model):
                                       help_text='grandTotal - amountPaid (used for payment allocation)')
 
     # Audit & notes
+    # The purchase order this invoice received goods for (one PO can be received over several invoices).
+    purchase_order = models.ForeignKey(PurchaseOrder, on_delete=models.SET_NULL, null=True, blank=True, related_name='receipts')
     created_by = models.ForeignKey('accounts.Staff', on_delete=models.SET_NULL, null=True,
                                    related_name='purchase_invoices_created')
     notes = models.TextField(null=True, blank=True)

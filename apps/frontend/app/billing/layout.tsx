@@ -5,31 +5,18 @@ import { useRouter } from 'next/navigation';
 import { OfflineBanner } from '@/components/shared/OfflineBanner';
 import { DashboardSkeleton } from '@/components/shared/DashboardSkeleton';
 import { useAuthStore } from '@/store/authStore';
-import { authApi } from '@/lib/apiClient';
+import { useAuthGate } from '@/hooks/useAuthGate';
+import { RouteGuard } from '@/components/shared/RouteGuard';
 import { GlobalOverlays } from '@/components/shared/GlobalOverlays';
 
 
 export default function BillingLayout({ children }: { children: React.ReactNode }) {
-    const { isAuthenticated, _hasHydrated } = useAuthStore();
-    const router = useRouter();
 
-    useEffect(() => {
-        if (_hasHydrated && !isAuthenticated) {
-            router.push('/login');
-        } else if (_hasHydrated && isAuthenticated) {
-            authApi.me().then(data => {
-                if (data && data.id) {
-                    useAuthStore.getState().setUser(data);
-                    if (data.outlet) {
-                        useAuthStore.getState().setOutlet(data.outlet);
-                    }
-                }
-            }).catch(console.error);
-        }
-    }, [_hasHydrated, isAuthenticated, router]);
+    // login redirect (one shared implementation); keeping the user fresh is <SessionSync/>'s job
+    const ready = useAuthGate();
 
 
-    if (!_hasHydrated || !isAuthenticated) {
+    if (!ready) {
         return <DashboardSkeleton />;
     }
 
@@ -38,7 +25,7 @@ export default function BillingLayout({ children }: { children: React.ReactNode 
             <OfflineBanner />
             {/* Main Full-Screen Content */}
             <main className="flex-1 h-full w-full overflow-hidden flex flex-col">
-                {children}
+                <RouteGuard>{children}</RouteGuard>
             </main>
             <GlobalOverlays />
         </div>

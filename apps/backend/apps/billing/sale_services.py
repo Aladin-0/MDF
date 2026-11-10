@@ -23,7 +23,7 @@ from apps.billing.models import SaleInvoice, SaleItem, ScheduleHRegister, Ledger
 from apps.accounts.models import Ledger
 from apps.inventory.models import Batch, MasterProduct
 from apps.inventory.services import post_stock_ledger_entry
-from apps.billing.services import generate_invoice_number, schedule_h_validate, fefo_batch_select
+from apps.billing.services import generate_invoice_number, schedule_h_validate, fefo_batch_select, schedule_cart_from_catalogue
 from apps.billing.utils.pricing import validate_sale_price
 from apps.billing.services import InsufficientStockError, ScheduleHViolationError, UnitIntegrityError
 from apps.billing.pricing_engine import calculate_line_item, TaxCalculatorService
@@ -168,11 +168,7 @@ def atomic_sale_save(
             validate_invoice_aging(customer)
 
         # Step 1: Validate Schedule H requirements BEFORE any stock deduction
-        cart_items = []
-        for item in items_data:
-            cart_items.append({
-                'scheduleType': item.get('scheduleType', 'OTC'),
-            })
+        cart_items = schedule_cart_from_catalogue(items_data)
 
         schedule_h_validate(cart_items, schedule_h_data)
 

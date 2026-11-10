@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-const PUBLIC_PATHS = ['/login', '/setup', '/sw.js', '/manifest.webmanifest', '/manifest.json']
+// '/po/' is the read-only purchase-order page a distributor opens from a WhatsApp link (no login; guarded by its secret token)
+const PUBLIC_PATHS = ['/login', '/setup', '/po/', '/sw.js', '/manifest.webmanifest', '/manifest.json']
 
 export function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl

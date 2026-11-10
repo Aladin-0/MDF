@@ -6,6 +6,7 @@ import { useEffect } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { useSettingsStore, rehydrateSettingsForOutlet } from '../store/settingsStore';
 import { useBillingStore } from '../store/billingStore';
+import { SessionSync } from '@/components/shared/SessionSync';
 
 export function Providers({ children }: { children: React.ReactNode }) {
     useEffect(() => {
@@ -63,6 +64,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
     return (
         <QueryClientProvider client={queryClient}>
+            <SessionSync />
             {children}
         </QueryClientProvider>
     );

@@ -9,6 +9,7 @@ import {
     Customer,
     Doctor,
     Ledger,
+    FamilyMember,
     PaymentSplit,
     ScheduleHData,
     BillTotals,
@@ -82,7 +83,12 @@ interface BillingState {
     toggleCart: () => void;
     setCustomerSelectorOpen: (open: boolean) => void;
     setLastInvoice: (inv: SaleInvoice | null) => void;
-    setEditingSaleId: (id: string | null) => void;
+    setEditingSaleId: (id: string | null, updatedAt?: string | null) => void;
+    setPatient: (patient: FamilyMember | null) => void;
+    /** Non-valued customer: keep only a name on the bill (clears any customer). */
+    setWalkInName: (name: string | null) => void;
+    /** Counter bill: a generic cash sale with no customer, patient or name. */
+    startCounterBill: () => void;
     setEditingReturnInfo: (info: BillingState['editingReturnInfo']) => void;
     setRevisionContext: (action: string | null, reasonCode: string | null, reasonText: string | null) => void;
     resetBilling: () => void;
@@ -279,6 +285,8 @@ export const useBillingStore = create<BillingState>()(
                 [id]: {
                     ...draft,
                     saleType: type,
+                    // Wholesale sells to ONE party (a person or a business): there is no "billing for" a family member
+                    patient: type === 'WHOLESALE' ? null : draft.patient,
                     billingBasis: type === 'WHOLESALE' ? 'PTR' : (draft.billingBasis === 'PTR' ? 'MRP' : draft.billingBasis),
                     cart: updatedCart,
                     updatedAt: new Date().toISOString()
@@ -326,7 +334,23 @@ export const useBillingStore = create<BillingState>()(
     
     setCustomerLedger: (customerLedger) => {
         const activeId = get().activeDraftId;
-        if (activeId) get().updateDraftHeader(activeId, { customerLedger });
+        // Changing the customer also drops the patient: they belonged to the previous customer's account.
+        if (activeId) get().updateDraftHeader(activeId, { customerLedger, patient: null, ...(customerLedger ? { walkInName: null } : {}) });
+    },
+
+    setWalkInName: (name) => {
+        const activeId = get().activeDraftId;
+        if (activeId) get().updateDraftHeader(activeId, { walkInName: name, ...(name ? { customer: null, customerLedger: null, patient: null } : {}) });
+    },
+
+    startCounterBill: () => {
+        const activeId = get().activeDraftId;
+        if (activeId) get().updateDraftHeader(activeId, { customer: null, customerLedger: null, patient: null, walkInName: null });
+    },
+
+    setPatient: (patient) => {
+        const activeId = get().activeDraftId;
+        if (activeId) get().updateDraftHeader(activeId, { patient });
     },
 
     setDoctor: (doctor) => {
@@ -488,6 +512,9 @@ export const useBillingStore = create<BillingState>()(
                     extraDiscountPct: 0,
                     invoiceDate: undefined,
                     editingSaleId: undefined,
+                    editingSaleUpdatedAt: undefined,
+                    patient: null,
+                    walkInName: null,
                     revisionAction: undefined,
                     revisionReasonCode: undefined,
                     revisionReasonText: undefined,
@@ -640,13 +667,13 @@ export const useBillingStore = create<BillingState>()(
 
     // --- Global UI Actions ---
 
-    setEditingSaleId: (id) => set((state) => {
+    setEditingSaleId: (id, updatedAt) => set((state) => {
         if (!state.activeDraftId) return state;
         const draft = state.drafts[state.activeDraftId];
         return {
             drafts: {
                 ...state.drafts,
-                [state.activeDraftId]: { ...draft, editingSaleId: id || undefined }
+                [state.activeDraftId]: { ...draft, editingSaleId: id || undefined, editingSaleUpdatedAt: id ? (updatedAt || undefined) : undefined }
             }
         };
     }),

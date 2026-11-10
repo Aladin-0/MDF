@@ -10,6 +10,7 @@ import { useRouter } from 'next/navigation';
 import { formatCurrency } from '@/lib/gst';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { FamilyBadge } from './FamilyBadge';
 import { CustomerFilters, CustomerFull } from '@/types';
 
 interface CustomerTableProps {
@@ -64,6 +65,7 @@ export default function CustomerTable({ filters, onEdit }: CustomerTableProps) {
                                         <div className="flex items-center gap-1.5">
                                             <span className="font-medium text-slate-900">{c.name}</span>
                                             {c.isChronic && <Heart className="w-3 h-3 text-purple-500 fill-purple-500" />}
+                                            <FamilyBadge {...c} />
                                             {c.outstanding > 0 && (
                                                 <span className="ml-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 uppercase tracking-wider">
                                                     Due

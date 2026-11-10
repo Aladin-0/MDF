@@ -10,13 +10,25 @@ from django.db.models.functions import Coalesce, NullIf
 from django.utils.timezone import make_aware, get_current_timezone
 from django.http import HttpResponse
 
-from apps.core.permissions import IsAuthenticated
+from apps.core.permissions import IsAuthenticated, CanManagePartners, CanEditVouchers
 from apps.core.models import Outlet
 from apps.billing.models import SaleInvoice, SaleItem, ExpenseEntry, SalesReturn, SalesReturnItem, ReceiptEntry
 from apps.purchases.models import PurchaseInvoice
 from apps.inventory.models import Batch
 from apps.accounts.models import Partner
 from apps.reports.models import DailyCashReport, FixedMonthlyExpense
+
+def bank_options(outlet_id):
+    """The bank accounts a cash deposit can go to, and the till's own ledger (what a deposit is taken out of)."""
+    from apps.accounts.models import Ledger
+    banks = Ledger.objects.filter(outlet_id=outlet_id, group__name='Bank Accounts').order_by('name')
+    cash = Ledger.objects.filter(outlet_id=outlet_id, group__name='Cash in Hand').order_by('name')
+    till = cash.filter(name__iexact='cash').first() or cash.first()
+    return {
+        'accounts': [{'id': str(b.id), 'name': b.name} for b in banks],
+        'cashLedger': {'id': str(till.id), 'name': till.name} if till else None,
+    }
+
 
 def get_daily_snapshot_data(outlet_id, start_date_str, end_date_str=None):
     if not end_date_str:
@@ -259,6 +271,13 @@ def get_daily_snapshot_data(outlet_id, start_date_str, end_date_str=None):
     cash_payment_items = []
     cash_received_items = []
     cash_income_items = []
+    bank_deposit = 0.0            # cash taken out of the drawer and put in a bank account (Contra: Dr Bank, Cr Cash)
+    cash_from_bank = 0.0          # cash brought back from the bank (Contra: Dr Cash, Cr Bank)
+    bank_deposit_items = []
+    cash_from_bank_items = []
+
+    def is_bank_line(line):
+        return bool(line and line.ledger and line.ledger.group and line.ledger.group.name.strip().lower() == 'bank accounts')
 
     def is_cash_line(line):
         if not line or not line.ledger:
@@ -333,6 +352,35 @@ def get_daily_snapshot_data(outlet_id, start_date_str, end_date_str=None):
                     cash_received += portion
                     cash_received_items.append(item_record)
 
+        # Contra: cash <-> bank. It is neither a payment nor a receipt, so the cash formula used to miss it entirely
+        # (a deposit left the drawer short by exactly the amount banked). A contra between two cash ledgers moves nothing out of the till.
+        if v.voucher_type == 'contra':
+            def contra_items(cash_lines, cash_side, bank_lines, bank_side):
+                cash_amt = float(sum(getattr(l, cash_side) for l in cash_lines))
+                total_bank = float(sum(getattr(l, bank_side) for l in bank_lines))
+                out = []
+                for bl in bank_lines:
+                    bank_amt = float(getattr(bl, bank_side))
+                    out.append({
+                        'id': str(v.id), 'no': v.voucher_no, 'date': v.date.strftime("%d-%m-%Y"), 'ledger': bl.ledger.name,
+                        'group': bl.ledger.group.name if bl.ledger.group else 'Bank Accounts', 'narration': v.narration or '',
+                        'amount': round(cash_amt * (bank_amt / total_bank) if total_bank > 0 else bank_amt, 2),
+                        'totalVoucherAmount': round(float(v.total_amount), 2),
+                        'link': f'/dashboard/accounts/voucher-entry?editId={v.id}',
+                    })
+                return out
+
+            bank_dr_lines = [l for l in lines if is_bank_line(l) and l.debit > 0]
+            bank_cr_lines = [l for l in lines if is_bank_line(l) and l.credit > 0]
+            if cash_cr_lines and bank_dr_lines:
+                recs = contra_items(cash_cr_lines, 'credit', bank_dr_lines, 'debit')
+                bank_deposit_items.extend(recs)
+                bank_deposit += sum(r['amount'] for r in recs)
+            if cash_dr_lines and bank_cr_lines:
+                recs = contra_items(cash_dr_lines, 'debit', bank_cr_lines, 'credit')
+                cash_from_bank_items.extend(recs)
+                cash_from_bank += sum(r['amount'] for r in recs)
+
     # Legacy POS receipts & manual carton sale
     if jama_manual > 0:
         cash_received += jama_manual
@@ -366,7 +414,8 @@ def get_daily_snapshot_data(outlet_id, start_date_str, end_date_str=None):
     fixed_exp, _ = FixedMonthlyExpense.objects.get_or_create(outlet_id=outlet_id)
 
     # ── Strict Formula for End-of-Day Required Cash ──
-    # Opening Cash + Gross Sales - Sales Return - Credit Sale - UPI - Cards - Cash Expenses - Cash Payments - Cash Purchases + Cash Received + Cash Income
+    # Opening Cash + Gross Sales - Sales Return - Credit Sale - UPI - Cards - Cash Expenses - Cash Payments - Cash Purchases
+    #   - Bank Deposit + Cash Withdrawn from Bank + Cash Received + Cash Income
     cash_required = (
         opening_cash
         + total_sales
@@ -377,6 +426,8 @@ def get_daily_snapshot_data(outlet_id, start_date_str, end_date_str=None):
         - cash_expenses
         - cash_payments
         - total_cash_purchases
+        - bank_deposit
+        + cash_from_bank
         + cash_received
         + cash_income
     )
@@ -496,6 +547,8 @@ def get_daily_snapshot_data(outlet_id, start_date_str, end_date_str=None):
             'expenses': round(cash_expenses, 2),
             'cashPayments': round(cash_payments, 2),
             'cashPurchases': round(total_cash_purchases, 2),
+            'bankDeposit': round(bank_deposit, 2),
+            'cashFromBank': round(cash_from_bank, 2),
             'cashReceived': round(cash_received, 2),
             'customerJama': round(cash_received, 2),
             'cashIncome': round(cash_income, 2),
@@ -512,6 +565,8 @@ def get_daily_snapshot_data(outlet_id, start_date_str, end_date_str=None):
                 'cashExpenses': cash_expense_items,
                 'cashPayments': cash_payment_items,
                 'cashPurchases': cash_purchase_items,
+                'bankDeposit': bank_deposit_items,
+                'cashFromBank': cash_from_bank_items,
                 'cashReceived': cash_received_items,
                 'cashIncome': cash_income_items,
             }
@@ -547,6 +602,7 @@ def get_daily_snapshot_data(outlet_id, start_date_str, end_date_str=None):
             'daysInMonth': fixed_exp.days_in_month,
             'perDay': float(fixed_exp.per_day),
         },
+        'bank': bank_options(outlet_id),
         'bills': {
             'first': first_bill.invoice_no if first_bill else 'N/A',
             'last': last_bill.invoice_no if last_bill else 'N/A'
@@ -601,7 +657,7 @@ class DailyCashReportView(APIView):
 
 
 class FixedMonthlyExpenseView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanManagePartners]
     
     def post(self, request, *args, **kwargs):
         outlet_id = request.data.get('outletId')
@@ -716,7 +772,7 @@ class DailySnapshotExportView(APIView):
         r += 1
         ws[f'A{r}'] = "TOTAL"; ws.merge_cells(f'A{r}:B{r}'); ws[f'C{r}'] = data['salesBreakdown']['actualCash']; style_cell(ws[f'A{r}']); style_cell(ws[f'C{r}'])
         
-        # Sales Breakdown (D8:E22)
+        # Sales Breakdown (D8:E24)
         sb_rows = [
             ("OPENING CASH", data['salesBreakdown']['openingCash'], None),
             ("GROSS SALES", data['salesBreakdown']['grossSales'], None),
@@ -727,6 +783,8 @@ class DailySnapshotExportView(APIView):
             ("(-) CASH EXPENSES", data['salesBreakdown']['cashExpenses'], "FF0000"),
             ("(-) CASH PAYMENTS", data['salesBreakdown']['cashPayments'], "FF0000"),
             ("(-) CASH PURCHASES", data['salesBreakdown']['cashPurchases'], "FF0000"),
+            ("(-) BANK DEPOSIT", data['salesBreakdown']['bankDeposit'], "FF0000"),
+            ("(+) CASH FROM BANK", data['salesBreakdown']['cashFromBank'], None),
             ("(+) CASH RECEIVED", data['salesBreakdown']['cashReceived'], "FF0000"),
             ("(+) CASH INCOME", data['salesBreakdown']['cashIncome'], None),
             ("CASH REQUIRED", data['salesBreakdown']['cashRequired'], "FFFF00"),
@@ -789,3 +847,88 @@ class DailySnapshotExportView(APIView):
         filename = f'Daily_Report_{start_date_str}.xlsx' if start_date_str == end_date_str else f'Daily_Report_{start_date_str}_to_{end_date_str}.xlsx'
         response['Content-Disposition'] = f'attachment; filename={filename}'
         return response
+
+
+class BankDepositView(APIView):
+    """
+    POST reports/daily-snapshot/bank-deposit/ : record cash taken from the till to a bank account.
+    It is a Contra voucher (Dr Bank, Cr Cash) made through the ordinary voucher service, so numbering, ledger balances, audit and the
+    accounts screens all see it like any other voucher, and the daily report picks it up as "Bank Deposit".
+    Needs the same right as creating a voucher.
+    """
+    permission_classes = [CanEditVouchers]
+
+    def post(self, request, *args, **kwargs):
+        from decimal import Decimal, InvalidOperation
+        from django.core.cache import cache
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from apps.accounts.models import Ledger
+        from apps.accounts.services import VoucherService
+
+        d = request.data
+        outlet_id = d.get('outletId')
+
+        def bad(msg, code=400):
+            return Response({'detail': msg}, status=code)
+
+        if not outlet_id:
+            return bad('outletId is required.')
+        try:
+            when = datetime.datetime.strptime(str(d.get('date') or ''), "%Y-%m-%d").date()
+        except ValueError:
+            return bad('Pick the date of the deposit.')
+        if when > datetime.date.today():
+            return bad('A deposit cannot be dated in the future.')
+        try:
+            amount = Decimal(str(d.get('amount')))
+        except (InvalidOperation, TypeError):
+            return bad('Enter the amount deposited.')
+        if not amount.is_finite() or amount <= 0:
+            return bad('The amount must be more than zero.')
+        if amount != amount.quantize(Decimal('0.01')) or amount >= Decimal('1000000000'):
+            return bad('The amount must be a valid rupee amount (at most 2 decimals).')
+
+        def ledger_of_outlet(ledger_id):
+            try:
+                return Ledger.objects.select_related('group').filter(id=ledger_id, outlet_id=outlet_id).first() if ledger_id else None
+            except (ValueError, DjangoValidationError):      # not a valid id
+                return None
+
+        bank = ledger_of_outlet(d.get('bankLedgerId'))
+        if not bank or bank.group.name != 'Bank Accounts':
+            return bad('Choose one of your bank accounts.')
+        if d.get('cashLedgerId'):
+            till = ledger_of_outlet(d.get('cashLedgerId'))
+            if not till or till.group.name != 'Cash in Hand':
+                return bad('The cash account is not valid.')
+        else:
+            opts = bank_options(outlet_id)['cashLedger']
+            if not opts:
+                return bad('This outlet has no Cash in Hand ledger to deposit from.')
+            till = Ledger.objects.get(id=opts['id'])
+
+        # the same deposit sent twice within seconds (a double click) is one deposit
+        guard = f'bankdep:{outlet_id}:{request.user.id}:{when}:{bank.id}:{amount}'
+        if not cache.add(guard, 1, 10):
+            return bad('That deposit was just recorded.', 409)
+
+        note = str(d.get('narration') or '').strip()[:300]
+        ref = str(d.get('reference') or '').strip()[:60]
+        narration = note or f'Cash deposited into {bank.name}'
+        if ref:
+            narration += f' (slip {ref})'
+        try:
+            voucher = VoucherService.create_voucher(outlet_id=outlet_id, staff_id=request.user.id, data={
+                'voucher_type': 'contra', 'date': when.isoformat(), 'narration': narration, 'total_amount': str(amount), 'payment_mode': 'cash',
+                # plain strings, not Decimal: the service writes its input to the audit log as JSON
+                'lines': [
+                    {'ledger_id': str(bank.id), 'debit': str(amount), 'credit': '0', 'description': 'Cash deposited'},
+                    {'ledger_id': str(till.id), 'debit': '0', 'credit': str(amount), 'description': 'Cash deposited'},
+                ],
+            })
+        except (DjangoValidationError, Exception) as e:
+            cache.delete(guard)
+            msgs = getattr(e, 'messages', None)
+            return bad('; '.join(msgs) if msgs else str(e))
+        return Response({'voucher': {'id': str(voucher.id), 'voucherNo': voucher.voucher_no, 'date': when.isoformat(), 'amount': str(amount),
+                                     'bank': bank.name, 'narration': narration}}, status=status.HTTP_201_CREATED)

@@ -3,7 +3,7 @@ from datetime import timedelta
 from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from apps.core.permissions import IsAuthenticated, CanAccessReports
 
 from apps.core.models import Outlet, GstTaxpayerAuth, SandboxConfiguration
 from apps.reports.models import GSTExportAudit
@@ -31,7 +31,7 @@ def mask_username(username):
 
 
 class GSTExportAuditView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanAccessReports]
     
     def get(self, request):
         outlet = get_user_outlet(request)
@@ -122,7 +122,7 @@ def is_sandbox_allowed(user, outlet):
     return True, ""
 
 class SandboxStatusView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanAccessReports]
     
     def get(self, request):
         outlet = get_user_outlet(request)
@@ -181,7 +181,7 @@ class SandboxStatusView(APIView):
 
 
 class SandboxRequestOTPView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanAccessReports]
     
     def post(self, request):
         outlet = get_user_outlet(request)
@@ -233,7 +233,7 @@ class SandboxRequestOTPView(APIView):
 
 
 class SandboxVerifyOTPView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanAccessReports]
     
     def post(self, request):
         outlet = get_user_outlet(request)
@@ -280,7 +280,7 @@ from apps.gst.tasks import sync_gstr2b_job
 from apps.reports.models import GSTR2BImportJob
 
 class GSTR2BSyncView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanAccessReports]
     
     def post(self, request):
         outlet = get_user_outlet(request)
@@ -337,7 +337,7 @@ class GSTR2BSyncView(APIView):
 
 
 class GSTR2BStatusView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanAccessReports]
     
     def get(self, request):
         outlet = get_user_outlet(request)
@@ -378,7 +378,7 @@ class GSTR2BStatusView(APIView):
 from apps.gst.services.reconciliation import run_advisory_reconciliation
 
 class GSTR2BReconciliationRunView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanAccessReports]
     
     def post(self, request):
         outlet = get_user_outlet(request)
@@ -419,7 +419,7 @@ from apps.reports.models import GSTTransactionSnapshot
 from apps.billing.models import SaleInvoice
 
 class GSTR1InvoicesView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanAccessReports]
 
     def get(self, request):
         outlet = get_user_outlet(request)
@@ -552,7 +552,7 @@ class GSTR1InvoicesView(APIView):
 from apps.reports.models import ITCReconciliationRun, ITCReconciliationResult
 
 class GSTR2BReconciliationDataView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanAccessReports]
 
     def get(self, request, fp):
         outlet = get_user_outlet(request)
@@ -636,7 +636,7 @@ class GSTR2BReconciliationDataView(APIView):
 
 
 class GSTR2AWarningView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanAccessReports]
 
     def get(self, request, fp):
         outlet = get_user_outlet(request)
@@ -687,7 +687,7 @@ class GSTR2AWarningView(APIView):
         return Response(results)
 
 class GSTR1ValidationView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanAccessReports]
 
     def get(self, request, mmyyyy):
         from apps.core.utils import get_user_outlet

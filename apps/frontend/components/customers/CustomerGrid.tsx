@@ -1,6 +1,7 @@
 'use client';
 
 import { Heart, RefreshCw, ArrowRight, Receipt, UserSearch, Pencil } from 'lucide-react';
+import { FamilyBadge } from './FamilyBadge';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -96,6 +97,7 @@ export default function CustomerGrid({ filters, onEdit }: CustomerGridProps) {
                         {/* Name + Contact */}
                         <div className="mt-3">
                             <div className="text-base font-bold text-slate-900">{customer.name}</div>
+                            <FamilyBadge {...customer} className="mt-1" />
                             <div className="text-sm text-muted-foreground">
                                 {customer.phone.slice(0, 5)} {customer.phone.slice(5)}
                             </div>

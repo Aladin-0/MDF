@@ -6,33 +6,18 @@ import { OfflineBanner } from '@/components/shared/OfflineBanner';
 import { DashboardSkeleton } from '@/components/shared/DashboardSkeleton';
 import { GlobalNavigation } from '@/components/layout/GlobalNavigation';
 import { useAuthStore } from '@/store/authStore';
-import { authApi } from '@/lib/apiClient';
+import { useAuthGate } from '@/hooks/useAuthGate';
+import { RouteGuard } from '@/components/shared/RouteGuard';
 
 import { GlobalOverlays } from '@/components/shared/GlobalOverlays';
 import { cn } from '@/lib/utils';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-    const { isAuthenticated, _hasHydrated } = useAuthStore();
-    const router = useRouter();
 
-    useEffect(() => {
-        if (_hasHydrated && !isAuthenticated) {
-            router.push('/login');
-        } else if (_hasHydrated && isAuthenticated) {
-            authApi.me().then(data => {
-                if (data && data.user) {
-                    useAuthStore.getState().setUser(data.user);
-                } else if (data && data.id) {
-                    useAuthStore.getState().setUser(data);
-                    if (data.outlet) {
-                        useAuthStore.getState().setOutlet(data.outlet);
-                    }
-                }
-            }).catch(console.error);
-        }
-    }, [_hasHydrated, isAuthenticated, router]);
+    // login redirect (one shared implementation); keeping the user fresh is <SessionSync/>'s job
+    const ready = useAuthGate();
 
-    if (!_hasHydrated || !isAuthenticated) {
+    if (!ready) {
         return <DashboardSkeleton />;
     }
 
@@ -48,7 +33,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             {/* Main content area */}
             <div className="flex-1 w-full max-w-[1600px] mx-auto overflow-x-hidden flex flex-col">
                 <main className="flex-1 p-4 sm:p-6 print:p-0">
-                    {children}
+                    <RouteGuard>{children}</RouteGuard>
                 </main>
             </div>
             

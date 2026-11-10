@@ -12,16 +12,21 @@ import {
   Download, TrendingUp, IndianRupee, Package, Briefcase, 
   Calculator, ChevronDown, ChevronUp, ExternalLink, Save, 
   Check, AlertCircle, ShoppingBag, Receipt, CreditCard, 
-  Smartphone, Banknote, ArrowDownRight, ArrowUpRight, Minus, Plus
+  Smartphone, Banknote, ArrowDownRight, ArrowUpRight, Minus, Plus, Landmark
 } from "lucide-react";
 import { PartnerSettingsModal } from "./partner-settings-modal";
 import { FixedExpensesModal } from "./fixed-expenses-modal";
 import { DateRangePicker } from "@/components/reports/DateRangePicker";
 import { getDefaultDateRange } from "@/hooks/useReports";
 import { DateRangeFilter } from "@/types";
+import { usePermissions } from "@/hooks/usePermissions";
+import { BankDepositModal } from "@/components/reports/BankDepositModal";
 
 export function DailyReportClient() {
   const { user } = useAuthStore();
+  const { hasPermission } = usePermissions();
+  const canDeposit = hasPermission('edit_vouchers');
+  const [depositOpen, setDepositOpen] = useState(false);
   const [dateRange, setDateRange] = useState<DateRangeFilter>(getDefaultDateRange);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -421,6 +426,45 @@ export function DailyReportClient() {
                     textColor="text-red-600"
                   />
 
+                  {/* 9b. Bank Deposit: cash taken to the bank (a Contra voucher) */}
+                  <BreakdownRow
+                    id="bankDeposit"
+                    label="(-) Bank Deposit"
+                    sublabel="(Cash deposited into the bank, from Contra entries)"
+                    operator="-"
+                    operatorColor="text-red-700 bg-red-100"
+                    amount={data.salesBreakdown.bankDeposit || 0}
+                    items={details.bankDeposit}
+                    isExpanded={!!expandedRows['bankDeposit']}
+                    onToggle={() => toggleRow('bankDeposit')}
+                    type="vouchers"
+                    formatCurrency={formatCurrency}
+                    textColor="text-red-600"
+                    action={canDeposit ? (
+                      <Button type="button" size="sm" variant="outline" className="h-7 gap-1 px-2 text-xs" onClick={() => setDepositOpen(true)}>
+                        <Landmark className="h-3.5 w-3.5" />Deposit to bank
+                      </Button>
+                    ) : undefined}
+                  />
+
+                  {/* 9c. Cash brought back from the bank (only when there is some) */}
+                  {(data.salesBreakdown.cashFromBank || 0) > 0 && (
+                    <BreakdownRow
+                      id="cashFromBank"
+                      label="(+) Cash from Bank"
+                      sublabel="(Cash withdrawn from the bank into the drawer, from Contra entries)"
+                      operator="+"
+                      operatorColor="text-green-700 bg-green-100"
+                      amount={data.salesBreakdown.cashFromBank}
+                      items={details.cashFromBank}
+                      isExpanded={!!expandedRows['cashFromBank']}
+                      onToggle={() => toggleRow('cashFromBank')}
+                      type="vouchers"
+                      formatCurrency={formatCurrency}
+                      textColor="text-green-700"
+                    />
+                  )}
+
                   {/* 10. Cash Received */}
                   <BreakdownRow
                     id="cashReceived"
@@ -694,6 +738,18 @@ export function DailyReportClient() {
           </div>
         </div>
       ) : null}
+
+      {canDeposit && user?.outletId && (
+        <BankDepositModal
+          open={depositOpen}
+          onClose={() => setDepositOpen(false)}
+          outletId={user.outletId}
+          bank={data?.bank}
+          defaultDate={(data?.isSingleDay ? dateRange.from : (dateRange.to || dateRange.from)) || ''}
+          cashInDrawer={dynamicCashRequired}
+          onDone={fetchData}
+        />
+      )}
     </div>
   );
 }
@@ -712,6 +768,8 @@ interface BreakdownRowProps {
   type: 'sales' | 'sales_portion' | 'returns' | 'purchases' | 'vouchers';
   formatCurrency: (amount: number) => string;
   textColor?: string;
+  /** a small button shown in the row header (does not toggle the row) */
+  action?: React.ReactNode;
 }
 
 function BreakdownRow({
@@ -726,7 +784,8 @@ function BreakdownRow({
   onToggle,
   type,
   formatCurrency,
-  textColor = 'text-gray-800'
+  textColor = 'text-gray-800',
+  action
 }: BreakdownRowProps) {
   const itemCount = items.length;
 
@@ -757,6 +816,7 @@ function BreakdownRow({
         </div>
 
         <div className="flex items-center gap-3">
+          {action && <span onClick={(e) => e.stopPropagation()}>{action}</span>}
           <span className={`font-bold text-sm ${textColor}`}>
             {operator === '-' && amount > 0 ? `-${formatCurrency(amount)}` : formatCurrency(amount)}
           </span>

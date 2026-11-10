@@ -27,9 +27,16 @@ from apps.billing.views import (
     RetryEinvoiceView,
 )
 from .quotation_views import QuotationListCreateView, QuotationDetailView, QuotationConvertView
+from apps.core.permissions import MethodPermissionMixin
 
 # Create a combined view that handles both GET and POST
-class SalesView(SaleListView, SaleCreateView):
+class SalesView(MethodPermissionMixin, SaleListView, SaleCreateView):
+    # POST must use SaleCreateView's IsBillingStaffOrAbove, not the list view's IsAuthenticated
+    method_permissions = {
+        'GET': SaleListView.permission_classes,
+        'POST': SaleCreateView.permission_classes,
+    }
+
     def get(self, request, *args, **kwargs):
         return SaleListView.get(self, request, *args, **kwargs)
 

@@ -1,9 +1,10 @@
 import logging
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from apps.core.permissions import IsAdminStaff, IsManagerOrAbove, IsAuthenticated, CanEditVouchers, CanViewAuditHistory
+from apps.core.permissions import IsAdminStaff, IsManagerOrAbove, IsAuthenticated, CanEditVouchers, CanViewAuditHistory, assert_outlet_access
 from rest_framework import status
 from django.core.exceptions import ValidationError
+from rest_framework.exceptions import ValidationError as DRFValidationError
 
 from apps.accounts.models import LedgerGroup, Ledger, Voucher, DebitNote, CreditNote
 from apps.accounts.services import LedgerService, VoucherService, DebitNoteService, CreditNoteService
@@ -57,7 +58,10 @@ class LedgerListView(APIView):
         outlet_id = get_outlet_id(request)
         if not outlet_id:
             return Response({'detail': 'outletId required'}, status=400)
-        qs = Ledger.objects.filter(outlet_id=outlet_id).select_related('group')
+        from django.db.models import Exists, OuterRef
+        from apps.accounts.models import Customer as _Customer
+        qs = Ledger.objects.filter(outlet_id=outlet_id).select_related('group', 'linked_customer').annotate(
+            _has_members=Exists(_Customer.objects.filter(account_holder_id=OuterRef('linked_customer_id'))))
         ledger_type = request.query_params.get('type')
         if ledger_type == 'cash':
             qs = qs.filter(group__name='Cash in Hand')
@@ -84,7 +88,10 @@ class LedgerListView(APIView):
         search = request.query_params.get('search', '').strip()
         if search:
             from django.db.models import Q
-            qs = qs.filter(Q(name__icontains=search) | Q(phone__icontains=search))
+            # A family is found by anyone on it: searching a member's name or mobile finds the account they bill under.
+            qs = qs.filter(Q(name__icontains=search) | Q(phone__icontains=search)
+                           | Q(linked_customer__members__name__icontains=search)
+                           | Q(linked_customer__members__phone__icontains=search)).distinct()
 
         total_count = qs.count()
         limit_param = request.query_params.get('limit')
@@ -261,6 +268,7 @@ class LedgerStatementView(APIView):
             ledger = Ledger.objects.select_related('group').get(id=ledger_id)
         except Ledger.DoesNotExist:
             return Response({'detail': 'Not found'}, status=404)
+        assert_outlet_access(request.user, ledger.outlet_id)
 
         from_date = request.query_params.get('from')
         to_date = request.query_params.get('to')
@@ -285,7 +293,7 @@ class LedgerStatementView(APIView):
         }
 
         # --- VoucherLines (manual voucher entries) ---
-        voucher_lines_qs = ledger.voucherline_set.select_related('voucher').order_by('voucher__date', 'voucher__created_at')
+        voucher_lines_qs = ledger.voucherline_set.select_related('voucher').prefetch_related('voucher__lines__ledger').order_by('voucher__date', 'voucher__created_at')
         if from_date:
             voucher_lines_qs = voucher_lines_qs.filter(voucher__date__gte=from_date)
         if to_date:
@@ -303,21 +311,21 @@ class LedgerStatementView(APIView):
         if to_date:
             journal_lines_qs = journal_lines_qs.filter(journal_entry__date__lte=to_date)
 
-        # ── Fast DB counts (O(1) index scan) ────────────────────────────────
-        total_voucher_count = voucher_lines_qs.count()
-        total_journal_count = journal_lines_qs.count()
-        total_count = total_voucher_count + total_journal_count
-
         # ── Build merged, sorted raw list ────────────────────────────────────
         raw = []
         for line in voucher_lines_qs:
+            description = line.description or line.voucher.narration
+            if not description:
+                # An entry made without a narration (a plain contra, say) would show as a blank dash: say what it was and against which ledger(s).
+                others = [l.ledger.name for l in line.voucher.lines.all() if l.ledger_id != ledger.id]
+                description = f"{line.voucher.get_voucher_type_display()}: {', '.join(dict.fromkeys(others))}" if others else line.voucher.get_voucher_type_display()
             raw.append({
                 '_date': line.voucher.date,
                 '_created_at': line.voucher.created_at,
                 'date': str(line.voucher.date),
                 'voucherNo': line.voucher.voucher_no,
                 'voucherType': line.voucher.voucher_type,
-                'description': line.description or line.voucher.narration,
+                'description': description,
                 'debit': float(line.debit),
                 'credit': float(line.credit),
                 'sourceType': 'VOUCHER',
@@ -384,41 +392,44 @@ class LedgerStatementView(APIView):
             else:
                 opening_balance += (v_debit - v_credit) + (j_debit - j_credit)
 
-        # ── True closing balance: traverse all rows (not just this page) ─────
+        # ── Running balance for EVERY row, oldest first (so a row's balance never depends on which page it is on) ──
         closing_balance = opening_balance
+        rows = []
         for row in raw:
             delta = (row['credit'] - row['debit']) if is_credit_nature else (row['debit'] - row['credit'])
             closing_balance += delta
-
-        # ── Paginate: walk to page start for accurate running balance ─────────
-        offset = (page - 1) * page_size
-        running = opening_balance
-        for row in raw[:offset]:
-            delta = (row['credit'] - row['debit']) if is_credit_nature else (row['debit'] - row['credit'])
-            running += delta
-
-        # Build only this page's transactions
-        transactions = []
-        for row in raw[offset:offset + page_size]:
-            delta = (row['credit'] - row['debit']) if is_credit_nature else (row['debit'] - row['credit'])
-            running += delta
-            transactions.append({
+            rows.append({
                 'date': row['date'],
                 'voucherNo': row['voucherNo'],
                 'voucherType': row['voucherType'],
                 'description': row['description'],
                 'debit': row['debit'],
                 'credit': row['credit'],
-                'balance': round(running, 2),
+                'balance': round(closing_balance, 2),
                 'sourceType': row['sourceType'],
                 'sourceId': row['sourceId'],
                 'journalEntryId': row.get('journalEntryId', ''),
             })
 
-        # Legacy: reverse page for 'latest first' ordering
+        # ── Order the WHOLE statement, then search, then page. ──
+        # (Latest-first used to reverse only the rows of the page that had been cut from the oldest end, so on a busy ledger -
+        # Cash has thousands of entries - "latest first" showed the newest of the OLDEST page and the real latest entries,
+        # such as today's bank deposit, could never be reached.)
         ordering = request.query_params.get('ordering', '').strip().lower()
         if ordering in ['desc', '-date', '-created_at', 'latest']:
-            transactions.reverse()
+            rows.reverse()
+
+        # Search runs on the server so it covers every page, not just the one on screen. Balances stay the true running balances.
+        needle = (request.query_params.get('search') or '').strip().lower()
+        if needle:
+            rows = [r for r in rows if needle in (r['voucherNo'] or '').lower() or needle in (r['description'] or '').lower()
+                    or needle in (r['voucherType'] or '').lower() or needle in f"{r['debit']:.2f} {r['credit']:.2f}"]
+
+        total_count = len(rows)
+        filtered_debit = round(sum(r['debit'] for r in rows), 2)       # totals of what the search matched (all pages)
+        filtered_credit = round(sum(r['credit'] for r in rows), 2)
+        offset = (page - 1) * page_size
+        transactions = rows[offset:offset + page_size]
 
         total_debit = round(sum(r['debit'] for r in raw), 2)
         total_credit = round(sum(r['credit'] for r in raw), 2)
@@ -435,6 +446,9 @@ class LedgerStatementView(APIView):
             'totalCredit': total_credit,
             'pageDebit': page_debit,
             'pageCredit': page_credit,
+            'filteredDebit': filtered_debit,
+            'filteredCredit': filtered_credit,
+            'totalEntries': len(raw),                                   # every entry in the date range, whatever the search
             'transactions': transactions,
             'pagination': {
                 'page': page,
@@ -722,6 +736,7 @@ class LedgerOutstandingView(APIView):
             ledger = Ledger.objects.select_related('group').get(id=ledger_id)
         except Ledger.DoesNotExist:
             return Response({'detail': 'Not found'}, status=404)
+        assert_outlet_access(request.user, ledger.outlet_id)
         balance = float(ledger.current_balance)
         balance_type = ledger.balance_type
         return Response({'outstanding': balance, 'balanceType': balance_type})
@@ -735,6 +750,9 @@ class LedgerPendingBillsView(APIView):
         if not outlet_id:
             return Response({'detail': 'outletId required'}, status=400)
         exclude_voucher_id = request.query_params.get('exclude_voucher_id')
+        # the outlet in the URL must own the ledger, otherwise ?outletId=<mine> + ledger of another outlet leaked bills
+        if not Ledger.objects.filter(id=ledger_id, outlet_id=outlet_id).exists():
+            return Response({'detail': 'Not found'}, status=404)
         bills = VoucherService.get_pending_bills(outlet_id, ledger_id, exclude_voucher_id=exclude_voucher_id)
         return Response({'data': bills, 'meta': {'total': len(bills)}})
 
@@ -1811,9 +1829,11 @@ class DebitNoteRevisionDetailView(APIView):
 
 class DebitNoteDetailView(APIView):
     permission_classes = [IsAuthenticated]
+
     def get(self, request, pk, *args, **kwargs):
         from django.shortcuts import get_object_or_404
         note = get_object_or_404(DebitNote, id=pk)
+        assert_outlet_access(request.user, note.outlet_id)  # was: any outlet's note by id
         return Response(DebitNoteSerializer(note).data)
 
     def put(self, request, pk, *args, **kwargs):
@@ -1835,9 +1855,11 @@ class DebitNoteDetailView(APIView):
             )
             note = DebitNote.objects.select_related('distributor').prefetch_related('items').get(id=note.id)
             return Response(DebitNoteSerializer(note).data)
-        except ValidationError as e:
+        except (ValidationError, DRFValidationError) as e:
+            # The service raises DRF's ValidationError; this view only imported Django's, so the stale-edit
+            # signal never matched and the client got a plain 400 instead of a 409 "reload required".
             if hasattr(e, 'get_codes') and 'stale_edit_conflict' in e.get_codes():
-                return Response({'error': str(e.detail)}, status=409)
-            return Response({'error': str(e.detail)}, status=400)
+                return Response({'error': str(getattr(e, 'detail', e))}, status=409)
+            return Response({'error': str(getattr(e, 'detail', e))}, status=400)
         except Exception as e:
             return Response({'error': str(e)}, status=400)

@@ -426,7 +426,7 @@ function LedgerDrilldown({
 
     const { data, isLoading } = useQuery({
         queryKey: ['ledger-statement', ledgerId, fromDate, toDate],
-        queryFn: () => voucherApi.getLedgerStatement(ledgerId!, fromDate, toDate),
+        queryFn: () => voucherApi.getLedgerStatementAll(ledgerId!, fromDate, toDate),
         enabled: !!ledgerId,
     });
 

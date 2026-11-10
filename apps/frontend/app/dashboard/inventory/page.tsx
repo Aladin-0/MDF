@@ -266,7 +266,8 @@ export default function InventoryPage() {
 
                      <TabsContent value="low_stock" className="mt-0 outline-none">
                          <LowStockTable
-                             onReorderClick={() => router.push('/dashboard/purchases/new')}
+                             // opens the Purchase Orders tab with the New PO popup ready (this used to go to a page that does not exist)
+                             onReorderClick={() => router.push('/dashboard/purchases?tab=purchase_orders&newPo=1')}
                          />
                      </TabsContent>
                  </div>

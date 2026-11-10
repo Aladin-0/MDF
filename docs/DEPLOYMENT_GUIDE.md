@@ -207,6 +207,37 @@ Delete the temporary askpass/ssh helper scripts. Optionally record the deploy in
 
 ---
 
+## 4b. Extra pre-deploy checks for the access-control release (login + roles)
+
+This release (see `docs/ACCESS_CONTROL.md`) removes login back doors and tightens API permissions. It cannot damage data,
+but it **can lock the wrong person out** if production data is not what the code assumes. Do these read-only checks first,
+on the server, and tell the user what they show before deploying:
+
+```bash
+docker exec mediflow_backend python manage.py shell -c "
+from apps.accounts.models import Staff
+from django.db.models import Count
+print('active staff by role:', list(Staff.objects.filter(is_active=True).values_list('role').annotate(n=Count('id'))))
+odd = Staff.objects.filter(is_active=True).exclude(role__in=['super_admin','admin','manager','billing_staff','view_only','cashier','custom'])
+print('ACTIVE STAFF WITH AN UNKNOWN ROLE (would lose all access):', [(s.name, s.role) for s in odd])
+print('active staff with an unusable password (could only ever log in via the old back doors):',
+      [s.name for s in Staff.objects.filter(is_active=True) if not s.has_usable_password()])
+"
+```
+
+- Any staff row with a role outside the five (`cashier` and `custom` are tolerated as `billing_staff`) gets **no** permissions: fix their role first.
+- Rows stored as `custom` (written by the old staff form) or `cashier` keep working. List them with
+  `docker exec mediflow_backend python manage.py normalize_staff_roles` and, if you want them tidied, rerun with `--apply`
+  (flags are never touched; it only rewrites the role string).
+- Staff listed as having an unusable password, or who currently log in with the word `password` / their own phone number,
+  will be refused after this release: set a real password or PIN for them (Staff → edit) **before** deploying.
+- No schema migration is involved, so rollback is the normal image/commit rollback in section 6.
+- After deploying, log in with a normal account on the live site, and check `/api/v1/auth/me/` returns a `permissions` list.
+- If the frontend and backend ever run different versions for a while, nothing breaks: an old frontend ignores the new
+  fields, and a new frontend falls back to local rules when the server sends no `permissions`.
+
+---
+
 ## 5. Things a future deploy should watch for
 
 - **Data migrations run automatically on boot.** 2026-11-03: `core.0015_activate_pharma_tax_slabs` re-activated the 12% and 28%
@@ -257,6 +288,7 @@ docker start mediflow_backend mediflow_celery
 
 | Date | From → To | Backup dir | Notes |
 |---|---|---|---|
+| 2026-11-03 (2nd) | `ca2d047` → `d065f12` | `/mediflow/backups/deploy_20261103_173854/` | Frontend-only: purchase product-search dropdown (4 visible + scroll) and arrow-key duplicate-row fix. Only `frontend` rebuilt/recreated (1m12s build, ~45s start) + nginx restart; backend/celery untouched, media tarball skipped (not affected). |
 | 2026-11-03 | `763de0d9` → `ca2d047` | `/mediflow/backups/deploy_20261103_142602/` | ERP reports, purchases/OCR, billing integrity, tax-slab migration `core.0015`; OpenCV pinned `5.0.0.93`. Build 3m45s. All checks passed; saudapakka unaffected. |
 | 2026-10-25 and earlier | → `763de0d9` | `/mediflow/backups/pre_deploy_*.dump`, `docker-compose.yml.*.bak` | Earlier manual deploys (dump + compose `.bak` per deploy). |
 

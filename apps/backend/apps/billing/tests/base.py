@@ -24,7 +24,9 @@ class BaseRevisionTestCase(APITestCase):
             cls.outlet,
             name="Billing Staff",
             phone="1111111111",
-            permissions=['can_modify_unpaid_bill', 'can_correct_header_fields']
+            permissions=['can_modify_unpaid_bill', 'can_correct_header_fields',
+                         # what the staff form's "Billing Staff" preset grants (canEditSales -> quantities; pricing override -> rates)
+                         'can_correct_quantities', 'can_correct_rates_discounts']
         )
         
         cls.senior_billing = make_test_staff(

@@ -213,7 +213,10 @@ def atomic_purchase_save(payload: Dict[str, Any], outlet_id: str, created_by_id:
                         f"Item {idx + 1}: unrecognised expiry date format '{raw_expiry}'. "
                         f"Use YYYY-MM-DD or MM/YY."
                     )
-            batch_key = (batch_no, expiry_date)
+            # A batch is identified by (product, batch no, expiry). The product was missing from this key, so two
+            # DIFFERENT products sharing a batch number on one invoice were merged into one batch: the second
+            # product's stock was added to the first product's batch.
+            batch_key = (str(master_product.id) if master_product else None, batch_no, expiry_date)
 
             # ─── QUANTITY UNIT CONTRACT ─────────────────────────────────────────────
             # item_payload['qty']       = strips/packs purchased (e.g. 10)
@@ -448,6 +451,12 @@ def atomic_purchase_save(payload: Dict[str, Any], outlet_id: str, created_by_id:
             except Exception as e:
                 logger.error(f"Cash payment journal failed for purchase {purchase_invoice.id}: {e}")
                 raise
+
+        # Receiving against a purchase order: link it and update the PO (received quantities, Partial / Completed) in THIS transaction,
+        # so a failed invoice leaves the PO untouched.
+        if payload.get('purchaseOrderId'):
+            from apps.purchases.po_services import link_invoice_to_po
+            link_invoice_to_po(purchase_invoice, payload['purchaseOrderId'], created_by)
 
         logger.info(f"Purchase {purchase_invoice.invoice_no} completed successfully")
 
@@ -690,6 +699,28 @@ def rebuild_distributor_ledger(outlet_id: str, distributor_id: str, from_date):
         LedgerEntry.objects.filter(pk=entry.pk).update(running_balance=running)
 
 
+def parse_purchase_expiry(raw):
+    """
+    The expiry date of a purchase line. Accepts ISO dates and the 'MM/YY' / 'MM/YYYY' forms the form allows.
+    One parser, used by the over-consumption guard AND the re-apply step: the guard used to key on the raw
+    text ('12/27') while the re-apply keyed on the parsed date, so they never matched and a valid edit of a
+    partly-sold batch was refused.
+    """
+    import re as _re
+    from datetime import date as _date
+    try:
+        return datetime.fromisoformat(str(raw).rstrip('Z').split('+')[0]).date()
+    except (ValueError, TypeError):
+        m = _re.match(r'^(\d{1,2})[\/\-](\d{2,4})$', str(raw or ''))
+        if m:
+            month = int(m.group(1))
+            year_raw = m.group(2)
+            year = int(year_raw) + 2000 if len(year_raw) == 2 else int(year_raw)
+            if 1 <= month <= 12:
+                return _date(year, month, 1)
+        raise PurchaseServiceError("Invalid expiry format")
+
+
 @transaction.atomic
 def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id: str, updated_by_id: str) -> PurchaseInvoice:
     """
@@ -706,6 +737,13 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
         except PurchaseInvoice.DoesNotExist:
             raise PurchaseServiceError(f"Purchase {purchase_id} not found")
 
+        # What the bill looked like BEFORE this edit. Step 5 overwrites these fields on the same object, so
+        # anything that needs the old date / distributor / type must read it here (the stock-ledger rebuild used
+        # min(new, new) and so never went back to the old date).
+        old_invoice_date = purchase_invoice.invoice_date
+        old_distributor_id = purchase_invoice.distributor_id
+        old_purchase_type = purchase_invoice.purchase_type
+
         from apps.accounts.models import Staff
         staff = Staff.objects.filter(id=updated_by_id).first()
         if purchase_invoice.outstanding <= 0:
@@ -720,11 +758,38 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
         if len(reason_text.strip()) < 10:
             raise PurchaseServiceError("Reason explanation must be at least 10 characters.")
 
+        # --- The same integrity rules as creating a purchase ---
+        items_in_payload = payload.get('items') or []
+        if not items_in_payload:
+            # An empty list used to delete every line, zero all the batches and keep the grand total.
+            raise PurchaseServiceError("Purchase must have at least one item.")
+        for _line in items_in_payload:
+            if int(_line.get('qty', 0) or 0) < 0 or int(_line.get('freeQty', 0) or 0) < 0:
+                raise PurchaseServiceError("Quantities cannot be negative.")
+
         from apps.audit.core.registry import SnapshotBuilderRegistry
         old_snapshot = SnapshotBuilderRegistry.build_snapshot(purchase_invoice)
 
         old_invoice_no = purchase_invoice.invoice_no
         outlet = Outlet.objects.get(id=outlet_id)
+
+        # --- Payments already made against this bill (bill-by-bill allocations) ---
+        # The edit sets the new total/outstanding from the payload and never looked at the allocations, so a
+        # bill with 800 paid could be edited down to 600 (outstanding -200, allocations of 800 against a 600
+        # bill), or switched between cash and credit while payments existed (cash refunded in the books,
+        # still shown as paid / or paid twice).
+        from django.db.models import Sum
+        from apps.billing.models import PaymentAllocation
+        allocated_paid = PaymentAllocation.objects.filter(invoice=purchase_invoice).aggregate(
+            total=Sum('allocated_amount'))['total'] or Decimal('0')
+        new_purchase_type = payload.get('purchaseType', 'credit')
+        if allocated_paid > 0:
+            if new_purchase_type != old_purchase_type:
+                raise PurchaseServiceError(
+                    "Cannot change the purchase type of a bill that already has payments recorded against it.")
+            if new_purchase_type == 'credit' and Decimal(str(payload['grandTotal'])) < allocated_paid:
+                raise PurchaseServiceError(
+                    f"The bill total cannot be lower than the payments already made against it (₹{allocated_paid}).")
 
         # ─── Step 2: Validate and get Distributor ─────────────────────────────────
         party_ledger_id = payload.get('partyLedgerId')
@@ -764,34 +829,58 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
 
         # --- Over-Consumption Validation ---
         # Map old items to their quantities
+        # Batches are identified by (product, batch no, expiry). The key used to omit the product, so two
+        # products sharing a batch number on one invoice collapsed into one entry (and the dict assignment
+        # kept only the LAST of several lines for the same batch, so 'purchased' was understated).
+        # Lock the batches first so the stock figure being compared cannot change under us.
+        _old_batch_ids = [i.batch_id for i in old_items if i.batch_id]
+        if _old_batch_ids:
+            list(BatchModel.objects.select_for_update().filter(id__in=_old_batch_ids).order_by('id'))
+
         old_batch_qtys = {}
         for old_item in old_items:
             if old_item.batch:
-                bkey = (old_item.batch.batch_no, str(old_item.batch.expiry_date)[:10] if old_item.batch.expiry_date else None)
-                old_batch_qtys[bkey] = {
-                    'purchased': old_item.qty + old_item.free_qty,
-                    'current_stock': old_item.batch.qty_strips
-                }
+                b = BatchModel.objects.get(pk=old_item.batch_id)      # fresh (locked) stock figure
+                bkey = (b.product_id, b.batch_no, b.expiry_date)
+                entry = old_batch_qtys.setdefault(bkey, {'purchased': 0, 'current_stock': b.qty_strips})
+                entry['purchased'] += old_item.qty + old_item.free_qty
 
         # Calculate new quantities from payload
         new_batch_qtys = {}
+        new_by_no_expiry = {}
         for p_item in payload.get('items', []):
-            expiry = p_item.get('expiryDate')
-            if expiry:
-                expiry = str(expiry)[:10]  # Just take YYYY-MM-DD
-            bkey = (p_item.get('batchNo'), expiry)
+            expiry = parse_purchase_expiry(p_item.get('expiryDate'))
+            bkey = (p_item.get('masterProductId'), p_item.get('batchNo'), expiry)
+            # master product ids arrive as strings; batches carry UUID/int ids: compare as text
+            bkey = (str(bkey[0]) if bkey[0] is not None else None, bkey[1], bkey[2])
             new_qty = int(p_item.get('qty', 0)) + int(p_item.get('freeQty', 0))
             new_batch_qtys[bkey] = new_batch_qtys.get(bkey, 0) + new_qty
+            ne = (p_item.get('batchNo'), expiry)
+            new_by_no_expiry[ne] = new_by_no_expiry.get(ne, 0) + new_qty
 
         # Validate that new_qty is not less than consumed_qty
-        for bkey, qtys in old_batch_qtys.items():
+        for (pid, bno, bexp), qtys in old_batch_qtys.items():
             consumed = qtys['purchased'] - qtys['current_stock']
             if consumed > 0:
-                new_qty = new_batch_qtys.get(bkey, 0)
+                new_qty = new_batch_qtys.get((str(pid) if pid is not None else None, bno, bexp))
+                if new_qty is None:
+                    # the payload may not carry the product id (custom / unresolved product): fall back to
+                    # batch no + expiry, but only when that pair is unambiguous on the old invoice
+                    same = [k for k in old_batch_qtys if (k[1], k[2]) == (bno, bexp)]
+                    new_qty = new_by_no_expiry.get((bno, bexp), 0) if len(same) == 1 else 0
                 if new_qty < consumed:
                     raise PurchaseServiceError(f"stock error: Cannot reduce stock below already consumed quantity (consumed: {consumed}).")
 
         
+        # Stock adjustments (expiry / damage write-offs) can be booked against specific purchase lines. Every edit
+        # recreates the lines, which the database refuses for those (PROTECT) with a cryptic error; say why.
+        if old_items:
+            from apps.inventory.models import StockAdjustmentAllocation
+            if StockAdjustmentAllocation.objects.filter(source_purchase_item__in=old_items).exists():
+                raise PurchaseServiceError(
+                    "This purchase has stock adjustments booked against it and cannot be edited. "
+                    "Reverse those adjustments first.")
+
         # Revert old stock ledger entries by exact source object
         if old_items:
             pi_ctype = ContentType.objects.get_for_model(PurchaseItem)
@@ -802,12 +891,14 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
                 txn_type='PURCHASE_IN'
             ).delete()
         old_batch_pk_map: Dict[tuple, int] = {}
+        old_pk_by_no_expiry: Dict[tuple, set] = {}
         for old_item in old_items:
             batch = old_item.batch
             if batch:
                 total_strips = old_item.qty + old_item.free_qty
-                bkey = (batch.batch_no, batch.expiry_date)
+                bkey = (str(batch.product_id) if batch.product_id is not None else None, batch.batch_no, batch.expiry_date)
                 old_batch_pk_map[bkey] = batch.pk
+                old_pk_by_no_expiry.setdefault((batch.batch_no, batch.expiry_date), set()).add(batch.pk)
                 logger.info(f"[EDIT] Reverting batch {batch.batch_no}: removing {total_strips} strips, will update mrp/saleRate on re-apply")
                 batches_to_rebuild.add(batch.pk)
             old_item.delete()
@@ -870,10 +961,16 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
             purchase_invoice.amount_paid = grand_total
             purchase_invoice.outstanding = Decimal('0')
         else:
+            if old_purchase_type == 'cash':
+                # the old cash-payment journal was reversed above, so nothing has been paid yet; it used to keep
+                # the old total as 'paid' and show a credit bill as settled
+                purchase_invoice.amount_paid = Decimal('0')
             purchase_invoice.outstanding = grand_total - purchase_invoice.amount_paid
             
         purchase_invoice.notes = payload.get('notes')
-        purchase_invoice.created_by = updated_by
+        # created_by is who ENTERED the bill; the editor is recorded in the revision. (It was overwritten.)
+        if purchase_invoice.created_by_id is None:
+            purchase_invoice.created_by = updated_by
         purchase_invoice.save()
 
         # ─── Step 6: Create new items and batches ─────────────────────────────────
@@ -890,22 +987,10 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
                     pass
 
             batch_no = item_payload['batchNo']
-            raw_expiry = item_payload['expiryDate']
-            try:
-                expiry_date = datetime.fromisoformat(raw_expiry.rstrip('Z').split('+')[0]).date()
-            except (ValueError, TypeError):
-                import re as _re
-                m = _re.match(r'^(\d{1,2})[\/\-](\d{2,4})$', raw_expiry)
-                if m:
-                    month = int(m.group(1))
-                    year_raw = m.group(2)
-                    year = int(year_raw) + 2000 if len(year_raw) == 2 else int(year_raw)
-                    from datetime import date as _date
-                    expiry_date = _date(year, month, 1)
-                else:
-                    raise PurchaseServiceError("Invalid expiry format")
-            
-            batch_key = (batch_no, expiry_date)
+            expiry_date = parse_purchase_expiry(item_payload['expiryDate'])
+
+            # product-aware key: two products may share a batch number on one invoice
+            batch_key = (str(master_product.id) if master_product else None, batch_no, expiry_date)
             total_strips = int(item_payload['qty']) + int(item_payload.get('freeQty', 0))
 
             if batch_key in batch_cache:
@@ -915,7 +1000,7 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
                 batch.ptr = Decimal(str(item_payload.get('ptr', 0)))
                 batch.pts = Decimal(str(item_payload.get('pts', 0)))
                 batch.purchase_rate = Decimal(str(item_payload.get('baseLandingRate', item_payload['purchaseRate'])))
-                batch.mrp = Decimal(str(item_payload.get('saleRate', item_payload['mrp'])))
+                # (a second line for the same batch used to overwrite the MRP just set above with the SALE rate)
                 new_pkg = int(item_payload.get('pkg') or 1)
                 if new_pkg and new_pkg != batch.pack_size:
                     batch.pack_size = new_pkg
@@ -924,6 +1009,12 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
                 # Prefer to look up batch by its original PK (saved from old_items) to avoid
                 # master_product=None mismatch when product lookup fails.
                 old_batch_pk = old_batch_pk_map.get(batch_key)
+                if old_batch_pk is None:
+                    # the product id may be missing/unresolved in the payload: fall back to batch no + expiry, but
+                    # ONLY when exactly one old batch has that pair (otherwise we could grab another product's batch)
+                    candidates = old_pk_by_no_expiry.get((batch_no, expiry_date), set())
+                    if len(candidates) == 1:
+                        old_batch_pk = next(iter(candidates))
                 batch = None
 
                 if old_batch_pk:
@@ -1082,14 +1173,18 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
             batches_to_rebuild.add(pi.batch.pk)
             
         for batch_id in batches_to_rebuild:
-            rebuild_stock_ledger(batch_id, min(invoice_date.date(), purchase_invoice.invoice_date))
+            # from the earlier of the OLD and NEW date (the old one was lost: both operands were the new date)
+            rebuild_stock_ledger(batch_id, min(old_invoice_date, purchase_invoice.invoice_date))
 
         # ─── Step 7: Update LedgerEntry ───────────────────────────────────────────
+        # Invoice numbers are only unique PER distributor, so the row must be found by distributor as well
+        # (matching on the number alone could take another distributor's "INV-1" and rewrite its payable).
         ledger_entry = LedgerEntry.objects.filter(
             outlet=outlet,
             entity_type='distributor',
             entry_type='purchase',
-            reference_no=old_invoice_no
+            reference_no=old_invoice_no,
+            distributor_id=old_distributor_id,
         ).first()
 
         if ledger_entry:
@@ -1100,6 +1195,9 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
                 distributor=distributor
             )
             rebuild_distributor_ledger(outlet_id, distributor.id, min(ledger_entry.date, invoice_date.date()))
+            if old_distributor_id != distributor.id:
+                # the bill left the old distributor: its later running balances still included it
+                rebuild_distributor_ledger(outlet_id, old_distributor_id, min(ledger_entry.date, invoice_date.date()))
         else:
             # Recreate LedgerEntry if not found
             last_ledger = LedgerEntry.objects.filter(
@@ -1150,6 +1248,17 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
             reason_text=reason_text or 'No reason provided',
             metadata={'payload': payload}
         )
+
+        # Keep a linked purchase order in step with the edit (received quantities are derived from the posted invoices).
+        from apps.purchases import po_services
+        new_po = payload.get('purchaseOrderId')
+        if new_po and str(new_po) != str(purchase_invoice.purchase_order_id or ''):
+            previous = purchase_invoice.purchase_order
+            po_services.link_invoice_to_po(purchase_invoice, new_po, updated_by)
+            if previous:
+                po_services.recompute_receipts(previous, updated_by)
+        elif purchase_invoice.purchase_order_id:
+            po_services.recompute_receipts(purchase_invoice.purchase_order, updated_by, purchase_invoice)
 
         return purchase_invoice  # return updated invoice
 

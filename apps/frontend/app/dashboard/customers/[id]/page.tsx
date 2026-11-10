@@ -15,6 +15,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import CustomerForm from '@/components/customers/CustomerForm';
+import { FamilyAccountCard } from '@/components/customers/FamilyAccountCard';
+import { FamilyBadge } from '@/components/customers/FamilyBadge';
 import { useCustomerById } from '@/hooks/useCustomers';
 import { useCustomerInvoices, useInvoiceItems } from '@/hooks/useSales';
 import { useBillingStore } from '@/store/billingStore';
@@ -610,13 +612,16 @@ export default function CustomerDetailPage() {
 
     const { id } = useParams<{ id: string }>();
     const { data: customer, isLoading, isError } = useCustomerById(id);
+    const outletId = useAuthStore((s) => s.user?.outlet?.id);
     const { data: creditAccountsData } = useCreditAccounts();
     const setCustomer = useBillingStore((s) => s.setCustomer);
     const [editOpen, setEditOpen] = useState(false);
     const [paymentOpen, setPaymentOpen] = useState(false);
 
     const creditAccounts = Array.isArray(creditAccountsData) ? creditAccountsData : (creditAccountsData as any)?.data ?? [];
-    const creditAccount = creditAccounts.find((a: any) => a.customer?.id === id);
+    // A family member's credit lives on their shared account, so look the credit account up under the account.
+    const creditOwnerId = (customer as any)?.accountId || id;
+    const creditAccount = creditAccounts.find((a: any) => a.customer?.id === creditOwnerId);
 
     if (isLoading) {
         return (
@@ -664,6 +669,7 @@ export default function CustomerDetailPage() {
                     <div>
                         <div className="flex items-center gap-2">
                             <h1 className="text-lg font-bold text-slate-900 leading-none">{customer.name}</h1>
+                            <FamilyBadge {...customer} />
                             {customer.isChronic && (
                                 <Badge className="bg-purple-100 text-purple-700 border-purple-200 gap-1 h-5 px-1.5 text-[10px]">
                                     <Heart className="w-2.5 h-2.5 fill-current" /> Chronic
@@ -691,7 +697,14 @@ export default function CustomerDetailPage() {
                     <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
                         <Pencil className="w-3.5 h-3.5 mr-2" /> Edit
                     </Button>
-                    {customer.outstanding > 0 && creditAccount && (
+                    {customer.isFamilyMember && customer.accountId && customer.outstanding > 0 && (
+                        <Button variant="outline" size="sm" className="text-amber-700 border-amber-200 hover:bg-amber-50" asChild>
+                            <Link href={`/dashboard/customers/${customer.accountId}`}>
+                                <IndianRupee className="w-3.5 h-3.5 mr-2" /> Collect on {customer.accountName}
+                            </Link>
+                        </Button>
+                    )}
+                    {!customer.isFamilyMember && customer.outstanding > 0 && creditAccount && (
                         <Button variant="outline" size="sm" className="text-amber-700 border-amber-200 hover:bg-amber-50" onClick={() => setPaymentOpen(true)}>
                             <IndianRupee className="w-3.5 h-3.5 mr-2" /> Collect Payment
                         </Button>
@@ -736,6 +749,10 @@ export default function CustomerDetailPage() {
                             )}
                         </CardContent>
                     </Card>
+
+                    {outletId && (
+                        <FamilyAccountCard customerId={id} customerName={customer.name} customerPhone={customer.phone} outletId={outletId} />
+                    )}
 
                     <Card className="shadow-sm">
                         <CardContent className="p-4 space-y-2">

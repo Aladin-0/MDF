@@ -8,7 +8,7 @@ from apps.reports.views import (
 )
 from apps.reports import dashboard_views
 
-from apps.reports.daily_snapshot_views import DailySnapshotView, DailySnapshotExportView, DailyCashReportView, FixedMonthlyExpenseView
+from apps.reports.daily_snapshot_views import DailySnapshotView, DailySnapshotExportView, DailyCashReportView, FixedMonthlyExpenseView, BankDepositView
 from apps.reports.erp_views import (
     ConsolidatedSalesBookView,
     ConsolidatedSalesBookExportView,
@@ -43,6 +43,7 @@ urlpatterns = [
     path('daily-snapshot/export/', DailySnapshotExportView.as_view(), name='daily-snapshot-export'),
     path('daily-snapshot/cash/', DailyCashReportView.as_view(), name='daily-snapshot-cash'),
     path('daily-snapshot/fixed-expenses/', FixedMonthlyExpenseView.as_view(), name='daily-snapshot-fixed-expenses'),
+    path('daily-snapshot/bank-deposit/', BankDepositView.as_view(), name='daily-snapshot-bank-deposit'),
     path('sales/daily/', SalesDailyReportView.as_view(), name='sales-daily-report'),
     path('sales/summary/', SalesSummaryReportView.as_view(), name='sales-summary-report'),
     path('gst/gstr1/', GSTR1ReportView.as_view(), name='gst-gstr1-report'),

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
+import { usePermissions } from "@/hooks/usePermissions";
 import { toast } from "sonner";
 import { Settings, Plus, Trash2 } from "lucide-react";
 
@@ -18,11 +19,12 @@ interface Partner {
 
 export function PartnerSettingsModal({ onUpdate }: { onUpdate: () => void }) {
   const { user } = useAuthStore();
+  const { hasPermission } = usePermissions();
   const [open, setOpen] = useState(false);
   const [partners, setPartners] = useState<Partner[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const canManage = user?.role === 'super_admin' || user?.role === 'admin' || user?.canManagePartners;
+  const canManage = hasPermission('manage_partners');
 
   useEffect(() => {
     if (open && canManage) {

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { Suspense, useState, useCallback, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { usePermissions } from '@/hooks/usePermissions';
 import { SettingsSidebar, type SectionId } from '@/components/settings/SettingsSidebar';
 import { OutletSettingsSection } from '@/components/settings/OutletSettingsSection';
@@ -8,6 +9,7 @@ import { GSTSettingsSection } from '@/components/settings/GSTSettingsSection';
 import { PrinterSettingsSection } from '@/components/settings/PrinterSettingsSection';
 import { BillingSettingsSection } from '@/components/settings/BillingSettingsSection';
 import { BillingPricingSettingsSection } from '@/components/settings/BillingPricingSettingsSection';
+import { PurchaseOrderSettingsSection } from '@/components/settings/PurchaseOrderSettingsSection';
 import { AttendanceSettingsSection } from '@/components/settings/AttendanceSettingsSection';
 import { NotificationsSection } from '@/components/settings/NotificationsSection';
 import { PreferencesSection } from '@/components/settings/PreferencesSection';
@@ -16,17 +18,26 @@ import { Button } from '@/components/ui/button';
 import { useSettingsStore } from '@/store/settingsStore';
 
 const SECTION_IDS: SectionId[] = [
-    'outlet', 'gst', 'printer', 'billing', 'attendance',
+    'outlet', 'gst', 'printer', 'billing', 'pricing', 'purchasing', 'attendance',
     'notifications', 'preferences', 'data',
 ];
 
-export default function SettingsPage() {
+function SettingsPageContent() {
     const { hasPermission } = usePermissions();
     const canManageSettings = hasPermission('manage_settings');
+    const searchParams = useSearchParams();
 
     const [activeSection, setActiveSection] = useState<SectionId>(
         canManageSettings ? 'outlet' : 'preferences'
     );
+
+    // Deep link / keyboard shortcut: /dashboard/settings?tab=gst opens that section.
+    const requestedTab = searchParams.get('tab');
+    useEffect(() => {
+        if (canManageSettings && requestedTab && (SECTION_IDS as string[]).includes(requestedTab)) {
+            setActiveSection(requestedTab as SectionId);
+        }
+    }, [requestedTab, canManageSettings]);
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
     const [discardKey, setDiscardKey] = useState(0);
 
@@ -72,7 +83,7 @@ export default function SettingsPage() {
                     </p>
                 </div>
                 <p className="hidden lg:block text-xs text-slate-400 font-mono bg-slate-100 px-3 py-1.5 rounded-lg">
-                    1–8 Navigate · S Save
+                    Alt+G, O, … Jump to a section · Alt+/ All shortcuts
                 </p>
             </div>
 
@@ -103,6 +114,9 @@ export default function SettingsPage() {
                     )}
                     {activeSection === 'pricing' && (
                         <BillingPricingSettingsSection />
+                    )}
+                    {activeSection === 'purchasing' && (
+                        <PurchaseOrderSettingsSection />
                     )}
                     {activeSection === 'attendance' && (
                         <AttendanceSettingsSection {...sectionProps} />
@@ -152,5 +166,14 @@ export default function SettingsPage() {
                 </div>
             )}
         </div>
+    );
+}
+
+export default function SettingsPage() {
+    // useSearchParams() must sit under a Suspense boundary in the Next.js app router.
+    return (
+        <Suspense fallback={null}>
+            <SettingsPageContent />
+        </Suspense>
     );
 }

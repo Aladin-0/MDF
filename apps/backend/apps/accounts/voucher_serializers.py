@@ -27,6 +27,26 @@ class LedgerSerializer(serializers.ModelSerializer):
         model = Ledger
         fields = '__all__'
 
+    @staticmethod
+    def _has_family(instance):
+        lc = instance.linked_customer
+        if not lc:
+            return False
+        flag = getattr(instance, '_has_members', None)          # annotated by the list view (no query per row)
+        return bool(lc.is_family_account or (flag if flag is not None else lc.members.exists()))
+
+    def _family_members(self, instance):
+        """The people who bill through this ledger: the owner (unless it is a purely shared record) then the members."""
+        if not self._has_family(instance):
+            return []
+        from apps.accounts.family_accounts import account_people
+        return [
+            {'id': str(m.id), 'name': m.name, 'age': m.age, 'gender': m.gender, 'phone': m.phone,
+             'isAccountHolder': m.pk == instance.linked_customer_id,
+             'relationship': m.relationship or ('Account holder' if m.pk == instance.linked_customer_id else '')}
+            for m in account_people(instance.linked_customer)
+        ]
+
     def to_representation(self, instance):
         return {
             'id': str(instance.id),
@@ -51,6 +71,10 @@ class LedgerSerializer(serializers.ModelSerializer):
             'creditLimit': float(instance.linked_customer.credit_limit) if instance.linked_customer else 0.0,
             'stateCode': instance.linked_customer.state_code if instance.linked_customer else None,
             
+            # Family account: the people who share this ledger (the billing screen lists one row per person)
+            'isFamilyAccount': self._has_family(instance),
+            'familyMembers': self._family_members(instance),
+
             'isSystem': instance.is_system,
             'createdAt': instance.created_at.isoformat(),
             # Contact

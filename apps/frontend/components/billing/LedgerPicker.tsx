@@ -1,18 +1,21 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Search, Loader2, Plus, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { voucherApi } from '@/lib/apiClient';
-import { Ledger } from '@/types';
+import { Ledger, FamilyMember } from '@/types';
 import { useOutletId } from '@/hooks/useOutletId';
 import { CreateLedgerModal } from '@/components/accounts/CreateLedgerModal';
 
 interface LedgerPickerProps {
     currentLedger: Ledger | null;
-    onSelect: (ledger: Ledger | null) => void;
+    /** `member` is set when a row for one person of a shared family ledger was chosen (see expandFamilyMembers). */
+    onSelect: (ledger: Ledger | null, member?: FamilyMember | null) => void;
+    /** List a shared family ledger as one row per person (name, age, relationship) instead of one row for the ledger. */
+    expandFamilyMembers?: boolean;
     defaultGroupName?: string;
     icon: React.ReactNode;
     placeholder?: string;
@@ -20,11 +23,21 @@ interface LedgerPickerProps {
     autoFocus?: boolean;
     inputRef?: React.RefObject<HTMLInputElement>;
     nextInputRef?: React.RefObject<HTMLInputElement>;
+    /** Billing: open the customer popup (pre-filled with what was typed) instead of the generic ledger form. */
+    onAddNew?: (query: string) => void;
+    /** Billing: when the search matched a family member (by name or mobile), hand that person back with the ledger. */
+    matchFamilyMember?: boolean;
+    /** Show the "Family: …" hint on rows. Off for wholesale, which bills one party. Default on. */
+    showFamily?: boolean;
 }
 
 export function LedgerPicker({ 
     currentLedger, 
     onSelect, 
+    expandFamilyMembers = false,
+    onAddNew,
+    matchFamilyMember = false,
+    showFamily = true,
     defaultGroupName, 
     icon, 
     placeholder = 'Search...',
@@ -85,7 +98,16 @@ export function LedgerPicker({
         enabled: isOpen && !!outletId,
     });
 
-    const ledgers = data || [];
+    // One row per person for a shared family ledger, so typing the family's mobile number lists Rahul, Priya and Rohan.
+    // Memoised: the highlight-reset effect below depends on this list's identity, and a new array every render would
+    // snap the highlight back to the first row after each key press.
+    type Row = { key: string; ledger: Ledger; member?: FamilyMember };
+    const rows: Row[] = useMemo(() => (data || []).flatMap((l): Row[] =>
+        expandFamilyMembers && l.isFamilyAccount && (l.familyMembers?.length ?? 0) > 0
+            ? l.familyMembers!.map((m) => ({ key: `${l.id}:${m.id}`, ledger: l, member: m }))
+            : [{ key: l.id, ledger: l }]
+    ), [data, expandFamilyMembers]);
+    const ledgers = rows;
 
     // Reset highlighted index when ledgers list updates
     useEffect(() => {
@@ -96,8 +118,19 @@ export function LedgerPicker({
         }
     }, [ledgers]);
 
-    const handleSelect = (ledger: Ledger | null) => {
-        onSelect(ledger);
+    const handleSelect = (row: Row | null) => {
+        // Plain rows call onSelect(ledger) exactly as before; only a family row adds the person.
+        if (!row) onSelect(null);
+        else if (row.member) onSelect(row.ledger, row.member);
+        else if (matchFamilyMember) {
+            // searching "priya" or her own mobile finds the family; start the bill for her, not for the account owner
+            const q = searchQuery.trim().toLowerCase();
+            const hit = q.length >= 2
+                ? row.ledger.familyMembers?.find((m) => !m.isAccountHolder && (m.name.toLowerCase().includes(q) || (m.phone ?? '').includes(q)))
+                : undefined;
+            if (hit) onSelect(row.ledger, hit); else onSelect(row.ledger);
+        }
+        else onSelect(row.ledger);
         setIsOpen(false);
         setHighlightedIndex(-1);
         setSearchQuery('');
@@ -236,16 +269,18 @@ export function LedgerPicker({
                                 <Loader2 className="w-5 h-5 animate-spin" />
                             </div>
                         ) : ledgers.length > 0 ? (
-                            ledgers.map((ledger, idx) => {
+                            ledgers.map((row, idx) => {
+                                const ledger = row.ledger;
+                                const member = row.member;
                                 const isHighlighted = idx === highlightedIndex;
                                 return (
                                     <div 
-                                        key={ledger.id}
+                                        key={row.key}
                                         onPointerDown={(e) => {
                                             e.preventDefault();
-                                            handleSelect(ledger);
+                                            handleSelect(row);
                                         }}
-                                        onClick={() => handleSelect(ledger)}
+                                        onClick={() => handleSelect(row)}
                                         onMouseEnter={() => setHighlightedIndex(idx)}
                                         className={cn(
                                             "px-3 py-3 min-h-[48px] cursor-pointer rounded flex flex-col group transition-colors select-none",
@@ -258,18 +293,39 @@ export function LedgerPicker({
                                             <span className={cn(
                                                 "text-sm font-bold",
                                                 isHighlighted ? "text-blue-900" : "text-slate-700 group-hover:text-blue-700"
-                                            )}>{ledger.name}</span>
+                                            )}>{member ? member.name : ledger.name}{member && (
+                                                <span className="font-medium text-slate-500">
+                                                    {' '}({[member.age != null ? `${member.age}y` : null, member.gender, member.relationship].filter(Boolean).join(' · ')})
+                                                </span>
+                                            )}</span>
                                             {ledger.phone && <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">{ledger.phone}</span>}
                                         </div>
                                         <div className="text-[10px] text-slate-400 truncate mt-0.5 font-medium">
-                                            {ledger.groupName} {ledger.address && `• ${ledger.address}`}
+                                            {member
+                                                ? `${ledger.name} • Balance: ₹${Number(ledger.currentBalance || 0).toLocaleString('en-IN')}`
+                                                : <>
+                                                    {ledger.groupName} {ledger.address && `• ${ledger.address}`}
+                                                    {showFamily && ledger.isFamilyAccount && (ledger.familyMembers?.length ?? 0) > 1 && (
+                                                        <span className="text-indigo-500 font-semibold"> • Family: {ledger.familyMembers!.map((m) => m.name.split(' ')[0]).join(', ')}</span>
+                                                    )}
+                                                </>}
                                         </div>
                                     </div>
                                 );
                             })
                         ) : (
                             <div className="px-3 py-4 text-center text-sm text-slate-500 font-medium">
-                                No {defaultGroupName || 'records'} found
+                                {onAddNew && searchQuery.trim() ? (
+                                    <div className="space-y-2">
+                                        <p>No customer found for <b>{searchQuery.trim()}</b>.</p>
+                                        <button type="button" data-testid="add-new-customer-prompt"
+                                            className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700"
+                                            onPointerDown={(e) => e.preventDefault()}
+                                            onClick={() => { const q = searchQuery.trim(); setIsOpen(false); onAddNew(q); }}>
+                                            <Plus className="w-3.5 h-3.5" /> Add New Customer
+                                        </button>
+                                    </div>
+                                ) : <>No {defaultGroupName || 'records'} found</>}
                             </div>
                         )}
                     </div>
@@ -287,11 +343,12 @@ export function LedgerPicker({
                                 e.preventDefault();
                                 e.stopPropagation();
                                 setIsOpen(false);
-                                setIsCreateOpen(true);
+                                if (onAddNew) onAddNew(searchQuery.trim());
+                                else setIsCreateOpen(true);
                             }}
                         >
                             <Plus className="w-3.5 h-3.5" />
-                            ADD NEW {defaultGroupName ? defaultGroupName.replace('Sundry ', '').toUpperCase() : 'RECORD'}
+                            ADD NEW {onAddNew ? 'CUSTOMER' : defaultGroupName ? defaultGroupName.replace('Sundry ', '').toUpperCase() : 'RECORD'}
                         </button>
                     </div>
                 </div>

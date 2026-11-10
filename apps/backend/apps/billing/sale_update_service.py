@@ -1,6 +1,7 @@
 from datetime import datetime, date, timedelta
 from typing import Dict, Any, List
 from decimal import Decimal, ROUND_FLOOR
+from django.utils import timezone
 from django.db import transaction
 from django.db.models import Sum
 
@@ -10,12 +11,74 @@ from apps.billing.models import SaleInvoice, SaleItem, ScheduleHRegister, Credit
 from apps.accounts.models import Staff, Customer, Ledger, JournalEntry
 from apps.accounts.services import LedgerService
 from apps.accounts.journal_service import _get_ledger, _create_lines_and_update_balances, post_sale_invoice
-from apps.billing.services import validate_sale_price, fefo_batch_select, schedule_h_validate
+from apps.billing.services import validate_sale_price, fefo_batch_select, schedule_h_validate, schedule_cart_from_catalogue
 from apps.billing.utils.item_amounts import resolve_item_amounts, split_amounts, MAX_ROUND_OFF
 from apps.billing.utils.pricing import line_cost_floor
 
 class SaleServiceError(Exception):
     pass
+
+
+class StaleSaleEdit(SaleServiceError):
+    """The bill changed after the client loaded it (someone else edited / cancelled it). Maps to HTTP 409."""
+
+
+def check_not_stale(invoice, expected_raw):
+    """Refuse an edit made from an out-of-date copy. No token sent, or a never-edited legacy row, skips the check."""
+    if not expected_raw or invoice.updated_at is None:
+        return
+    expected = parse_client_datetime(expected_raw) if isinstance(expected_raw, str) else None
+    if expected is None:
+        raise SaleServiceError('expectedUpdatedAt is not a valid timestamp.')
+    current = invoice.updated_at
+    if timezone.is_aware(current) != timezone.is_aware(expected):
+        current = current.replace(tzinfo=None) if timezone.is_aware(current) else current
+        expected = expected.replace(tzinfo=None) if timezone.is_aware(expected) else expected
+    if abs((current - expected).total_seconds()) > 0.001:
+        raise StaleSaleEdit('This bill changed since you opened it. Reload it and try again.')
+
+
+def touch(invoice):
+    """Advance the version stamp. auto_now only fires for fields named in update_fields, and most saves here list them."""
+    SaleInvoice.objects.filter(pk=invoice.pk).update(updated_at=timezone.now())
+    invoice.refresh_from_db(fields=['updated_at'])
+
+
+VALID_BILLING_BASIS = ('MRP', 'PTR', 'PTS')
+
+
+def parse_client_datetime(raw):
+    """
+    Parse an invoice date sent by the browser into what the database stores (naive IST when USE_TZ is off).
+
+    The browser sends `new Date(...).toISOString()`, i.e. UTC with a trailing 'Z'. The edit path used to do
+    `str(raw).rstrip('Z')` and read the UTC wall-clock time as if it were IST, so EVERY edit moved the bill
+    back by 5h30m (a bill at 03:00 IST landed on the previous day, which also moved its stock-ledger and
+    journal dates). The create path parses it correctly; this makes edit do the same.
+    """
+    from django.conf import settings
+    from django.utils import timezone
+    from django.utils.dateparse import parse_datetime, parse_date
+    text = str(raw).strip()
+    parsed = parse_datetime(text)
+    if parsed is None:
+        only_date = parse_date(text[:10])
+        if only_date is None:
+            raise SaleServiceError(f"Invalid invoiceDate: {raw!r}")
+        parsed = datetime.combine(only_date, datetime.min.time())
+    if timezone.is_aware(parsed):
+        parsed = timezone.localtime(parsed)            # to the pharmacy's timezone (IST)
+    elif settings.USE_TZ:
+        parsed = timezone.make_aware(parsed)
+    if not settings.USE_TZ and timezone.is_aware(parsed):
+        parsed = parsed.replace(tzinfo=None)
+    return parsed
+
+
+def normalize_billing_basis(raw, current):
+    """'mrp' / 'PTR' / ... -> a valid stored choice; anything else keeps the bill's current basis."""
+    candidate = str(raw).strip().upper() if raw else ''
+    return candidate if candidate in VALID_BILLING_BASIS else current
 
 def rebuild_customer_ledger(outlet_id: str, customer_id: str, from_date: date):
     """Recalculate running_balance for a customer from a specific date."""
@@ -36,6 +99,225 @@ def rebuild_customer_ledger(outlet_id: str, customer_id: str, from_date: date):
     for entry in entries:
         running = running + entry.debit - entry.credit
         LedgerEntry.objects.filter(pk=entry.pk).update(running_balance=running)
+
+# ─── Who may modify a bill, and how ─────────────────────────────────────────────────────────
+# ONE place decides this. The modification-options endpoint, POST /revise/ and PUT /sales/<id>/ all
+# call it, so what the UI is offered is what the API will accept. (They used to carry separate copies:
+# `standard_correction` had no permission check at all, and PUT skipped the per-action rights, so any
+# user with the generic "can edit sales" flag could rewrite a paid bill.)
+
+REVISION_ACTION_FLAGS = {
+    'direct_revise': 'can_modify_draft_bill',
+    'commercial_correction': 'can_modify_unpaid_bill',
+    'paid_bill_correction': 'can_modify_paid_bill',
+    'return_aware_correction': 'can_modify_bill_with_return',
+    'header_correction': 'can_correct_header_fields',
+    'cancel_and_reissue': 'can_cancel_and_reissue_bill',
+}
+LEGACY_GENERIC_ACTION = 'standard_correction'
+
+
+class RevisionNotAllowed(Exception):
+    def __init__(self, message: str, status_code: int = 400):
+        super().__init__(message)
+        self.message = message
+        self.status_code = status_code
+
+
+def infer_revision_action(invoice: SaleInvoice) -> str:
+    """The specific action a generic edit (PUT, or `standard_correction`) amounts to for this bill's state."""
+    if invoice.returns.exists():
+        return 'return_aware_correction'
+    if invoice.amount_paid > 0:
+        return 'paid_bill_correction'
+    return 'commercial_correction'
+
+
+def effective_revision_action(invoice: SaleInvoice, action: str = None) -> str:
+    if not action or action == LEGACY_GENERIC_ACTION:
+        return infer_revision_action(invoice)
+    return action
+
+
+def check_revision_allowed(user, invoice: SaleInvoice, action: str = None) -> str:
+    """
+    Does `user` hold the right for this kind of change to this bill? Returns the effective action,
+    or raises RevisionNotAllowed(message, http_status). A generic edit needs the right for the specific
+    action it amounts to (a paid bill needs the "modify paid bill" right, and so on).
+    """
+    from apps.core.permissions import has_bill_revision_permission
+    effective = effective_revision_action(invoice, action)
+    flag = REVISION_ACTION_FLAGS.get(effective)
+    if flag is None:
+        raise RevisionNotAllowed('Invalid revisionAction.', 400)
+    if not has_bill_revision_permission(user, flag):
+        raise RevisionNotAllowed(f'Permission denied: Missing {flag}.', 403)
+    if effective == 'direct_revise' and invoice.amount_paid > 0:
+        raise RevisionNotAllowed('Cannot direct revise a paid bill.', 400)
+    if effective == 'commercial_correction' and invoice.amount_paid > 0:
+        raise RevisionNotAllowed('Cannot commercially correct a paid bill.', 400)
+    return effective
+
+
+def _edit_parties(new_customer, payload: dict, invoice: SaleInvoice, sale_type: str = 'RETAIL'):
+    """
+    (account_to_bill, patient) for an edit. Picking a family member bills their account; an edit that names no patient keeps
+    the bill's existing one while it stays on the same account.
+    """
+    if new_customer is None:
+        return None, None
+    if sale_type == 'WHOLESALE':
+        return new_customer.financial_customer, None        # one party, no family patient
+    from apps.accounts.family_accounts import resolve_bill_parties, FamilyAccountError
+    patient_id = payload.get('patientId') if 'patientId' in payload else None
+    if 'patientId' not in payload and invoice.patient_id and invoice.customer_id == new_customer.financial_customer.pk:
+        patient_id = invoice.patient_id
+    try:
+        return resolve_bill_parties(new_customer, patient_id)
+    except FamilyAccountError as err:
+        raise SaleServiceError(str(err))
+
+
+def _edit_walk_in_name(new_customer, payload: dict, invoice: SaleInvoice) -> str:
+    """A name-only (non-valued) customer lives on the bill; it only applies while the bill has no customer profile."""
+    if new_customer is not None:
+        return ''
+    if 'walkInName' in payload:
+        return str(payload.get('walkInName') or '').strip()[:255]
+    return invoice.walk_in_name
+
+
+def _money(value) -> Decimal:
+    try:
+        return Decimal(str(value if value not in (None, '') else 0)).quantize(Decimal('0.01'))
+    except Exception:
+        return Decimal('0')
+
+
+def _billed_account_id(raw):
+    """The id of the account that would be billed for a customer id (or ledger id) from the client; family members map to their account."""
+    import uuid as _uuid
+    from apps.accounts.models import Customer as _Customer, Ledger as _Ledger
+    try:
+        key = _uuid.UUID(str(raw))
+    except (ValueError, AttributeError, TypeError):
+        return str(raw)
+    customer = _Customer.objects.filter(pk=key).first()
+    if customer is None:
+        ledger = _Ledger.objects.select_related('linked_customer').filter(pk=key).first()
+        customer = ledger.linked_customer if ledger else None
+    return str(customer.financial_customer.pk) if customer else str(raw)
+
+
+def check_correction_scope(user, invoice: SaleInvoice, payload: dict, action: str) -> None:
+    """
+    What is being CHANGED must also be allowed, not just the kind of edit. Beyond the action right
+    (check_revision_allowed) three finer rights apply to anyone below admin:
+      - can_correct_customer         changing who the bill is for
+      - can_correct_quantities       changing, adding or removing item quantities
+      - can_correct_rates_discounts  changing an item's rate / discount, or the whole-bill extra discount
+    They were stored, editable and shown in the staff API but never checked anywhere.
+    Raises RevisionNotAllowed(403). cancel_and_reissue makes a new bill, so it is not a correction of this one.
+    """
+    if action == 'cancel_and_reissue':
+        return
+    from apps.core.permissions import has_bill_revision_permission
+
+    def need(flag, what):
+        if not has_bill_revision_permission(user, flag):
+            raise RevisionNotAllowed(f'Permission denied: Missing {flag} (needed to change {what}).', 403)
+
+    cust_key = 'customerId' if 'customerId' in payload else ('customer_id' if 'customer_id' in payload else None)
+    if cust_key is not None:
+        new_customer = payload.get(cust_key) or None
+        old_customer = str(invoice.customer_id) if invoice.customer_id else None
+        new_account = _billed_account_id(new_customer) if new_customer else None
+        if new_account != old_customer:
+            need('can_correct_customer', 'the customer')
+    if 'patientId' in payload:
+        new_patient = str(payload.get('patientId')) if payload.get('patientId') else None
+        old_patient = str(invoice.patient_id) if invoice.patient_id else None
+        if new_patient != old_patient:
+            need('can_correct_customer', 'who the bill is for')
+    if action == 'header_correction':
+        return      # a header correction never touches the item lines
+
+    old = {}
+    for it in invoice.items.all():
+        slot = old.setdefault(str(it.batch_id), {'qty': 0, 'prices': set()})
+        slot['qty'] += (it.qty_strips or 0) * (it.pack_size or 1) + (it.qty_loose or 0)
+        slot['prices'].add((_money(it.rate), _money(it.discount_pct)))
+    new = {}
+    for it in payload.get('items') or []:
+        slot = new.setdefault(str(it.get('batchId') or it.get('batch_id')), {'strips': 0, 'loose': 0, 'prices': set()})
+        slot['strips'] += int(it.get('qtyStrips') or 0)
+        slot['loose'] += int(it.get('qtyLoose') or 0)
+        slot['prices'].add((_money(it.get('rate')), _money(it.get('discountPct'))))
+
+    pack = {str(i.batch_id): (i.pack_size or 1) for i in invoice.items.all()}
+    qty_changed = set(old) != set(new) or any(
+        old[b]['qty'] != new[b]['strips'] * pack.get(b, 1) + new[b]['loose'] for b in old if b in new)
+    if qty_changed:
+        need('can_correct_quantities', 'item quantities')
+    price_changed = any(old[b]['prices'] != new[b]['prices'] for b in old if b in new)
+    if 'extraDiscountPct' in payload and _money(payload.get('extraDiscountPct')) != _money(invoice.extra_discount_pct):
+        price_changed = True
+    if price_changed:
+        need('can_correct_rates_discounts', 'rates or discounts')
+
+
+def revision_state_block(invoice: SaleInvoice, action: str):
+    """A message when the bill's STATE (returns, later payments) rules the action out, else None."""
+    label = (action or '').replace('_', ' ')
+    if invoice.returns.exists() and action not in ('return_aware_correction', 'header_correction'):
+        return f'Cannot {label} a bill with returns.'
+    if (hasattr(invoice, 'receipt_allocations') and invoice.receipt_allocations.exists()
+            and action not in ('paid_bill_correction', 'header_correction')):
+        return f'Cannot {label} a bill with later payments.'
+    return None
+
+
+def allowed_revision_actions(user, invoice: SaleInvoice) -> list:
+    """The actions to OFFER for this bill: exactly those check_revision_allowed + revision_state_block accept."""
+    paid = invoice.amount_paid > 0
+    has_returns = invoice.returns.exists()
+    offered = []
+    for action in ('direct_revise', 'commercial_correction', 'paid_bill_correction',
+                   'return_aware_correction', 'cancel_and_reissue', 'header_correction'):
+        if action == 'paid_bill_correction' and not paid:
+            continue
+        if action == 'return_aware_correction' and not has_returns:
+            continue
+        try:
+            check_revision_allowed(user, invoice, action)
+        except RevisionNotAllowed:
+            continue
+        if revision_state_block(invoice, action):
+            continue
+        offered.append(action)
+    return offered
+
+
+def _undo_credit_effect(account: CreditAccount, tx: CreditTransaction) -> None:
+    """
+    Take back what one CreditTransaction did to its account. A 'debit' (credit given) raised outstanding and
+    borrowed; a 'credit' (an advance / repayment recorded on the bill) LOWERED outstanding and raised repaid.
+    The reversal subtracted for both types, so undoing a 'credit' moved the account the wrong way, by
+    twice the amount.
+    """
+    if tx.type == 'debit':
+        account.total_outstanding -= tx.amount
+        account.total_borrowed -= tx.amount
+    else:
+        account.total_outstanding += tx.amount
+        account.total_repaid -= tx.amount
+
+
+def _add_customer_purchases(customer_id, delta: Decimal) -> None:
+    """Atomic in the database (no read-modify-write), so two bills saved at once cannot lose an update."""
+    from django.db.models import F
+    Customer.objects.filter(pk=customer_id).update(total_purchases=F('total_purchases') + delta)
+
 
 def get_sale_modification_constraints(invoice: SaleInvoice, action: str = None) -> Dict[str, Any]:
     """
@@ -78,13 +360,14 @@ def get_sale_modification_constraints(invoice: SaleInvoice, action: str = None) 
     }
 
 @transaction.atomic
-def cancel_invoice(sale_id: str, updated_by_id: str, reason: str):
+def cancel_invoice(sale_id: str, updated_by_id: str, reason: str, expected_updated_at=None):
     from apps.inventory.models import StockLedger
     from apps.billing.models import SaleInvoice, CreditTransaction
     from apps.accounts.journal_service import reverse_journal
     from django.utils import timezone
 
     sale_invoice = SaleInvoice.objects.select_for_update().get(id=sale_id)
+    check_not_stale(sale_invoice, expected_updated_at)
     outlet = sale_invoice.outlet
     
     if sale_invoice.is_cancelled:
@@ -119,8 +402,7 @@ def cancel_invoice(sale_id: str, updated_by_id: str, reason: str):
     # Revert accounting
     old_customer = sale_invoice.customer
     if old_customer:
-        old_customer.total_purchases -= sale_invoice.grand_total
-        old_customer.save(update_fields=['total_purchases'])
+        _add_customer_purchases(old_customer.pk, -sale_invoice.grand_total)
 
     # Reverse JournalEntry
     reverse_journal(
@@ -131,13 +413,11 @@ def cancel_invoice(sale_id: str, updated_by_id: str, reason: str):
     )
 
     # Reverse CreditTransactions
-    old_credit_txs = CreditTransaction.objects.filter(invoice=sale_invoice)
+    old_credit_txs = list(CreditTransaction.objects.filter(invoice=sale_invoice))
     for tx in old_credit_txs:
-        account = tx.credit_account
-        account.total_outstanding -= tx.amount
-        if tx.type == 'debit':
-            account.total_borrowed -= tx.amount
-        account.save(update_fields=['total_outstanding', 'total_borrowed'])
+        account = CreditAccount.objects.select_for_update().get(pk=tx.credit_account_id)
+        _undo_credit_effect(account, tx)
+        account.save(update_fields=['total_outstanding', 'total_borrowed', 'total_repaid'])
         CreditTransaction.objects.create(
             credit_account=account,
             customer=account.customer,
@@ -153,7 +433,7 @@ def cancel_invoice(sale_id: str, updated_by_id: str, reason: str):
     sale_invoice.cancellation_reason = reason
     sale_invoice.cancelled_at = timezone.now()
     sale_invoice.cancelled_by_id = updated_by_id
-    sale_invoice.save(update_fields=['is_cancelled', 'cancellation_reason', 'cancelled_at', 'cancelled_by'])
+    sale_invoice.save(update_fields=['is_cancelled', 'cancellation_reason', 'cancelled_at', 'cancelled_by', 'updated_at'])
 
 @transaction.atomic
 def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, updated_by_id: str) -> SaleInvoice:
@@ -170,6 +450,8 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
             raise SaleServiceError(f"Sale {sale_id} not found")
         
         revision_action = payload.get('revisionAction')
+
+        check_not_stale(sale_invoice, payload.get('expectedUpdatedAt'))
 
         # Enforce edit constraints
         constraints = get_sale_modification_constraints(sale_invoice, action=revision_action)
@@ -216,6 +498,8 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
                 except Customer.DoesNotExist:
                     raise SaleServiceError(f"Customer {customer_id} not found")
 
+            new_customer, new_patient = _edit_parties(new_customer, payload, sale_invoice, payload.get('saleType', sale_invoice.sale_type))
+
             from apps.accounts.models import Doctor
             new_doctor = sale_invoice.doctor  # default: keep existing
             if doctor_id:
@@ -227,19 +511,23 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
             # Parse invoice_date if provided
             raw_invoice_date = payload.get('invoiceDate')
             if raw_invoice_date:
-                invoice_date_str = str(raw_invoice_date).rstrip('Z').split('+')[0]
-                new_invoice_date = datetime.fromisoformat(invoice_date_str)
+                new_invoice_date = parse_client_datetime(raw_invoice_date)
             else:
                 new_invoice_date = sale_invoice.invoice_date
 
             # Apply ONLY header field updates — no stock, no payments, no items
             sale_invoice.customer = new_customer
+            sale_invoice.patient = new_patient
+            sale_invoice.walk_in_name = _edit_walk_in_name(new_customer, payload, sale_invoice)
             sale_invoice.doctor = new_doctor
             sale_invoice.invoice_date = new_invoice_date
-            sale_invoice.billed_by = billed_by
+            # billed_by is WHO BILLED the sale; an edit must not reassign it to whoever edited (the editor is
+            # recorded in the revision). Only a bill that has no biller yet takes the editor.
+            if sale_invoice.billed_by_id is None:
+                sale_invoice.billed_by = billed_by
             sale_invoice.sale_type = payload.get('saleType', sale_invoice.sale_type)
-            sale_invoice.billing_basis = payload.get('billingBasis', sale_invoice.billing_basis)
-            sale_invoice.save(update_fields=['customer', 'doctor', 'invoice_date', 'billed_by', 'sale_type', 'billing_basis'])
+            sale_invoice.billing_basis = normalize_billing_basis(payload.get('billingBasis'), sale_invoice.billing_basis)
+            sale_invoice.save(update_fields=['customer', 'patient', 'walk_in_name', 'doctor', 'invoice_date', 'billed_by', 'sale_type', 'billing_basis', 'updated_at'])
 
             return sale_invoice
 
@@ -255,8 +543,7 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
         # Frontend may not send invoiceDate on edit; fall back to the existing invoice date
         raw_invoice_date = payload.get('invoiceDate')
         if raw_invoice_date:
-            invoice_date_str = str(raw_invoice_date).rstrip('Z').split('+')[0]
-            invoice_date = datetime.fromisoformat(invoice_date_str)
+            invoice_date = parse_client_datetime(raw_invoice_date)
         else:
             existing_dt = sale_invoice.invoice_date
             invoice_date = existing_dt if isinstance(existing_dt, datetime) else datetime.combine(existing_dt, datetime.min.time())
@@ -344,7 +631,7 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
             resolved_payment_mode = payload.get('paymentMode', 'cash')
 
         # Step 2: Validate Schedule H
-        cart_items = [{'scheduleType': item.get('scheduleType', 'OTC')} for item in items_data]
+        cart_items = schedule_cart_from_catalogue(items_data)   # the catalogue's schedule, not the client's label
         try:
             schedule_h_validate(cart_items, schedule_h_data)
         except Exception as e:
@@ -368,6 +655,8 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
                 new_customer = Customer.objects.get(id=customer_id, outlet=outlet)
             except Customer.DoesNotExist:
                 raise SaleServiceError(f"Customer {customer_id} not found")
+
+        new_customer, new_patient = _edit_parties(new_customer, payload, sale_invoice, payload.get('saleType', sale_invoice.sale_type))
 
         from apps.accounts.models import Doctor
         new_doctor = None
@@ -418,17 +707,14 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
             old_invoice_date = old_invoice_date.date()
             
         if old_customer:
-            old_customer.total_purchases -= sale_invoice.grand_total
-            old_customer.save(update_fields=['total_purchases'])
+            _add_customer_purchases(old_customer.pk, -sale_invoice.grand_total)
 
         # Reverse CreditTransaction
-        old_credit_txs = CreditTransaction.objects.filter(invoice=sale_invoice)
+        old_credit_txs = list(CreditTransaction.objects.filter(invoice=sale_invoice))
         for tx in old_credit_txs:
-            account = tx.credit_account
-            account.total_outstanding -= tx.amount
-            if tx.type == 'debit':
-                account.total_borrowed -= tx.amount
-            account.save(update_fields=['total_outstanding', 'total_borrowed'])
+            account = CreditAccount.objects.select_for_update().get(pk=tx.credit_account_id)
+            _undo_credit_effect(account, tx)
+            account.save(update_fields=['total_outstanding', 'total_borrowed', 'total_repaid'])
             tx.delete()
 
         # Reverse JournalEntry
@@ -596,6 +882,8 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
         # Step 7: Update SaleInvoice
         # (invoice_date and invoice_d already parsed at the top of this function)
         sale_invoice.customer = new_customer
+        sale_invoice.patient = new_patient
+        sale_invoice.walk_in_name = _edit_walk_in_name(new_customer, payload, sale_invoice)
         sale_invoice.doctor = new_doctor
         sale_invoice.invoice_date = invoice_date
         sale_invoice.subtotal = Decimal(str(payload.get('subtotal', 0)))
@@ -609,9 +897,10 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
         sale_invoice.amount_paid = cash_paid_val + upi_paid_val + card_paid_val
         sale_invoice.amount_due = max(Decimal('0'), client_grand_total - sale_invoice.amount_paid)
         sale_invoice.grand_total = client_grand_total
-        sale_invoice.billed_by = billed_by
+        if sale_invoice.billed_by_id is None:   # see header correction: the original biller is kept
+            sale_invoice.billed_by = billed_by
         sale_invoice.sale_type = payload.get('saleType', sale_invoice.sale_type)
-        sale_invoice.billing_basis = payload.get('billingBasis', sale_invoice.billing_basis)
+        sale_invoice.billing_basis = normalize_billing_basis(payload.get('billingBasis'), sale_invoice.billing_basis)
 
         # Step 8: Strict Boundary Validation & Payload Aggregation
         server_taxable = Decimal('0')
@@ -678,6 +967,7 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
         # Step 9: Credit Transactions
         if credit_given_val != 0 and new_customer:
             credit_account, _ = CreditAccount.objects.get_or_create(outlet=outlet, customer=new_customer)
+            credit_account = CreditAccount.objects.select_for_update().get(pk=credit_account.pk)
             credit_account.total_outstanding += credit_given_val
             if credit_given_val > 0:
                 credit_account.total_borrowed += credit_given_val
@@ -699,12 +989,28 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
                 date=current_accounting_date,
             )
 
+        # The customer's legacy ledger rows for this bill, and the earliest date their move can affect.
+        # Running balances MUST be rebuilt from that date, not from today: the sale entry used to be moved to
+        # today and balances rebuilt only from today, so entries dated in between still carried the OLD amount
+        # and the sale was counted twice.
+        sale_entry = LedgerEntry.objects.filter(outlet=outlet, entity_type='customer', entry_type='sale', reference_no=sale_invoice.invoice_no).first()
+        receipt_entry = LedgerEntry.objects.filter(outlet=outlet, entity_type='customer', entry_type='receipt', reference_no=sale_invoice.invoice_no).first()
+        earliest_affected = current_accounting_date
+        for _e in (sale_entry, receipt_entry):
+            if _e is not None and _e.date < earliest_affected:
+                earliest_affected = _e.date
+
+        if not new_customer and old_customer:
+            # The bill became a walk-in sale: nothing may stay on the old customer's ledger.
+            LedgerEntry.objects.filter(
+                outlet=outlet, entity_type='customer', reference_no=sale_invoice.invoice_no, entry_type__in=['sale', 'receipt'],
+            ).delete()
+            rebuild_customer_ledger(str(outlet.id), str(old_customer.id), earliest_affected)
+
         if new_customer:
-            new_customer.total_purchases += sale_invoice.grand_total
-            new_customer.save(update_fields=['total_purchases'])
+            _add_customer_purchases(new_customer.pk, sale_invoice.grand_total)
 
             # Ledger entries
-            sale_entry = LedgerEntry.objects.filter(outlet=outlet, entity_type='customer', entry_type='sale', reference_no=sale_invoice.invoice_no).first()
             if sale_entry:
                 LedgerEntry.objects.filter(pk=sale_entry.pk).update(
                     debit=sale_invoice.grand_total,
@@ -722,8 +1028,7 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
                 )
             
             total_paid = sale_invoice.amount_paid
-            receipt_entry = LedgerEntry.objects.filter(outlet=outlet, entity_type='customer', entry_type='receipt', reference_no=sale_invoice.invoice_no).first()
-            
+
             if total_paid > Decimal('0'):
                 if receipt_entry:
                     LedgerEntry.objects.filter(pk=receipt_entry.pk).update(
@@ -740,9 +1045,9 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
             elif receipt_entry:
                 LedgerEntry.objects.filter(pk=receipt_entry.pk).delete()
 
-            rebuild_customer_ledger(str(outlet.id), str(new_customer.id), current_accounting_date)
+            rebuild_customer_ledger(str(outlet.id), str(new_customer.id), earliest_affected)
             if old_customer and old_customer.id != new_customer.id:
-                rebuild_customer_ledger(str(outlet.id), str(old_customer.id), min(current_accounting_date, old_customer.created_at.date()))
+                rebuild_customer_ledger(str(outlet.id), str(old_customer.id), earliest_affected)
 
         # Clear cached relationships so post_sale_invoice reads fresh InvoicePayments
         if hasattr(sale_invoice, '_prefetched_objects_cache'):
@@ -755,6 +1060,7 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
         for batch_id in batches_to_rebuild:
             rebuild_stock_ledger(batch_id, min(invoice_d, old_invoice_date if 'old_invoice_date' in locals() else invoice_d))
 
+        touch(sale_invoice)
         return sale_invoice
 
     except SaleServiceError:

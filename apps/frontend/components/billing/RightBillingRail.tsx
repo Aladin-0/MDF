@@ -6,6 +6,7 @@ import { useMagicSubmit } from '@/hooks/useMagicSubmit';
 import { useAuthStore } from '@/store/authStore';
 import { cn } from '@/lib/utils';
 import { calculateTotalMargin } from '@/lib/billingMarginUtils';
+import { canViewBillingMargins } from '@/lib/access';
 import { useCheckout } from '@/hooks/useCheckout';
 import { useToast } from '@/hooks/use-toast';
 import { RevisionReasonModal } from './RevisionReasonModal';
@@ -20,7 +21,8 @@ import {
 export function RightBillingRail() {
     const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
     const { drafts, activeDraftId, getDraftTotals, setDraftDocumentMode, setRevisionContext, showMarginInfo, toggleMarginInfo, activeStaff, landingCostIncludeGst } = useBillingStore();
-    const isCashier = activeStaff?.role === 'cashier' || activeStaff?.role === 'billing_staff';
+    // Margins are for roles that may see purchase economics; unknown roles are hidden by default.
+    const isCashier = !canViewBillingMargins(activeStaff?.role);
     const canViewMargins = !isCashier && showMarginInfo;
     const { outlet } = useAuthStore();
     const containerRef = useRef<HTMLDivElement>(null);

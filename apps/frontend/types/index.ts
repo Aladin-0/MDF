@@ -1,12 +1,15 @@
 // ─── Enums / Union Types ──────────────────────────────────────────────────────
 
+/**
+ * The five roles the backend actually has (apps/accounts/models.py Staff.ROLE_CHOICES).
+ * This list used to also contain 'owner' and 'cashier', which the backend never issues, so the
+ * permission table carried rules for roles that cannot exist.
+ */
 export type StaffRole =
-    | 'owner'
     | 'super_admin'
     | 'admin'
     | 'manager'
     | 'billing_staff'
-    | 'cashier'
     | 'view_only';
 
 export type DrugSchedule =
@@ -132,7 +135,14 @@ export interface AuthUser {
     canViewPurchaseRates: boolean;
     canCreatePurchases: boolean;
     canAccessReports: boolean;
+    /**
+     * What this user may do, computed by the SERVER with the same rules its API enforces
+     * (apps/core/permissions.py effective_permissions). The UI checks membership in this list.
+     * Absent only on sessions cached before this field existed (lib/access.ts has a fallback).
+     */
+    permissions?: string[];
     canEditSales?: boolean;
+    canExportGst?: boolean;
     canEditPurchases?: boolean;
     canModifyPaidPurchases?: boolean;
     canModifySettledVouchers?: boolean;
@@ -348,6 +358,18 @@ export interface Customer {
     isActive?: boolean;
     ledgerId?: string;
     createdAt: string;
+    // Family / shared accounts: a member bills through `accountId` and their money (outstanding, creditLimit) is the account's.
+    email?: string;
+    isFamilyAccount?: boolean;
+    /** A purely shared account record (no single owner) as opposed to a person who owns an account with members. */
+    isSharedAccountRecord?: boolean;
+    isFamilyMember?: boolean;
+    accountId?: string | null;
+    accountName?: string | null;
+    relationship?: string;
+    gender?: string;
+    age?: number | null;
+    memberCount?: number;
 }
 
 export interface Doctor {
@@ -530,6 +552,12 @@ export interface DraftBill {
     createdAt: string;
     updatedAt: string;
     editingSaleId?: string;
+    /** Version stamp of the bill when it was loaded for editing; sent back so a stale edit is refused (409). */
+    editingSaleUpdatedAt?: string;
+    /** Who the medicine is for when the bill goes to a shared family account. */
+    patient?: FamilyMember | null;
+    /** Non-valued customer: a name only (no mobile, no profile), printed on the bill. */
+    walkInName?: string | null;
     revisionAction?: string;
     revisionReasonCode?: string;
     revisionReasonText?: string;
@@ -609,6 +637,10 @@ export interface SaleInvoice {
     doctorSpecialty?: string;
     patientName?: string;
     patientAddress?: string;
+    /** Family accounts: the person the bill was for (the customer is then the shared account). */
+    patientId?: string | null;
+    patientMemberName?: string | null;
+    walkInName?: string | null;
     outlet?: Outlet;
 }
 
@@ -667,6 +699,9 @@ export interface QuotationItem {
 }
 
 export interface SaleInvoiceSummary {
+    patientId?: string | null;
+    patientMemberName?: string | null;
+    walkInName?: string | null;
     id: string;
     invoiceNo: string;
     invoiceDate: string;
@@ -1643,6 +1678,18 @@ export interface LedgerGroup {
     isSystem: boolean;
 }
 
+/** A person on a shared family account (bills go to the account; the person is the patient). */
+export interface FamilyMember {
+    id: string;
+    name: string;
+    relationship?: string;
+    gender?: string;
+    age?: number | null;
+    phone?: string;
+    /** This person owns the account the others bill under. */
+    isAccountHolder?: boolean;
+}
+
 export interface Ledger {
     id: string;
     name: string;
@@ -1656,6 +1703,9 @@ export interface Ledger {
     gstin?: string;
     address?: string;
     linkedCustomerId?: string;
+    /** A shared family ledger: the people who bill to it (one picker row each). */
+    isFamilyAccount?: boolean;
+    familyMembers?: FamilyMember[];
     linkedDistributorId?: string;
     isSystem: boolean;
     createdAt: string;
@@ -1799,6 +1849,11 @@ export interface LedgerStatement {
     totalCredit?: number;
     pageDebit?: number;
     pageCredit?: number;
+    /** totals of the entries a search matched (all pages); the whole statement's totals are totalDebit / totalCredit */
+    filteredDebit?: number;
+    filteredCredit?: number;
+    /** every entry in the date range, whatever the search */
+    totalEntries?: number;
     pagination?: {
         page: number;
         page_size: number;

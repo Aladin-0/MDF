@@ -11,6 +11,9 @@ export type SubNavItem = {
     label: string;
     href: string;
     icon: any;
+    /** Who may see this entry. Leave out to inherit the parent's rule. Lets one tab group pages with different rights
+     *  (e.g. Staff List is admin-only, Attendance is for everyone). */
+    permission?: Permission | null;
 };
 
 export type NavItem = {
@@ -18,8 +21,6 @@ export type NavItem = {
     href: string;
     icon: any;
     permission: Permission | null;
-    shortcut?: string;
-    sequence?: string;
     badge?: string;
     subItems?: SubNavItem[];
 };
@@ -30,24 +31,18 @@ export const NAV_ITEMS: NavItem[] = [
         href: '/dashboard',
         icon: LayoutDashboard,
         permission: null,
-        shortcut: 'Alt+1',
-        sequence: 'g d',
     },
     {
         label: 'Billing',
         href: '/billing',
         icon: Receipt,
         permission: 'create_bills' as Permission,
-        shortcut: 'Alt+2',
-        sequence: 'g b',
     },
     {
         label: 'Sales',
         href: '/dashboard/sales',
         icon: ClipboardList,
         permission: 'create_bills' as Permission,
-        shortcut: 'Alt+3',
-        sequence: 'g s',
         subItems: [
             { label: 'Invoices', href: '/dashboard/sales', icon: List },
             { label: 'Quotations', href: '/dashboard/sales/quotations', icon: FileSearch },
@@ -60,8 +55,6 @@ export const NAV_ITEMS: NavItem[] = [
         href: '/dashboard/inventory',
         icon: Package,
         permission: 'view_outlet' as Permission,
-        shortcut: 'Alt+4',
-        sequence: 'g i',
         subItems: [
             { label: 'Stock List', href: '/dashboard/inventory', icon: List },
             { label: 'Stock Ledger', href: '/dashboard/stockledger', icon: ClipboardList },
@@ -71,9 +64,7 @@ export const NAV_ITEMS: NavItem[] = [
         label: 'Purchases',
         href: '/dashboard/purchases',
         icon: ShoppingCart,
-        permission: 'create_purchases' as Permission,
-        shortcut: 'Alt+5',
-        sequence: 'g p',
+        permission: 'view_purchases' as Permission,
         subItems: [
             { label: 'Purchases Dashboard', href: '/dashboard/purchases', icon: LayoutDashboard },
             { label: 'Purchase Returns', href: '/dashboard/accounts/purchase-returns', icon: ArrowUpLeft },
@@ -84,36 +75,29 @@ export const NAV_ITEMS: NavItem[] = [
         href: '/dashboard/customers',
         icon: Users,
         permission: 'view_outlet' as Permission,
-        shortcut: 'Alt+6',
-        sequence: 'g c',
     },
     {
         label: 'Credit',
         href: '/dashboard/credit',
         icon: CreditCard,
         permission: 'view_outlet' as Permission,
-        shortcut: 'Alt+7',
-        sequence: 'g u',
     },
     {
+        // Staff and Attendance used to be two top tabs. One group now, like Sales / Purchases / Accounts.
         label: 'Staff',
         href: '/dashboard/staff',
         icon: UserCog,
-        permission: 'manage_staff' as Permission,
-    },
-    {
-        label: 'Attendance',
-        href: '/dashboard/attendance',
-        icon: CalendarCheck,
-        permission: 'view_outlet' as Permission,
+        permission: null,
+        subItems: [
+            { label: 'Staff List', href: '/dashboard/staff', icon: Users, permission: 'manage_staff' as Permission },
+            { label: 'Attendance', href: '/dashboard/attendance', icon: CalendarCheck, permission: 'view_outlet' as Permission },
+        ],
     },
     {
         label: 'Accounts',
         href: '/dashboard/accounts/vouchers',
         icon: Wallet,
-        permission: 'create_purchases' as Permission,
-        shortcut: 'Alt+8',
-        sequence: 'g a',
+        permission: 'view_accounts' as Permission,
         subItems: [
             { label: 'Accounts Dashboard', href: '/dashboard/accounts/overview', icon: LayoutDashboard },
             { label: 'New Voucher', href: '/dashboard/accounts/voucher-entry', icon: BookOpen },
@@ -129,16 +113,12 @@ export const NAV_ITEMS: NavItem[] = [
         href: '/gst',
         icon: Scale,
         permission: 'view_reports' as Permission,
-        shortcut: 'Alt+G',
-        sequence: 'g g',
     },
     {
         label: 'Reports',
         href: '/dashboard/reports',
         icon: BarChart3,
         permission: 'view_reports' as Permission,
-        shortcut: 'Alt+9',
-        sequence: 'g r',
         subItems: [
             { label: 'Reports Dashboard', href: '/dashboard/reports', icon: LayoutDashboard },
             { label: 'Daily Report', href: '/dashboard/reports/daily', icon: ClipboardList },
@@ -149,7 +129,46 @@ export const NAV_ITEMS: NavItem[] = [
         href: '/dashboard/settings',
         icon: Settings,
         permission: 'manage_settings' as Permission,
-        shortcut: 'Alt+0',
-        sequence: 'g t',
     },
 ] as const;
+
+type Has = (permission: Permission) => boolean;
+
+/**
+ * The navigation a given user should see, from one place (the top bar and the sidebar both use it).
+ *  - an entry the user may not open is dropped, sub-items included;
+ *  - a group left with no entries disappears;
+ *  - a group left with a single entry becomes a plain link to it, named after that entry. A cashier therefore still sees a plain
+ *    "Attendance" tab, not a "Staff" dropdown holding one thing.
+ */
+export function visibleNavItems(has: Has): NavItem[] {
+    const out: NavItem[] = [];
+    for (const item of NAV_ITEMS) {
+        if (item.permission && !has(item.permission)) continue;
+        if (!item.subItems) { out.push(item); continue; }
+
+        const gated = item.subItems.some((s) => s.permission);
+        const subs = item.subItems.filter((s) => !s.permission || has(s.permission));
+        if (subs.length === 0) continue;
+        if (gated && subs.length === 1 && item.subItems.length > 1) {
+            const only = subs[0];
+            out.push({ label: only.label, href: only.href, icon: only.icon, permission: null });
+            continue;
+        }
+        out.push({ ...item, subItems: subs });
+    }
+    return out;
+}
+
+/**
+ * Which sub-item is the current page: the MOST specific match. (`/dashboard/sales/quotations` also starts with `/dashboard/sales`;
+ * a plain prefix test highlighted both entries.)
+ */
+export function activeSubHref(pathname: string, subItems?: SubNavItem[]): string | null {
+    let best: string | null = null;
+    for (const sub of subItems ?? []) {
+        const hit = pathname === sub.href || pathname.startsWith(sub.href + '/');
+        if (hit && (best === null || sub.href.length > best.length)) best = sub.href;
+    }
+    return best;
+}

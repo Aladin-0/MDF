@@ -12,7 +12,8 @@ import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { NAV_ITEMS } from '@/lib/navConfig';
+import { visibleNavItems, activeSubHref } from '@/lib/navConfig';
+import { shortcutHintForHref } from '@/lib/shortcutEngine';
 import { Building2, Pill, ChevronLeft, ChevronRight, MoreVertical, LogOut, User } from 'lucide-react';
 
 interface SidebarProps {
@@ -43,18 +44,20 @@ export function Sidebar({ isCollapsed, onToggle, isMobile = false }: SidebarProp
     };
 
     // Pre-calculate active routes for O(1) lookup during render
+    const navItems = visibleNavItems(hasPermission);
     const activeStates = useMemo(() => {
         const states: Record<string, { active: boolean; subActive: boolean }> = {};
 
-        NAV_ITEMS.forEach(item => {
-            const isSubActive = item.subItems?.some(sub => checkIsActive(pathname, sub.href)) ?? false;
+        navItems.forEach(item => {
+            const isSubActive = activeSubHref(pathname, item.subItems) !== null;
             // Item is active if a sub-item is active, OR its exact path matches
             const isActive = isSubActive || checkIsActive(pathname, item.href);
 
             states[item.href] = { active: isActive, subActive: isSubActive };
         });
         return states;
-    }, [pathname]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [pathname, navItems.map((i) => i.href).join('|')]);
 
     return (
         <div
@@ -104,10 +107,9 @@ export function Sidebar({ isCollapsed, onToggle, isMobile = false }: SidebarProp
                     )}
 
                     {/* Standard Navigation */}
-                    {NAV_ITEMS.map((item) => {
-                        if (item.permission && !hasPermission(item.permission)) return null;
-
+                    {navItems.map((item) => {
                         const state = activeStates[item.href];
+                        const currentSub = activeSubHref(pathname, item.subItems);
                         const Icon = item.icon;
 
                         return (
@@ -116,7 +118,7 @@ export function Sidebar({ isCollapsed, onToggle, isMobile = false }: SidebarProp
                                     href={item.href}
                                     icon={Icon}
                                     label={item.label}
-                                    shortcut={item.shortcut}
+                                    shortcut={shortcutHintForHref(item.href)}
                                     isActive={state.active}
                                     isCollapsed={isCollapsed}
                                     isMobile={isMobile}
@@ -127,7 +129,7 @@ export function Sidebar({ isCollapsed, onToggle, isMobile = false }: SidebarProp
                                 {item.subItems && state.active && !isCollapsed && (
                                     <div className="mt-1 ml-[22px] space-y-1 border-l-2 border-slate-100 pl-3 animate-in slide-in-from-top-2 fade-in duration-200">
                                         {item.subItems.map((sub) => {
-                                            const subActive = checkIsActive(pathname, sub.href);
+                                            const subActive = sub.href === currentSub;
                                             const SubIcon = sub.icon;
                                             return (
                                                 <Link

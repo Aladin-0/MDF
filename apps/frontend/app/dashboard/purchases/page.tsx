@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -8,27 +9,43 @@ import { PurchasesList } from '@/components/purchases/PurchasesList';
 import { NewPurchaseForm } from '@/components/purchases/NewPurchaseForm';
 import { DistributorsTab } from '@/components/purchases/DistributorsTab';
 import { PurchaseOrdersList } from '@/components/purchases/PurchaseOrdersList';
-import { FileText, Plus, Users, ShoppingCart, Edit, ClipboardList } from 'lucide-react';
+import { FileText, Plus, Users, ShoppingCart, Edit, ClipboardList, ListChecks } from 'lucide-react';
+import { ShortbookTab, AddToShortbook } from '@/components/purchases/ShortbookTab';
+import { NewPurchaseOrderModal } from '@/components/purchases/NewPurchaseOrderModal';
+import { usePOList, useShortbook } from '@/hooks/usePO';
 import { cn } from '@/lib/utils';
 import { PurchaseInvoiceFull } from '@/types';
-import { useAuthStore } from '@/store/authStore';
+import { usePermissions } from '@/hooks/usePermissions';
 
 const tabs = [
-    { value: 'invoices',        label: 'Invoices',        icon: FileText },
+    { value: 'shortbook',       label: 'Shortbook',       icon: ListChecks },
     { value: 'purchase_orders', label: 'Purchase Orders', icon: ClipboardList },
+    { value: 'invoices',        label: 'Invoices',        icon: FileText },
     { value: 'new',             label: 'New Purchase',    icon: Plus     },
     { value: 'distributors',    label: 'Distributors',    icon: Users    },
 ];
+const TAB_VALUES = tabs.map((t) => t.value);
 
 
 export default function PurchasesPage() {
-    const [activeTab, setActiveTab] = useState('invoices');
+    const searchParams = useSearchParams();
+    const router = useRouter();
+    const urlTab = searchParams.get('tab');
+    // PO settings moved to Settings; keep old bookmarks working
+    useEffect(() => { if (urlTab === 'po_settings') router.replace('/dashboard/settings?tab=purchasing'); }, [urlTab, router]);
+    const [activeTab, setActiveTab] = useState(urlTab && TAB_VALUES.includes(urlTab) ? urlTab : 'shortbook');
+    // a link such as Inventory -> "Create Purchase Order" (?tab=purchase_orders&newPo=1) or PO -> "Receive goods" (?tab=new&poId=…)
+    useEffect(() => { if (urlTab && TAB_VALUES.includes(urlTab)) setActiveTab(urlTab); }, [urlTab]);
+    const [addShortbookOpen, setAddShortbookOpen] = useState(false);
+    const [newPoOpen, setNewPoOpen] = useState(searchParams.get('newPo') === '1');
     const [editingInvoice, setEditingInvoice] = useState<PurchaseInvoiceFull | null>(null);
     const [lastModifiedInvoiceId, setLastModifiedInvoiceId] = useState<string | null>(null);
 
-    const user = useAuthStore((s) => s.user);
-    const canEdit = user?.role === 'super_admin' || user?.role === 'admin' || !!user?.canEditPurchases;
-    const canCreate = user?.role === 'super_admin' || user?.role === 'admin' || !!user?.canCreatePurchases;
+    const { hasPermission } = usePermissions();
+    const canEdit = hasPermission('edit_purchases');
+    const canCreate = hasPermission('create_purchases');
+    const shortbookCount = useShortbook({ countsOnly: 1 }).data?.counts.pending ?? 0;     // just the number for the badge: no rows, no stock scan
+    const openPoCount = usePOList({ status: 'OPEN', pageSize: 1 }).data?.statusCounts.OPEN ?? 0;
 
     const handleEditInvoice = (invoice: PurchaseInvoiceFull) => {
         setEditingInvoice(invoice);
@@ -61,14 +78,14 @@ export default function PurchasesPage() {
                             </div>
                             <p className="pl-[46px] text-sm text-muted-foreground">Record and manage purchase invoices (GRN) from distributors</p>
                         </div>
-                        <Button
-                            size="sm"
-                            className="shrink-0 gap-1.5"
-                            onClick={() => { setEditingInvoice(null); setActiveTab('new'); }}
-                        >
-                            <Plus className="h-4 w-4" />
-                            New Purchase
-                        </Button>
+                        {/* the main action follows the tab */}
+                        {activeTab === 'shortbook' && canCreate ? (
+                            <Button size="sm" className="shrink-0 gap-1.5" onClick={() => setAddShortbookOpen(true)}><Plus className="h-4 w-4" />Add to Shortbook</Button>
+                        ) : activeTab === 'purchase_orders' && canCreate ? (
+                            <Button size="sm" className="shrink-0 gap-1.5" onClick={() => setNewPoOpen(true)}><Plus className="h-4 w-4" />New PO</Button>
+                        ) : (
+                            <Button size="sm" className="shrink-0 gap-1.5" onClick={() => { setEditingInvoice(null); setActiveTab('new'); }}><Plus className="h-4 w-4" />New Purchase</Button>
+                        )}
                     </div>
                     <Separator />
                 </>
@@ -100,6 +117,8 @@ export default function PurchasesPage() {
                                     : <Icon className={cn('h-4 w-4', isActive ? 'text-primary' : 'text-muted-foreground')} />
                                 }
                                 {isEditTab ? 'Edit Purchase' : label}
+                                {value === 'shortbook' && shortbookCount > 0 && <span className="rounded-full bg-primary/10 px-1.5 text-xs font-semibold text-primary">{shortbookCount}</span>}
+                                {value === 'purchase_orders' && openPoCount > 0 && <span className="rounded-full bg-primary/10 px-1.5 text-xs font-semibold text-primary">{openPoCount}</span>}
                             </button>
                         );
                     })}
@@ -115,6 +134,10 @@ export default function PurchasesPage() {
                             highlightInvoiceId={lastModifiedInvoiceId}
                             onClearHighlight={() => setLastModifiedInvoiceId(null)}
                         />
+                    </TabsContent>
+
+                    <TabsContent value="shortbook" className="mt-0 outline-none">
+                        <ShortbookTab />
                     </TabsContent>
 
                     <TabsContent value="purchase_orders" className="mt-0 outline-none">
@@ -151,6 +174,8 @@ export default function PurchasesPage() {
 
                 </div>
             </Tabs>
+            <AddToShortbook open={addShortbookOpen} onClose={() => setAddShortbookOpen(false)} />
+            <NewPurchaseOrderModal open={newPoOpen} onOpenChange={setNewPoOpen} />
         </div>
     );
 }

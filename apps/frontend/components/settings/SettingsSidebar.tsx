@@ -2,13 +2,13 @@
 
 import {
     Building2, Receipt, Printer, ShoppingCart, Clock,
-    Bell, Palette, Database, IndianRupee
+    Bell, Palette, Database, IndianRupee, ClipboardList
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type SectionId =
     | 'outlet' | 'gst'
-    | 'printer' | 'billing' | 'pricing' | 'attendance'
+    | 'printer' | 'billing' | 'pricing' | 'purchasing' | 'attendance'
     | 'notifications' | 'preferences' | 'data';
 
 interface NavGroup {
@@ -30,6 +30,7 @@ const NAV_GROUPS: NavGroup[] = [
             { id: 'printer', label: 'Printing', icon: Printer },
             { id: 'billing', label: 'Billing', icon: ShoppingCart },
             { id: 'pricing', label: 'Billing & Pricing', icon: IndianRupee },
+            { id: 'purchasing', label: 'Purchase Orders', icon: ClipboardList },
             { id: 'attendance', label: 'Attendance', icon: Clock },
         ],
     },

@@ -12,6 +12,18 @@ from apps.accounts.journal_service import post_debit_note
 
 logger = logging.getLogger(__name__)
 
+def _recompute_invoice_outstanding(invoice_id):
+    """outstanding = max(0, grand_total - amount_paid - sum of this bill's debit notes). Order-independent."""
+    from django.db.models import Sum
+    try:
+        inv = PurchaseInvoice.objects.select_for_update().get(id=invoice_id)
+    except PurchaseInvoice.DoesNotExist:
+        return
+    returned = DebitNote.objects.filter(purchase_invoice_id=invoice_id).aggregate(t=Sum('total_amount'))['t'] or Decimal('0')
+    inv.outstanding = max(Decimal('0'), inv.grand_total - inv.amount_paid - returned)
+    inv.save(update_fields=['outstanding'])
+
+
 @transaction.atomic
 def atomic_debit_note_update(debit_note_id: str, outlet_id: str, payload: dict, staff_id: str) -> DebitNote:
     """
@@ -53,14 +65,10 @@ def atomic_debit_note_update(debit_note_id: str, outlet_id: str, payload: dict, 
     from apps.inventory.services import reverse_stock_ledger_entry
     reverse_stock_ledger_entry(outlet_id, 'PURCHASE_RETURN', note)
 
-    # Reverse previous invoice outstanding deduction
-    if note.purchase_invoice_id:
-        try:
-            old_inv = PurchaseInvoice.objects.select_for_update().get(id=note.purchase_invoice_id)
-            old_inv.outstanding += Decimal(str(note.total_amount))
-            old_inv.save(update_fields=['outstanding'])
-        except PurchaseInvoice.DoesNotExist:
-            pass
+    # (The invoice's outstanding is NOT reversed/re-applied as a +/- delta any more: creation clamps it at 0, so
+    #  undoing it with `+= total` and re-applying without a clamp left the wrong balance. It is recomputed from
+    #  the facts once the note has been rewritten, see _recompute_invoice_outstanding below.)
+    invoice_to_recompute = note.purchase_invoice_id
 
     # 2. Reverse previous ledger journal
     from apps.accounts.models import JournalEntry
@@ -83,6 +91,7 @@ def atomic_debit_note_update(debit_note_id: str, outlet_id: str, payload: dict, 
         raise ValidationError('Debit note must have at least one item.')
 
     ZERO_UUID = '00000000-0000-0000-0000-000000000000'
+    returned_per_batch = {}
     server_computed_total = Decimal('0')
     server_computed_subtotal = Decimal('0')
     server_computed_gst = Decimal('0')
@@ -103,38 +112,34 @@ def atomic_debit_note_update(debit_note_id: str, outlet_id: str, payload: dict, 
         # Find original purchase invoice item
         original_qty = Decimal('0')
         previously_returned_qty = Decimal('0')
+        pi_lines = []
         if note.purchase_invoice_id:
-            try:
-                pi_item = PurchaseItem.objects.get(purchase_invoice_id=note.purchase_invoice_id, batch_id=batch.id)
-                original_qty = pi_item.qty
+            # PurchaseItem links to its bill through `invoice` and carries `purchase_rate`; this used
+            # `purchase_invoice_id=` / `.rate`, which do not exist, so EVERY edit of a purchase-linked note raised a
+            # FieldError (not caught by `except DoesNotExist`). A batch may also appear on several lines.
+            pi_lines = list(PurchaseItem.objects.filter(invoice_id=note.purchase_invoice_id, batch_id=batch.id))
+            original_qty = sum((l.qty for l in pi_lines), Decimal('0'))
+            if pi_lines:
                 # Sum previously returned quantities for this batch on this invoice, EXCLUDING current note
                 other_notes = DebitNote.objects.filter(purchase_invoice_id=note.purchase_invoice_id).exclude(id=note.id)
                 from django.db.models import Sum
                 agg = DebitNoteItem.objects.filter(debit_note__in=other_notes, batch_id=batch.id).aggregate(total=Sum('qty'))
                 previously_returned_qty = agg['total'] or Decimal('0')
-            except PurchaseItem.DoesNotExist:
-                # If no direct link, fallback to checking what's currently in stock
-                pass
+        # the cap is per BATCH across this note's lines (splitting one batch over two lines used to bypass it)
+        returned_in_this_note = returned_per_batch.get(str(batch.id), Decimal('0'))
 
         qty_to_return_strips = Decimal(str(item_data['qty']))
         if qty_to_return_strips <= 0:
             continue
 
         if original_qty > 0:
-            max_allowed = original_qty - previously_returned_qty
+            max_allowed = original_qty - previously_returned_qty - returned_in_this_note
             if qty_to_return_strips > max_allowed:
                 raise ValidationError(f"Cannot return {qty_to_return_strips} strips of '{item_data.get('product_name')}'. Maximum allowed is {max_allowed}.")
 
         # Retrieve original rate or fallback to batch purchase_rate
-        original_rate = Decimal('0')
-        if note.purchase_invoice_id:
-            try:
-                pi_item = PurchaseItem.objects.get(purchase_invoice_id=note.purchase_invoice_id, batch_id=batch.id)
-                original_rate = pi_item.rate
-            except PurchaseItem.DoesNotExist:
-                original_rate = batch.purchase_rate
-        else:
-            original_rate = batch.purchase_rate
+        original_rate = pi_lines[0].purchase_rate if pi_lines else batch.purchase_rate
+        returned_per_batch[str(batch.id)] = returned_in_this_note + qty_to_return_strips
 
         line_subtotal = qty_to_return_strips * original_rate
         # For simplicity, if gst_rate is needed, compute it. Assuming item_data passes gst_rate which is safe to use if it matches original.
@@ -211,14 +216,10 @@ def atomic_debit_note_update(debit_note_id: str, outlet_id: str, payload: dict, 
     note.total_amount = server_computed_total
     note.save()
 
-    # Re-apply new invoice outstanding deduction
+    # The note's total is now final: recompute the bill's outstanding from the facts (total - paid - ALL its
+    # debit notes, never below 0, the same floor creation applies).
     if note.purchase_invoice_id:
-        try:
-            new_inv = PurchaseInvoice.objects.select_for_update().get(id=note.purchase_invoice_id)
-            new_inv.outstanding = new_inv.outstanding - server_computed_total
-            new_inv.save(update_fields=['outstanding'])
-        except PurchaseInvoice.DoesNotExist:
-            pass
+        _recompute_invoice_outstanding(note.purchase_invoice_id)
 
     # 7. Post new ledger effects
     try:

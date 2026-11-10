@@ -137,6 +137,26 @@ def fefo_batch_select(outlet_id: str, product_id: str, qty_strips_needed: int) -
     return allocation
 
 
+def schedule_cart_from_catalogue(items_data) -> List[Dict[str, Any]]:
+    """
+    The `cart_items` list for schedule_h_validate, with each line's schedule taken from the CATALOGUE
+    (MasterProduct.schedule_type, found by productId or by the batch's product) instead of from the label
+    the client sent. Validating the client's label meant a request that called a Schedule H drug "OTC"
+    skipped the doctor/patient check altogether. The client's label is only a fallback for a line whose
+    product cannot be found.
+    """
+    from apps.inventory.models import MasterProduct, Batch
+    product_ids = {str(i.get('productId')) for i in items_data if i.get('productId')}
+    batch_ids = {str(i.get('batchId')) for i in items_data if i.get('batchId') and not i.get('productId')}
+    by_product = {str(pk): st for pk, st in MasterProduct.objects.filter(id__in=product_ids).values_list('id', 'schedule_type')} if product_ids else {}
+    by_batch = {str(pk): st for pk, st in Batch.objects.filter(id__in=batch_ids).values_list('id', 'product__schedule_type')} if batch_ids else {}
+    cart = []
+    for item in items_data:
+        real = by_product.get(str(item.get('productId'))) or by_batch.get(str(item.get('batchId')))
+        cart.append({'scheduleType': real or item.get('scheduleType', 'OTC')})
+    return cart
+
+
 def schedule_h_validate(cart_items: List[Dict[str, Any]], schedule_h_data: Optional[Dict[str, Any]] = None) -> None:
     """
     Validate that Schedule H/H1/X/Narcotic drugs have required doctor and patient details.

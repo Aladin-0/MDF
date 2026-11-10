@@ -7,12 +7,10 @@ interface RoleBadgeProps {
 }
 
 const roleConfig: Record<StaffRole, { label: string; className: string }> = {
-    owner: { label: 'Owner', className: 'bg-red-100 text-red-700' },
     super_admin: { label: 'Super Admin', className: 'bg-purple-100 text-purple-700' },
     admin: { label: 'Admin', className: 'bg-blue-100 text-blue-700' },
     manager: { label: 'Manager', className: 'bg-green-100 text-green-700' },
     billing_staff: { label: 'Billing Staff', className: 'bg-amber-100 text-amber-700' },
-    cashier: { label: 'Cashier', className: 'bg-amber-100 text-amber-700' },
     view_only: { label: 'View Only', className: 'bg-slate-100 text-slate-600' },
 };
 

@@ -1,6 +1,6 @@
 from django.db import transaction
 from django.contrib.contenttypes.models import ContentType
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from .models import StockLedger, Batch, StockAdjustment, StockAdjustmentAllocation
 from apps.purchases.models import PurchaseItem
 
@@ -233,7 +233,8 @@ def rebuild_stock_ledger(batch_or_id=None, from_date=None, batch_id=None, batch=
 
     # Step 3: Update Batch master
     pack_size = batch_obj.pack_size or 1
-    total_loose = max(0, int(running_qty * pack_size))
+    # round, don't truncate: 10 - 0.1429 (a 1-of-7 loose sale) = 9.8571 x 7 = 68.9997 must be 69, not 68
+    total_loose = max(0, int((running_qty * pack_size).to_integral_value(rounding=ROUND_HALF_UP)))
     qty_strips = total_loose // pack_size
     qty_loose = total_loose % pack_size
     Batch.objects.filter(pk=target_id).update(qty_strips=qty_strips, qty_loose=qty_loose)

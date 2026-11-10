@@ -14,10 +14,12 @@ interface ProductSearchDropdownProps {
     context?: 'purchase' | 'billing' | 'procurement';
     placeholder?: string;
     className?: string;
+    /** open the list as soon as the field appears (for a popup whose first job is to pick a product) */
+    defaultOpen?: boolean;
 }
 
-export function ProductSearchDropdown({ onSelect, context = 'purchase', placeholder = "Search products...", className = "" }: ProductSearchDropdownProps) {
-    const [open, setOpen] = useState(false);
+export function ProductSearchDropdown({ onSelect, context = 'purchase', placeholder = "Search products...", className = "", defaultOpen = false }: ProductSearchDropdownProps) {
+    const [open, setOpen] = useState(defaultOpen);
     const [query, setQuery] = useState('');
     const [activeValue, setActiveValue] = useState('');
     
@@ -36,7 +38,7 @@ export function ProductSearchDropdown({ onSelect, context = 'purchase', placehol
                     variant="outline"
                     role="combobox"
                     aria-expanded={open}
-                    className={cn("w-full justify-start text-muted-foreground font-normal bg-white rounded-md border border-gray-300 shadow-sm focus:border-purple-500 focus:ring-1 focus:ring-purple-500 hover:bg-gray-50 transition-colors", className)}
+                    className={cn("w-full justify-start text-muted-foreground font-normal bg-white rounded-md border border-gray-300 shadow-sm focus:border-primary focus:ring-1 focus:ring-primary hover:bg-gray-50 transition-colors", className)}
                 >
                     <Search className="mr-2 h-4 w-4 shrink-0 text-gray-400" />
                     {placeholder}

@@ -192,6 +192,15 @@ class OutletSettings(models.Model):
     currency_symbol = models.CharField(max_length=5, default='₹')
     gstr2b_tolerance = models.DecimalField(max_digits=5, decimal_places=2, default=1.00, help_text="Tolerance for GSTR-2B reconciliation in INR")
     
+    # ── Purchase orders ──
+    po_auto_rules_enabled = models.BooleanField(default=False, help_text='Low stock auto-adds to the Shortbook; sent POs with nothing received expire')
+    po_expiry_days = models.IntegerField(default=3, help_text='Days after sending before an untouched PO expires')
+    po_default_channel = models.CharField(max_length=20, default='whatsapp_link')
+    po_whatsapp_template = models.TextField(blank=True, default='', help_text='Placeholders: {store} {po_no} {link} {distributor}')
+    po_number_prefix = models.CharField(max_length=10, default='PO')
+    po_show_rate_to_distributor = models.BooleanField(default=False, help_text='Show last rate (and the total) on the public PO page')
+    po_count_free_qty = models.BooleanField(default=False, help_text='Count free goods toward the received quantity')
+
     # Compliance Automation Flags
     enable_eway_bill = models.BooleanField(default=False)
     enable_einvoice = models.BooleanField(default=False)

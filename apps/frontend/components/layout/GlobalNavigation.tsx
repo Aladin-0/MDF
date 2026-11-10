@@ -5,9 +5,10 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAuthStore } from '@/store/authStore';
-import { NAV_ITEMS, NavItem } from '@/lib/navConfig';
+import { visibleNavItems, activeSubHref, NavItem } from '@/lib/navConfig';
 import { cn } from '@/lib/utils';
-import { Pill, Menu, Bell, Settings, Building2 } from 'lucide-react';
+import { Pill, Menu, Bell, Settings, Building2, Keyboard } from 'lucide-react';
+import { OPEN_SHORTCUT_HELP_EVENT } from '@/hooks/useShortcutHandler';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Sidebar } from '@/components/shared/Sidebar';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -22,7 +23,7 @@ export function GlobalNavigation() {
     const navRef = useRef<HTMLDivElement>(null);
 
     // Filter items based on permissions
-    const accessibleNavItems = NAV_ITEMS.filter(item => !item.permission || hasPermission(item.permission));
+    const accessibleNavItems = visibleNavItems(hasPermission);
 
     // For Super Admin chain link
     const hasChainLink = user?.role === 'super_admin';
@@ -191,7 +192,7 @@ export function GlobalNavigation() {
 
     return (
         <div
-            className="w-full bg-white shadow-sm border-b border-slate-200 flex flex-col z-40 shrink-0"
+            className="w-full bg-white shadow-sm border-b border-slate-200 flex flex-col relative z-50 shrink-0"
             role="menubar"
             aria-label="Main navigation"
             onKeyDown={handleKeyDown}
@@ -244,13 +245,10 @@ export function GlobalNavigation() {
 
                     {accessibleNavItems.map((item, i) => {
                         const index = hasChainLink ? i + 1 : i;
-                        const isSubItemActive = !!item.subItems?.some(
-                            (sub) => pathname === sub.href || pathname.startsWith(sub.href + '/')
-                        );
+                        const currentSub = activeSubHref(pathname, item.subItems);
+                        const isSubItemActive = currentSub !== null;
                         const isClaimedByOther = accessibleNavItems.some(
-                            (other) => other !== item && other.subItems?.some(
-                                (sub) => pathname === sub.href || pathname.startsWith(sub.href + '/')
-                            )
+                            (other) => other !== item && activeSubHref(pathname, other.subItems) !== null
                         );
                         const isActive = isSubItemActive || (
                             !isClaimedByOther && (pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href)))
@@ -297,7 +295,7 @@ export function GlobalNavigation() {
                                             aria-label={`${item.label} submenu`}
                                         >
                                             {item.subItems!.map((subItem, j) => {
-                                                const isChildActive = pathname === subItem.href || pathname.startsWith(subItem.href + '/');
+                                                const isChildActive = subItem.href === currentSub;
                                                 const Icon = subItem.icon;
 
                                                 return (
@@ -381,6 +379,13 @@ export function GlobalNavigation() {
                                     <Link href="/dashboard/chain" className="cursor-pointer">Chain Dashboard</Link>
                                 </DropdownMenuItem>
                             )}
+                            <DropdownMenuItem
+                                onClick={() => window.dispatchEvent(new CustomEvent(OPEN_SHORTCUT_HELP_EVENT))}
+                                className="cursor-pointer"
+                            >
+                                <Keyboard className="mr-2 h-4 w-4" /> Keyboard Shortcuts
+                                <span className="ml-auto text-[10px] font-mono text-slate-400">Alt+/</span>
+                            </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={handleLogoutAction} className="text-red-600 focus:bg-red-50 focus:text-red-600 cursor-pointer">
                                 Log out

@@ -728,7 +728,12 @@ export default function SalesList() {
                                     <td className="px-4 py-3">
                                         <div className="flex items-center gap-1.5">
                                             <Users className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                                            <span className="text-slate-700">{inv.customer?.name ?? 'Walk-in'}</span>
+                                            <span className="text-slate-700">
+                                                {inv.patientMemberName ?? inv.customer?.name ?? inv.walkInName ?? 'Walk-in'}
+                                                {inv.patientMemberName && inv.customer?.name && (
+                                                    <span className="block text-[10px] text-slate-400">{inv.customer.name}</span>
+                                                )}
+                                            </span>
                                         </div>
                                     </td>
                                     {saleType === 'WHOLESALE' ? (

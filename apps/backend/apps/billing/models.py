@@ -30,6 +30,12 @@ class SaleInvoice(models.Model):
     invoice_no = models.CharField(max_length=50, help_text='e.g., INV-2026-000001')
     invoice_date = models.DateTimeField()
     customer = models.ForeignKey('accounts.Customer', on_delete=models.SET_NULL, null=True, blank=True)
+    # Who the medicine was FOR when several people share one account (a family). `customer` stays the account that is
+    # billed; null here means the bill is for `customer` themselves.
+    patient = models.ForeignKey('accounts.Customer', on_delete=models.SET_NULL, null=True, blank=True,
+                                related_name='patient_invoices')
+    # "Non-valued customer": a name taken at the counter with no mobile number and no customer profile. Only used when `customer` is empty.
+    walk_in_name = models.CharField(max_length=255, blank=True, default='')
     doctor = models.ForeignKey('accounts.Doctor', on_delete=models.SET_NULL, null=True, blank=True,
                                help_text='For Schedule H prescriptions')
     hospital_name = models.CharField(max_length=255, null=True, blank=True)
@@ -113,6 +119,9 @@ class SaleInvoice(models.Model):
     # Sale type
     is_return = models.BooleanField(default=False, help_text='Sales return/credit note')
     is_cancelled = models.BooleanField(default=False, help_text='Cancelled/Voided invoice')
+    # Version stamp for edits: the client sends back the value it loaded (expectedUpdatedAt) and a stale one is
+    # refused with 409. Nullable so existing rows need no backfill (a NULL stamp simply skips the check).
+    updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
 
     # Audit
     billed_by = models.ForeignKey('accounts.Staff', on_delete=models.SET_NULL, null=True, related_name='billed_invoices')

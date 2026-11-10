@@ -6,11 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
+import { usePermissions } from "@/hooks/usePermissions";
 import { toast } from "sonner";
 import { Settings } from "lucide-react";
 
 export function FixedExpensesModal({ initialData, onUpdate }: { initialData?: any, onUpdate: () => void }) {
   const { user } = useAuthStore();
+  const { hasPermission } = usePermissions();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   
@@ -66,7 +68,7 @@ export function FixedExpensesModal({ initialData, onUpdate }: { initialData?: an
         </DialogHeader>
         
         {/* We only show settings if they have can_manage_partners or are a super_admin for now as it's an admin setting */}
-        {!(user?.canManagePartners || user?.role === 'super_admin' || user?.role === 'admin') ? (
+        {!hasPermission('manage_partners') ? (
           <div className="p-6 text-center text-red-500 bg-red-50 rounded-lg">
             You do not have permission to manage fixed expenses.
           </div>

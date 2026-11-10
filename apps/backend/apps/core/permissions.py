@@ -7,42 +7,124 @@ from rest_framework.exceptions import PermissionDenied
 ADMIN_ROLES = {'super_admin', 'admin'}
 MANAGER_ROLES = {'super_admin', 'admin', 'manager'}
 ALL_ROLES = {'super_admin', 'admin', 'manager', 'billing_staff', 'view_only'}
-BILLING_ROLES = {'super_admin', 'admin', 'manager', 'billing_staff'}
+BILLING_ROLES = {'super_admin', 'admin', 'manager', 'billing_staff', 'cashier', 'custom'}
+
+# LEGACY role strings. They are not in Staff.ROLE_CHOICES and can no longer be created or assigned
+# (see can_assign_role), but rows that carry them exist and must not be locked out of billing:
+#   'cashier' : older data / test factories; the frontend always treated it as a billing role.
+#   'custom'  : written by an old bug in the staff form, which turned the role into 'custom' whenever
+#               the permission toggles did not match a preset. Such a user's real rights are their
+#               per-user flags, on top of the lowest billing tier.
+# Both behave as billing_staff. `manage.py normalize_staff_roles --apply` rewrites the rows.
+ROLE_ALIASES = {'cashier': 'billing_staff', 'custom': 'billing_staff'}
+
+
+def canonical_role(role):
+    return ROLE_ALIASES.get(role, role)
+
+# Numeric rank used to stop people granting or modifying roles above their own.
+ROLE_RANK = {'view_only': 0, 'billing_staff': 1, 'manager': 2, 'admin': 3, 'super_admin': 4}
+
+# Every spelling of "which outlet is this request about" that views read. The outlet guard must
+# look at all of them: guarding only `outletId` left `outlet_id` endpoints (trial balance, GST
+# summary, balance sheet, P&L, ...) open to other outlets.
+OUTLET_PARAM_KEYS = ('outletId', 'outlet_id')
+
+
+def _get_requested_outlet_ids(request):
+    """
+    Every outlet id the request names, from the query string AND the body, in every spelling.
+    (`request.data` may be a list for bulk endpoints; those carry no top-level outlet key.)
+    """
+    ids = []
+    for key in OUTLET_PARAM_KEYS:
+        value = request.query_params.get(key)
+        if value:
+            ids.append(str(value))
+    data = getattr(request, 'data', None)
+    if hasattr(data, 'get'):
+        for key in OUTLET_PARAM_KEYS:
+            value = data.get(key)
+            if value and not isinstance(value, (dict, list)):
+                ids.append(str(value))
+    # Several views (billing revision history/reports, audit) fall back to the `OutletId` header when no
+    # outletId is given. It was never checked, so a user of outlet A could send OutletId: <outlet B> and read
+    # B's revisions and snapshots. It is an outlet selector like the others.
+    header = request.META.get('HTTP_OUTLETID')
+    if header:
+        ids.append(str(header))
+    return ids
 
 
 def _get_requested_outlet_id(request):
+    """First outlet id named by the request (kept for callers that only need one)."""
+    ids = _get_requested_outlet_ids(request)
+    return ids[0] if ids else None
+
+
+def _same_organization(user, outlet_id):
     """
-    Extract the outlet ID from the request.
-    Checks query params first (GET requests), then request body (POST/PUT).
+    True if `outlet_id` belongs to the same organization as the user's home outlet.
+    A super_admin may switch between the outlets of THEIR organization, never another one.
+    If the home outlet has no organization we cannot tell, so we keep the historical behaviour.
     """
-    outlet_id = request.query_params.get('outletId')
-    if not outlet_id and hasattr(request, 'data') and isinstance(request.data, dict):
-        outlet_id = request.data.get('outletId')
-    return outlet_id
+    home = getattr(user, 'outlet', None)
+    org_id = getattr(home, 'organization_id', None) if home else None
+    if org_id is None:
+        return True
+    from apps.core.models import Outlet
+    return Outlet.objects.filter(id=outlet_id, organization_id=org_id).exists()
+
+
+def user_can_access_outlet(user, outlet_id):
+    """
+    Object-level outlet rule, for views that load a record by id and must check it belongs
+    to an outlet the caller may use:
+      - regular staff: only their own outlet
+      - super_admin: any outlet of their own organization
+    """
+    if not user or not getattr(user, 'is_authenticated', False):
+        return False
+    if outlet_id is None or str(outlet_id) == '':
+        return False
+    own = str(getattr(user, 'outlet_id', '') or '')
+    if str(outlet_id) == own:
+        return True
+    if getattr(user, 'role', None) == 'super_admin':
+        return _same_organization(user, outlet_id)
+    return False
+
+
+def assert_outlet_access(user, outlet_id, message=None):
+    """Raise PermissionDenied unless `user` may use `outlet_id` (see user_can_access_outlet)."""
+    if not user_can_access_outlet(user, outlet_id):
+        raise PermissionDenied(
+            message or 'You do not have access to this outlet. Staff can only access data from their own outlet.'
+        )
 
 
 def check_outlet_access(request):
     """
-    Enforces outlet isolation:
-    - super_admin can access any outlet.
-    - All other roles can ONLY access their own outlet.
+    Enforces outlet isolation for every outlet id the request names (query + body, any spelling):
+    - regular staff can ONLY use their own outlet;
+    - super_admin can use any outlet of their own organization.
     Returns True if allowed, raises PermissionDenied if not.
     """
     if not request.user or not request.user.is_authenticated:
         return True  # Let the IsAuthenticated permission handle unauthenticated requests
 
-    # super_admin bypasses outlet restriction
-    if getattr(request.user, 'role', None) == 'super_admin':
+    requested = _get_requested_outlet_ids(request)
+
+    # No outlet named: nothing to check here (the view reports the missing parameter itself).
+    if not requested:
         return True
 
-    requested_outlet_id = _get_requested_outlet_id(request)
-
-    # If no outletId is in request, let the view handle the missing param error
-    if not requested_outlet_id:
-        return True
-
-    user_outlet_id = str(getattr(request.user, 'outlet_id', '') or '')
-    if user_outlet_id and str(requested_outlet_id) != user_outlet_id:
+    own = str(getattr(request.user, 'outlet_id', '') or '')
+    for outlet_id in requested:
+        if outlet_id == own:
+            continue
+        if getattr(request.user, 'role', None) == 'super_admin' and _same_organization(request.user, outlet_id):
+            continue
         raise PermissionDenied(
             'You do not have access to this outlet. '
             'Staff can only access data from their own outlet.'
@@ -235,6 +317,16 @@ class CanCreatePurchases(BasePermission):
         return True
 
 
+class CanSendPurchaseOrders(CanCreatePurchases):
+    """Send / resend / mark a purchase order as ordered. Today it follows `can_create_purchases`; a separate flag can be split off later."""
+    message = 'You do not have permission to send purchase orders. Contact your admin to enable this.'
+
+
+class CanCancelPurchaseOrders(CanEditPurchaseInvoice):
+    """Cancel a purchase order or close it short. Follows `can_edit_purchases`."""
+    message = 'You do not have permission to cancel purchase orders. Contact your admin to enable this.'
+
+
 class CanAccessPurchases(BasePermission):
     """
     Allows general access to purchase-related GET views (lists, distributors) if:
@@ -376,3 +468,150 @@ class CanViewBillRevisionHistory(BasePermission):
             check_outlet_access(request)
             return True
         return False
+
+
+# ─── Additional flag-based permission classes ────────────────────────────────
+
+class CanManageProducts(BasePermission):
+    """
+    Creating products in the master catalogue.
+    Managers and above, or anyone who is allowed to enter purchases (new products are added
+    from the purchase screen).
+    """
+    message = 'You do not have permission to create products. Contact your admin to enable this.'
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        user = request.user
+        if getattr(user, 'role', None) in MANAGER_ROLES or \
+           getattr(user, 'can_create_purchases', False) or \
+           getattr(user, 'can_edit_purchases', False):
+            check_outlet_access(request)
+            return True
+        return False
+
+
+class CanManagePartners(BasePermission):
+    """Profit-split partners and fixed monthly expenses: admins, or users with can_manage_partners."""
+    message = 'You do not have permission to manage partners or fixed expenses.'
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if _is_admin(request.user) or getattr(request.user, 'can_manage_partners', False):
+            check_outlet_access(request)
+            return True
+        return False
+
+
+# ─── Role management rules (who may create / change whom) ────────────────────
+
+def can_assign_role(caller, new_role):
+    """
+    A caller may only hand out roles that are not above their own, and ONLY a super_admin
+    may create or promote another super_admin. Without this an admin could make themselves
+    (or anyone) a super_admin, which bypasses outlet isolation entirely.
+    """
+    if new_role not in ROLE_RANK:
+        return False
+    caller_role = getattr(caller, 'role', None)
+    if caller_role == 'super_admin':
+        return True
+    if caller_role == 'admin':
+        return ROLE_RANK[new_role] <= ROLE_RANK['admin'] and new_role != 'super_admin'
+    return False
+
+
+def can_manage_staff_member(caller, target):
+    """
+    May `caller` edit/deactivate `target`? A super_admin account can only be managed by a
+    super_admin (an admin could otherwise reset a super_admin's password and take the account).
+    """
+    caller_role = getattr(caller, 'role', None)
+    if caller_role == 'super_admin':
+        return True
+    if caller_role == 'admin':
+        return getattr(target, 'role', None) != 'super_admin'
+    return False
+
+
+# ─── Effective permissions (single source of truth sent to the frontend) ────
+
+# The names below are the frontend's vocabulary (hooks/usePermissions.ts). Each rule mirrors
+# the DRF permission class that actually protects the matching API, so the UI can never offer
+# something the API will refuse (or hide something the API allows).
+def effective_permissions(user):
+    """
+    The list of permission names this user actually holds. Computed from the same role sets and
+    flags the API classes above use, and sent with login / me / switch-outlet. The frontend
+    checks membership in this list instead of re-implementing the rules.
+    """
+    if not user or not getattr(user, 'is_authenticated', False):
+        return []
+    role = canonical_role(getattr(user, 'role', None))
+    if role not in ALL_ROLES:
+        return []  # unknown role string: grant nothing rather than guess
+
+    admin = role in ADMIN_ROLES
+    manager = role in MANAGER_ROLES
+
+    def flag(name):
+        return admin or bool(getattr(user, name, False))
+
+    perms = {'view_outlet'}                                        # IsAuthenticated
+    if role in BILLING_ROLES:
+        perms.add('create_bills')                                  # IsBillingStaffOrAbove
+    if flag('can_create_purchases'):
+        perms.add('create_purchases')                              # CanCreatePurchases
+    if manager or any(getattr(user, f, False) for f in
+                      ('can_create_purchases', 'can_edit_purchases', 'can_view_purchase_rates')):
+        perms.add('view_purchases')                                # CanAccessPurchases
+    if flag('can_edit_purchases'):
+        perms.add('edit_purchases')                                # CanEditPurchaseInvoice
+        perms.add('cancel_purchase_orders')                        # CanCancelPurchaseOrders
+    if flag('can_create_purchases'):
+        perms.add('send_purchase_orders')                          # CanSendPurchaseOrders
+    if flag('can_edit_sales'):
+        perms.add('edit_sales')                                    # CanEditSalesInvoice
+    if flag('can_view_purchase_rates'):
+        perms.add('view_purchase_rates')                           # CanViewPurchaseRates
+    if flag('can_access_reports'):
+        perms.add('view_reports')                                  # CanAccessReports
+    if flag('can_export_gst'):
+        perms.add('export_reports')                                # GST export views
+    if flag('can_view_audit_history'):
+        perms.add('view_audit_history')                            # CanViewAuditHistory
+    if flag('can_manage_partners'):
+        perms.add('manage_partners')                               # CanManagePartners
+    if flag('can_edit_vouchers'):
+        perms.add('edit_vouchers')                                 # CanEditVouchers (create / change vouchers, e.g. a bank deposit)
+    if manager:
+        perms.update({'view_accounts', 'override_credit'})         # IsManagerOrAbove
+    if manager or flag('can_create_purchases') or flag('can_edit_purchases'):
+        perms.add('manage_products')                               # CanManageProducts
+    if admin:
+        perms.update({'manage_staff', 'manage_settings', 'manage_po_settings'})   # IsAdminStaff
+    if role == 'super_admin':
+        perms.update({'view_all_outlets', 'manage_outlets'})       # outlet-isolation bypass
+    return sorted(perms)
+
+
+class MethodPermissionMixin:
+    """
+    For views that merge a list view and a create view into one URL:
+
+        class SalesView(MethodPermissionMixin, SaleListView, SaleCreateView):
+            method_permissions = {'GET': SaleListView.permission_classes,
+                                  'POST': SaleCreateView.permission_classes}
+
+    Python takes `permission_classes` from the FIRST base class only, so a merged view silently
+    used the list view's (weaker) permission for creates: a view_only user could POST a bill and
+    a manager without can_create_purchases could create purchases. This enforces each method's
+    own permission instead.
+    """
+    method_permissions = {}
+
+    def get_permissions(self):
+        classes = self.method_permissions.get(self.request.method, self.permission_classes)
+        return [permission() for permission in classes]

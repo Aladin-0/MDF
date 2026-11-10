@@ -1,13 +1,19 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { AddFamilyMemberDialog } from './AddFamilyMemberDialog';
+import { BillingFor } from './BillingFor';
+import { NewCustomerModal } from './NewCustomerModal';
+import { NonValuedCustomerDialog } from './NonValuedCustomerDialog';
+import type { FamilyMember } from '@/types';
+import { useAuthStore } from '@/store/authStore';
 import { useBillingStore } from '@/store/billingStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { LedgerPicker } from './LedgerPicker';
 import { DoctorPicker } from './DoctorPicker';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { UserPlus, Search, Stethoscope, PlusSquare, Upload, FileText, Check, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { UserPlus, UserX, Receipt, MoreVertical, Search, Stethoscope, PlusSquare, Upload, FileText, Check, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface BillingHeaderStripProps {
@@ -23,6 +29,7 @@ export function BillingHeaderStrip({ customerRef, doctorRef, medicineSearchRef }
         activeDraftId,
         setCustomer,
         setCustomerLedger,
+        setPatient,
         setDoctor,
         setHospitalName,
         setDraftDocumentMode,
@@ -33,12 +40,56 @@ export function BillingHeaderStrip({ customerRef, doctorRef, medicineSearchRef }
     const enableEwayBill = useSettingsStore(s => s.enableEwayBill);
 
     const [showSecondaryDetails, setShowSecondaryDetails] = useState(false);
+    const [addPersonOpen, setAddPersonOpen] = useState(false);
+    const [newCustomerOpen, setNewCustomerOpen] = useState(false);
+    const [newCustomerQuery, setNewCustomerQuery] = useState('');
+    const [nonValuedOpen, setNonValuedOpen] = useState(false);
+    const [menuOpen, setMenuOpen] = useState(false);
+    const menuRef = useRef<HTMLDivElement>(null);
+    const outletIdForFamily = useAuthStore((s) => s.user?.outlet?.id);
+    const { setWalkInName, startCounterBill } = useBillingStore();
+
+    // Alt+J (non-valued customer) is a registry shortcut; it reaches this component as an event
+    useEffect(() => {
+        const open = () => setNonValuedOpen(true);
+        window.addEventListener('billing:open-non-valued', open);
+        return () => window.removeEventListener('billing:open-non-valued', open);
+    }, []);
+    useEffect(() => {
+        const away = (e: MouseEvent) => { if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false); };
+        document.addEventListener('mousedown', away);
+        return () => document.removeEventListener('mousedown', away);
+    }, []);
 
     if (!activeDraftId) return null;
     const activeDraft = drafts[activeDraftId];
     if (!activeDraft) return null;
 
-    const { customer, customerLedger, doctor, hospitalName, documentMode, saleType, quotationId, transporterId, vehicleNo, transDistance, transMode, vehicleType } = activeDraft;
+    const { customer, customerLedger, patient, walkInName, doctor, hospitalName, documentMode, saleType, quotationId, transporterId, vehicleNo, transDistance, transMode, vehicleType } = activeDraft;
+
+    // One place that puts a customer (and, for a family, who it is for) on the bill: the picker and the new-customer popup both use it.
+    const selectCustomer = (ledger: any | null, member: FamilyMember | null) => {
+        setCustomerLedger(ledger);                 // (also clears the previous patient and any walk-in name)
+        setPatient(saleType === 'WHOLESALE' ? null : (member ?? null));   // null = Self; wholesale bills one party, never a family member
+        if (ledger) {
+            setCustomer({
+                // the real customer record when the ledger has one; the server also accepts a ledger id
+                id: ledger.linkedCustomerId || ledger.id,
+                name: ledger.name,
+                phone: ledger.phone || '',
+                gstin: ledger.gstin || '',
+                address: ledger.address || '',
+                creditLimit: ledger.creditLimit,
+                dlNo20b: ledger.dlNo20b,
+                dlNo21b: ledger.dlNo21b,
+                dlExpiry: ledger.dlExpiry,
+                customerType: ledger.customerType,
+                stateCode: ledger.stateCode,
+            } as any);
+        } else {
+            setCustomer(null);
+        }
+    };
 
     // Only allow toggling if no quotationId (open/convert sets mode explicitly)
     const canToggleMode = !quotationId;
@@ -111,38 +162,62 @@ export function BillingHeaderStrip({ customerRef, doctorRef, medicineSearchRef }
                 </div>
 
                 {/* Primary Inputs: Customer and Doctor (Stack on mobile, 2-col on md: and desktop) */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-2">
                     {/* Customer Search */}
-                    <div className={saleType === 'WHOLESALE' ? "col-span-1 md:col-span-2" : "col-span-1"}>
-                        <label className="text-[11px] font-bold text-slate-600 mb-1 block">Customer Search</label>
+                    <div data-shortcut-target="customer-search" className={cn('order-1', saleType === 'WHOLESALE' ? 'col-span-1 md:col-span-2 lg:col-span-12' : 'col-span-1 lg:col-span-5')}>
+                        <div className="h-6 flex items-center justify-between gap-2">
+                            <label className="text-[11px] font-bold text-slate-600 block">Customer Search</label>
+                            <div className="flex items-center gap-1" ref={menuRef}>
+                                {saleType !== 'WHOLESALE' && <button type="button" data-testid="counter-bill" onClick={() => { startCounterBill(); }}
+                                    className="rounded px-1.5 py-0.5 text-[10px] font-bold text-slate-600 hover:bg-slate-100">
+                                    Counter Bill <kbd className="ml-0.5 rounded bg-slate-100 px-1 font-mono text-[9px] text-slate-500">Alt+C</kbd>
+                                </button>}
+                                <div className="relative">
+                                    <button type="button" aria-label="More customer options" aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setMenuOpen((o) => !o)}
+                                        className="flex h-6 w-6 items-center justify-center rounded text-slate-500 hover:bg-slate-100"><MoreVertical className="h-4 w-4" /></button>
+                                    {menuOpen && (
+                                        <div role="menu" className="absolute right-0 z-40 mt-1 w-64 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 text-sm shadow-xl">
+                                            <button role="menuitem" type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-slate-50"
+                                                onClick={() => { setMenuOpen(false); setNewCustomerQuery(''); setNewCustomerOpen(true); }}>
+                                                <UserPlus className="h-4 w-4 text-blue-600" /> Add New Customer
+                                            </button>
+                                            {saleType !== 'WHOLESALE' && <button role="menuitem" type="button" className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left hover:bg-slate-50"
+                                                onClick={() => { setMenuOpen(false); setNonValuedOpen(true); }}>
+                                                <span className="flex items-center gap-2"><UserX className="h-4 w-4 text-slate-600" /> Add a Non-Valued Customer</span>
+                                                <kbd className="rounded bg-slate-100 px-1 font-mono text-[10px] text-slate-500">Alt+J</kbd>
+                                            </button>}
+                                            {saleType !== 'WHOLESALE' && <button role="menuitem" type="button" className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left hover:bg-slate-50"
+                                                onClick={() => { setMenuOpen(false); startCounterBill(); }}>
+                                                <span className="flex items-center gap-2"><Receipt className="h-4 w-4 text-emerald-600" /> Create as Counter Bill</span>
+                                                <kbd className="rounded bg-slate-100 px-1 font-mono text-[10px] text-slate-500">Alt+C</kbd>
+                                            </button>}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                        {walkInName && !customerLedger ? (
+                            <div data-testid="walk-in-chip" className="flex h-9 items-center justify-between rounded border-2 border-slate-300 bg-slate-50 pl-3 pr-1">
+                                <span className="flex items-center gap-2 truncate text-sm font-semibold text-slate-800">
+                                    <UserX className="h-4 w-4 text-slate-500" /> {walkInName}
+                                    <span className="rounded bg-white px-1.5 py-0.5 text-[10px] font-bold text-slate-500 border border-slate-200">Walk-in · no mobile</span>
+                                </span>
+                                <button type="button" aria-label="Remove walk-in customer" className="rounded px-2 py-1 text-xs font-bold uppercase text-slate-600 hover:bg-slate-200" onClick={() => setWalkInName(null)}>Change</button>
+                            </div>
+                        ) : (
                         <LedgerPicker
                             inputRef={customerRef}
                             nextInputRef={doctorRef}
                             currentLedger={customerLedger || null}
-                            onSelect={(ledger) => {
-                                setCustomerLedger(ledger);
-                                if (ledger) {
-                                    setCustomer({
-                                        id: ledger.id,
-                                        name: ledger.name,
-                                        phone: ledger.phone || '',
-                                        gstin: ledger.gstin || '',
-                                        address: ledger.address || '',
-                                        creditLimit: (ledger as any).creditLimit,
-                                        dlNo20b: (ledger as any).dlNo20b,
-                                        dlNo21b: (ledger as any).dlNo21b,
-                                        dlExpiry: (ledger as any).dlExpiry,
-                                        customerType: (ledger as any).customerType,
-                                        stateCode: (ledger as any).stateCode,
-                                    } as any);
-                                } else {
-                                    setCustomer(null);
-                                }
-                            }}
+                            matchFamilyMember={saleType !== 'WHOLESALE'}
+                            showFamily={saleType !== 'WHOLESALE'}
+                            onAddNew={(q) => { setNewCustomerQuery(q); setNewCustomerOpen(true); }}
+                            onSelect={(ledger, member) => selectCustomer(ledger, member ?? null)}
                             defaultGroupName="Sundry Debtors"
                             icon={<UserPlus className="w-4 h-4" />}
-                            placeholder="Search Customer..."
+                            placeholder="Search by name or mobile number…"
                         />
+                        )}
                         <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-slate-500 font-medium min-h-[16px]">
                             {customerLedger ? (
                                 <>
@@ -157,7 +232,20 @@ export function BillingHeaderStrip({ customerRef, doctorRef, medicineSearchRef }
                                     )}
                                 </>
                             ) : (
-                                <span>No Customer Selected</span>
+                                <span>{walkInName ? 'Name only · no mobile number · history is not kept' : 'No Customer Selected'}</span>
+                            )}
+
+                            {saleType !== 'WHOLESALE' && customerLedger && !(customerLedger as any).isMock && (Number(customerLedger.currentBalance) > 0 || Number((customer as any)?.creditLimit) > 0) && (
+                                <div className="flex gap-2 ml-2 shrink-0" data-testid="family-account-money">
+                                    <span className={cn("px-1.5 rounded text-[10px] font-bold border", Number(customerLedger.currentBalance) > 0 ? "bg-red-50 text-red-700 border-red-200" : "bg-slate-50 text-slate-700 border-slate-200")}>
+                                        Due: ₹{Math.round(Number(customerLedger.currentBalance) || 0).toLocaleString('en-IN')}
+                                    </span>
+                                    {Number((customer as any)?.creditLimit) > 0 && (
+                                        <span className="bg-emerald-50 text-emerald-700 px-1.5 rounded text-[10px] font-bold border border-emerald-200">
+                                            Limit: ₹{Number((customer as any).creditLimit).toLocaleString('en-IN')}
+                                        </span>
+                                    )}
+                                </div>
                             )}
 
                             {/* Wholesale Badges */}
@@ -175,12 +263,34 @@ export function BillingHeaderStrip({ customerRef, doctorRef, medicineSearchRef }
                                 </div>
                             )}
                         </div>
+
                     </div>
+
+                    {/* Billing For: retail only. Wholesale sells to one person / business, so there is no family to choose from. */}
+                    {saleType !== 'WHOLESALE' && (
+                        <div className={'order-2 md:order-3 lg:order-2 lg:col-span-3'}>
+                            {customerLedger && (customerLedger as any).isMock ? (
+                                <div data-testid="billing-for">
+                                    <label className="text-[11px] font-bold text-slate-600 h-6 flex items-center">Billing For</label>
+                                    <div className="h-9 px-3 border-2 border-blue-400 rounded bg-blue-50/50 flex items-center text-sm font-semibold text-blue-900 truncate">
+                                        {patient?.name ?? 'Self'}
+                                    </div>
+                                </div>
+                            ) : (
+                                <BillingFor
+                                    ledger={customerLedger && (customerLedger as any).linkedCustomerId ? customerLedger : null}
+                                    patient={patient}
+                                    onSelect={setPatient}
+                                    onAdd={() => setAddPersonOpen(true)}
+                                />
+                            )}
+                        </div>
+                    )}
 
                     {/* Prescribing Doctor */}
                     {saleType === 'RETAIL' && (
-                        <div className="relative">
-                            <label className="text-[11px] font-bold text-slate-600 mb-1 block">Prescribing Doctor</label>
+                        <div className="relative order-3 md:order-2 lg:order-3 lg:col-span-4">
+                            <label className="text-[11px] font-bold text-slate-600 h-6 flex items-center">Prescribing Doctor</label>
                             <DoctorPicker
                                 inputRef={doctorRef}
                                 nextInputRef={medicineSearchRef}
@@ -320,6 +430,38 @@ export function BillingHeaderStrip({ customerRef, doctorRef, medicineSearchRef }
                     </div>
                 )}
             </div>
+            {saleType !== 'WHOLESALE' && customerLedger && (customerLedger as any).linkedCustomerId && outletIdForFamily && (
+                <AddFamilyMemberDialog
+                    open={addPersonOpen}
+                    onClose={() => setAddPersonOpen(false)}
+                    outletId={outletIdForFamily}
+                    ownerId={(customerLedger as any).linkedCustomerId}
+                    ownerName={customerLedger.name.replace(/\s*\(\d{8,}\)\s*$/, '')}
+                    ownerPhone={customerLedger.phone || ''}
+                    onAdded={(member) => {
+                        // the first person added turns a plain customer into a family: list the owner too, then select the new person
+                        const owner: FamilyMember = {
+                            id: (customerLedger as any).linkedCustomerId, name: customerLedger.name.replace(/\s*\(\d{8,}\)\s*$/, ''),
+                            isAccountHolder: true, relationship: 'Account holder', phone: customerLedger.phone,
+                        };
+                        const existing = customerLedger.familyMembers?.length ? customerLedger.familyMembers : [owner];
+                        updateDraftHeader(activeDraftId, {
+                            customerLedger: { ...customerLedger, isFamilyAccount: true, familyMembers: [...existing, member] },
+                            patient: member,
+                        });
+                    }}
+                />
+            )}
+            {outletIdForFamily && (
+                <NewCustomerModal
+                    open={newCustomerOpen}
+                    onClose={() => setNewCustomerOpen(false)}
+                    outletId={outletIdForFamily}
+                    initialQuery={newCustomerQuery}
+                    onCreated={(ledger) => selectCustomer(ledger, null)}
+                />
+            )}
+            <NonValuedCustomerDialog open={nonValuedOpen} onClose={() => setNonValuedOpen(false)} onSave={(name) => setWalkInName(name)} />
         </div>
     );
 }

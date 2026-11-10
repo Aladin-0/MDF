@@ -11,6 +11,20 @@ from apps.accounts.models import Staff
 
 logger = logging.getLogger(__name__)
 
+_QTY_KEYS = ('qtyReturned', 'qty_returned', 'qtyStripsReturned', 'qtyStrips', 'qty_strips',
+             'qtyLooseReturned', 'qtyLoose', 'qty_loose')
+
+
+def _line_has_quantity(item_data) -> bool:
+    for key in _QTY_KEYS:
+        try:
+            if item_data.get(key) not in (None, '') and float(item_data[key]) > 0:
+                return True
+        except (TypeError, ValueError):
+            continue
+    return False
+
+
 def _last_ledger_balance(outlet, customer):
     last = LedgerEntry.objects.filter(outlet=outlet, entity_type='customer', customer=customer).order_by('-id').first()
     return last.running_balance if last else Decimal('0')
@@ -100,6 +114,11 @@ def atomic_sale_return_update(return_id: str, payload: dict, outlet_id: str, upd
             or item_data.get('sale_item_id')
         )
         if not sale_item_id:
+            # A line that asks to return something but names no original sale item cannot be applied. It used to be
+            # skipped silently, so editing such a return (e.g. a manual/standalone one) wiped all its lines, restored
+            # no stock and saved a total of 0.
+            if _line_has_quantity(item_data):
+                raise ValidationError("A return line is missing its original sale item and cannot be edited here.")
             continue
         sale_item = SaleItem.objects.select_for_update().get(id=sale_item_id, invoice__outlet=outlet)
         batch = sale_item.batch
@@ -163,6 +182,10 @@ def atomic_sale_return_update(return_id: str, payload: dict, outlet_id: str, upd
         sale_item.qty_returned += qty_to_return
         sale_item.save(update_fields=['qty_returned'])
 
+    if not new_items_to_create:
+        # create_sales_return refuses an empty return; the edit did not, and it had already reversed the old effects
+        raise ValidationError("A sale return must contain at least one item with a quantity.")
+
     SalesReturnItem.objects.bulk_create(new_items_to_create)
 
     # 4. Post NEW stock ledger entries
@@ -211,7 +234,9 @@ def atomic_sale_return_update(return_id: str, payload: dict, outlet_id: str, upd
     sales_return.deduction_amount = deduction_amount
     sales_return.refund_mode = new_refund_mode
     sales_return.reason = payload.get('reason', sales_return.reason)
-    sales_return.save(update_fields=['total_amount', 'deduction_amount', 'refund_mode', 'reason'])
+    # `updated_at` MUST be listed: auto_now is only applied to fields named in update_fields, so it never changed and
+    # the expectedUpdatedAt check above stayed valid forever (a second editor silently overwrote the first).
+    sales_return.save(update_fields=['total_amount', 'deduction_amount', 'refund_mode', 'reason', 'updated_at'])
 
     # Fetch fresh for snapshot
     sales_return.refresh_from_db()

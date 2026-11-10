@@ -2,7 +2,7 @@ import json
 from decimal import Decimal
 from django.http import JsonResponse, HttpResponse
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
+from apps.core.permissions import CanAccessReports
 from rest_framework.response import Response
 
 from apps.core.models import Outlet
@@ -14,7 +14,7 @@ def get_current_outlet(request):
     return getattr(request.user, 'outlet', None)
 
 class GSTPeriodsView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanAccessReports]
     
     def get(self, request):
         outlet = get_current_outlet(request)
@@ -41,7 +41,7 @@ class GSTPeriodsView(APIView):
         return Response(result)
 
 class GSTSummaryView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanAccessReports]
 
     def get(self, request):
         outlet = get_current_outlet(request)
@@ -197,7 +197,7 @@ class GSTSummaryView(APIView):
         })
 
 class GSTReconciliationView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanAccessReports]
 
     def get(self, request, fp):
         outlet = get_current_outlet(request)
@@ -282,7 +282,7 @@ class GSTReconciliationView(APIView):
         })
 
 class GSTExportView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanAccessReports]
     
     def get(self, request, fp, export_type):
         outlet = get_current_outlet(request)

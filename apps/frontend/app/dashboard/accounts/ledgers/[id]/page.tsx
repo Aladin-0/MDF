@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { format } from 'date-fns';
@@ -24,6 +24,7 @@ import { cn } from '@/lib/utils';
 import { PurchaseDetailModal } from '@/components/purchases/PurchaseDetailModal';
 import { VoucherDetailModal } from '@/components/accounts/VoucherDetailModal';
 import { useOutletId } from '@/hooks/useOutletId';
+import { useDebounce } from '@/hooks/useDebounce';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -82,6 +83,9 @@ const LEDGER_SORT_OPTIONS: SortOption[] = [
     { label: 'Oldest First', value: 'asc' },
 ];
 
+/** Entries per page. The server sorts the whole statement first and then cuts the page, so every entry is reachable. */
+const PAGE_SIZE = 200;
+
 export default function LedgerStatementPage() {
     const { id } = useParams<{ id: string }>();
     const router = useRouter();
@@ -91,8 +95,10 @@ export default function LedgerStatementPage() {
     const { toast } = useToast();
 
     const [statement, setStatement] = useState<LedgerStatement | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(true);        // first load only
+    const [fetching, setFetching] = useState(false);      // any later load (page, sort, search, dates): the old table stays on screen, dimmed
     const [search, setSearch] = useState('');
+    const debouncedSearch = useDebounce(search, 300);
 
     // Date filter — default: 1st of current FY to today
     const [from, setFrom] = useState(() => {
@@ -103,6 +109,15 @@ export default function LedgerStatementPage() {
         return fyStart;
     });
     const [to, setTo] = useState(format(new Date(), 'yyyy-MM-dd'));
+    // the dates the statement was actually loaded with (the inputs above only apply when you press Apply Filter)
+    const [applied, setApplied] = useState({ from, to });
+
+    // The page belongs to the filters it was chosen under: change the sort, search, dates or ledger and you are back on page 1,
+    // without a second fetch for a stale page number.
+    const filterKey = `${id}|${currentSort}|${applied.from}|${applied.to}|${debouncedSearch}`;
+    const [pageState, setPageState] = useState({ key: filterKey, page: 1 });
+    const page = pageState.key === filterKey ? pageState.page : 1;
+    const goToPage = (p: number) => setPageState({ key: filterKey, page: p });
 
     // Preview state
     const [previewPurchaseId, setPreviewPurchaseId] = useState<string | null>(null);
@@ -113,31 +128,25 @@ export default function LedgerStatementPage() {
     const [voucherModalOpen, setVoucherModalOpen] = useState(false);
     const [previewVoucherId, setPreviewVoucherId] = useState('');
 
-    function load(sortVal?: string) {
+    useEffect(() => {
         if (!id) return;
-        setLoading(true);
-        const sortToUse = sortVal || currentSort;
+        let cancelled = false;
+        setFetching(true);
         voucherApi
-            .getLedgerStatement(id, from, to, sortToUse, 1, 1000)
-            .then(setStatement)
-            .catch(() => toast({ variant: 'destructive', title: 'Failed to load statement' }))
-            .finally(() => setLoading(false));
-    }
+            .getLedgerStatement(id, applied.from, applied.to, currentSort, page, PAGE_SIZE, debouncedSearch)
+            .then((r: LedgerStatement) => { if (!cancelled) setStatement(r); })
+            .catch(() => { if (!cancelled) toast({ variant: 'destructive', title: 'Failed to load statement' }); })
+            .finally(() => { if (!cancelled) { setLoading(false); setFetching(false); } });
+        return () => { cancelled = true; };
+    }, [id, currentSort, applied, debouncedSearch, page]);                                  // eslint-disable-line react-hooks/exhaustive-deps
 
-    useEffect(() => { load(currentSort); }, [id, currentSort]);
-
-    // ── Filtered transactions ─────────────────────────────────────────────────
-    const filtered = useMemo(() => {
-        if (!statement) return [];
-        const q = search.toLowerCase().trim();
-        if (!q) return statement.transactions;
-        return statement.transactions.filter((tx) =>
-            tx.description?.toLowerCase().includes(q) ||
-            tx.voucherNo?.toLowerCase().includes(q) ||
-            tx.voucherType?.toLowerCase().includes(q) ||
-            txTypeLabel(tx.sourceType, tx.voucherType).toLowerCase().includes(q)
-        );
-    }, [statement, search]);
+    // Searching and paging happen on the server (so they cover every entry, not just the rows on screen): what arrives is what is shown.
+    const filtered = statement?.transactions ?? [];
+    const pageInfo = statement?.pagination;
+    const totalEntries = statement?.totalEntries ?? pageInfo?.total_count ?? filtered.length;
+    const matching = pageInfo?.total_count ?? filtered.length;
+    const firstShown = filtered.length ? ((pageInfo?.page ?? 1) - 1) * (pageInfo?.page_size ?? PAGE_SIZE) + 1 : 0;
+    const lastShown = firstShown ? firstShown + filtered.length - 1 : 0;
 
     // ── Row click handler ─────────────────────────────────────────────────────
     async function handleRowClick(tx: LedgerTransaction) {
@@ -230,8 +239,8 @@ export default function LedgerStatementPage() {
                     <Label className="text-xs text-slate-500">To</Label>
                     <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-9 w-40 text-sm" />
                 </div>
-                <Button onClick={() => load()} disabled={loading} variant="outline" className="h-9">
-                    {loading ? <RefreshCw className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
+                <Button onClick={() => setApplied({ from, to })} disabled={fetching} variant="outline" className="h-9">
+                    {fetching ? <RefreshCw className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
                     Apply Filter
                 </Button>
 
@@ -288,10 +297,10 @@ export default function LedgerStatementPage() {
                             <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Transactions</p>
                             <div className="mt-1 flex items-baseline gap-3">
                                 <p className="text-xl font-bold text-slate-800">
-                                    {statement.pagination?.total_count ?? statement.transactions.length}
+                                    {totalEntries}
                                 </p>
-                                {search && filtered.length !== statement.transactions.length && (
-                                    <span className="text-sm text-slate-400">({filtered.length} shown)</span>
+                                {debouncedSearch && matching !== totalEntries && (
+                                    <span className="text-sm text-slate-400">({matching} match)</span>
                                 )}
                             </div>
                             <p className="mt-0.5 text-xs text-slate-500 font-medium">
@@ -321,11 +330,11 @@ export default function LedgerStatementPage() {
                         <div className="rounded-xl border bg-white py-16 text-center">
                             <Search className="mx-auto mb-3 h-8 w-8 text-slate-200" />
                             <p className="text-sm text-slate-400">
-                                {search ? `No entries match "${search}"` : 'No transactions in this period'}
+                                {debouncedSearch ? `No entries match "${debouncedSearch}"` : 'No transactions in this period'}
                             </p>
                         </div>
                     ) : (
-                        <div className="overflow-hidden rounded-xl border bg-white shadow-sm">
+                        <div className={cn('overflow-hidden rounded-xl border bg-white shadow-sm transition-opacity', fetching && 'opacity-60')}>
                             <table className="w-full text-sm">
                                 <thead>
                                     <tr className="border-b bg-slate-50">
@@ -436,13 +445,13 @@ export default function LedgerStatementPage() {
                                 <tfoot className="border-t bg-slate-50 font-semibold">
                                     <tr>
                                         <td colSpan={4} className="px-4 py-3 text-xs uppercase tracking-wide text-slate-600">
-                                            {search ? `Filtered Totals (${filtered.length} entries)` : `Overall Year Totals (${statement.pagination?.total_count ?? statement.transactions.length} entries)`}
+                                            {debouncedSearch ? `Matching Totals (${matching} entries)` : `Overall Totals (${totalEntries} entries)`}
                                         </td>
                                         <td className="px-4 py-3 text-right font-mono text-sm font-bold text-red-600">
-                                            {INR(search ? filtered.reduce((s, t) => s + t.debit, 0) : (statement.totalDebit ?? filtered.reduce((s, t) => s + t.debit, 0)))}
+                                            {INR(debouncedSearch ? (statement.filteredDebit ?? 0) : (statement.totalDebit ?? 0))}
                                         </td>
                                         <td className="px-4 py-3 text-right font-mono text-sm font-bold text-emerald-600">
-                                            {INR(search ? filtered.reduce((s, t) => s + t.credit, 0) : (statement.totalCredit ?? filtered.reduce((s, t) => s + t.credit, 0)))}
+                                            {INR(debouncedSearch ? (statement.filteredCredit ?? 0) : (statement.totalCredit ?? 0))}
                                         </td>
                                         <td className="px-4 py-3 text-right font-mono text-sm font-bold text-slate-800">
                                             {INR(statement.closingBalance)} <span className="text-xs text-blue-600 font-bold">{statement.balanceType || statement.ledger.balanceType}</span>
@@ -451,6 +460,18 @@ export default function LedgerStatementPage() {
                                     </tr>
                                 </tfoot>
                             </table>
+                            {pageInfo && pageInfo.total_pages > 1 && (
+                                <nav aria-label="Statement pages" className="flex flex-wrap items-center justify-between gap-3 border-t bg-white px-4 py-3 text-sm text-slate-600">
+                                    <span>Showing {firstShown}–{lastShown} of {matching} entries</span>
+                                    <span className="flex items-center gap-2">
+                                        <Button variant="outline" size="sm" disabled={pageInfo.page <= 1 || fetching} onClick={() => goToPage(1)}>First</Button>
+                                        <Button variant="outline" size="sm" disabled={pageInfo.page <= 1 || fetching} onClick={() => goToPage(pageInfo.page - 1)}>Previous</Button>
+                                        <span>Page {pageInfo.page} of {pageInfo.total_pages}</span>
+                                        <Button variant="outline" size="sm" disabled={!pageInfo.has_more || fetching} onClick={() => goToPage(pageInfo.page + 1)}>Next</Button>
+                                        <Button variant="outline" size="sm" disabled={!pageInfo.has_more || fetching} onClick={() => goToPage(pageInfo.total_pages)}>Last</Button>
+                                    </span>
+                                </nav>
+                            )}
                         </div>
                     )}
                 </>

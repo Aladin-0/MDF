@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-type ModalType = 
+export type ModalType = 
     | "MODAL_CREATE_LEDGER"
     | "MODAL_BILL_ADJUSTMENT"
     | "MODAL_MANUAL_ATTENDANCE"

@@ -155,6 +155,9 @@ export function buildSalePayload(draft: any, scheduleHData: any, totals: any, ac
         revisionAction: draft.revisionAction,
         revisionReasonCode: draft.revisionReasonCode,
         revisionReasonText: draft.revisionReasonText,
+        expectedUpdatedAt: draft.editingSaleId ? draft.editingSaleUpdatedAt : undefined,
+        patientId: (draft.saleType || 'RETAIL') === 'WHOLESALE' ? undefined : (draft.patient?.id ?? undefined),
+        walkInName: draft.customer ? undefined : (draft.walkInName || undefined),
         quotationId: draft.quotationId,
     };
 }
@@ -484,5 +487,10 @@ export function buildCustomerPayload(
         dlNo20b: form.dlNo20b?.trim() || undefined,
         dlNo21b: form.dlNo21b?.trim() || undefined,
         dlExpiry: form.dlExpiry || undefined,
+        gender: form.gender || undefined,
+        relationship: form.relationship || undefined,
+        // Family: create-only (joining / leaving an existing customer goes through customers/<id>/account/)
+        isFamilyAccount: form.isFamilyAccount || undefined,
+        accountHolderId: form.accountHolderId || undefined,
     };
 }

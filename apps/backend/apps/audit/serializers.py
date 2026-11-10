@@ -32,6 +32,7 @@ class DocumentRevisionV2LegacyAdapterSerializer(serializers.ModelSerializer):
     modified_at = serializers.DateTimeField(source='created_at', read_only=True)
     created_at = serializers.DateTimeField(read_only=True)
     resulting_document_id = serializers.SerializerMethodField()
+    document_no = serializers.SerializerMethodField()
     
     class Meta:
         model = DocumentRevisionV2
@@ -39,12 +40,24 @@ class DocumentRevisionV2LegacyAdapterSerializer(serializers.ModelSerializer):
             'id', 'original_document_id', 'revision_number', 'revision_type', 
             'revision_status', 'modified_by', 'modified_at', 'created_at', 'reason_code', 
             'reason_text', 'old_snapshot_json', 'new_snapshot_json', 
-            'diff_summary_json', 'resulting_document_id'
+            'diff_summary_json', 'resulting_document_id', 'document_no'
         ]
 
     def get_resulting_document_id(self, obj):
-        # V2 doesn't store this at the schema level yet. 
-        # For cancel & reissue, we will eventually store in diff_summary_json
+        # Cancel & reissue records the replacement bill's id inside the new snapshot.
+        snap = obj.new_snapshot_json or {}
+        return snap.get('_resulting_invoice_id')
+
+    def get_document_no(self, obj):
+        """The human document number (invoice / voucher / return no). It lives under `header` in the snapshot,
+        which is why the screen, reading a top-level key, showed 'Unknown Invoice' for every row."""
+        for snap in (obj.old_snapshot_json, obj.new_snapshot_json):
+            if not isinstance(snap, dict):
+                continue
+            header = snap.get('header') if isinstance(snap.get('header'), dict) else snap
+            for key in ('invoice_no', 'voucher_no', 'return_no', 'debit_note_no', 'bill_no'):
+                if header.get(key):
+                    return header[key]
         return None
 
     def get_revision_number(self, obj):

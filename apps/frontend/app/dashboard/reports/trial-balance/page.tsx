@@ -100,7 +100,7 @@ export default function TrialBalancePage() {
 
     const { data: ledgerStatement, isLoading: isLedgerLoading } = useQuery({
         queryKey: ['ledger-statement', selectedLedgerId, fromDate, toDate],
-        queryFn: () => voucherApi.getLedgerStatement(selectedLedgerId!, fromDate, toDate),
+        queryFn: () => voucherApi.getLedgerStatementAll(selectedLedgerId!, fromDate, toDate),
         enabled: !!selectedLedgerId,
     });
 

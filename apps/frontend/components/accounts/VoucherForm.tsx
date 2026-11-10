@@ -62,6 +62,7 @@ export function VoucherForm({ initialType = 'receipt', voucherId, onSuccess }: V
     const [saving, setSaving] = useState(false);
     const [loadingNo, setLoadingNo] = useState(false);
     const [loadingVoucher, setLoadingVoucher] = useState(!!voucherId);
+    const [originalPaymentMode, setOriginalPaymentMode] = useState<string | null>(null);
     const [globalError, setGlobalError] = useState<string | null>(null);
 
     // Revision state
@@ -129,6 +130,7 @@ export function VoucherForm({ initialType = 'receipt', voucherId, onSuccess }: V
                 setDate(data.date);
                 setNarration(data.narration);
                 setOriginalStatus(data.status || 'posted');
+                setOriginalPaymentMode(data.paymentMode || null);
 
                 if (data.lines && data.lines.length > 0) {
                     setLines(data.lines.map((l: any, idx: number) => ({
@@ -336,6 +338,16 @@ export function VoucherForm({ initialType = 'receipt', voucherId, onSuccess }: V
                 reasonCode,
                 reasonText
             );
+
+            if (voucherId && payload.payment_mode !== undefined) {
+                // The builder only knows 'cash' or 'bank' (from the ledger picked), and this form passes it no cash/bank
+                // ledger, so every edit stamped the voucher 'cash' - turning a UPI / cheque / card receipt into cash.
+                // Keep the voucher's own mode; it only changes when the lines now touch (or no longer touch) a bank ledger.
+                const touchesBank = (lines || []).some((l: any) => (l.ledger?.groupName ?? '') === 'Bank Accounts');
+                payload.payment_mode = touchesBank
+                    ? (originalPaymentMode && originalPaymentMode !== 'cash' ? originalPaymentMode : 'bank')
+                    : 'cash';
+            }
 
             let voucher;
             if (voucherId) {

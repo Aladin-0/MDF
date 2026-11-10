@@ -21,8 +21,24 @@ export function EditSaleHydrator() {
         hasHydrated.current = true;
         const hydrate = async () => {
             try {
-                const res = await api.get(`/sales/${editId}/`, { params: { outletId: outlet.id } });
+                const [res, optionsRes] = await Promise.all([
+                    api.get(`/sales/${editId}/`, { params: { outletId: outlet.id } }),
+                    api.get(`/sales/${editId}/modification-options/`, { params: { outletId: outlet.id } }),
+                ]);
                 const fullInvoice = res.data;
+
+                // Which kind of correction this user may make on this bill is decided by the SERVER (it is the same
+                // rule the save call enforces). This used to hard-code 'paid_bill_correction' for every edit, so an
+                // unpaid bill was sent as a paid-bill correction and a user without that right was refused at save.
+                const allowed: string[] = optionsRes.data?.allowedActions ?? [];
+                const info = optionsRes.data?.invoice ?? {};
+                const preferred = info.hasReturns ? 'return_aware_correction' : info.isPaid ? 'paid_bill_correction' : 'commercial_correction';
+                const revisionAction = allowed.includes(preferred) ? preferred : allowed[0];
+                if (!revisionAction) {
+                    alert(optionsRes.data?.blockReason || 'You do not have permission to modify this bill.');
+                    router.replace('/billing');
+                    return;
+                }
 
                 const store = useBillingStore.getState();
                 
@@ -41,9 +57,6 @@ export function EditSaleHydrator() {
                 }
                 store.setLastInvoice(null);
                 
-                store.setEditingSaleId(editId);
-                store.setRevisionContext('paid_bill_correction', '', '');
-
                 if (fullInvoice.invoiceDate) {
                     const d = new Date(fullInvoice.invoiceDate);
                     store.updateDraftHeader(targetDraftId, {
@@ -71,12 +84,33 @@ export function EditSaleHydrator() {
                     } as any);
                 }
 
+                if (!fullInvoice.customer && fullInvoice.walkInName) store.setWalkInName(fullInvoice.walkInName);
+
+                // Set AFTER the customer ledger (setCustomerLedger clears the patient).
+                if (fullInvoice.patientId) {
+                    // The person the bill was for on a shared family account (kept unless the user picks someone else).
+                    store.setPatient({ id: fullInvoice.patientId, name: fullInvoice.patientMemberName || 'Patient' });
+                }
+
                 // FIX 1: Read both camelCase and snake_case to prevent UI hallucination
                 store.setExtraDiscountPct(Number(fullInvoice.extraDiscountPct ?? fullInvoice.extra_discount_pct ?? 0));
 
+                const method = (fullInvoice.paymentMode || 'cash') as any;
                 store.setPayment({
-                    method: (fullInvoice.paymentMode || 'cash') as any,
+                    method,
                     amount: fullInvoice.amountPaid ?? fullInvoice.grandTotal ?? 0,
+                    // A split bill must come back as its split, otherwise saving re-sends it as 0/0/0/0 and the
+                    // payment is lost or the bill is turned into a different tender.
+                    ...(method === 'split'
+                        ? {
+                            splitBreakdown: {
+                                cash: Number(fullInvoice.cashPaid ?? 0),
+                                upi: Number(fullInvoice.upiPaid ?? 0),
+                                card: Number(fullInvoice.cardPaid ?? 0),
+                                credit: Number(fullInvoice.creditGiven ?? 0),
+                            },
+                        }
+                        : {}),
                 });
 
                 if (fullInvoice.doctorId || fullInvoice.doctorName) {
@@ -132,7 +166,11 @@ export function EditSaleHydrator() {
                          // FIX 2: Always force the base rate to be MRP (or PTR/PTS) before any discounts. 
                          // This prevents the "Double Discount" trap.
                          const isWholesale = fullInvoice.saleType === 'WHOLESALE';
-                         const baseRate = isWholesale ? (pts || ptr || mrp) : mrp;
+                         // Use the base rate SAVED on the bill (what the counter sent as `rate`), falling back to the
+                         // current MRP/PTS only if it is missing. Always using MRP changed a hand-typed rate back to MRP on
+                         // every re-save, which the server now (correctly) refuses for staff who may not change rates.
+                         const savedRate = Number(item.rate ?? 0);
+                         const baseRate = savedRate > 0 ? savedRate : (isWholesale ? (pts || ptr || mrp) : mrp);
                          
                          const discountPct = Number(item.discountPct ?? item.discount_pct ?? 0);
                          const gstRate = Number(item.gstRate ?? item.gst_rate ?? 0);
@@ -178,12 +216,18 @@ export function EditSaleHydrator() {
                      });
                 }
                 
+                // Only now is the draft a complete copy of the bill: mark it as an edit of that bill. (It was marked
+                // first, so a failure half-way left an empty cart that Save would have sent over the real invoice.)
+                store.setEditingSaleId(editId, fullInvoice.updatedAt ?? null);
+                store.setRevisionContext(revisionAction, '', '');
+
                 // Clear the URL param without reload
                 router.replace('/billing');
 
             } catch (err) {
                 console.error("Hydration failed:", err);
-                alert("Failed to load invoice details for editing.");
+                const detail = (err as any)?.response?.data?.detail;
+                alert(detail || "Failed to load invoice details for editing.");
             }
         };
 

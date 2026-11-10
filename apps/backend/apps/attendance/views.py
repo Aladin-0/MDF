@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, time
 from decimal import Decimal
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import PermissionDenied
 from rest_framework import status
 from datetime import datetime
 from django.db import transaction
@@ -13,7 +13,7 @@ import math
 from apps.attendance.models import AttendanceRecord
 from apps.accounts.models import Staff
 from apps.core.models import Outlet, OutletSettings
-from apps.core.permissions import IsAdminStaff, ADMIN_ROLES
+from apps.core.permissions import IsAdminStaff, IsAuthenticated, ADMIN_ROLES, assert_outlet_access
 
 logger = logging.getLogger(__name__)
 
@@ -246,6 +246,8 @@ class AttendanceCheckOutView(APIView):
             photo = payload.get('photo')
 
             staff = Staff.objects.get(id=staff_id)
+            # was: any logged-in user could clock any staff member of ANY outlet out, by id
+            assert_outlet_access(request.user, staff.outlet_id)
             today = datetime.now().date()
             current_time = datetime.now().time()
 
@@ -287,6 +289,8 @@ class AttendanceCheckOutView(APIView):
 
         except Staff.DoesNotExist:
             return Response({'error': {'code': 'STAFF_NOT_FOUND', 'message': 'Staff not found'}}, status=404)
+        except PermissionDenied:
+            raise  # a 403, not a generic 500
         except Exception as e:
             logger.error(f"Error check out: {e}")
             return Response({'error': 'Failed'}, status=500)

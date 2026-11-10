@@ -3,7 +3,8 @@ import './globals.css';
 import { Providers } from './providers';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 import { Toaster } from '@/components/ui/toaster';
-import { CommandMenu } from '@/components/shared/CommandMenu';
+import { Toaster as SonnerToaster } from 'sonner';
+import { GlobalShortcuts } from '@/components/shared/GlobalShortcuts';
 import { GlobalModalManager } from '@/components/shared/GlobalModalManager';
 
 
@@ -52,7 +53,11 @@ export default function RootLayout({
                 <ErrorBoundary>
                     <Providers>{children}</Providers>
                     <Toaster />
-                    <CommandMenu />
+                    {/* 16 files show their messages with `toast` from 'sonner' (staff saves, reports, GST, sales, ...).
+                        Nothing used to mount sonner's own Toaster, so those messages were never visible:
+                        a save succeeded or failed with no feedback at all. */}
+                    <SonnerToaster position="top-right" richColors closeButton />
+                    <GlobalShortcuts />
                     <GlobalModalManager />
                 </ErrorBoundary>
             </body>

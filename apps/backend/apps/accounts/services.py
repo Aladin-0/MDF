@@ -328,16 +328,26 @@ class VoucherService:
 
             if invoice_type == 'sale':
                 sale_inv_id = adj.get('invoice_id')
+                from apps.billing.models import SaleInvoice
+                # The bill must belong to THIS outlet (it was fetched by id alone, so a receipt could be allocated
+                # against another outlet's invoice).
+                try:
+                    inv = SaleInvoice.objects.select_for_update(of=('self',)).select_related('customer').get(id=sale_inv_id, outlet_id=outlet_id)   # lock the bill only: customer is a nullable join, which Postgres cannot lock
+                except SaleInvoice.DoesNotExist:
+                    raise ValidationError(f'Sale invoice {sale_inv_id} was not found for this outlet.')
                 VoucherBillAdjustment.objects.create(
                     voucher=voucher,
                     invoice_type='sale',
                     sale_invoice_id=sale_inv_id,
                     adjusted_amount=adjusted_amount,
                 )
+                # The bill's own balance goes down by what was allocated to it. Editing a voucher already
+                # reverses and re-applies this (voucher_update_service), assuming creation did it; creation never
+                # did, so an edit pushed amount_due ABOVE grand_total and receivables stayed overstated.
+                inv.amount_due = max(Decimal('0'), inv.amount_due - adjusted_amount)
+                inv.save(update_fields=['amount_due'])
                 # Reduce customer outstanding
                 try:
-                    from apps.billing.models import SaleInvoice
-                    inv = SaleInvoice.objects.select_related('customer').get(id=sale_inv_id)
                     if inv.customer_id:
                         customer = Customer.objects.select_for_update().get(
                             id=inv.customer_id, outlet_id=outlet_id

@@ -3,7 +3,11 @@ import re
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
-from apps.core.permissions import IsAdminStaff, IsAuthenticated
+from apps.core.permissions import (
+    IsAdminStaff, IsAuthenticated, effective_permissions,
+    can_assign_role, can_manage_staff_member, assert_outlet_access,
+)
+from apps.core.ratelimit import FailureLimiter, client_ip
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework import status
 from django.db.models import Q, Sum
@@ -17,6 +21,13 @@ from apps.audit.services import log_activity
 from django.contrib.auth.hashers import check_password
 
 logger = logging.getLogger(__name__)
+
+# Failed-attempt limits (see apps.core.ratelimit). Phone: one account being guessed.
+# IP: one machine trying many accounts. Cleared for a phone number on a successful login.
+LOGIN_PHONE_LIMITER = FailureLimiter('login:phone', limit=5, window=15 * 60)
+LOGIN_IP_LIMITER = FailureLimiter('login:ip', limit=30, window=15 * 60)
+# PIN guessing by an already logged-in user (cashier switch on the billing terminal).
+PIN_USER_LIMITER = FailureLimiter('pin:user', limit=10, window=5 * 60)
 
 
 def serialize_outlet_data(outlet):
@@ -37,6 +48,66 @@ def serialize_outlet_data(outlet):
         'logoUrl': outlet.logo_url,
         'invoiceFooter': outlet.invoice_footer,
     }
+
+
+# Staff permission flags exposed to the client: (JSON key, Staff attribute).
+_USER_FLAG_FIELDS = (
+    ('canEditRate', 'can_edit_rate'),
+    ('canViewPurchaseRates', 'can_view_purchase_rates'),
+    ('canCreatePurchases', 'can_create_purchases'),
+    ('canAccessReports', 'can_access_reports'),
+    ('canEditSales', 'can_edit_sales'),
+    ('canEditPurchases', 'can_edit_purchases'),
+    ('canExportGst', 'can_export_gst'),
+    ('canModifyPaidPurchases', 'can_modify_paid_purchases'),
+    ('canModifySettledVouchers', 'can_modify_settled_vouchers'),
+    ('canModifySettledReturns', 'can_modify_settled_returns'),
+    ('canEditSaleReturns', 'can_edit_sale_returns'),
+    ('canEditPurchaseReturns', 'can_edit_purchase_returns'),
+    ('canEditVouchers', 'can_edit_vouchers'),
+    ('canViewAuditHistory', 'can_view_audit_history'),
+    ('canVoidRecords', 'can_void_records'),
+    ('canModifyDraftBill', 'can_modify_draft_bill'),
+    ('canModifyUnpaidBill', 'can_modify_unpaid_bill'),
+    ('canCorrectHeaderFields', 'can_correct_header_fields'),
+    ('canCorrectRatesDiscounts', 'can_correct_rates_discounts'),
+    ('canCorrectQuantities', 'can_correct_quantities'),
+    ('canCorrectCustomer', 'can_correct_customer'),
+    ('canModifyBillWithReturn', 'can_modify_bill_with_return'),
+    ('canModifyPaidBill', 'can_modify_paid_bill'),
+    ('canCancelAndReissueBill', 'can_cancel_and_reissue_bill'),
+    ('canViewBillRevisionHistory', 'can_view_bill_revision_history'),
+    ('canManagePartners', 'can_manage_partners'),
+)
+
+
+def build_user_payload(staff):
+    """
+    The one place that turns a Staff row into the user object the frontend stores.
+    login, me and switch-outlet all use it, so they can never disagree again (switch-outlet
+    used to return a cut-down outlet and /me used to be mapped differently by the client).
+    Includes `permissions`: what this user may actually do, computed by the same rules the
+    API enforces (see apps.core.permissions.effective_permissions).
+    """
+    outlet = staff.outlet
+    org = outlet.organization
+    payload = {
+        'id': str(staff.id),
+        'name': staff.name,
+        'phone': staff.phone,
+        'role': staff.role,
+        'outletId': str(outlet.id),
+        'organizationId': str(org.id) if org else None,
+        'isSuperAdmin': staff.role == 'super_admin',
+        'outlet': serialize_outlet_data(outlet),
+        'avatarUrl': staff.avatar_url,
+        'maxDiscount': float(staff.max_discount),
+        'permissions': effective_permissions(staff),
+    }
+    for json_key, attr in _USER_FLAG_FIELDS:
+        payload[json_key] = bool(getattr(staff, attr, False))
+    return payload
+
 
 
 class LoginView(APIView):
@@ -68,7 +139,6 @@ class LoginView(APIView):
                 "name": "...",
                 "phone": "...",
                 "role": "...",
-                "staffPin": "...",
                 "outletId": "...",
                 "outlet": {...},
                 "maxDiscount": 0,
@@ -77,8 +147,8 @@ class LoginView(APIView):
         }
         """
 
-        phone = request.data.get('phone')
-        password = request.data.get('password')
+        phone = str(request.data.get('phone') or '').strip()
+        password = str(request.data.get('password') or '')
 
         if not phone or not password:
             return Response(
@@ -86,20 +156,38 @@ class LoginView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        # Brute-force protection. The staff PIN is accepted as a password and has only 10,000
+        # possible values, so unlimited guessing would eventually get into any account.
+        ip = client_ip(request)
+        wait = max(LOGIN_PHONE_LIMITER.blocked_for(phone), LOGIN_IP_LIMITER.blocked_for(ip))
+        if wait:
+            response = Response(
+                {'detail': f'Too many failed login attempts. Try again in {max(wait // 60, 1)} minute(s).'},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+            response['Retry-After'] = str(wait)
+            return response
+
         logger.info(f"Login attempt for phone: {phone}")
 
-        try:
-            # Query staff by phone, with fallback for phone typo (8999205205 -> 8999205207)
-            staff = Staff.objects.filter(phone=phone).first()
-            if not staff and phone == '8999205205':
-                staff = Staff.objects.filter(phone='8999205207').first()
-            if not staff:
-                raise Staff.DoesNotExist()
-        except Staff.DoesNotExist:
-            logger.warning(f"Login failed: staff not found for phone {phone}")
+        staff = Staff.objects.filter(phone=phone).first()
+
+        # Only the account's real password or its real staff PIN are accepted. (This used to also
+        # accept the literal word "password", the phone number itself, and silently remapped one
+        # hard-coded phone number to another account: all of those were back doors.)
+        is_pw_valid = bool(staff) and (
+            staff.check_password(password)
+            or bool(staff.staff_pin and check_password(password, staff.staff_pin))
+        )
+
+        if not is_pw_valid:
+            LOGIN_PHONE_LIMITER.record_failure(phone)
+            LOGIN_IP_LIMITER.record_failure(ip)
+            logger.warning(f"Login failed for phone {phone}")
             log_activity(
                 action='LOGIN_FAILED',
                 module='auth',
+                user=staff,
                 description=f"Failed login attempt for phone {phone}",
             )
             return Response(
@@ -107,33 +195,16 @@ class LoginView(APIView):
                 status=status.HTTP_401_UNAUTHORIZED
             )
 
-        # Validate against staff.password, 'password', phone as password, or staff.staff_pin
-        is_pw_valid = (
-            staff.check_password(password)
-            or (password == 'password')
-            or (password == staff.phone)
-            or (staff.staff_pin and check_password(password, staff.staff_pin))
-        )
-        if not is_pw_valid:
-            logger.warning(f"Login failed: invalid password for staff {staff.id}")
-            log_activity(
-                action='LOGIN_FAILED',
-                module='auth',
-                user=staff,
-                description=f"Invalid password for staff {staff.name} ({phone})",
-            )
-            return Response(
-                {'detail': 'Invalid phone or password'},
-                status=status.HTTP_401_UNAUTHORIZED
-            )
-
-        # Validate staff is active
+        # Validate staff is active (only after the credentials were right, so an inactive
+        # account cannot be used to test whether a guess was correct)
         if not staff.is_active:
             logger.warning(f"Login failed: staff {staff.id} is inactive")
             return Response(
                 {'detail': 'Staff account is inactive'},
                 status=status.HTTP_401_UNAUTHORIZED
             )
+
+        LOGIN_PHONE_LIMITER.reset(phone)
 
         logger.info(f"Login successful for staff {staff.id} ({staff.name})")
         log_activity(
@@ -147,50 +218,10 @@ class LoginView(APIView):
         refresh = RefreshToken.for_user(staff)
         access = refresh.access_token
 
-        # Serialize user data
-        org = staff.outlet.organization
-        user_data = {
-            'id': str(staff.id),
-            'name': staff.name,
-            'phone': staff.phone,
-            'role': staff.role,
-            'outletId': str(staff.outlet.id),
-            'organizationId': str(org.id) if org else None,
-            'isSuperAdmin': staff.role == 'super_admin',
-            'outlet': serialize_outlet_data(staff.outlet),
-            'avatarUrl': staff.avatar_url,
-            'maxDiscount': float(staff.max_discount),
-            'canEditRate': staff.can_edit_rate,
-            'canViewPurchaseRates': staff.can_view_purchase_rates,
-            'canCreatePurchases': staff.can_create_purchases,
-            'canAccessReports': staff.can_access_reports,
-            'canEditSales': staff.can_edit_sales,
-            'canEditPurchases': staff.can_edit_purchases,
-            'canModifyPaidPurchases': staff.can_modify_paid_purchases,
-            'canModifySettledVouchers': staff.can_modify_settled_vouchers,
-            'canModifySettledReturns': staff.can_modify_settled_returns,
-            'canEditSaleReturns': staff.can_edit_sale_returns,
-            'canEditPurchaseReturns': staff.can_edit_purchase_returns,
-            'canEditVouchers': staff.can_edit_vouchers,
-            'canViewAuditHistory': staff.can_view_audit_history,
-            'canVoidRecords': staff.can_void_records,
-            'canModifyDraftBill': staff.can_modify_draft_bill,
-            'canModifyUnpaidBill': staff.can_modify_unpaid_bill,
-            'canCorrectHeaderFields': staff.can_correct_header_fields,
-            'canCorrectRatesDiscounts': staff.can_correct_rates_discounts,
-            'canCorrectQuantities': staff.can_correct_quantities,
-            'canCorrectCustomer': staff.can_correct_customer,
-            'canModifyBillWithReturn': staff.can_modify_bill_with_return,
-            'canModifyPaidBill': staff.can_modify_paid_bill,
-            'canCancelAndReissueBill': staff.can_cancel_and_reissue_bill,
-            'canViewBillRevisionHistory': staff.can_view_bill_revision_history,
-            'canManagePartners': getattr(staff, 'can_manage_partners', False),
-        }
-
         response_data = {
             'access': str(access),
             'refresh': str(refresh),
-            'user': user_data,
+            'user': build_user_payload(staff),
         }
 
         return Response(response_data, status=status.HTTP_200_OK)
@@ -242,54 +273,10 @@ class SwitchOutletView(APIView):
         refresh = RefreshToken.for_user(staff)
         access = refresh.access_token
 
-        org = staff.outlet.organization
-        user_data = {
-            'id': str(staff.id),
-            'name': staff.name,
-            'phone': staff.phone,
-            'role': staff.role,
-            'outletId': str(staff.outlet.id),
-            'organizationId': str(org.id) if org else None,
-            'isSuperAdmin': staff.role == 'super_admin',
-            'outlet': {
-                'id': str(staff.outlet.id),
-                'name': staff.outlet.name,
-                'city': staff.outlet.city,
-                'state': staff.outlet.state,
-            },
-            'avatarUrl': staff.avatar_url,
-            'maxDiscount': float(staff.max_discount),
-            'canEditRate': staff.can_edit_rate,
-            'canViewPurchaseRates': staff.can_view_purchase_rates,
-            'canCreatePurchases': staff.can_create_purchases,
-            'canAccessReports': staff.can_access_reports,
-            'canEditSales': staff.can_edit_sales,
-            'canEditPurchases': staff.can_edit_purchases,
-            'canModifyPaidPurchases': staff.can_modify_paid_purchases,
-            'canModifySettledVouchers': staff.can_modify_settled_vouchers,
-            'canModifySettledReturns': staff.can_modify_settled_returns,
-            'canEditSaleReturns': staff.can_edit_sale_returns,
-            'canEditPurchaseReturns': staff.can_edit_purchase_returns,
-            'canEditVouchers': staff.can_edit_vouchers,
-            'canViewAuditHistory': staff.can_view_audit_history,
-            'canVoidRecords': staff.can_void_records,
-            'canModifyDraftBill': staff.can_modify_draft_bill,
-            'canModifyUnpaidBill': staff.can_modify_unpaid_bill,
-            'canCorrectHeaderFields': staff.can_correct_header_fields,
-            'canCorrectRatesDiscounts': staff.can_correct_rates_discounts,
-            'canCorrectQuantities': staff.can_correct_quantities,
-            'canCorrectCustomer': staff.can_correct_customer,
-            'canModifyBillWithReturn': staff.can_modify_bill_with_return,
-            'canModifyPaidBill': staff.can_modify_paid_bill,
-            'canCancelAndReissueBill': staff.can_cancel_and_reissue_bill,
-            'canViewBillRevisionHistory': staff.can_view_bill_revision_history,
-            'canManagePartners': getattr(staff, 'can_manage_partners', False),
-        }
-
         response_data = {
             'access': str(access),
             'refresh': str(refresh),
-            'user': user_data,
+            'user': build_user_payload(staff),
         }
 
         return Response(response_data, status=status.HTTP_200_OK)
@@ -315,47 +302,8 @@ class StaffMeView(APIView):
                 status=status.HTTP_401_UNAUTHORIZED
             )
 
-        # Serialize user data (same as LoginView)
-        org = staff.outlet.organization
-        user_data = {
-            'id': str(staff.id),
-            'name': staff.name,
-            'phone': staff.phone,
-            'role': staff.role,
-            'outletId': str(staff.outlet.id),
-            'organizationId': str(org.id) if org else None,
-            'isSuperAdmin': staff.role == 'super_admin',
-            'outlet': serialize_outlet_data(staff.outlet),
-            'avatarUrl': staff.avatar_url,
-            'maxDiscount': float(staff.max_discount),
-            'canEditRate': staff.can_edit_rate,
-            'canViewPurchaseRates': staff.can_view_purchase_rates,
-            'canCreatePurchases': staff.can_create_purchases,
-            'canAccessReports': staff.can_access_reports,
-            'canEditSales': staff.can_edit_sales,
-            'canEditPurchases': staff.can_edit_purchases,
-            'canModifyPaidPurchases': staff.can_modify_paid_purchases,
-            'canModifySettledVouchers': staff.can_modify_settled_vouchers,
-            'canModifySettledReturns': staff.can_modify_settled_returns,
-            'canEditSaleReturns': staff.can_edit_sale_returns,
-            'canEditPurchaseReturns': staff.can_edit_purchase_returns,
-            'canEditVouchers': staff.can_edit_vouchers,
-            'canViewAuditHistory': staff.can_view_audit_history,
-            'canVoidRecords': staff.can_void_records,
-            'canModifyDraftBill': staff.can_modify_draft_bill,
-            'canModifyUnpaidBill': staff.can_modify_unpaid_bill,
-            'canCorrectHeaderFields': staff.can_correct_header_fields,
-            'canCorrectRatesDiscounts': staff.can_correct_rates_discounts,
-            'canCorrectQuantities': staff.can_correct_quantities,
-            'canCorrectCustomer': staff.can_correct_customer,
-            'canModifyBillWithReturn': staff.can_modify_bill_with_return,
-            'canModifyPaidBill': staff.can_modify_paid_bill,
-            'canCancelAndReissueBill': staff.can_cancel_and_reissue_bill,
-            'canViewBillRevisionHistory': staff.can_view_bill_revision_history,
-            'canManagePartners': getattr(staff, 'can_manage_partners', False),
-        }
+        return Response(build_user_payload(staff), status=status.HTTP_200_OK)
 
-        return Response(user_data, status=status.HTTP_200_OK)
 
 
 class CustomerSearchView(APIView):
@@ -417,34 +365,61 @@ class CustomerSearchView(APIView):
 
         # Search Customers by name or phone (case-insensitive)
         query_lower = query.lower()
+        if request.query_params.get('accountOwners') or request.query_params.get('familyAccounts'):
+            # "Who can this person bill under?" Any customer who is not themselves a member of someone else's account, plus the
+            # purely shared family records. Used by the Add Customer form, the customer page and the add-person popup.
+            owners = Customer.objects.filter(outlet=outlet, is_active=True, account_holder__isnull=True).filter(
+                Q(name__icontains=query_lower) | Q(phone__icontains=query_lower))
+            exclude = request.query_params.get('excludeId')
+            if exclude:
+                owners = owners.exclude(pk=exclude)
+            owners = owners.order_by('-is_family_account', 'name').distinct()[:20]
+            return Response([{'id': str(a.id), 'name': a.name, 'phone': a.phone, 'memberCount': a.members.count(),
+                              'isFamilyAccount': a.is_family_account, 'outstanding': float(a.outstanding_balance)} for a in owners])
+
+        # Shared accounts are not patients: they never appear as a row, their MEMBERS do (found by their own name / phone or
+        # by the account's name / phone), so typing a family's mobile number lists everyone who shares it.
         customers = Customer.objects.filter(
             outlet=outlet,
-            is_active=True
+            is_active=True,
+            is_family_account=False,
         ).filter(
             Q(name__icontains=query_lower) | Q(phone__icontains=query_lower)
-        ).distinct()
+            | Q(account_holder__name__icontains=query_lower) | Q(account_holder__phone__icontains=query_lower)
+        ).select_related('account_holder').distinct()
 
         logger.info(f"Found {customers.count()} customers matching: {query}")
 
         # Serialize customers
         results = []
+        from apps.accounts.family_accounts import account_ledger
         for customer in customers:
+            owner = customer.financial_customer          # who owns the money: their family account, else themselves
+            owner_ledger = account_ledger(customer)
             result = {
                 'id': str(customer.id),
                 'name': customer.name,
+                'relationship': customer.relationship,
+                'gender': customer.gender,
+                'age': customer.age,
+                'isFamilyMember': bool(customer.account_holder_id),
+                'accountId': str(owner.id),
+                'accountName': owner.name if customer.account_holder_id else None,
+                'ledgerId': str(owner_ledger.id) if owner_ledger else None,
                 'phone': customer.phone,
                 'address': customer.address,
                 'state': customer.state or '',
                 'dob': customer.dob.isoformat() if customer.dob else None,
                 'gstin': customer.gstin,
+                'email': customer.email,
                 'fixedDiscount': float(customer.fixed_discount),
-                'creditLimit': float(customer.credit_limit),
+                'creditLimit': float(owner.credit_limit),
                 'dlNo20b': customer.dl_no_20b,
                 'dlNo21b': customer.dl_no_21b,
                 'dlExpiry': customer.dl_expiry.isoformat() if customer.dl_expiry else None,
                 'customerType': customer.customer_type,
                 'stateCode': customer.state_code,
-                'outstanding': float(customer.outstanding_balance),
+                'outstanding': float(owner.outstanding_balance),
                 'totalPurchases': float(customer.total_purchases),
                 'isChronic': customer.is_chronic,
                 'isActive': customer.is_active,
@@ -486,12 +461,13 @@ class CustomerDetailView(APIView):
                 )
 
         try:
-            customer = Customer.objects.get(id=customer_id, outlet=outlet)
+            customer = Customer.objects.select_related('account_holder').get(id=customer_id, outlet=outlet)
         except Customer.DoesNotExist:
             return Response(
                 {'detail': f'Customer {customer_id} not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
+        from apps.accounts.family_accounts import account_ledger
 
         result = {
             'id': str(customer.id),
@@ -501,8 +477,9 @@ class CustomerDetailView(APIView):
             'state': customer.state or '',
             'dob': customer.dob.isoformat() if customer.dob else None,
             'gstin': customer.gstin,
+            'email': customer.email,
             'fixedDiscount': float(customer.fixed_discount),
-            'creditLimit': float(customer.credit_limit),
+            'creditLimit': float(customer.financial_customer.credit_limit),
             'dlNo20b': customer.dl_no_20b,
             'dlNo21b': customer.dl_no_21b,
             'dlExpiry': customer.dl_expiry.isoformat() if customer.dl_expiry else None,
@@ -513,7 +490,8 @@ class CustomerDetailView(APIView):
             'isChronic': customer.is_chronic,
             'isActive': customer.is_active,
             'createdAt': customer.created_at.isoformat(),
-            'ledgerId': str(customer.ledgers.filter(group__name='Sundry Debtors').first().id) if customer.ledgers.filter(group__name='Sundry Debtors').exists() else None,
+            'ledgerId': (lambda l: str(l.id) if l else None)(account_ledger(customer)),
+            **_family_fields(customer),
         }
 
         return Response(result, status=status.HTTP_200_OK)
@@ -582,6 +560,13 @@ class CustomerDetailView(APIView):
             customer.customer_type = request.data['customerType'] or 'RETAIL'
         if 'stateCode' in request.data:
             customer.state_code = request.data['stateCode'] or '27'
+        if 'email' in request.data:
+            customer.email = (request.data['email'] or '').strip()[:254]
+        # Family details (joining / leaving an account goes through customers/<id>/account/, which checks balances)
+        if 'gender' in request.data:
+            customer.gender = (request.data['gender'] or '').strip()[:10]
+        if 'relationship' in request.data:
+            customer.relationship = (request.data['relationship'] or '').strip()[:30]
 
         if 'creditLimit' in request.data:
             try:
@@ -649,6 +634,7 @@ class CustomerDetailView(APIView):
             'state': customer.state or '',
             'dob': customer.dob.isoformat() if customer.dob else None,
             'gstin': customer.gstin,
+            'email': customer.email,
             'fixedDiscount': float(customer.fixed_discount),
             'creditLimit': float(customer.credit_limit),
             'dlNo20b': customer.dl_no_20b,
@@ -664,6 +650,97 @@ class CustomerDetailView(APIView):
         }
 
         return Response(result, status=status.HTTP_200_OK)
+
+
+def _family_fields(customer):
+    """The family-account facts every customer response carries (a member's money is their account's)."""
+    owner = customer.financial_customer
+    return {
+        # "has a family": a shared record, or a person with members under them
+        'isFamilyAccount': customer.is_family_account or customer.members.exists(),
+        'isSharedAccountRecord': customer.is_family_account,
+        'isFamilyMember': bool(customer.account_holder_id),
+        'accountId': str(owner.id) if customer.account_holder_id else None,
+        'accountName': owner.name if customer.account_holder_id else None,
+        'relationship': customer.relationship,
+        'gender': customer.gender,
+        'age': customer.age,
+        'memberCount': customer.members.count(),
+    }
+
+
+def _member_row(member):
+    from apps.accounts.family_accounts import account_ledger
+    owner = member.financial_customer
+    ledger = account_ledger(member)
+    is_holder = owner.pk == member.pk and not member.is_family_account and member.members.exists()
+    return {
+        'isAccountHolder': is_holder,
+        'id': str(member.id), 'name': member.name, 'phone': member.phone,
+        'relationship': member.relationship or ('Account holder' if is_holder else ''),
+        'gender': member.gender, 'age': member.age, 'dob': member.dob.isoformat() if member.dob else None,
+        'isChronic': member.is_chronic, 'isFamilyMember': bool(member.account_holder_id),
+        'accountId': str(owner.id), 'accountName': owner.name if member.account_holder_id else None,
+        'ledgerId': str(ledger.id) if ledger else None,
+        'outstanding': float(owner.outstanding_balance), 'creditLimit': float(owner.credit_limit),
+    }
+
+
+class CustomerMembersView(APIView):
+    """
+    GET /api/v1/customers/<id>/members/?outletId=
+    Who can this bill be for? For a family account (or any of its members) it is everyone on the account; for an
+    individual it is just that person. The billing screen uses it to ask "who is this for?".
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, customer_id, *args, **kwargs):
+        outlet_id = request.query_params.get('outletId')
+        try:
+            customer = Customer.objects.select_related('account_holder').get(id=customer_id, outlet_id=outlet_id)
+        except (Customer.DoesNotExist, ValueError, ValidationError):
+            return Response({'detail': 'Customer not found'}, status=status.HTTP_404_NOT_FOUND)
+        from apps.accounts.family_accounts import account_people
+        account = customer.financial_customer
+        people = account_people(account)
+        return Response({
+            'accountId': str(account.id), 'accountName': account.name,
+            'isSharedAccountRecord': account.is_family_account,
+            'isFamilyAccount': account.is_family_account or len(people) > 1,
+            'members': [_member_row(m) for m in people],
+        })
+
+
+class CustomerAccountView(APIView):
+    """
+    POST /api/v1/customers/<id>/account/
+      {"accountHolderId": "<family account id>", "relationship": "Mother", "gender": "F"}  -> put this person on the account
+      {"accountHolderId": null}                                                           -> take them off (own ledger again)
+    Refused while the person has a balance of their own (it would be stranded on a ledger that stops receiving their bills).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, customer_id, *args, **kwargs):
+        from apps.accounts.family_accounts import attach_member, detach_member, FamilyAccountError
+        outlet_id = request.data.get('outletId') or request.query_params.get('outletId')
+        try:
+            member = Customer.objects.get(id=customer_id, outlet_id=outlet_id)
+        except (Customer.DoesNotExist, ValueError, ValidationError):
+            return Response({'detail': 'Customer not found'}, status=status.HTTP_404_NOT_FOUND)
+        account_id = request.data.get('accountHolderId')
+        try:
+            if account_id:
+                account = Customer.objects.filter(id=account_id, outlet_id=outlet_id).first()
+                if account is None:
+                    return Response({'detail': 'Family account not found'}, status=status.HTTP_404_NOT_FOUND)
+                attach_member(member, account, (request.data.get('relationship') or '').strip()[:30],
+                              (request.data.get('gender') or '').strip()[:10])
+            else:
+                detach_member(member)
+        except FamilyAccountError as err:
+            return Response({'detail': str(err), 'code': 'FAMILY_ACCOUNT'}, status=status.HTTP_400_BAD_REQUEST)
+        member.refresh_from_db()
+        return Response(_member_row(member))
 
 
 class CustomerListView(APIView):
@@ -691,7 +768,7 @@ class CustomerListView(APIView):
             )
 
         # Query customers
-        customers = Customer.objects.filter(outlet=outlet, is_active=True)
+        customers = Customer.objects.filter(outlet=outlet, is_active=True).select_related('account_holder')
 
         # Apply search filter
         if search_query:
@@ -723,7 +800,7 @@ class CustomerListView(APIView):
         # OPTIMIZED: Bulk-prefetch Ledger balances for all page customers in ONE query.
         # Before: outstanding_balance @property fires a Ledger query per customer (N extra queries).
         # After:  1 extra query total, looked up via dict.
-        customer_ids = [c.id for c in customers_page]
+        customer_ids = [c.account_holder_id or c.id for c in customers_page]      # a member's money is their account's
         ledger_balances = {
             str(l.linked_customer_id): float(l.current_balance)
             for l in Ledger.objects.filter(
@@ -736,7 +813,8 @@ class CustomerListView(APIView):
         results = []
         for customer in customers_page:
             cid = str(customer.id)
-            outstanding = ledger_balances.get(cid, float(customer.outstanding))
+            owner_key = str(customer.account_holder_id or customer.id)
+            outstanding = ledger_balances.get(owner_key, float(customer.financial_customer.outstanding))
             result = {
                 'id': cid,
                 'name': customer.name,
@@ -745,8 +823,9 @@ class CustomerListView(APIView):
                 'state': customer.state or '',
                 'dob': customer.dob.isoformat() if customer.dob else None,
                 'gstin': customer.gstin,
+                'email': customer.email,
                 'fixedDiscount': float(customer.fixed_discount),
-                'creditLimit': float(customer.credit_limit),
+                'creditLimit': float(customer.financial_customer.credit_limit),
                 'dlNo20b': customer.dl_no_20b,
                 'dlNo21b': customer.dl_no_21b,
                 'dlExpiry': customer.dl_expiry.isoformat() if customer.dl_expiry else None,
@@ -757,6 +836,7 @@ class CustomerListView(APIView):
                 'isChronic': customer.is_chronic,
                 'isActive': customer.is_active,
                 'createdAt': customer.created_at.isoformat(),
+                **_family_fields(customer),
             }
             results.append(result)
 
@@ -787,7 +867,12 @@ class CustomerListView(APIView):
         is_chronic = bool(request.data.get('isChronic', False))
         fixed_discount = request.data.get('fixedDiscount', 0)
         credit_limit = request.data.get('creditLimit', 0)
-        
+        email = (request.data.get('email') or '').strip()[:254]
+        is_family_account = bool(request.data.get('isFamilyAccount', False))
+        account_holder_id = request.data.get('accountHolderId') or None
+        relationship = (request.data.get('relationship') or '').strip()[:30]
+        gender = (request.data.get('gender') or '').strip()[:10]
+
         dl_no_20b = request.data.get('dlNo20b') or None
         dl_no_21b = request.data.get('dlNo21b') or None
         dl_expiry = request.data.get('dlExpiry') or None
@@ -798,10 +883,11 @@ class CustomerListView(APIView):
         if not name:
             return Response({'detail': 'name is required'}, status=status.HTTP_400_BAD_REQUEST)
 
-        if not phone:
+        # A family member's own mobile is optional: without one they share the account owner's number.
+        if not phone and not account_holder_id:
             return Response({'detail': 'phone is required'}, status=status.HTTP_400_BAD_REQUEST)
 
-        if not re.match(r'^[6-9]\d{9}$', phone):
+        if phone and not re.match(r'^[6-9]\d{9}$', phone):
             return Response(
                 {'detail': 'phone must be a valid 10-digit Indian mobile number starting with 6-9'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -840,9 +926,38 @@ class CustomerListView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        # dob arrives as text: parse it up front (a bad value is a 400, not a crash after the record was already saved)
+        if dob:
+            from django.utils.dateparse import parse_date
+            dob = parse_date(str(dob)[:10])
+            if dob is None:
+                return Response({'detail': 'dob must be a date (YYYY-MM-DD)'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if is_family_account and account_holder_id:
+            return Response({'detail': 'A shared family account cannot itself belong to another account.'}, status=status.HTTP_400_BAD_REQUEST)
+        account_holder = None
+        if account_holder_id:
+            account_holder = Customer.objects.filter(pk=account_holder_id, outlet=outlet).first()
+            if account_holder is None:
+                return Response({'detail': 'The account owner was not found.'}, status=status.HTTP_404_NOT_FOUND)
+            if account_holder.account_holder_id:
+                return Response({'detail': f'"{account_holder.name}" is a member of another account; choose that account\'s owner.'},
+                                status=status.HTTP_400_BAD_REQUEST)
+
+        if not phone:
+            phone = account_holder.phone
+
+        if email and '@' not in email:
+            return Response({'detail': 'email is not valid'}, status=status.HTTP_400_BAD_REQUEST)
+
         # Create customer
         customer = Customer.objects.create(
             outlet=outlet,
+            email=email,
+            account_holder=account_holder,
+            is_family_account=is_family_account,
+            relationship=relationship,
+            gender=gender,
             name=name,
             phone=phone,
             address=address,
@@ -860,23 +975,10 @@ class CustomerListView(APIView):
             is_active=True,
         )
 
-        # Automatically create a Ledger for the new customer in the Sundry Debtors group
-        from apps.accounts.models import Ledger, LedgerGroup
-        debtor_group, _ = LedgerGroup.objects.get_or_create(
-            outlet=outlet,
-            name='Sundry Debtors',
-            defaults={'nature': 'asset', 'is_system': True}
-        )
-        Ledger.objects.create(
-            outlet=outlet,
-            name=f"{customer.name} ({customer.phone})",
-            group=debtor_group,
-            linked_customer=customer,
-            phone=customer.phone,
-            gstin=customer.gstin or '',
-            address=customer.address or '',
-            is_system=True
-        )
+        # A ledger in Sundry Debtors for everyone EXCEPT a family member: members share their account's ledger.
+        from apps.accounts.family_accounts import ensure_customer_ledger, account_ledger
+        if not account_holder:
+            ensure_customer_ledger(customer)
 
         logger.info(f"Created customer {customer.id} ({customer.name}) and Ledger for outlet {outlet.name}")
 
@@ -890,6 +992,7 @@ class CustomerListView(APIView):
             'state': customer.state or '',
             'dob': customer.dob.isoformat() if customer.dob else None,
             'gstin': customer.gstin,
+            'email': customer.email,
             'fixedDiscount': float(customer.fixed_discount),
             'creditLimit': float(customer.credit_limit),
             'dlNo20b': customer.dl_no_20b,
@@ -902,9 +1005,42 @@ class CustomerListView(APIView):
             'isChronic': customer.is_chronic,
             'isActive': customer.is_active,
             'createdAt': customer.created_at.isoformat(),
+            # the ledger bills to (the billing screen selects the new customer straight away)
+            'ledgerId': (lambda l: str(l.id) if l else None)(account_ledger(customer)),
+            **_family_fields(customer),
         }
 
         return Response(result, status=status.HTTP_201_CREATED)
+
+
+def _pin_matches(staff, pin):
+    """
+    True if `pin` is this staff member's PIN. Hashing is slow on purpose, so results are cached,
+    but the cache key is a digest: the old key embedded the plaintext PIN in Redis.
+    """
+    import hashlib
+    from django.core.cache import cache
+    digest = hashlib.sha256(f'{staff.staff_pin}:{pin}'.encode('utf-8')).hexdigest()[:40]
+    cache_key = f'pin_check:{digest}'
+    cached = cache.get(cache_key)
+    if cached is None:
+        cached = bool(staff.staff_pin) and check_password(pin, staff.staff_pin)
+        cache.set(cache_key, cached, timeout=3600)
+    return cached
+
+
+def _pin_blocked_response(user):
+    """429 response when this logged-in user has made too many wrong PIN guesses, else None."""
+    wait = PIN_USER_LIMITER.blocked_for(user.id)
+    if not wait:
+        return None
+    response = Response(
+        {'error': {'code': 'TOO_MANY_ATTEMPTS',
+                   'message': f'Too many wrong PIN attempts. Try again in {max(wait // 60, 1)} minute(s).'}},
+        status=status.HTTP_429_TOO_MANY_REQUESTS,
+    )
+    response['Retry-After'] = str(wait)
+    return response
 
 
 class StaffLookupByPinView(APIView):
@@ -935,30 +1071,22 @@ class StaffLookupByPinView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        from django.contrib.auth.hashers import check_password
-        from django.core.cache import cache
-        
+        blocked = _pin_blocked_response(request.user)
+        if blocked:
+            return blocked
+
         try:
             outlet = Outlet.objects.get(id=outlet_id)
-        except Outlet.DoesNotExist:
+        except (Outlet.DoesNotExist, ValueError, ValidationError):
             return Response(
                 {'detail': f'Outlet {outlet_id} not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        matched_staff = []
-        for s in Staff.objects.filter(outlet=outlet, is_active=True):
-            cache_key = f'pin_check:{s.staff_pin}:{pin}'
-            is_valid = cache.get(cache_key)
-            
-            if is_valid is None:
-                is_valid = check_password(pin, s.staff_pin)
-                cache.set(cache_key, is_valid, timeout=86400 * 7)  # Cache for 7 days
-                
-            if is_valid:
-                matched_staff.append(s)
-                
+        matched_staff = [s for s in Staff.objects.filter(outlet=outlet, is_active=True) if _pin_matches(s, str(pin))]
+
         if not matched_staff:
+            PIN_USER_LIMITER.record_failure(request.user.id)
             return Response(
                 {'error': {'code': 'INVALID_PIN', 'message': 'Invalid PIN'}},
                 status=status.HTTP_400_BAD_REQUEST
@@ -984,7 +1112,6 @@ class StaffLookupByPinView(APIView):
             'id': str(staff.id),
             'name': staff.name,
             'role': staff.role,
-            'staffPin': staff.staff_pin,
             'maxDiscount': float(staff.max_discount),
             'canEditRate': staff.can_edit_rate,
             'canViewPurchaseRates': staff.can_view_purchase_rates,
@@ -1028,7 +1155,6 @@ class StaffListView(APIView):
                 'name': s.name,
                 'phone': s.phone,
                 'role': s.role,
-                'staffPin': s.staff_pin,
                 'outletId': str(s.outlet.id),
                 'avatarUrl': s.avatar_url,
                 'maxDiscount': float(s.max_discount),
@@ -1096,7 +1222,6 @@ class StaffPinVerifyView(APIView):
             "id": "...",
             "name": "...",
             "role": "...",
-            "staffPin": "...",
             "maxDiscount": 0,
             "canEditRate": false,
             "billsToday": 0,
@@ -1113,36 +1238,31 @@ class StaffPinVerifyView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        blocked = _pin_blocked_response(request.user)
+        if blocked:
+            return blocked
+
         # Validate outlet
         try:
             outlet = Outlet.objects.get(id=outlet_id)
-        except Outlet.DoesNotExist:
+        except (Outlet.DoesNotExist, ValueError, ValidationError):
             return Response(
                 {'detail': f'Outlet {outlet_id} not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # Fetch staff by id and outlet
+        # Fetch staff by id and outlet (a deactivated account's PIN must stop working)
         try:
-            staff = Staff.objects.get(id=staff_id, outlet=outlet)
+            staff = Staff.objects.get(id=staff_id, outlet=outlet, is_active=True)
         except Staff.DoesNotExist:
             return Response(
                 {'detail': f'Staff {staff_id} not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        from django.contrib.auth.hashers import check_password
-        from django.core.cache import cache
-        
         # Verify PIN
-        cache_key = f'pin_check:{staff.staff_pin}:{pin}'
-        is_valid = cache.get(cache_key)
-        
-        if is_valid is None:
-            is_valid = check_password(pin, staff.staff_pin)
-            cache.set(cache_key, is_valid, timeout=86400 * 7)  # Cache for 7 days
-            
-        if not is_valid:
+        if not _pin_matches(staff, str(pin)):
+            PIN_USER_LIMITER.record_failure(request.user.id)
             return Response(
                 {'error': {'code': 'INVALID_PIN', 'message': 'Invalid PIN'}},
                 status=status.HTTP_400_BAD_REQUEST
@@ -1165,7 +1285,6 @@ class StaffPinVerifyView(APIView):
             'id': str(staff.id),
             'name': staff.name,
             'role': staff.role,
-            'staffPin': staff.staff_pin,
             'maxDiscount': float(staff.max_discount),
             'canEditRate': staff.can_edit_rate,
             'canViewPurchaseRates': staff.can_view_purchase_rates,
@@ -1229,15 +1348,19 @@ class CustomerPurchaseHistoryView(APIView):
 
         # Get purchase history (last 50 invoices)
         from apps.billing.models import SaleInvoice, SaleItem
+        # A person's history is the bills made FOR them (patient), plus their own bills with no patient; a family account's
+        # history is every bill on the account.
+        history_filter = Q(customer=customer) if customer.is_family_account else (
+            Q(patient=customer) | Q(customer=customer, patient__isnull=True))
         invoices = SaleInvoice.objects.filter(
-            customer=customer,
+            history_filter,
             outlet=outlet
         ).select_related('billed_by').order_by('-invoice_date')[:50]
 
         # Build response
         results = []
         for invoice in invoices:
-            item_count = SaleItem.objects.filter(sale_invoice=invoice).count()
+            item_count = invoice.items.count()      # (was SaleItem.objects.filter(sale_invoice=...): that field does not exist)
             result = {
                 'invoiceId': invoice.invoice_no,
                 'date': invoice.invoice_date.date().isoformat(),
@@ -1325,9 +1448,17 @@ class StaffCreateView(APIView):
         else:
             outlet = caller.outlet
         valid_roles = ('super_admin', 'admin', 'manager', 'billing_staff', 'view_only')
-        role = request.data.get('role', 'billing_staff')
+        role = request.data.get('role') or 'billing_staff'
+        if role == 'custom':
+            # UI-only value sent by older frontends ("custom permissions"): not a role. The staff
+            # member's real rights are their flags, on top of the lowest billing tier.
+            role = 'billing_staff'
         if role not in valid_roles:
             return Response({'error': f'Invalid role. Must be one of: {valid_roles}'}, status=status.HTTP_400_BAD_REQUEST)
+        # An admin must not be able to mint a super_admin (that role bypasses outlet isolation).
+        if not can_assign_role(caller, role):
+            return Response({'error': f'You are not allowed to create a user with the role "{role}".'},
+                            status=status.HTTP_403_FORBIDDEN)
 
         password = request.data.get('password', '')
         if not password:
@@ -1388,7 +1519,12 @@ class StaffCreateView(APIView):
             is_active=True,
         )
 
-        pass
+        log_activity(
+            action='CREATE', module='staff', entity_type='Staff', entity_id=staff.id,
+            entity_label=staff.name, user=caller, outlet=staff.outlet, request=request,
+            description=f"{caller.name} created staff {staff.name} with role {staff.role}",
+            changes={'role': {'old': None, 'new': staff.role}},
+        )
 
         return Response({'success': True, 'data': _serialize_staff(staff)}, status=status.HTTP_201_CREATED)
 
@@ -1398,7 +1534,6 @@ class StaffDetailView(APIView):
     permission_classes = [IsAdminStaff]
 
     def patch(self, request, pk, *args, **kwargs):
-        print("DEBUG PATCH PAYLOAD:", request.data)
         from django.contrib.auth.hashers import make_password
         caller = request.user
         if caller.role not in ('super_admin', 'admin'):
@@ -1411,6 +1546,14 @@ class StaffDetailView(APIView):
                 staff = Staff.objects.get(id=pk, outlet=caller.outlet)
         except Staff.DoesNotExist:
             return Response({'detail': 'Staff not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        # An admin must not be able to edit (or reset the password of) a super_admin account.
+        if not can_manage_staff_member(caller, staff):
+            return Response({'error': 'You are not allowed to modify this account.'}, status=status.HTTP_403_FORBIDDEN)
+
+        # Nobody may lock themselves out by deactivating their own account.
+        if staff.id == caller.id and 'isActive' in request.data and request.data['isActive'] in (False, 'false', 'False', 0, '0'):
+            return Response({'error': 'You cannot deactivate your own account.'}, status=status.HTTP_403_FORBIDDEN)
 
         camel_map = {
             'maxDiscount': 'max_discount',
@@ -1497,9 +1640,30 @@ class StaffDetailView(APIView):
                         except Exception:
                             val = None
                 setattr(staff, snake, val)
-        for field in ('name', 'email', 'role'):
+        for field in ('name', 'email'):
             if field in request.data:
                 setattr(staff, field, request.data[field])
+
+        # Role changes are validated: the value must be a real role, nobody may change their own
+        # role, and nobody may hand out a role above their own (only a super_admin creates
+        # super_admins). This used to be a blind setattr of whatever string was sent.
+        # 'custom' is not a role (an old form sent it whenever the toggles differed from a preset):
+        # ignore it and keep the current role instead of failing or, worse, storing it.
+        if request.data.get('role') == 'custom':
+            requested_role = staff.role
+        else:
+            requested_role = request.data.get('role', staff.role)
+
+        if requested_role != staff.role:
+            new_role = requested_role
+            if new_role not in ('super_admin', 'admin', 'manager', 'billing_staff', 'view_only'):
+                return Response({'error': 'Invalid role.'}, status=status.HTTP_400_BAD_REQUEST)
+            if staff.id == caller.id:
+                return Response({'error': 'You cannot change your own role.'}, status=status.HTTP_403_FORBIDDEN)
+            if not can_assign_role(caller, new_role):
+                return Response({'error': f'You are not allowed to assign the role "{new_role}".'},
+                                status=status.HTTP_403_FORBIDDEN)
+            staff.role = new_role
 
         if 'password' in request.data and request.data['password']:
             staff.set_password(str(request.data['password']))
@@ -1556,8 +1720,19 @@ class StaffDetailView(APIView):
         for key in old_state:
             if old_state[key] != new_state[key]:
                 changes[key] = {'old': old_state[key], 'new': new_state[key]}
+        # Record THAT a credential changed, never its value.
+        if request.data.get('password'):
+            changes['password'] = {'old': '***', 'new': '***'}
+        if request.data.get('pin'):
+            changes['pin'] = {'old': '***', 'new': '***'}
 
-        pass
+        if changes:
+            log_activity(
+                action='UPDATE', module='staff', entity_type='Staff', entity_id=staff.id,
+                entity_label=staff.name, user=caller, outlet=staff.outlet, request=request,
+                description=f"{caller.name} changed staff {staff.name}: {', '.join(sorted(changes))}",
+                changes=changes,
+            )
 
         return Response({'success': True, 'data': _serialize_staff(staff)}, status=status.HTTP_200_OK)
 
@@ -1574,10 +1749,20 @@ class StaffDetailView(APIView):
         except Staff.DoesNotExist:
             return Response({'detail': 'Staff not found'}, status=status.HTTP_404_NOT_FOUND)
 
+        if not can_manage_staff_member(caller, staff):
+            return Response({'error': 'You are not allowed to deactivate this account.'}, status=status.HTTP_403_FORBIDDEN)
+        if staff.id == caller.id:
+            return Response({'error': 'You cannot deactivate your own account.'}, status=status.HTTP_403_FORBIDDEN)
+
         staff.is_active = False
         staff.save(update_fields=['is_active'])
 
-        pass
+        log_activity(
+            action='DELETE', module='staff', entity_type='Staff', entity_id=staff.id,
+            entity_label=staff.name, user=caller, outlet=staff.outlet, request=request,
+            description=f"{caller.name} deactivated staff {staff.name}",
+            changes={'is_active': {'old': True, 'new': False}},
+        )
 
         return Response({'success': True, 'data': {'id': str(staff.id), 'isActive': False}}, status=status.HTTP_200_OK)
 
@@ -2041,10 +2226,15 @@ class ChangePinView(APIView):
     def patch(self, request, *args, **kwargs):
         from django.contrib.auth.hashers import make_password, check_password
         staff = request.user
-        current_pin = request.data.get('currentPin', '')
+        current_pin = str(request.data.get('currentPin', ''))
         new_pin = str(request.data.get('newPin', ''))
 
+        blocked = _pin_blocked_response(staff)
+        if blocked:
+            return blocked
+
         if not check_password(current_pin, staff.staff_pin):
+            PIN_USER_LIMITER.record_failure(staff.id)
             return Response({'error': 'Current PIN is incorrect'}, status=status.HTTP_400_BAD_REQUEST)
 
         if not new_pin.isdigit() or not (4 <= len(new_pin) <= 6):
@@ -2054,9 +2244,10 @@ class ChangePinView(APIView):
             if check_password(new_pin, existing_staff.staff_pin):
                 return Response({'error': 'This PIN is already in use by another staff member in this outlet.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Only the PIN changes. This used to also overwrite the account's login password with
+        # a hash of the PIN, silently destroying the password the admin had set.
         staff.staff_pin = make_password(new_pin)
-        staff.set_password(make_password(new_pin))
-        staff.save(update_fields=['staff_pin', 'password'])
+        staff.save(update_fields=['staff_pin'])
 
         log_activity(
             action="UPDATE",
@@ -2126,9 +2317,9 @@ class LogoutView(TokenBlacklistView):
         return response
 
 from apps.accounts.dashboard_service import DashboardService
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+# NOTE: do NOT import DRF's IsAuthenticated here. It used to shadow the project's outlet-aware
+# IsAuthenticated (imported at the top of this module), so the four dashboard views below had no
+# outlet check and any logged-in user could read any outlet's KPIs.
 
 class DashboardKPIView(APIView):
     permission_classes = [IsAuthenticated]

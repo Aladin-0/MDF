@@ -5,7 +5,7 @@ from django.db import transaction
 from django.utils import timezone
 from .models import Quotation, QuotationItem
 from .serializers import QuotationSerializer
-from apps.core.permissions import IsAuthenticated, IsBillingStaffOrAbove
+from apps.core.permissions import IsAuthenticated, IsBillingStaffOrAbove, assert_outlet_access
 from apps.billing.camel_case_helper import convert_dict_to_camel_case
 from .views import SaleCreateView
 
@@ -138,6 +138,7 @@ class QuotationListCreateView(generics.ListCreateAPIView):
                 try:
                     from django.core.exceptions import ValidationError
                     batch = Batch.objects.get(id=batch_id)
+                    assert_outlet_access(request.user, batch.outlet_id)
                     item['medicine_name'] = batch.product.name
                     item['batch_no'] = batch.batch_no
                     item['expiry_date'] = batch.expiry_date  # snapshot for display
@@ -270,6 +271,7 @@ class QuotationDetailView(generics.RetrieveUpdateDestroyAPIView):
             if batch_id:
                 try:
                     batch = Batch.objects.get(id=batch_id)
+                    assert_outlet_access(request.user, batch.outlet_id)
                     item['medicine_name'] = batch.product.name
                     item['batch_no'] = batch.batch_no
                     item['expiry_date'] = batch.expiry_date  # snapshot for display
@@ -312,6 +314,7 @@ class QuotationConvertView(APIView):
             quotation = Quotation.objects.get(pk=pk)
         except Quotation.DoesNotExist:
             return Response({'detail': 'Quotation not found.'}, status=status.HTTP_404_NOT_FOUND)
+        assert_outlet_access(request.user, quotation.outlet_id)
 
         if quotation.status == 'converted':
             return Response({'detail': 'Already converted.'}, status=status.HTTP_400_BAD_REQUEST)

@@ -25,6 +25,7 @@ import {
 import { useStaffList, useDeleteStaff } from '@/hooks/useStaff';
 import { StaffPerformanceModal } from 'components/staff/StaffPerformanceModal';
 import { PermissionGate } from '@/components/shared/PermissionGate';
+import { ROLE_LABELS, normalizeRole } from './staffPermissions';
 
 const ROLE_COLORS: Record<string, string> = {
     super_admin: 'bg-red-100 text-red-700',
@@ -32,14 +33,6 @@ const ROLE_COLORS: Record<string, string> = {
     manager: 'bg-blue-100 text-blue-700',
     billing_staff: 'bg-green-100 text-green-700',
     view_only: 'bg-slate-100 text-slate-600',
-};
-
-const ROLE_LABELS: Record<string, string> = {
-    super_admin: 'Super Admin',
-    admin: 'Admin',
-    manager: 'Manager',
-    billing_staff: 'Billing Staff',
-    view_only: 'View Only',
 };
 
 interface StaffTableProps {
@@ -122,9 +115,19 @@ export function StaffTable({ onEdit }: StaffTableProps) {
 
                                         {/* Role */}
                                         <TableCell>
-                                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${ROLE_COLORS[s.role]}`}>
-                                                {ROLE_LABELS[s.role] ?? s.role}
+                                            {/* Legacy / unknown role strings ('custom' from an old form bug, 'cashier', ...) are shown as what
+                                                the server treats them as, and flagged so an admin opens and saves them to repair the row. */}
+                                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${ROLE_COLORS[normalizeRole(s.role)]}`}>
+                                                {ROLE_LABELS[normalizeRole(s.role)]}
                                             </span>
+                                            {!ROLE_LABELS[s.role] && (
+                                                <span
+                                                    className="ml-1.5 text-[10px] font-semibold text-amber-700"
+                                                    title={`Stored role "${s.role}" is not a current role. It behaves as Billing Staff. Open and save to fix it.`}
+                                                >
+                                                    legacy role
+                                                </span>
+                                            )}
                                         </TableCell>
 
                                         {/* Phone */}

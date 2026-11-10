@@ -8,6 +8,7 @@ import { TodayAttendanceTab } from '@/components/attendance/TodayAttendanceTab';
 import { MonthlyAttendanceTab } from '@/components/attendance/MonthlyAttendanceTab';
 import { SmartCheckInAction } from '@/components/attendance/SmartCheckInAction';
 import { Clock } from 'lucide-react';
+import { StaffSectionTabs } from '@/components/staff/StaffSectionTabs';
 
 export default function AttendancePage() {
     const { user } = useAuthStore();
@@ -20,7 +21,7 @@ export default function AttendancePage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                     <div className="p-2.5 bg-primary/10 text-primary rounded-lg">
                         <Clock className="w-6 h-6" />
@@ -35,6 +36,8 @@ export default function AttendancePage() {
                 
                 <SmartCheckInAction />
             </div>
+
+            <StaffSectionTabs />
 
             <Tabs defaultValue={isAdmin ? "today" : "my-summary"} className="w-full">
                 <TabsList className="mb-4">

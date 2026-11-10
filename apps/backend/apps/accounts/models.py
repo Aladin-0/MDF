@@ -127,6 +127,7 @@ class Customer(models.Model):
     state = models.CharField(max_length=100, null=True, blank=True)
     dob = models.DateField(null=True, blank=True)
     gstin = models.CharField(max_length=15, null=True, blank=True, help_text='For B2B customers')
+    email = models.EmailField(blank=True, default='', help_text='For invoices / reminders')
 
     CUSTOMER_TYPE_CHOICES = [
         ('RETAIL', 'Retail'),
@@ -172,6 +173,18 @@ class Customer(models.Model):
                                       help_text='Expected date of next medicine refill')
     notes = models.TextField(null=True, blank=True, help_text='Clinical notes or special instructions')
 
+    # ── Family / shared accounts ────────────────────────────────────────────────────────────────────
+    # Several people can share one mobile number AND one credit account. The shared account is itself a Customer
+    # record (is_family_account=True, e.g. "Sharma Family Account") that owns the ledger, outstanding balance, credit
+    # limit and credit account. Members point at it with `account_holder` and keep their own medical profile.
+    # Bills are posted to the ACCOUNT (SaleInvoice.customer) and record the person in SaleInvoice.patient, so all the
+    # existing money code (ledger, outstanding, credit limit, receipts) keeps working on a single owner.
+    account_holder = models.ForeignKey('self', null=True, blank=True, on_delete=models.PROTECT, related_name='members',
+                                       help_text='The family account this person bills to (blank = bills to themselves)')
+    is_family_account = models.BooleanField(default=False, help_text='A shared account record, not a patient')
+    relationship = models.CharField(max_length=30, blank=True, default='', help_text='e.g. Father, Mother, Son')
+    gender = models.CharField(max_length=10, blank=True, default='')
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     objects = OutletFilteredManager()
@@ -185,10 +198,24 @@ class Customer(models.Model):
         ]
 
     @property
+    def financial_customer(self):
+        """The record that owns the money for this person: their family account, else themselves."""
+        return self.account_holder if self.account_holder_id else self
+
+    @property
+    def age(self):
+        if not self.dob:
+            return None
+        from datetime import date
+        today = date.today()
+        return today.year - self.dob.year - ((today.month, today.day) < (self.dob.month, self.dob.day))
+
+    @property
     def outstanding_balance(self):
         from apps.accounts.models import Ledger
-        ledger = Ledger.objects.filter(linked_customer=self, group__name='Sundry Debtors').first()
-        return ledger.current_balance if ledger else self.outstanding
+        owner = self.financial_customer      # a family member owes through their account, not through a ledger of their own
+        ledger = Ledger.objects.filter(linked_customer=owner, group__name='Sundry Debtors').first()
+        return ledger.current_balance if ledger else owner.outstanding
 
     def clean(self):
         if self.customer_type == 'WHOLESALE':

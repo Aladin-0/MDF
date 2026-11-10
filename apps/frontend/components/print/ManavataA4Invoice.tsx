@@ -89,7 +89,8 @@ export const ManavataA4Invoice = forwardRef<HTMLDivElement, InvoicePreviewProps>
     const isA5 = template === 'A5' || activeConfig.template === 'A5';
     
     const customer = invoice.customer || (invoice as any).patientName;
-    const customerName = (invoice as any).patientName || customer?.name || 'Cash Customer';
+    // A bill made for a person on a shared family account prints that person, not "Sharma Family Account".
+    const customerName = (invoice as any).patientMemberName || (invoice as any).patientName || customer?.name || (invoice as any).walkInName || 'Cash Customer';
     const customerAddress = invoice.patientAddress || customer?.address || '—';
     const customerPhone = customer?.phone || '—';
     const customerGstin = customer?.gstin || '—';

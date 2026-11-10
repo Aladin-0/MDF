@@ -1,7 +1,9 @@
 import logging
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from apps.core.permissions import IsAuthenticated, IsManagerOrAbove
+from apps.core.permissions import IsAuthenticated, IsManagerOrAbove, assert_outlet_access
+from apps.core.permissions import CanManageProducts
+
 from rest_framework import status
 from django.db.models import Q, Sum
 from datetime import datetime
@@ -28,6 +30,7 @@ class BatchLandingCostView(APIView):
             batch = Batch.objects.get(id=batch_id)
         except Batch.DoesNotExist:
             return Response({'detail': 'Batch not found'}, status=status.HTTP_404_NOT_FOUND)
+        assert_outlet_access(request.user, batch.outlet_id)
 
         outlet_id = getattr(request.user, 'outlet_id', None) or getattr(request.user, 'pharmacy_id', None)
 
@@ -55,6 +58,7 @@ class BatchDetailUpdateView(APIView):
             batch = Batch.objects.get(id=batch_id)
         except Batch.DoesNotExist:
             return Response({'detail': 'Batch not found'}, status=status.HTTP_404_NOT_FOUND)
+        assert_outlet_access(request.user, batch.outlet_id)
 
         data = request.data
         errors = {}
@@ -207,6 +211,11 @@ def serialize_batch(batch):
 
 class ProductListView(APIView):
     permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        if self.request.method == 'POST':
+            return [CanManageProducts()]
+        return [IsAuthenticated()]
 
     def get(self, request, *args, **kwargs):
         products = MasterProduct.objects.all()

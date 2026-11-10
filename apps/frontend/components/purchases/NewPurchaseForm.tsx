@@ -27,10 +27,13 @@ import { LedgerPicker } from '@/components/accounts/LedgerPicker';
 import { useAuthStore } from '@/store/authStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { PurchaseItemRow, PURCHASE_ITEM_COLS } from './PurchaseItemRow';
+import { useShortcutHandler } from '@/hooks/useShortcutHandler';
 import { AddNewProductDrawer } from './AddNewProductDrawer';
 import { PurchaseItemFormData, ProductSearchResult, Ledger, PurchaseInvoiceFull } from '@/types';
 import { useOutletId } from '@/hooks/useOutletId';
 import { buildPurchasePayload, normalizeExpiryDate } from '@/utils/payloadBuilders';
+import { poApi } from '@/lib/poApi';
+import { useOpenPOs } from '@/hooks/usePO';
 
 export const normalizeExpiry = normalizeExpiryDate;
 
@@ -129,7 +132,8 @@ const isNearExpiry = (exp: string) => {
 export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (updatedInvoiceId?: string) => void, invoiceToEdit?: PurchaseInvoiceFull | null }) {
     const searchParams = useSearchParams();
     const poId = searchParams?.get('poId');
-    const [linkedPoNo, setLinkedPoNo] = useState<string | null>(null);
+    // The purchase order this invoice receives goods for (sent to the server as purchaseOrderId)
+    const [linkedPo, setLinkedPo] = useState<{ id: string; poNumber: string } | null>(null);
 
     const { toast } = useToast();
     const outletId = useOutletId();
@@ -418,7 +422,9 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
             hsnCode: it.hsnCode || '',
             batchNo: it.batchNo,
             expiryDate: normalizeExpiry(it.expiryDate || ''),
-            pkg: (it.pkg === 1 && it.product?.packSize) ? it.product.packSize : it.pkg,
+            // The pack size FROZEN on the invoice. Swapping in the product's current pack size re-labelled stored
+            // quantities (20 loose units became 20 packs of 10) so saving an edit multiplied the stock.
+            pkg: it.pkg || 1,
             packUnitLabel: it.packUnitLabel || it.product?.packUnit || '',
             qty: it.qty,
             freeQty: it.freeQty,
@@ -469,47 +475,39 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
     };
 
 
-    // ── Autofill from PO Logic ───────────────────────────────────────────────
-    useEffect(() => {
-        if (poId && outletId && !invoiceToEdit) {
-            fetch(`${API_URL}/purchases/orders/${poId}/?outletId=${outletId}`, {
-                headers: getHeaders()
-            })
-                .then(res => {
-                    if (!res.ok) throw new Error('PO fetch failed');
-                    return res.json();
-                })
-                .then(data => {
-                    if (data && data.items) {
-                        setLinkedPoNo(data.poNumber);
-                        setValue('purchaseOrderRef', data.id); // Save PO ID so backend can mark it
-
-                        const newItems = data.items.map((it: any) => {
-                            const remainingQty = it.qtyStrips - it.receivedQty;
-                            if (remainingQty <= 0) return null;
-
-                            return {
-                                ...emptyItem(),
-                                productId: it.productId,
-                                productName: it.productName,
-                                qty: remainingQty,
-                                purchaseRate: it.lastRate,
-                                ptr: it.lastRate,
-                            };
-                        }).filter(Boolean);
-
-                        if (newItems.length > 0) {
-                            setItems(newItems);
-                            toast({ title: 'PO Data Loaded', description: `Pre-filled ${newItems.length} items from ${data.poNumber}.` });
-                        }
-                    }
-                })
-                .catch(err => {
-                    console.error("Failed to fetch PO", err);
-                    toast({ title: 'Error', description: 'Failed to load PO data.', variant: 'destructive' });
-                });
+    // ── Receive against a purchase order ─────────────────────────────────────
+    // Fills the party and the lines still owed (remaining quantity). The user still enters batch, expiry and the real rate.
+    const loadPo = useCallback(async (id: string) => {
+        try {
+            const po = await poApi.get(outletId!, id);
+            if (po.status !== 'SENT' && po.status !== 'PARTIAL') {
+                toast({ variant: 'destructive', title: `${po.poNumber} is ${po.statusLabel}`, description: 'Goods can only be received against a Sent or Partial order.' });
+                return;
+            }
+            setLinkedPo({ id: po.id, poNumber: po.poNumber });
+            setValue('purchaseOrderRef', po.poNumber);
+            if (po.distributorLedger) {
+                setPartyLedger(po.distributorLedger);
+                setValue('partyLedgerId', po.distributorLedger.id, { shouldValidate: true });
+            }
+            const owed = po.items.filter((it) => it.remainingQty > 0).map((it) => ({
+                ...emptyItem(), productId: it.productId, productName: it.productName,
+                qty: it.remainingQty, purchaseRate: Number(it.estRate), ptr: Number(it.estRate),
+            }));
+            if (owed.length > 0) {
+                setItems(owed);
+                toast({ title: `Filled from ${po.poNumber}`, description: `${owed.length} line${owed.length > 1 ? 's' : ''} still to receive. Enter batch, expiry and the invoice rate.` });
+            }
+        } catch (e: any) {
+            toast({ title: 'Could not load the purchase order', description: e?.message, variant: 'destructive' });
         }
-    }, [poId, outletId, invoiceToEdit, setValue, toast]);
+    }, [outletId, setValue, toast]);
+
+    useEffect(() => { if (poId && outletId && !invoiceToEdit) loadPo(poId); }, [poId, outletId, invoiceToEdit, loadPo]);
+
+    // Open orders from the chosen distributor: offer to link one
+    const distributorId = (partyLedger as any)?.linkedDistributorId as string | undefined;
+    const { data: openPos } = useOpenPOs(!linkedPo && !invoiceToEdit ? distributorId : null);
 
 
     // ── Draft ────────────────────────────────────────────────────────────────
@@ -538,6 +536,9 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
             toast({ title: 'Draft saved' });
         } catch { /* ignore */ }
     }, [draftKey, watch, items, toast]);
+
+    // Ctrl+S (registry id purchases.saveDraft) saves the draft instead of the browser's "Save page"
+    useShortcutHandler('purchases.saveDraft', saveDraft);
 
     // Auto-save every 30 s while dirty
     useEffect(() => {
@@ -704,6 +705,8 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
                 invoiceToEdit ? revisionReasonText : undefined
             );
 
+            if (linkedPo && !invoiceToEdit) payload.purchaseOrderId = linkedPo.id;
+
             if (invoiceToEdit && invoiceToEdit.status !== 'SAVED') {
                 await updatePurchase.mutateAsync({ id: invoiceToEdit.id, payload });
                 toast({
@@ -837,11 +840,23 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
                     </Dialog>
                 )}
 
-                {linkedPoNo && (
-                    <div className="bg-indigo-50 border border-indigo-100 text-indigo-700 px-4 py-3 rounded-lg flex items-center gap-3">
-                        <FileText className="w-5 h-5 text-indigo-500" />
-                        <span className="font-medium">🔗 Linked to {linkedPoNo}</span>
-                        <span className="text-sm opacity-80">Line items have been automatically populated based on remaining quantities.</span>
+                {linkedPo && (
+                    <div className="flex flex-wrap items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm">
+                        <FileText className="h-5 w-5 text-primary" />
+                        <span className="font-medium">Receiving against {linkedPo.poNumber}</span>
+                        <span className="opacity-80">Lines show what is still owed. Saving this invoice updates the order.</span>
+                        <button type="button" className="ml-auto text-xs font-semibold text-primary underline" onClick={() => { setLinkedPo(null); setValue('purchaseOrderRef', ''); }}>Unlink</button>
+                    </div>
+                )}
+                {!linkedPo && !invoiceToEdit && (openPos?.results?.length ?? 0) > 0 && (
+                    <div className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                        <FileText className="h-5 w-5 text-amber-600" />
+                        <span className="font-medium">{openPos!.results.length} open order{openPos!.results.length > 1 ? 's' : ''} from {partyLedger?.name}. Link one?</span>
+                        {openPos!.results.map((o) => (
+                            <button key={o.id} type="button" className="rounded-md border border-amber-300 bg-white px-2.5 py-1 text-xs font-semibold hover:bg-amber-100" onClick={() => loadPo(o.id)}>
+                                {o.poNumber} · {o.receivedQty}/{o.orderedQty} received
+                            </button>
+                        ))}
                     </div>
                 )}
 
@@ -1264,8 +1279,8 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
                             {watchedPurchaseType === 'credit' && <span className="text-[11px] text-slate-500">Due {watch('dueDate') ?? '—'}</span>}
                         </div>
                         <div className="flex shrink-0 items-center gap-1.5">
-                            <Button type="button" variant="outline" size="sm" className="h-8 rounded border-slate-300 px-2 text-xs text-slate-700" onClick={saveDraft} title="Shortcut: Alt + S">
-                                <Save className="mr-1 h-3.5 w-3.5" /> Save Draft <span className="ml-1 hidden text-[10px] text-slate-500 md:inline">Alt+S</span>
+                            <Button type="button" variant="outline" size="sm" className="h-8 rounded border-slate-300 px-2 text-xs text-slate-700" onClick={saveDraft} title="Shortcut: Ctrl + S">
+                                <Save className="mr-1 h-3.5 w-3.5" /> Save Draft <span className="ml-1 hidden text-[10px] text-slate-500 md:inline">Ctrl+S</span>
                             </Button>
                             <Button type="button" variant="outline" onClick={() => onSuccess()} className="h-8 rounded border-slate-300 px-2 text-xs">
                                 Cancel

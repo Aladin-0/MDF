@@ -34,6 +34,7 @@ export function ActiveBillsTabs() {
                     return (
                         <div
                             key={draft.id}
+                            title={idx < 10 ? `Switch to bill ${idx + 1} (Alt+Shift+${(idx + 1) % 10})` : undefined}
                             onClick={() => switchDraft(draft.id)}
                             className={cn(
                                 "group shrink-0 flex items-center justify-between gap-2 px-3 min-w-[140px] max-w-[200px] h-[38px] cursor-pointer rounded-t-lg border-x border-t transition-colors relative",
@@ -71,7 +72,7 @@ export function ActiveBillsTabs() {
                                         isActive ? "opacity-100 text-slate-400 hover:text-slate-700 hover:bg-slate-100"
                                             : "opacity-0 group-hover:opacity-100 text-slate-400 hover:text-slate-700 hover:bg-slate-300"
                                     )}
-                                    title="Close Tab"
+                                    title="Close Bill (Alt+W)"
                                 >
                                     <X className="w-3.5 h-3.5" />
                                 </button>

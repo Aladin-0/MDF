@@ -6,8 +6,12 @@ import { Search, Package, AlertTriangle, X, Loader2, FileText, Repeat } from 'lu
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
+import { useOutletId } from '@/hooks/useOutletId';
+import { usePermissions } from '@/hooks/usePermissions';
+import { poApi } from '@/lib/poApi';
 import { getExpiryStatus } from '@/utils/expiry';
 import { calculateLineMargin, calculateTotalMargin } from '@/lib/billingMarginUtils';
+import { canViewBillingMargins } from '@/lib/access';
 import { useProductSearch } from '@/hooks/useProductSearch';
 import { useOutletSettings } from '@/hooks/useOutletSettings';
 import { Batch, ProductSearchResult, BillTotals } from '@/types';
@@ -24,6 +28,8 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
     const { drafts, activeDraftId, addToCart, removeFromCart, updateCartItem, getDraftTotals, showMarginInfo, activeStaff } = useBillingStore();
     const setLandingCostIncludeGst = useBillingStore(state => state.setLandingCostIncludeGst);
     const landingCostIncludeGst = useBillingStore(state => state.landingCostIncludeGst);
+    const outletId = useOutletId() as string;
+    const { hasPermission } = usePermissions();
     const { data: outletSettings } = useOutletSettings();
 
     useEffect(() => {
@@ -32,7 +38,8 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
         }
     }, [outletSettings, setLandingCostIncludeGst]);
 
-    const isCashier = activeStaff?.role === 'cashier' || activeStaff?.role === 'billing_staff';
+    // Margins are for roles that may see purchase economics; unknown roles are hidden by default.
+    const isCashier = !canViewBillingMargins(activeStaff?.role);
     const canViewMargins = !isCashier && showMarginInfo;
     
     // Search State
@@ -52,6 +59,9 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
     const [qtyLoose, setQtyLoose] = useState('');
     const [discountPct, setDiscountPct] = useState('');
     const [errorMsg, setErrorMsg] = useState('');
+    // A product that is out of stock can be noted for re-ordering right where the cashier hits the problem
+    const [noStockProduct, setNoStockProduct] = useState<{ id: string; name: string } | null>(null);
+    const [shortbookNoted, setShortbookNoted] = useState<string | null>(null);
     
     const { data: searchResults = [], isFetching } = useProductSearch(searchQuery, 'billing');
     
@@ -200,11 +210,13 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
         console.log("validBatches evaluated to:", validBatches);
         if (validBatches.length === 0 && availableBatches.length > 0) {
             setErrorMsg(`No valid stock (unexpired, qty > 0) available for ${product.name}`);
-            setTimeout(() => setErrorMsg(''), 3000);
+            setNoStockProduct({ id: product.id, name: product.name });
+            setTimeout(() => { setErrorMsg(''); setNoStockProduct(null); }, 8000);
             return;
         } else if (availableBatches.length === 0) {
             setErrorMsg(`No stock available for ${product.name}`);
-            setTimeout(() => setErrorMsg(''), 3000);
+            setNoStockProduct({ id: product.id, name: product.name });
+            setTimeout(() => { setErrorMsg(''); setNoStockProduct(null); }, 8000);
             return;
         }
 
@@ -569,6 +581,7 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                                 }}
                                 className="w-full h-10 pl-10 pr-10 border-2 border-[#0EA5E9] rounded-md focus-visible:ring-0 focus-visible:border-[#0284C7] font-semibold text-sm shadow-sm"
                                 placeholder="Search Medicine..."
+                                data-shortcut-target="medicine-search"
                                 value={searchQuery}
                                 onChange={(e) => {
                                     setSearchQuery(e.target.value);
@@ -624,8 +637,21 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                     </div>
 
                     {errorMsg && (
-                        <div className="text-xs font-bold text-red-500 bg-red-50 px-2 py-0.5 rounded mt-1">
-                            {errorMsg}
+                        <div className="text-xs font-bold text-red-500 bg-red-50 px-2 py-0.5 rounded mt-1 flex items-center gap-2">
+                            <span>{errorMsg}</span>
+                            {noStockProduct && (hasPermission('create_bills') || hasPermission('create_purchases')) && (
+                                shortbookNoted === noStockProduct.id ? <span className="text-emerald-600">Added to Shortbook ✓</span> : (
+                                    <button type="button" data-testid="add-to-shortbook" className="rounded border border-red-300 bg-white px-1.5 py-0.5 text-[11px] font-bold text-red-700 hover:bg-red-100"
+                                        onClick={async () => {
+                                            try {
+                                                await poApi.shortbookAdd(outletId, { productId: noStockProduct.id, qty: 1, source: 'billing' });
+                                                setShortbookNoted(noStockProduct.id);
+                                            } catch (e: any) { setErrorMsg(e?.message || 'Could not add to the Shortbook'); }
+                                        }}>
+                                        Add to Shortbook
+                                    </button>
+                                )
+                            )}
                         </div>
                     )}
 

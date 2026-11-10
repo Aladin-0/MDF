@@ -54,6 +54,8 @@ export default function RevisionHistoryPage() {
             'cancel_and_reissue': { label: 'Cancel & Reissue', color: 'bg-purple-100 text-purple-800' },
             'return_aware_correction': { label: 'Return-Aware Correction', color: 'bg-orange-100 text-orange-800' },
             'direct_revise': { label: 'Direct Revise', color: 'bg-emerald-100 text-emerald-800' },
+            'header_correction': { label: 'Header Correction', color: 'bg-sky-100 text-sky-800' },
+            'standard_correction': { label: 'Correction', color: 'bg-gray-100 text-gray-800' },
         };
         const config = typeMap[type] || { label: type, color: 'bg-gray-100 text-gray-800' };
         return <Badge className={config.color} variant="secondary">{config.label}</Badge>;
@@ -155,12 +157,12 @@ export default function RevisionHistoryPage() {
                                         <TableCell>{getRevisionTypeBadge(rev.revision_type)}</TableCell>
                                         <TableCell>
                                             <Button variant="link" className="p-0 h-auto" onClick={() => router.push(`/dashboard/sales/revisions/${rev.old_snapshot_json?.id || rev.original_document_id}`)}>
-                                                {rev.old_snapshot_json?.invoice_no || 'Unknown Invoice'}
+                                                {rev.document_no || rev.old_snapshot_json?.header?.invoice_no || 'Unknown Invoice'}
                                             </Button>
                                         </TableCell>
                                         <TableCell>
-                                            {rev.resulting_invoice_id ? (
-                                                <Button variant="link" className="p-0 h-auto" onClick={() => router.push(`/dashboard/sales/revisions/${rev.resulting_invoice_id}`)}>
+                                            {rev.resulting_document_id ? (
+                                                <Button variant="link" className="p-0 h-auto" onClick={() => router.push(`/dashboard/sales/revisions/${rev.resulting_document_id}`)}>
                                                     View New Invoice <ArrowRight className="h-3 w-3 ml-1" />
                                                 </Button>
                                             ) : '-'}
