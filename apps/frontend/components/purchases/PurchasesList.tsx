@@ -16,10 +16,10 @@ import { usePurchasesList, useDeleteDraft } from '@/hooks/usePurchases';
 import { PurchaseInvoiceFull } from '@/types';
 import { cn } from '@/lib/utils';
 import { getPurchaseStatus, STATUS_CONFIG } from '@/lib/purchaseUtils';
-import { useRef } from 'react';
-import { api } from '@/lib/api';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/authStore';
-import { Scan, Loader2 } from 'lucide-react';
+import { Scan } from 'lucide-react';
+import { ScanBillDialog, ScanUploadResult } from './ScanBillDialog';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { SortDropdown, SortOption } from '@/components/ui/SortDropdown';
@@ -67,6 +67,16 @@ function getPeriodBounds(period: PeriodFilter): { start: string; end: string } |
 
 /* ─── component ───────────────────────────────────────────── */
 
+/** "Auto-deletes in 2 days" / "Auto-deletes today" for an unsaved scan draft. */
+export function draftDeletesIn(autoDeleteAt: string, now: Date = new Date()): string {
+    const ms = new Date(autoDeleteAt).getTime() - now.getTime();
+    if (Number.isNaN(ms)) return '';
+    if (ms <= 0) return 'Auto-deletes soon — save it to keep it';
+    const days = Math.floor(ms / 86_400_000);
+    if (days === 0) return 'Auto-deletes today if not saved';
+    return `Auto-deletes in ${days} day${days > 1 ? 's' : ''} if not saved`;
+}
+
 export function PurchasesList({ 
     onEditInvoice,
     onScanSuccess,
@@ -88,10 +98,10 @@ export function PurchasesList({
     const [expandedId, setExpandedId] = useState<string | null>(null);
     const [page, setPage] = useState(1);
     const [selectedInvoice, setSelectedInvoice] = useState<PurchaseInvoiceFull | null>(null);
-    const [isUploading, setIsUploading] = useState(false);
+    const [scanOpen, setScanOpen] = useState(false);
+    const queryClient = useQueryClient();
     const [activeHighlightId, setActiveHighlightId] = useState<string | null>(highlightInvoiceId || urlHighlight || null);
     
-    const fileInputRef = useRef<HTMLInputElement>(null);
     const outlet = useAuthStore((s) => s.outlet);
     const { toast } = useToast();
     const router = useRouter();
@@ -110,39 +120,22 @@ export function PurchasesList({
         return () => clearTimeout(timer);
     }, [search]);
 
-    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file || !outlet?.id) return;
-
-        setIsUploading(true);
-        const formData = new FormData();
-        formData.append('image', file);
-        formData.append('outletId', outlet.id);
-
-        try {
-            const res = await api.post('/purchases/scan/upload/', formData, {
-                params: { outletId: outlet.id },
-                timeout: 120000, // 2 minutes for high-res camera photos
-            });
-            toast({ title: 'Upload Successful', description: 'Opening OCR analysis...' });
-            if (res.data.draftId && onScanSuccess) {
-                onScanSuccess(res.data.draftId);
-            }
-        } catch (err: any) {
-            console.error('OCR Upload Error:', err);
-            const msg =
-                err.error?.message ||
-                err.response?.data?.error?.message ||
-                err.response?.data?.message ||
-                (err.code === 'ECONNABORTED' ? 'Upload timed out. Please check your internet connection and try again.' : err.message);
+    const handleScanUploaded = ({ draftIds, failed }: ScanUploadResult) => {
+        setScanOpen(false);
+        queryClient.invalidateQueries({ queryKey: ['purchases'] });
+        if (draftIds.length === 1 && failed === 0) {
+            toast({ title: 'Bill uploaded', description: 'Reading the bill — opening the review screen...' });
+            onScanSuccess?.(draftIds[0]);
+            return;
+        }
+        if (draftIds.length > 0) {
             toast({
-                variant: 'destructive',
-                title: 'Upload Failed',
-                description: msg,
+                title: `${draftIds.length} bills uploaded`,
+                description: 'Each one is being read in the background. Open each draft from the list to review and save it.',
             });
-        } finally {
-            setIsUploading(false);
-            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+        if (failed > 0) {
+            toast({ variant: 'destructive', title: 'Upload failed', description: `${failed} bill${failed > 1 ? 's' : ''} could not be uploaded. Please try again.` });
         }
     };
 
@@ -280,22 +273,18 @@ export function PurchasesList({
                     
                     {onScanSuccess && (
                         <>
-                            <input
-                                type="file"
-                                accept="image/jpeg,image/png,image/webp"
-                                capture="environment"
-                                ref={fileInputRef}
-                                onChange={handleFileUpload}
-                                className="hidden"
-                            />
+                            {outlet?.id && (
+                                <ScanBillDialog open={scanOpen} onClose={() => setScanOpen(false)}
+                                    outletId={outlet.id} onUploaded={handleScanUploaded} />
+                            )}
                             <Button
                                 variant="default"
                                 size="sm"
                                 className="h-10 sm:h-9 gap-1.5 w-full sm:w-auto bg-primary text-primary-foreground shadow-sm"
-                                onClick={() => fileInputRef.current?.click()}
-                                disabled={isUploading}
+                                onClick={() => setScanOpen(true)}
+                                disabled={!outlet?.id}
                             >
-                                {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Scan className="w-4 h-4" />}
+                                <Scan className="w-4 h-4" />
                                 <span className="hidden sm:inline">Scan Bill</span>
                                 <span className="inline sm:hidden font-semibold">Tap to Scan Invoice</span>
                             </Button>
@@ -449,7 +438,14 @@ export function PurchasesList({
                                                 </div>
                                             </td>
                                             <td className="px-4 py-3 text-foreground max-w-[180px] truncate">
-                                                {inv.distributor?.name || (inv.status === 'SAVED' && inv.ocrData?.header?.partyName ? `OCR: ${inv.ocrData.header.partyName}` : (inv.status === 'SAVED' ? 'Pending OCR...' : '—'))}
+                                                {inv.distributor?.name || (inv.status === 'SAVED' && (inv.ocrData?.header?.distributor_name || inv.ocrData?.header?.partyName)
+                                                    ? `OCR: ${inv.ocrData.header.distributor_name || inv.ocrData.header.partyName}`
+                                                    : (inv.status === 'SAVED' ? 'Pending OCR...' : '—'))}
+                                                {inv.status === 'SAVED' && inv.autoDeleteAt && (
+                                                    <span className="block text-[10px] font-medium text-amber-700" title="Unsaved scan drafts are removed automatically">
+                                                        {draftDeletesIn(inv.autoDeleteAt)}
+                                                    </span>
+                                                )}
                                             </td>
                                             <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
                                                 {inv.status === 'SAVED' && inv.ocrData ? (inv.ocrData?.items?.length ?? 0) : (inv.items?.length ?? 0)}

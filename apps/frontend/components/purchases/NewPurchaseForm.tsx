@@ -180,8 +180,12 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
     const [ocrStatus, setOcrStatus] = useState<'idle' | 'processing' | 'ready' | 'error'>('idle');
     const [ocrError, setOcrError] = useState('');
     const [ocrReviewNotes, setOcrReviewNotes] = useState<string[]>([]);
+    // Set when the automatic checks could not confirm the scanned reading.
+    const [ocrNeedsReview, setOcrNeedsReview] = useState(false);
     const [ocrRetrySequence, setOcrRetrySequence] = useState(0);
     const [scannedImage, setScannedImage] = useState<string | null>(null);
+    // Every page of a multi-page scan (page 1 first); scannedImage is page 1.
+    const [scannedPages, setScannedPages] = useState<string[]>([]);
     const [scannedImageModalOpen, setScannedImageModalOpen] = useState(false);
 
     const handleOpenAddProduct = (rowIndex: number, name: string) => {
@@ -198,17 +202,23 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
         setItems((prev) => prev.map((item, i) => {
             if (i !== rowIndex) return item;
             const newPkg = typeof product.packSize === 'number' && product.packSize > 0 ? product.packSize : ('' as unknown as number);
+            // On a row filled from a scanned bill, the bill is the source of truth
+            // for this purchase's MRP and GST — don't replace them with old stock values.
+            const fromBill = !!item.ocrOriginalName;
             return {
                 ...item,
                 productId: product.id,
                 productName: product.name,
                 isCustom: false,
-                hsnCode: product.hsnCode ?? item.hsnCode,
+                hsnCode: (fromBill && item.hsnCode) ? item.hsnCode : (product.hsnCode ?? item.hsnCode),
                 pkg: newPkg,
                 packUnitLabel: product.packUnit || '',
-                gstRate,
-                mrp,
+                gstRate: fromBill && item.gstRate > 0 ? item.gstRate : gstRate,
+                mrp: fromBill && item.mrp > 0 ? item.mrp : mrp,
                 saleRate,
+                // A human picked it: treat as confirmed, drop the suggestion chips.
+                ocrMatchConfidence: fromBill ? 1 : item.ocrMatchConfidence,
+                ocrSuggestions: [],
             };
         }));
     };
@@ -287,7 +297,9 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
         if (!invoiceToEdit) {
             setOcrStatus('idle');
             setOcrReviewNotes([]);
+            setOcrNeedsReview(false);
             setScannedImage(null);
+            setScannedPages([]);
             return;
         }
 
@@ -319,6 +331,8 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
                         const ocrData = res.data;
                         setOcrStatus('ready');
                         setScannedImage(ocrData.invoiceImageUrl ? new URL(ocrData.invoiceImageUrl, API_URL).toString() : null);
+                        setScannedPages(((ocrData.invoiceImageUrls as string[] | undefined) ?? [])
+                            .filter(Boolean).map((u) => new URL(u, API_URL).toString()));
 
                         // Set the Ledger object directly so the UI updates
                         if (ocrData.header?.partyLedger) {
@@ -351,10 +365,16 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
                             ptr: 0,
                             pts: 0,
                             saleRate: 0,
+                            ocrOriginalName: item.ocrOriginalName || item.name || '',
+                            ocrMatchConfidence: item.medicineMatch?.productId ? Number(item.medicineMatch?.confidence ?? 0) : 0,
+                            ocrSuggestions: Array.isArray(item.medicineMatch?.suggestions) ? item.medicineMatch.suggestions : [],
                         }));
 
                         setItems(formItems.length ? formItems : [emptyItem()]);
                         const reviewNotes: string[] = [];
+                        if (ocrData.scanPhotoRemoved) {
+                            reviewNotes.push('The scan photo was removed (photos are deleted 24 hours after scanning). Check the rows against the paper bill.');
+                        }
                         if (!ocrData.header?.partyLedgerId) reviewNotes.push('Select the distributor ledger.');
                         if (!ocrData.header?.invoiceNo) reviewNotes.push('Enter the invoice number.');
                         if (!ocrData.header?.invoiceDate) reviewNotes.push('Enter the invoice date.');
@@ -375,6 +395,7 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
                             if (typeof warning === 'string' && !warning.startsWith('Medicine not found in inventory:')) reviewNotes.push(warning);
                         }
                         setOcrReviewNotes(reviewNotes);
+                        setOcrNeedsReview(!!ocrData.needsReview);
 
                         reset({
                             partyLedgerId: ocrData.header?.partyLedgerId || '',
@@ -799,13 +820,30 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
                     </div>
                 )}
 
-                {ocrStatus === 'ready' && ocrReviewNotes.length > 0 && (
-                    <div className="border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900" role="status">
-                        <p className="font-semibold">Review the scanned invoice before saving</p>
-                        <ul className="mt-1 list-disc space-y-0.5 pl-4">
-                            {ocrReviewNotes.slice(0, 5).map((note, index) => <li key={`${index}-${note}`}>{note}</li>)}
-                            {ocrReviewNotes.length > 5 && <li>{ocrReviewNotes.length - 5} more fields need review.</li>}
-                        </ul>
+                {/* Scanned bills are never saved automatically: staff always check them against the paper bill. */}
+                {ocrStatus === 'ready' && (
+                    <div
+                        className={ocrNeedsReview
+                            ? 'border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-900'
+                            : 'border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900'}
+                        role={ocrNeedsReview ? 'alert' : 'status'}
+                        data-testid="ocr-review-banner"
+                    >
+                        <p className="font-semibold">
+                            {ocrNeedsReview
+                                ? 'Manual review required — the automatic checks could not confirm this scan'
+                                : 'Review the scanned invoice against the paper bill before saving'}
+                        </p>
+                        {ocrReviewNotes.length > 0 ? (
+                            <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                                {ocrReviewNotes.slice(0, ocrNeedsReview ? 8 : 5).map((note, index) => <li key={`${index}-${note}`}>{note}</li>)}
+                                {ocrReviewNotes.length > (ocrNeedsReview ? 8 : 5) && (
+                                    <li>{ocrReviewNotes.length - (ocrNeedsReview ? 8 : 5)} more fields need review.</li>
+                                )}
+                            </ul>
+                        ) : (
+                            <p className="mt-0.5">All automatic checks passed. Nothing is saved until you press Save.</p>
+                        )}
                     </div>
                 )}
 
@@ -821,21 +859,32 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
                                 onClick={() => setScannedImageModalOpen(true)}
                             >
                                 <ImageIcon className="h-4 w-4" />
-                                View Scanned Invoice
+                                View Scanned Invoice{scannedPages.length > 1 ? ` (${scannedPages.length} pages)` : ''}
                             </Button>
                         </div>
                         <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
                             <DialogHeader>
                                 <DialogTitle>Scanned Invoice Image</DialogTitle>
                             </DialogHeader>
-                            <div className="flex-1 overflow-auto bg-slate-100 rounded-md border border-border flex items-center justify-center p-4">
-                                {/* Use standard img tag instead of next/image since the URL is external/django */}
-                                <img
-                                    src={scannedImage}
-                                    alt="Scanned Invoice"
-                                    className="max-w-full max-h-full object-contain"
-                                />
-                            </div>
+                            {scannedPages.length > 1 ? (
+                                <div className="flex-1 space-y-4 overflow-auto rounded-md border border-border bg-slate-100 p-4">
+                                    {scannedPages.map((src, i) => (
+                                        <figure key={src} className="space-y-1">
+                                            <figcaption className="text-xs font-semibold text-slate-600">Page {i + 1} of {scannedPages.length}</figcaption>
+                                            <img src={src} alt={`Scanned invoice page ${i + 1}`} className="mx-auto max-w-full object-contain" />
+                                        </figure>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="flex-1 overflow-auto bg-slate-100 rounded-md border border-border flex items-center justify-center p-4">
+                                    {/* Use standard img tag instead of next/image since the URL is external/django */}
+                                    <img
+                                        src={scannedImage}
+                                        alt="Scanned Invoice"
+                                        className="max-w-full max-h-full object-contain"
+                                    />
+                                </div>
+                            )}
                         </DialogContent>
                     </Dialog>
                 )}

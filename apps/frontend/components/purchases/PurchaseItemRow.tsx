@@ -13,6 +13,9 @@ import { calculateLandingRate } from '@/lib/purchase-calculations';
 
 interface ItemFieldError { message?: string; }
 
+/** Compare product names ignoring punctuation / spacing ("DOLO-650" == "DOLO 650"). */
+const normName = (s?: string) => (s || '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
+
 interface Props {
     index: number;
     value: PurchaseItemFormData;
@@ -126,6 +129,9 @@ export function PurchaseItemRow({
     const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
     const debounceRef                     = useRef<ReturnType<typeof setTimeout> | null>(null);
     const abortControllerRef              = useRef<AbortController | null>(null);
+    // Enter pressed while a search is in flight: pick the first result of THAT
+    // search when it arrives (never a stale result from the previous query).
+    const pendingEnterRef                 = useRef(false);
     const wrapperRef                      = useRef<HTMLDivElement>(null);
     const inputRef                        = useRef<HTMLInputElement>(null);
     const portalRef                       = useRef<HTMLDivElement>(null);
@@ -206,6 +212,11 @@ export function PurchaseItemRow({
         onChange(index, 'productName', raw);
         onChange(index, 'productId', '' as unknown as number);
         onChange(index, 'isCustom', false as unknown as number);
+        // Results belong to the previous query — drop them now so Enter can't
+        // select a product the user is no longer looking at.
+        setResults([]);
+        setHighlightedIndex(-1);
+        pendingEnterRef.current = false;
 
         if (debounceRef.current) clearTimeout(debounceRef.current);
         if (abortControllerRef.current) {
@@ -216,6 +227,9 @@ export function PurchaseItemRow({
         if (raw.length < 2) {
             setResults([]);
             setHighlightedIndex(-1);
+            // Any in-flight search was just aborted and no new one starts:
+            // clear the spinner so Enter moves on instead of waiting forever.
+            setSearching(false);
             if (raw.length > 0) openDropdown(); // show "no results + add" even for short queries
             return;
         }
@@ -229,19 +243,28 @@ export function PurchaseItemRow({
                 setSearching(false);
                 return;
             }
+            const controller = new AbortController();
+            abortControllerRef.current = controller;
             try {
-                const controller = new AbortController();
-                abortControllerRef.current = controller;
                 const found = await productsApi.search(raw, outletId, 'purchase', controller.signal);
+                if (controller.signal.aborted) return;
                 setResults(found);
                 setHighlightedIndex(found.length > 0 ? 0 : -1);
+                if (pendingEnterRef.current) {
+                    pendingEnterRef.current = false;
+                    if (found.length > 0) handleSelectResult(found[0]);
+                }
             } catch (err: any) {
                 if (err?.name !== 'AbortError') {
                     setResults([]);
                     setHighlightedIndex(-1);
                 }
             } finally {
-                setSearching(false);
+                // An aborted (superseded) search must not flip the spinner off
+                // while the newer search is still running.
+                if (abortControllerRef.current === controller) {
+                    setSearching(false);
+                }
             }
         }, 300);
     };
@@ -442,6 +465,9 @@ export function PurchaseItemRow({
                                                 handleAddNew();
                                             } else if (results.length > 0) {
                                                 handleSelectResult(results[0]);
+                                            } else if (searching) {
+                                                // Wait for the search for what was just typed.
+                                                pendingEnterRef.current = true;
                                             } else {
                                                 setDropdownOpen(false);
                                                 // Advance to next input (HSN)
@@ -475,6 +501,56 @@ export function PurchaseItemRow({
                     </div>
                     {errors?.productName && (
                         <p className="mt-0.5 text-[10px] leading-none text-red-500">{errors.productName.message}</p>
+                    )}
+                    {value.ocrOriginalName && (
+                        (() => {
+                            const billName = value.ocrOriginalName;
+                            const sameName = normName(billName) === normName(value.productName);
+                            const lowConfidence = !!value.productId && (value.ocrMatchConfidence ?? 1) < 0.9;
+                            const suggestions = !value.productId ? (value.ocrSuggestions ?? []) : [];
+                            if (sameName && !lowConfidence && suggestions.length === 0) return null;
+                            return (
+                                <div className="px-1.5 pb-0.5">
+                                    {(!sameName || lowConfidence) && (
+                                        <p
+                                            className={cn(
+                                                'truncate text-[10px] leading-tight',
+                                                lowConfidence ? 'font-medium text-amber-700' : 'text-slate-500',
+                                            )}
+                                            title={lowConfidence ? `Bill says "${billName}" — please confirm the product` : `Bill says "${billName}"`}
+                                        >
+                                            Bill: {billName}{lowConfidence ? ' · check' : ''}
+                                        </p>
+                                    )}
+                                    {suggestions.length > 0 && (
+                                        <div className="mt-0.5 flex flex-wrap gap-1">
+                                            {suggestions.slice(0, 3).map((s) => (
+                                                <button
+                                                    key={s.id}
+                                                    type="button"
+                                                    title={`Use ${s.name}`}
+                                                    onMouseDown={(e) => e.preventDefault()}
+                                                    onClick={() => onSelectProduct(index, {
+                                                        id: s.id,
+                                                        name: s.name,
+                                                        packSize: s.packSize ?? undefined,
+                                                        packUnit: s.packUnit ?? undefined,
+                                                        hsnCode: s.hsnCode ?? '',
+                                                        gstRate: s.gstRate ?? 0,
+                                                        mrp: s.mrp ?? 0,
+                                                        saleRate: 0,
+                                                        batches: [],
+                                                    } as unknown as ProductSearchResult)}
+                                                    className="max-w-[180px] truncate rounded border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 hover:bg-violet-100"
+                                                >
+                                                    {s.name}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })()
                     )}
                 </td>
 

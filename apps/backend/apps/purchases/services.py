@@ -176,15 +176,21 @@ def atomic_purchase_save(payload: Dict[str, Any], outlet_id: str, created_by_id:
             if prod_id:
                 try:
                     master_product = MasterProduct.objects.get(id=prod_id)
-                    # --- AI Learning: Save OCR Alias if provided ---
+                    # --- OCR learning: remember "name as printed on bill" -> product ---
+                    # update_or_create so a user's correction replaces an earlier
+                    # wrong pick instead of being ignored forever.
                     ocr_name = item_payload.get('ocrOriginalName')
                     if ocr_name:
-                        ocr_clean = str(ocr_name).upper().strip()
-                        if ocr_clean and ocr_clean != master_product.name.upper():
+                        from apps.purchases.ocr_matching import alias_key
+                        ocr_key = alias_key(ocr_name)
+                        # Always (re)write — even when the bill name equals the
+                        # product name — so a correction replaces any earlier
+                        # wrong alias stored under the same key.
+                        if ocr_key:
                             from apps.inventory.models import MasterProductAlias
-                            MasterProductAlias.objects.get_or_create(
+                            MasterProductAlias.objects.update_or_create(
                                 outlet=outlet,
-                                alias_name=ocr_clean,
+                                alias_name=ocr_key,
                                 defaults={'product': master_product}
                             )
                 except MasterProduct.DoesNotExist:
