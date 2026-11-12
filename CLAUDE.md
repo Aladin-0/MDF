@@ -28,6 +28,10 @@ Before changing purchase orders, the Shortbook or receiving goods against a PO, 
 
 New popups and forms reuse the project's own pieces: `components/shared/ModalShell.tsx` (same look as `CreateLedgerModal`: bordered header, uppercase muted section titles, `Label` + `Input`, footer with a full-width primary button and an outline Cancel) and the `ui/*` components with the theme tokens (`primary`, `muted`, `input`). Billing header fields are 36px (`h-9`) with `text-[11px] font-bold text-slate-600` labels in `h-6` rows so they align. Do not hand-roll a different style.
 
+## Mobile layout
+
+Before adding or changing a page, table, popup or form, read `docs/MOBILE_LAYOUT.md`. Everything except billing and the New Purchase entry screen must work on a 360px phone: mobile-first Tailwind, daily lists become cards below `md`, wide report tables scroll inside their own wrapper, popups use `ModalShell` / `ui/dialog`. Do not add a fixed pixel width without a `w-full sm:` fallback.
+
 ## Deploying to production
 
 Before any server/deploy task, read `docs/DEPLOYMENT_GUIDE.md` (server layout, shared-server safety rules, backup, deploy, verify and rollback steps). ALWAYS use the server's own configuration files (`docker-compose.yml`, `.env`, `apps/backend/.env`, `apps/frontend/.env.local`, `settings/base.py`, `nginx/nginx.conf`) exactly as they are on the server — they differ from git on purpose and production runs correctly with them; never overwrite them, and take a backup before every deploy. The server also hosts the separate saudapakka project — never touch it. Never store the SSH password in files; ask the user.
