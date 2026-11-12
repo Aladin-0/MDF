@@ -40,13 +40,13 @@ export function AuditAndReconciliationWatch() {
                         <div className="p-2 bg-slate-100 rounded-lg">
                             <FileWarning className="h-5 w-5 text-slate-600" />
                         </div>
-                        <div className="flex-1">
+                        <div className="min-w-0 flex-1">
                             <p className="text-sm font-semibold">Today's Revisions</p>
                             <p className="text-xs text-muted-foreground mt-1">
                                 {totalModified} documents modified today
                             </p>
                             {totalModified > 0 && (
-                                <div className="mt-2 flex gap-2 text-[11px] font-medium">
+                                <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-medium">
                                     {salesModified > 0 && <span className="px-2 py-0.5 bg-slate-100 rounded">Sales: {salesModified}</span>}
                                     {purchasesModified > 0 && <span className="px-2 py-0.5 bg-slate-100 rounded">Purchases: {purchasesModified}</span>}
                                     {vouchersModified > 0 && <span className="px-2 py-0.5 bg-slate-100 rounded">Vouchers: {vouchersModified}</span>}

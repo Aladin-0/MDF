@@ -142,8 +142,8 @@ export function ExpiryReportTab() {
             </div>
 
             {/* Filter bar */}
-            <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">Show batches expiring within:</span>
+            <div className="flex flex-wrap items-center gap-2">
+                <span className="w-full sm:w-auto text-sm text-muted-foreground">Show batches expiring within:</span>
                 {FILTER_OPTIONS.map(opt => (
                     <button
                         key={opt.value}
@@ -158,7 +158,7 @@ export function ExpiryReportTab() {
                         {opt.label}
                     </button>
                 ))}
-                <span className="ml-2 text-sm text-muted-foreground">
+                <span className="sm:ml-2 text-sm text-muted-foreground">
                     ({filteredRows.length} batches)
                 </span>
             </div>

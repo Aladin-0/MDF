@@ -135,10 +135,10 @@ export function ReceivePaymentSheet({ open, onClose, preSelectedCustomerId, onSu
         <Sheet open={open} onOpenChange={(v: boolean) => { if (!v) onClose(); }}>
             <SheetContent side="right" className="flex flex-col h-full p-0 sm:max-w-xl w-full">
 
-                <SheetHeader className="shrink-0 border-b px-6 py-4">
-                    <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-3">
-                            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+                <SheetHeader className="shrink-0 border-b px-4 py-3 sm:px-6 sm:py-4">
+                    <div className="flex items-start justify-between gap-2">
+                        <div className="flex min-w-0 items-center gap-3">
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
                                 <User className="h-4 w-4" />
                             </div>
                             <div>
@@ -148,13 +148,13 @@ export function ReceivePaymentSheet({ open, onClose, preSelectedCustomerId, onSu
                                 </SheetDescription>
                             </div>
                         </div>
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose}>
+                        <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0 sm:h-8 sm:w-8" onClick={onClose}>
                             <X className="h-4 w-4" />
                         </Button>
                     </div>
                 </SheetHeader>
 
-                <div className="flex-1 overflow-y-auto min-h-0 px-6 py-5 space-y-6">
+                <div className="flex-1 overflow-y-auto min-h-0 px-4 py-4 sm:px-6 sm:py-5 space-y-6">
 
                     {/* Select Customer */}
                     <div className="space-y-3">
@@ -194,14 +194,14 @@ export function ReceivePaymentSheet({ open, onClose, preSelectedCustomerId, onSu
                             <div className="space-y-3">
                                 <div className="flex items-center justify-between">
                                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Outstanding Bills</p>
-                                    <Button variant="outline" size="sm" className="h-7 text-xs" onClick={receiveAll}>
+                                    <Button variant="outline" size="sm" className="h-8 sm:h-7 text-xs" onClick={receiveAll}>
                                         Receive All
                                     </Button>
                                 </div>
 
                                 <div className="rounded-xl border border-border overflow-hidden">
-                                    <table className="w-full text-xs">
-                                        <thead className="bg-muted/50 border-b border-border">
+                                    <table className="block w-full text-xs sm:table">
+                                        <thead className="hidden bg-muted/50 border-b border-border sm:table-header-group">
                                             <tr>
                                                 <th className="text-left px-3 py-2.5 font-medium text-muted-foreground">Invoice No</th>
                                                 <th className="text-left px-3 py-2.5 font-medium text-muted-foreground">Date</th>
@@ -209,22 +209,22 @@ export function ReceivePaymentSheet({ open, onClose, preSelectedCustomerId, onSu
                                                 <th className="text-right px-3 py-2.5 font-medium text-muted-foreground w-28">Receive</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="divide-y divide-border">
+                                        <tbody className="block divide-y divide-border sm:table-row-group">
                                             {saleInvoices.map((inv) => {
                                                 const amt = parseFloat(amounts[inv.id] ?? '0') || 0;
                                                 const overPay = amt > inv.outstanding;
                                                 const fullPay = amt > 0 && amt === inv.outstanding;
                                                 const partialPay = amt > 0 && amt < inv.outstanding;
                                                 return (
-                                                    <tr key={inv.id} className="hover:bg-muted/30">
-                                                        <td className="px-3 py-3 font-mono text-foreground">{inv.invoiceNo}</td>
-                                                        <td className="px-3 py-3 text-muted-foreground">
+                                                    <tr key={inv.id} className="grid grid-cols-2 items-center gap-x-3 gap-y-1 px-3 py-3 hover:bg-muted/30 sm:table-row sm:p-0">
+                                                        <td className="min-w-0 break-all p-0 font-mono text-foreground sm:px-3 sm:py-3 sm:break-normal">{inv.invoiceNo}</td>
+                                                        <td className="p-0 text-right text-muted-foreground sm:px-3 sm:py-3 sm:text-left">
                                                             {format(new Date(inv.invoiceDate), 'dd MMM yy')}
                                                         </td>
-                                                        <td className="px-3 py-3 text-right font-semibold tabular-nums text-amber-600">
+                                                        <td className="p-0 text-left font-semibold tabular-nums text-amber-600 sm:px-3 sm:py-3 sm:text-right">
                                                             {formatINR(inv.outstanding)}
                                                         </td>
-                                                        <td className="px-3 py-3">
+                                                        <td className="p-0 sm:px-3 sm:py-3">
                                                             <div className="relative">
                                                                 <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">₹</span>
                                                                 <Input
@@ -235,7 +235,7 @@ export function ReceivePaymentSheet({ open, onClose, preSelectedCustomerId, onSu
                                                                     value={amounts[inv.id] ?? ''}
                                                                     onChange={(e) => setAmount(inv.id, e.target.value)}
                                                                     className={cn(
-                                                                        'h-8 pl-5 text-xs text-right tabular-nums',
+                                                                        'h-9 sm:h-8 pl-5 text-xs text-right tabular-nums',
                                                                         overPay && 'border-red-500 focus-visible:ring-red-500',
                                                                         fullPay && 'border-emerald-500 focus-visible:ring-emerald-500',
                                                                         partialPay && 'border-amber-500 focus-visible:ring-amber-500',
@@ -337,7 +337,7 @@ export function ReceivePaymentSheet({ open, onClose, preSelectedCustomerId, onSu
                     )}
                 </div>
 
-                <div className="shrink-0 border-t px-6 py-4 bg-background flex items-center justify-between gap-3">
+                <div className="shrink-0 border-t px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-4 bg-background flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         {totalAllocated > 0 && (
                             <>
@@ -346,7 +346,7 @@ export function ReceivePaymentSheet({ open, onClose, preSelectedCustomerId, onSu
                             </>
                         )}
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 [&>button:last-child]:min-w-0 [&>button:last-child]:flex-1 sm:[&>button:last-child]:flex-none">
                         <Button variant="outline" onClick={onClose}>Cancel</Button>
                         <Button
                             onClick={handleSubmit}

@@ -130,6 +130,108 @@ export function TodayAttendanceTab() {
     return (
         <Card>
             <CardContent className="p-0">
+                {/* phones: one card per person; md and up: the table below */}
+                <ul className="divide-y md:hidden">
+                    {(staffList as any[]).map(staff => {
+                        const record = todayRecords?.find((r: any) => r.staffId === staff.id);
+                        const isCheckedIn = !!record?.checkInTime && !record.checkOutTime;
+                        return (
+                            <li key={staff.id} className="space-y-3 p-4">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="flex min-w-0 items-center gap-3">
+                                        <div className="relative shrink-0">
+                                            <Avatar className="w-9 h-9">
+                                                <AvatarFallback className="text-xs bg-primary/10 text-primary">
+                                                    {staff.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
+                                                </AvatarFallback>
+                                            </Avatar>
+                                            {isCheckedIn && (
+                                                <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white" />
+                                            )}
+                                        </div>
+                                        <div className="min-w-0">
+                                            <div className="break-words font-medium text-sm">{staff.name}</div>
+                                            <RoleBadge role={staff.role} size="sm" />
+                                        </div>
+                                    </div>
+                                    <div className="shrink-0">
+                                        <StatusBadge record={record} />
+                                    </div>
+                                </div>
+                                <dl className="grid grid-cols-3 gap-2 text-sm">
+                                    <div>
+                                        <dt className="text-xs text-muted-foreground">Check In</dt>
+                                        <dd>
+                                            {record?.checkInTime ? (
+                                                <>
+                                                    {formatTime12h(record.checkInTime.slice(0, 5))}
+                                                    {record.isLate && <span className="block text-xs text-amber-600">Late</span>}
+                                                </>
+                                            ) : (
+                                                <span className="text-slate-400">—</span>
+                                            )}
+                                        </dd>
+                                    </div>
+                                    <div>
+                                        <dt className="text-xs text-muted-foreground">Check Out</dt>
+                                        <dd>
+                                            {record?.checkOutTime ? (
+                                                formatTime12h(record.checkOutTime.slice(0, 5))
+                                            ) : record?.checkInTime ? (
+                                                <span className="text-xs text-green-600 animate-pulse">Still working...</span>
+                                            ) : (
+                                                <span className="text-slate-400">—</span>
+                                            )}
+                                        </dd>
+                                    </div>
+                                    <div>
+                                        <dt className="text-xs text-muted-foreground">Hours</dt>
+                                        <dd><LiveHours record={record} /></dd>
+                                    </div>
+                                </dl>
+                                <p className="text-xs text-muted-foreground">Shift {DEFAULT_SHIFT_START}–{DEFAULT_SHIFT_END}</p>
+                                <PermissionGate permission="manage_staff">
+                                    <div className="flex flex-wrap gap-2">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-9 flex-1 text-xs"
+                                            onClick={() => {
+                                                setSelectedStaffForModal(staff.id);
+                                                setIsModalOpen(true);
+                                            }}
+                                        >
+                                            Edit
+                                        </Button>
+                                        {!isCheckedIn && (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="h-9 flex-1 text-xs text-green-600 hover:text-green-700 hover:bg-green-50"
+                                                onClick={() => {
+                                                    setSelectedStaffForModal(staff.id);
+                                                    setIsModalOpen(true);
+                                                }}
+                                            >
+                                                Mark Present
+                                            </Button>
+                                        )}
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-9 flex-1 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                                            onClick={() => handleMarkAbsent(staff)}
+                                            disabled={markManual.isPending}
+                                        >
+                                            Mark Absent
+                                        </Button>
+                                    </div>
+                                </PermissionGate>
+                            </li>
+                        );
+                    })}
+                </ul>
+                <div className="hidden md:block">
                 <Table>
                     <TableHeader>
                         <TableRow>
@@ -262,6 +364,7 @@ export function TodayAttendanceTab() {
                         })}
                     </TableBody>
                 </Table>
+                </div>
             </CardContent>
 
             <ManualAttendanceModal 

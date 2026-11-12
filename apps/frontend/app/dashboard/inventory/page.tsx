@@ -58,12 +58,12 @@ function InventoryView() {
 
     return (
         <div className="space-y-6">
-            <header className="flex flex-wrap items-start justify-between gap-3">
+            <header className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
                 <div>
                     <h1 className="text-2xl font-semibold tracking-tight [text-wrap:balance]">Inventory</h1>
                     <p className="mt-1 text-sm text-muted-foreground">Stock levels, batches and expiry dates</p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 [&>*]:max-sm:flex-1">
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button type="button" variant="outline" disabled={!!exporting}>

@@ -105,17 +105,17 @@ export default function VoucherListPage() {
     return (
         <div className="space-y-6 max-w-[1600px] mx-auto pb-10">
             {/* Header */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div className="flex items-center gap-3">
-                    <div className="p-2 bg-indigo-100 text-indigo-700 rounded-lg">
+            <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 sm:gap-4">
+                <div className="flex items-center gap-3 min-w-0">
+                    <div className="p-2 bg-indigo-100 text-indigo-700 rounded-lg shrink-0">
                         <List className="h-6 w-6" />
                     </div>
                     <div>
-                        <h1 className="text-2xl font-bold tracking-tight text-slate-900">All Vouchers Register</h1>
+                        <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">All Vouchers Register</h1>
                         <p className="text-sm text-slate-500 mt-1">Centralized view of all accounting entries</p>
                     </div>
                 </div>
-                <Button asChild className="bg-indigo-600 hover:bg-indigo-700">
+                <Button asChild className="bg-indigo-600 hover:bg-indigo-700 w-full sm:w-auto">
                     <Link href="/dashboard/accounts/voucher-entry">
                         <Plus className="w-4 h-4 mr-2" />
                         New Voucher
@@ -172,7 +172,7 @@ export default function VoucherListPage() {
                     <SheetTrigger asChild>
                         <Button variant="outline" className="w-full h-10"><Filter className="w-4 h-4 mr-2" /> Filter Vouchers</Button>
                     </SheetTrigger>
-                    <SheetContent side="bottom" className="rounded-t-2xl">
+                    <SheetContent side="bottom" className="rounded-t-2xl max-h-[85dvh] overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
                         <SheetHeader>
                             <SheetTitle>Filters</SheetTitle>
                         </SheetHeader>
@@ -224,7 +224,7 @@ export default function VoucherListPage() {
             ) : (
                 <>
                     {/* Desktop Table */}
-                    <div className="hidden md:block bg-white rounded-xl shadow-sm border border-slate-200/60 overflow-hidden">
+                    <div className="hidden md:block bg-white rounded-xl shadow-sm border border-slate-200/60 overflow-x-auto">
                         <table className="w-full text-left border-collapse text-sm">
                             <thead>
                                 <tr className="bg-slate-50/80 border-b border-slate-200/60 text-slate-500 font-semibold tracking-wide uppercase text-[10px]">
@@ -284,20 +284,20 @@ export default function VoucherListPage() {
                         {filteredVouchers.map((voucher: any) => (
                             <Card key={voucher.id} className="cursor-pointer hover:border-indigo-200 transition-colors shadow-sm" onClick={() => handleViewDetails(voucher.id)}>
                                 <CardContent className="p-4 space-y-3">
-                                    <div className="flex justify-between items-start">
-                                        <div>
+                                    <div className="flex justify-between items-start gap-3">
+                                        <div className="min-w-0">
                                             <span className={`inline-flex px-2 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider border mb-1.5 ${TYPE_COLORS[voucher.voucherType] || 'bg-slate-100 text-slate-600'}`}>
                                                 {voucher.voucherType}
                                             </span>
                                             <p className="font-mono font-bold text-indigo-600 text-sm">{voucher.voucherNo}</p>
                                         </div>
-                                        <div className="text-right">
+                                        <div className="text-right shrink-0">
                                             <p className="font-bold text-slate-900">{INR(voucher.totalAmount)}</p>
                                             <p className="text-xs text-slate-500">{format(new Date(voucher.date), 'dd MMM yyyy')}</p>
                                         </div>
                                     </div>
                                     <div className="text-sm">
-                                        <p className="font-medium text-slate-800">{getPartyName(voucher.lines)}</p>
+                                        <p className="font-medium text-slate-800 break-words">{getPartyName(voucher.lines)}</p>
                                         {voucher.narration && <p className="text-slate-500 text-xs italic mt-0.5 line-clamp-1">&ldquo;{voucher.narration}&rdquo;</p>}
                                     </div>
                                     <div className="flex justify-between items-center pt-2 border-t border-slate-100">

@@ -16,15 +16,15 @@ const TONES = {
 /** The summary strip above the Expiring and Low Stock lists. */
 export function ListBanner({ tone, icon, title, description, actions }: ListBannerProps) {
     return (
-        <div className={cn('flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4', TONES[tone])}>
-            <div className="flex items-start gap-3">
+        <div className={cn('flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3 sm:p-4', TONES[tone])}>
+            <div className="flex min-w-0 items-start gap-3">
                 <span className="mt-0.5 shrink-0" aria-hidden="true">{icon}</span>
-                <div>
+                <div className="min-w-0">
                     <p className="font-semibold">{title}</p>
                     {description && <p className="desc text-sm">{description}</p>}
                 </div>
             </div>
-            {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+            {actions && <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">{actions}</div>}
         </div>
     );
 }

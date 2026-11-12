@@ -77,7 +77,7 @@ export function NotificationsSection({ onDirty, onSaved, discardKey }: Notificat
                     onCheckedChange={(v) => setValue('notifyLowStock', v, { shouldDirty: true })}
                 />
                 {notifyLowStock && (
-                    <div className="flex items-center gap-3 pl-2 py-2">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 pl-2 py-2">
                         <Label htmlFor="lowStockThreshold" className="text-sm text-slate-600 whitespace-nowrap">
                             Alert when stock falls below:
                         </Label>
@@ -105,7 +105,7 @@ export function NotificationsSection({ onDirty, onSaved, discardKey }: Notificat
                     }}
                 />
                 {notifyExpiry > 0 && (
-                    <div className="flex items-center gap-3 pl-2 py-2">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 pl-2 py-2">
                         <Label htmlFor="notifyExpiryDays" className="text-sm text-slate-600 whitespace-nowrap">
                             Alert for medicines expiring within:
                         </Label>

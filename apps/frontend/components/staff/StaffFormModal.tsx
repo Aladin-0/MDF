@@ -102,14 +102,14 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
 
     return (
         <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-            <DialogContent className="max-w-5xl max-h-[90vh] p-0 overflow-hidden flex flex-col">
-                <DialogHeader className="px-6 py-4 border-b shrink-0 bg-white sticky top-0 z-10">
+            <DialogContent className="max-w-5xl max-h-[calc(100dvh-1rem)] sm:max-h-[90vh] p-0 sm:p-0 overflow-hidden flex flex-col">
+                <DialogHeader className="px-4 sm:px-6 py-4 border-b shrink-0 bg-white sticky top-0 z-10">
                     <DialogTitle>
                         {isEdit ? `Edit — ${editingStaff?.name}` : 'Add New Staff Member'}
                     </DialogTitle>
                 </DialogHeader>
 
-                <div className="flex-1 overflow-y-auto px-6 py-4">
+                <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4">
                     {blockedBySuperAdmin && (
                         <p className="mb-4 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
                             This is a Super Admin account. Only a Super Admin can change it.
@@ -123,8 +123,8 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                             Basic Information
                         </p>
 
-                        <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1 col-span-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="space-y-1 sm:col-span-2">
                                 <Label>Full Name *</Label>
                                 <Input
                                     {...register('name', { required: 'Name is required' })}
@@ -177,7 +177,7 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                                 )}
                             </div>
 
-                            <div className="space-y-1 col-span-2">
+                            <div className="space-y-1 sm:col-span-2">
                                 <Label>Email</Label>
                                 <Input
                                     {...register('email')}
@@ -196,10 +196,10 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                             Security
                         </p>
 
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 
                             {/* Password */}
-                            <div className="space-y-1 col-span-2">
+                            <div className="space-y-1 sm:col-span-2">
                                 <Label>
                                     {isEdit ? 'New Password (leave blank to keep current)' : 'Password *'}
                                 </Label>
@@ -223,7 +223,7 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                             </div>
 
                             {/* Confirm Password */}
-                            <div className="space-y-1 col-span-2">
+                            <div className="space-y-1 sm:col-span-2">
                                 <Label>
                                     {isEdit ? 'Confirm New Password' : 'Confirm Password *'}
                                 </Label>
@@ -246,7 +246,7 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                             </div>
 
                             {/* Billing PIN */}
-                            <div className="space-y-1 col-span-2">
+                            <div className="space-y-1 sm:col-span-2">
                                 <Label>
                                     {isEdit ? 'New Billing PIN (leave blank to keep current)' : 'Billing PIN *'}
                                 </Label>
@@ -275,7 +275,7 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
 
                             {/* Confirm Billing PIN — create only */}
                             {!isEdit && (
-                                <div className="space-y-1 col-span-2">
+                                <div className="space-y-1 sm:col-span-2">
                                     <Label>Confirm Billing PIN *</Label>
                                     <Input
                                         {...register('confirmPin', {
@@ -322,7 +322,7 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                             </p>
                         )}
 
-                        <div className="grid grid-cols-3 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                             <div className="space-y-1">
                                 <Label>Shift Start Time</Label>
                                 <Input
@@ -391,7 +391,7 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                             <div className="space-y-0 p-3 rounded-xl border border-slate-200 bg-white">
                                 <h4 className="font-semibold text-slate-800 text-sm mb-3">Sales & Billing</h4>
                                 <div className="space-y-2">
-                                    <div className="flex items-center justify-between">
+                                    <div className="flex items-center justify-between gap-3">
                                         <div>
                                             <p className="text-sm font-medium leading-none">Can Edit Sales</p>
                                             <p className="text-xs text-muted-foreground mt-1">Master permission to modify invoices</p>
@@ -405,7 +405,7 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                                         "p-3 rounded-md bg-slate-50 border-l-4 border-indigo-500 space-y-3 mt-2 transition-opacity", 
                                         !watch('canEditSales') && "opacity-50 pointer-events-none"
                                     )}>
-                                        <div className="flex items-center justify-between">
+                                        <div className="flex items-center justify-between gap-3">
                                             <div className="flex items-center">
                                                 <p className="text-xs font-medium text-slate-700">Modify Draft/Unpaid Bills</p>
                                                 <Tooltip>
@@ -419,7 +419,7 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                                             </div>
                                             <Switch checked={watch('canModifyDraftUnpaidBill')} onCheckedChange={(v) => handleChildChange('canModifyDraftUnpaidBill', v)} />
                                         </div>
-                                        <div className="flex items-center justify-between">
+                                        <div className="flex items-center justify-between gap-3">
                                             <div className="flex items-center">
                                                 <p className="text-xs font-medium text-slate-700">Modify Paid Bills</p>
                                                 <Tooltip>
@@ -433,7 +433,7 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                                             </div>
                                             <Switch checked={watch('canModifyPaidBill')} onCheckedChange={(v) => handleChildChange('canModifyPaidBill', v)} />
                                         </div>
-                                        <div className="flex items-center justify-between">
+                                        <div className="flex items-center justify-between gap-3">
                                             <div className="flex items-center">
                                                 <p className="text-xs font-medium text-slate-700">Correct Header Fields</p>
                                                 <Tooltip>
@@ -447,7 +447,7 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                                             </div>
                                             <Switch checked={watch('canCorrectHeaderFields')} onCheckedChange={(v) => handleChildChange('canCorrectHeaderFields', v)} />
                                         </div>
-                                        <div className="flex items-center justify-between">
+                                        <div className="flex items-center justify-between gap-3">
                                             <div className="flex items-center">
                                                 <p className="text-xs font-medium text-slate-700">Correct Quantities</p>
                                                 <Tooltip>
@@ -469,14 +469,14 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                             <div className="space-y-0 p-3 rounded-xl border border-slate-200 bg-white">
                                 <h4 className="font-semibold text-slate-800 text-sm mb-3">Pricing & Customer</h4>
                                 <div className="space-y-4">
-                                    <div className="flex items-center justify-between">
+                                    <div className="flex items-center justify-between gap-3">
                                         <div>
                                             <p className="text-sm font-medium leading-none">Override Pricing</p>
                                             <p className="text-xs text-muted-foreground mt-1">Override MRP & apply discounts</p>
                                         </div>
                                         <Switch checked={watch('canOverridePricing')} onCheckedChange={(v) => handleChildChange('canOverridePricing', v)} />
                                     </div>
-                                    <div className="flex items-center justify-between">
+                                    <div className="flex items-center justify-between gap-3">
                                         <div>
                                             <p className="text-sm font-medium leading-none">Correct Customer</p>
                                             <p className="text-xs text-muted-foreground mt-1">Change customer on existing bills</p>
@@ -490,14 +490,14 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                             <div className="space-y-0 p-3 rounded-xl border border-slate-200 bg-white">
                                 <h4 className="font-semibold text-slate-800 text-sm mb-3">Purchases & Inventory</h4>
                                 <div className="space-y-4">
-                                    <div className="flex items-center justify-between">
+                                    <div className="flex items-center justify-between gap-3">
                                         <div>
                                             <p className="text-sm font-medium leading-none">Create Purchases</p>
                                             <p className="text-xs text-muted-foreground mt-1">Add new GRN / purchase invoices</p>
                                         </div>
                                         <Switch checked={watch('canCreatePurchases')} onCheckedChange={(v) => handleChildChange('canCreatePurchases', v)} />
                                     </div>
-                                    <div className="flex items-center justify-between">
+                                    <div className="flex items-center justify-between gap-3">
                                         <div>
                                             <p className="text-sm font-medium leading-none">View Purchase Rates</p>
                                             <p className="text-xs text-muted-foreground mt-1">See cost price in inventory</p>
@@ -506,7 +506,7 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                                     </div>
                                     
                                     <div className="pt-1">
-                                        <div className="flex items-center justify-between">
+                                        <div className="flex items-center justify-between gap-3">
                                             <div>
                                                 <p className="text-sm font-medium leading-none">Edit Purchases</p>
                                                 <p className="text-xs text-muted-foreground mt-1">Modify existing purchases</p>
@@ -520,7 +520,7 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                                             "p-3 rounded-md bg-slate-50 border-l-4 border-indigo-500 mt-2 transition-opacity", 
                                             !watch('canEditPurchases') && "opacity-50 pointer-events-none"
                                         )}>
-                                            <div className="flex items-center justify-between">
+                                            <div className="flex items-center justify-between gap-3">
                                                 <div className="flex items-center">
                                                 <p className="text-xs font-medium text-slate-700">Modify Paid Purchases</p>
                                                 <Tooltip>
@@ -544,7 +544,7 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                                 <h4 className="font-semibold text-slate-800 text-sm mb-3">Vouchers & Returns</h4>
                                 <div className="space-y-4">
                                     <div>
-                                        <div className="flex items-center justify-between">
+                                        <div className="flex items-center justify-between gap-3">
                                             <div>
                                                 <p className="text-sm font-medium leading-none">Edit Vouchers</p>
                                                 <p className="text-xs text-muted-foreground mt-1">Modify receipt/payment/contra</p>
@@ -558,7 +558,7 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                                             "p-3 rounded-md bg-slate-50 border-l-4 border-indigo-500 mt-2 transition-opacity", 
                                             !watch('canEditVouchers') && "opacity-50 pointer-events-none"
                                         )}>
-                                            <div className="flex items-center justify-between">
+                                            <div className="flex items-center justify-between gap-3">
                                                 <div className="flex items-center">
                                                 <p className="text-xs font-medium text-slate-700">Modify Settled Vouchers</p>
                                                 <Tooltip>
@@ -576,7 +576,7 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                                     </div>
 
                                     <div>
-                                        <div className="flex items-center justify-between">
+                                        <div className="flex items-center justify-between gap-3">
                                             <div>
                                                 <p className="text-sm font-medium leading-none">Edit Returns</p>
                                                 <p className="text-xs text-muted-foreground mt-1">Modify existing returns</p>
@@ -590,7 +590,7 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                                             "p-3 rounded-md bg-slate-50 border-l-4 border-indigo-500 mt-2 transition-opacity", 
                                             !watch('canEditReturns') && "opacity-50 pointer-events-none"
                                         )}>
-                                            <div className="flex items-center justify-between">
+                                            <div className="flex items-center justify-between gap-3">
                                                 <div className="flex items-center">
                                                 <p className="text-xs font-medium text-slate-700">Modify Settled Returns</p>
                                                 <Tooltip>
@@ -613,28 +613,28 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                             <div className="space-y-0 p-3 rounded-xl border border-slate-200 bg-white lg:col-span-2">
                                 <h4 className="font-semibold text-slate-800 text-sm mb-3">System & Audit</h4>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                    <div className="flex items-center justify-between">
+                                    <div className="flex items-center justify-between gap-3">
                                         <div>
                                             <p className="text-sm font-medium leading-none">Access Reports</p>
                                             <p className="text-xs text-muted-foreground mt-1">View sales, GST, stock</p>
                                         </div>
                                         <Switch checked={watch('canAccessReports')} onCheckedChange={(v) => handleChildChange('canAccessReports', v)} />
                                     </div>
-                                    <div className="flex items-center justify-between">
+                                    <div className="flex items-center justify-between gap-3">
                                         <div>
                                             <p className="text-sm font-medium leading-none">Void/Cancel Records</p>
                                             <p className="text-xs text-muted-foreground mt-1">Cancel bills/vouchers</p>
                                         </div>
                                         <Switch checked={watch('canVoidRecords')} onCheckedChange={(v) => handleChildChange('canVoidRecords', v)} />
                                     </div>
-                                    <div className="flex items-center justify-between">
+                                    <div className="flex items-center justify-between gap-3">
                                         <div>
                                             <p className="text-sm font-medium leading-none">View Audit History</p>
                                             <p className="text-xs text-muted-foreground mt-1">See full revision logs</p>
                                         </div>
                                         <Switch checked={watch('canViewAuditHistory')} onCheckedChange={(v) => handleChildChange('canViewAuditHistory', v)} />
                                     </div>
-                                    <div className="flex items-center justify-between">
+                                    <div className="flex items-center justify-between gap-3">
                                         <div>
                                             <p className="text-sm font-medium leading-none">Manage Partners</p>
                                             <p className="text-xs text-muted-foreground mt-1">Edit profit splits & equity</p>
@@ -648,7 +648,7 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                             <div className="space-y-0 p-3 rounded-xl border border-slate-200 bg-white lg:col-span-1">
                                 <h4 className="font-semibold text-slate-800 text-sm mb-3">Tax & Compliance</h4>
                                 <div className="space-y-4">
-                                    <div className="flex items-center justify-between">
+                                    <div className="flex items-center justify-between gap-3">
                                         <div>
                                             <p className="text-sm font-medium leading-none">Export GST Reports</p>
                                             <p className="text-xs text-muted-foreground mt-1">Allow downloading of official GSTR-1 and tax files.</p>
@@ -663,7 +663,7 @@ export function StaffFormModal({ open, onClose, editingStaff }: StaffFormModalPr
                     </form>
                 </div>
 
-                <DialogFooter className="px-6 py-4 border-t bg-slate-50 shrink-0 sticky bottom-0 z-10">
+                <DialogFooter className="px-4 sm:px-6 py-4 border-t bg-slate-50 shrink-0 sticky bottom-0 z-10">
                     <Button type="button" variant="outline" onClick={onClose}>
                         Cancel
                     </Button>

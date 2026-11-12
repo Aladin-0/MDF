@@ -59,7 +59,7 @@ export function StaffPerformanceModal({ staff, open, onClose }: Props) {
 
     return (
         <Dialog open={open} onOpenChange={onClose}>
-            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-w-lg max-h-[calc(100dvh-1rem)] sm:max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>
                         📊 {staff?.name} — Performance
@@ -67,7 +67,7 @@ export function StaffPerformanceModal({ staff, open, onClose }: Props) {
                 </DialogHeader>
 
                 {/* Date Range */}
-                <div className="flex gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row">
                     <div className="space-y-1 flex-1">
                         <Label>From</Label>
                         <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
@@ -104,8 +104,8 @@ export function StaffPerformanceModal({ staff, open, onClose }: Props) {
                                 <div className="space-y-2">
                                     {perf.topProducts.slice(0, 5).map((p: any, i: number) => (
                                         <div key={i} className="flex justify-between items-center text-sm py-1 border-b last:border-0">
-                                            <span className="text-slate-700">{p.productName}</span>
-                                            <span className="text-slate-500 text-xs">
+                                            <span className="text-slate-700 min-w-0 break-words pr-2">{p.productName}</span>
+                                            <span className="text-slate-500 text-xs shrink-0">
                                                 {p.qty} units · ₹{Number(p.totalAmount).toLocaleString('en-IN')}
                                             </span>
                                         </div>
@@ -118,7 +118,7 @@ export function StaffPerformanceModal({ staff, open, onClose }: Props) {
                         {perf?.salesByPaymentMode && (
                             <div>
                                 <p className="text-sm font-semibold text-slate-700 mb-2">Sales by Payment Mode</p>
-                                <div className="grid grid-cols-2 gap-2">
+                                <div className="grid grid-cols-1 min-[400px]:grid-cols-2 gap-2">
                                     {Object.entries(perf.salesByPaymentMode).map(([mode, amount]: any) => (
                                         <div key={mode} className="flex justify-between items-center bg-slate-50 rounded-lg px-3 py-2 text-sm">
                                             <span className="capitalize text-slate-600">{mode}</span>

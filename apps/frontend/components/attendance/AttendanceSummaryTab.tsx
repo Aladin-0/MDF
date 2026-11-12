@@ -69,14 +69,14 @@ function MySummaryHero({ summary, shiftStart }: { summary: AttendanceSummary; sh
     const offset = circumference - (summary.attendancePct / 100) * circumference;
 
     return (
-        <div className="w-full relative overflow-hidden bg-white/70 backdrop-blur-xl border border-slate-200/50 rounded-[2rem] shadow-sm flex flex-col xl:flex-row items-center xl:items-stretch gap-8 p-8 md:p-10 mb-4 transition-all duration-500 hover:shadow-lg group">
+        <div className="w-full relative overflow-hidden bg-white/70 backdrop-blur-xl border border-slate-200/50 rounded-[2rem] shadow-sm flex flex-col xl:flex-row items-center xl:items-stretch gap-5 sm:gap-8 p-5 sm:p-8 md:p-10 mb-4 transition-all duration-500 hover:shadow-lg group">
             {/* Soft background glow */}
             <div className="absolute -left-32 -top-32 w-96 h-96 bg-primary/10 rounded-full blur-3xl opacity-50 group-hover:opacity-70 transition-opacity duration-1000" />
             <div className="absolute -right-32 -bottom-32 w-96 h-96 bg-emerald-400/10 rounded-full blur-3xl opacity-50 group-hover:opacity-70 transition-opacity duration-1000" />
             
             {/* Left section: Identity & Ring */}
-            <div className="relative z-10 flex items-center gap-8 shrink-0">
-                <div className="relative w-32 h-32 flex items-center justify-center">
+            <div className="relative z-10 flex min-w-0 max-w-full flex-col items-center gap-4 text-center sm:flex-row sm:gap-8 sm:text-left xl:shrink-0">
+                <div className="relative w-32 h-32 shrink-0 flex items-center justify-center">
                     <svg className="absolute inset-0 w-full h-full -rotate-90 transform" viewBox="0 0 100 100">
                         <circle cx="50" cy="50" r={radius} className="stroke-slate-100 fill-none" strokeWidth="8" />
                         <circle 
@@ -96,9 +96,9 @@ function MySummaryHero({ summary, shiftStart }: { summary: AttendanceSummary; sh
                         </AvatarFallback>
                     </Avatar>
                 </div>
-                <div>
-                    <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight mb-2">{summary.staffName}</h2>
-                    <div className="flex items-center gap-3">
+                <div className="min-w-0">
+                    <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight mb-2 break-words">{summary.staffName}</h2>
+                    <div className="flex flex-wrap items-center justify-center gap-3 sm:justify-start">
                         {staff && <RoleBadge role={staff.role} size="md" />}
                         <AttendancePctBadge pct={summary.attendancePct} large />
                     </div>
@@ -109,7 +109,7 @@ function MySummaryHero({ summary, shiftStart }: { summary: AttendanceSummary; sh
 
             {/* Right section: Stats Layout */}
             <div className="relative z-10 flex-1 w-full min-w-0 flex flex-col gap-6">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
                     <div className="flex flex-col gap-1">
                         <span className="flex items-center gap-1.5 text-sm font-semibold text-emerald-600 uppercase tracking-wider"><CheckCircle2 className="w-4 h-4" /> Present</span>
                         <span className="text-4xl font-black text-slate-900">{presentDays}</span>
@@ -169,17 +169,17 @@ function StaffSummaryCard({ summary, shiftStart }: { summary: AttendanceSummary;
         <Card className="group relative overflow-hidden bg-white/50 hover:bg-white/90 backdrop-blur-sm border border-slate-200/60 rounded-3xl shadow-sm hover:shadow-xl transition-all duration-500 ease-out hover:-translate-y-1">
             <div className="absolute inset-0 bg-gradient-to-br from-indigo-50/40 via-transparent to-blue-50/40 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
             
-            <CardContent className="p-6 relative z-10">
+            <CardContent className="p-4 sm:p-6 relative z-10">
                 {/* Header */}
-                <div className="flex items-start justify-between mb-6">
-                    <div className="flex items-center gap-4">
+                <div className="flex items-start justify-between gap-2 mb-6">
+                    <div className="flex min-w-0 items-center gap-3 sm:gap-4">
                         <Avatar className="w-12 h-12 border-2 border-white shadow-sm ring-2 ring-primary/5">
                             <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/5 text-primary text-sm font-semibold">
                                 {summary.staffName.split(' ').map(n => n[0]).join('').slice(0, 2)}
                             </AvatarFallback>
                         </Avatar>
-                        <div>
-                            <div className="font-bold text-slate-900 tracking-tight">{summary.staffName}</div>
+                        <div className="min-w-0">
+                            <div className="font-bold text-slate-900 tracking-tight break-words">{summary.staffName}</div>
                             {staff && <div className="mt-0.5"><RoleBadge role={staff.role} size="sm" /></div>}
                         </div>
                     </div>
@@ -279,7 +279,7 @@ export function AttendanceSummaryTab({ selectedMonth, selectedYear, onMonthChang
         <div className="space-y-4">
             {/* Month navigator */}
             <div className="flex items-center gap-2">
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={prevMonth}>
+                <Button variant="ghost" size="icon" className="h-9 w-9 sm:h-8 sm:w-8" onClick={prevMonth}>
                     <ChevronLeft className="w-4 h-4" />
                 </Button>
                 <span className="text-sm font-semibold min-w-32 text-center">
@@ -288,7 +288,7 @@ export function AttendanceSummaryTab({ selectedMonth, selectedYear, onMonthChang
                 <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8"
+                    className="h-9 w-9 sm:h-8 sm:w-8"
                     onClick={nextMonth}
                     disabled={isFutureMonth}
                 >

@@ -87,7 +87,7 @@ export function BillingSettingsSection({ onDirty, onSaved, discardKey }: Billing
             <div className="rounded-xl border bg-white p-4 space-y-4">
                 <p className="text-sm font-semibold text-slate-800">Discount Policy</p>
                 <div className="space-y-3">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-3">
                         <Label className="text-sm font-medium">Default Discount %</Label>
                         <span className="text-sm font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
                             {defaultDiscountPct}%
@@ -172,12 +172,12 @@ export function BillingSettingsSection({ onDirty, onSaved, discardKey }: Billing
                 />
 
                 {/* Default Quantity Mode */}
-                <div className="flex items-center justify-between py-2">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between py-2">
                     <div>
                         <p className="text-sm font-medium text-slate-800">Default Quantity Mode</p>
                         <p className="text-xs text-muted-foreground mt-0.5">Which unit is pre-selected when a medicine is added to billing</p>
                     </div>
-                    <div className="flex items-center gap-1 rounded-lg border bg-slate-100 p-1">
+                    <div className="flex items-center gap-1 rounded-lg border bg-slate-100 p-1 self-start sm:self-auto shrink-0">
                         <button
                             type="button"
                             onClick={() => setValue('defaultQuantityMode', 'strip', { shouldDirty: true })}
@@ -215,7 +215,7 @@ export function BillingSettingsSection({ onDirty, onSaved, discardKey }: Billing
                 />
                 {enableCreditSales && (
                     <div className="space-y-3 pt-2">
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between gap-3">
                             <div>
                                 <Label className="text-sm font-medium">Credit Warning Threshold</Label>
                                 <p className="text-xs text-muted-foreground mt-0.5">

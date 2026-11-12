@@ -160,20 +160,20 @@ export default function SalesReturnBookPage() {
     const parameterBar = (
         <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
             {/* Date Range Inputs */}
-            <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg p-1 shadow-2xs">
+            <div className="flex w-full sm:w-auto items-center gap-1.5 bg-white border border-slate-200 rounded-lg p-1 shadow-2xs">
                 <Calendar className="w-4 h-4 text-slate-400 ml-1.5" />
                 <Input
                     type="date"
                     value={dateRange.from}
                     onChange={(e) => setDateRange((prev) => ({ ...prev, from: e.target.value }))}
-                    className="h-7 w-32 border-none p-1 text-xs focus-visible:ring-0 shadow-none font-medium"
+                    className="h-7 min-w-0 flex-1 sm:flex-none sm:w-32 border-none p-1 text-xs focus-visible:ring-0 shadow-none font-medium"
                 />
                 <span className="text-slate-300 text-xs select-none">to</span>
                 <Input
                     type="date"
                     value={dateRange.to}
                     onChange={(e) => setDateRange((prev) => ({ ...prev, to: e.target.value }))}
-                    className="h-7 w-32 border-none p-1 text-xs focus-visible:ring-0 shadow-none font-medium"
+                    className="h-7 min-w-0 flex-1 sm:flex-none sm:w-32 border-none p-1 text-xs focus-visible:ring-0 shadow-none font-medium"
                 />
             </div>
 
@@ -285,7 +285,7 @@ export default function SalesReturnBookPage() {
                             <span className="text-xs font-medium uppercase tracking-wider">Credit Notes</span>
                             <RotateCcw className="w-4 h-4 text-rose-500" />
                         </div>
-                        <div className="text-xl sm:text-2xl font-bold text-slate-900">
+                        <div className="text-lg sm:text-2xl font-bold text-slate-900 break-words">
                             {summary.return_count ?? rows.length}
                         </div>
                         <p className="text-[11px] text-slate-500 mt-1">Processed Returns</p>
@@ -297,7 +297,7 @@ export default function SalesReturnBookPage() {
                             <span className="text-xs font-medium uppercase tracking-wider">Total Refunded</span>
                             <ArrowDownRight className="w-4 h-4 text-rose-600" />
                         </div>
-                        <div className="text-xl sm:text-2xl font-bold text-rose-600">
+                        <div className="text-lg sm:text-2xl font-bold text-rose-600 break-words">
                             {formatCurrency(totalRefundAmount)}
                         </div>
                         <p className="text-[11px] text-rose-500/80 mt-1">Reversed Turnover</p>
@@ -309,7 +309,7 @@ export default function SalesReturnBookPage() {
                             <span className="text-xs font-medium uppercase tracking-wider">Taxable Reversal</span>
                             <Receipt className="w-4 h-4 text-blue-500" />
                         </div>
-                        <div className="text-xl sm:text-2xl font-bold text-slate-900">
+                        <div className="text-lg sm:text-2xl font-bold text-slate-900 break-words">
                             {formatCurrency(summary.total_taxable)}
                         </div>
                         <p className="text-[11px] text-slate-500 mt-1">Excluding Tax</p>
@@ -321,7 +321,7 @@ export default function SalesReturnBookPage() {
                             <span className="text-xs font-medium uppercase tracking-wider">GST Reversed</span>
                             <Percent className="w-4 h-4 text-indigo-500" />
                         </div>
-                        <div className="text-xl sm:text-2xl font-bold text-slate-900">
+                        <div className="text-lg sm:text-2xl font-bold text-slate-900 break-words">
                             {formatCurrency(summary.total_gst)}
                         </div>
                         <p className="text-[11px] text-slate-500 mt-1">Output Tax Reversal</p>
@@ -333,7 +333,7 @@ export default function SalesReturnBookPage() {
                             <span className="text-xs font-medium uppercase tracking-wider">Exempted</span>
                             <Coins className="w-4 h-4 text-amber-500" />
                         </div>
-                        <div className="text-xl sm:text-2xl font-bold text-slate-900">
+                        <div className="text-lg sm:text-2xl font-bold text-slate-900 break-words">
                             {formatCurrency(summary.total_exempted)}
                         </div>
                         <p className="text-[11px] text-slate-500 mt-1">0% GST Items</p>
@@ -381,7 +381,7 @@ export default function SalesReturnBookPage() {
                 {!isLoading && !isError && rows.length > 0 && (
                     <div className="border border-slate-200 rounded-lg overflow-hidden shadow-2xs">
                         <div className="overflow-x-auto max-h-[600px]">
-                            <Table className="text-xs">
+                            <Table className="text-xs max-md:min-w-[1100px] max-md:[&_th]:whitespace-nowrap max-md:[&_td]:whitespace-nowrap">
                                 <TableHeader className="bg-slate-100/80 sticky top-0 z-10 border-b border-slate-200">
                                     <TableRow className="hover:bg-transparent">
                                         <TableHead className="w-24 font-bold text-slate-700">Date</TableHead>

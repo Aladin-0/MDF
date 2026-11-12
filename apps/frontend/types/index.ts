@@ -632,6 +632,8 @@ export interface SaleInvoice {
     billedByName: string;
     itemsCount?: number;
     items: CartItem[];
+    /** Voided (the original of a cancel-and-reissue): listed so its number is never missing, but not counted as sales. */
+    isCancelled?: boolean;
     isModified?: boolean;
     revisionCount?: number;
     createdAt: string;

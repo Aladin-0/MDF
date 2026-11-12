@@ -9,7 +9,7 @@ import {
     useReactTable, getCoreRowModel, getSortedRowModel,
     flexRender, createColumnHelper, SortingState,
 } from '@tanstack/react-table';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { format } from 'date-fns';
 import { ArrowUpDown } from 'lucide-react';
 import { DateRangeFilter, SalesReportRow } from '@/types';
@@ -29,6 +29,15 @@ interface SalesReportTabProps {
 export function SalesReportTab({ dateRange }: SalesReportTabProps) {
     const { data, isLoading } = useSalesReport(dateRange);
     const [sorting, setSorting] = useState<SortingState>([]);
+    // Narrow (phone) screens get slimmer chart axes so the plot area stays usable
+    const [narrow, setNarrow] = useState(false);
+    useEffect(() => {
+        const mq = window.matchMedia('(max-width: 639px)');
+        const update = () => setNarrow(mq.matches);
+        update();
+        mq.addEventListener('change', update);
+        return () => mq.removeEventListener('change', update);
+    }, []);
 
     const rows = data?.rows ?? [];
 
@@ -110,7 +119,7 @@ export function SalesReportTab({ dateRange }: SalesReportTabProps) {
             <ReportSummaryCards cards={(data?.summary ?? []).map((c: any) => ({ ...c, trend: c.trend as "up" | "down" | "flat" }))} isLoading={isLoading} />
 
             {/* Sales Trend Chart */}
-            <div className="bg-white rounded-xl border p-4">
+            <div className="bg-white rounded-xl border p-3 sm:p-4">
                 <h3 className="text-sm font-semibold text-slate-700 mb-4">Daily Sales Trend</h3>
                 <ResponsiveContainer width="100%" height={280}>
                     <ComposedChart data={data?.chartData ?? []}>
@@ -119,16 +128,19 @@ export function SalesReportTab({ dateRange }: SalesReportTabProps) {
                             dataKey="date"
                             tickFormatter={v => format(new Date(v), 'd MMM')}
                             tick={{ fontSize: 11 }}
+                            minTickGap={narrow ? 24 : 5}
                         />
                         <YAxis
                             yAxisId="sales"
                             orientation="left"
+                            width={narrow ? 40 : 60}
                             tickFormatter={v => `₹${(v / 1000).toFixed(0)}k`}
                             tick={{ fontSize: 11 }}
                         />
                         <YAxis
                             yAxisId="bills"
                             orientation="right"
+                            width={narrow ? 28 : 60}
                             tick={{ fontSize: 11 }}
                         />
                         <Tooltip
@@ -164,7 +176,7 @@ export function SalesReportTab({ dateRange }: SalesReportTabProps) {
 
             {/* Payment Mode Breakdown */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-white rounded-xl border p-4">
+                <div className="bg-white rounded-xl border p-3 sm:p-4">
                     <h3 className="text-sm font-semibold text-slate-700 mb-4">Payment Mode Split</h3>
                     <ResponsiveContainer width="100%" height={200}>
                         <PieChart>
@@ -189,7 +201,7 @@ export function SalesReportTab({ dateRange }: SalesReportTabProps) {
                     </ResponsiveContainer>
                 </div>
 
-                <div className="bg-white rounded-xl border p-4">
+                <div className="bg-white rounded-xl border p-3 sm:p-4">
                     <h3 className="text-sm font-semibold text-slate-700 mb-4">Payment Amounts</h3>
                     <div className="space-y-3 mt-2">
                         {pieData.map((item, idx) => (
@@ -208,7 +220,7 @@ export function SalesReportTab({ dateRange }: SalesReportTabProps) {
                                         }}
                                     />
                                 </div>
-                                <span className="text-sm font-medium text-slate-800 w-20 text-right">
+                                <span className="text-sm font-medium text-slate-800 min-w-[5rem] text-right">
                                     {formatCurrency(item.value)}
                                 </span>
                             </div>
@@ -220,7 +232,7 @@ export function SalesReportTab({ dateRange }: SalesReportTabProps) {
             {/* Data Table */}
             <div className="bg-white rounded-xl border overflow-hidden">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                    <table className="w-full min-w-[900px] text-sm">
                         <thead>
                             {table.getHeaderGroups().map(hg => (
                                 <tr key={hg.id} className="bg-slate-50 border-b">

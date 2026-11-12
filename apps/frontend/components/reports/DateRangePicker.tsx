@@ -81,7 +81,7 @@ export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
 
             {/* Custom date inputs */}
             {value.period === 'custom' && (
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                     <div className="flex items-center gap-2">
                         <span className="text-sm text-muted-foreground">From</span>
                         <Input

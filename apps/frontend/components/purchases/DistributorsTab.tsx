@@ -87,7 +87,7 @@ function DistributorForm({
 
     return (
         <Card className="border-blue-200 shadow-sm">
-            <CardHeader className="pb-4 pt-5 px-6 border-b border-slate-100">
+            <CardHeader className="pb-4 pt-5 px-4 sm:px-6 border-b border-slate-100">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -98,7 +98,7 @@ function DistributorForm({
                     <Button
                         variant="ghost"
                         size="icon"
-                        className="h-7 w-7 text-slate-400 hover:text-slate-600"
+                        className="h-9 w-9 sm:h-7 sm:w-7 text-slate-400 hover:text-slate-600"
                         onClick={onCancel}
                         disabled={isSaving}
                     >
@@ -107,7 +107,7 @@ function DistributorForm({
                 </div>
             </CardHeader>
 
-            <CardContent className="px-6 py-5 space-y-6">
+            <CardContent className="px-4 sm:px-6 py-5 space-y-6">
 
                 {/* Business Info */}
                 <div className="space-y-3">
@@ -125,7 +125,7 @@ function DistributorForm({
                             placeholder="e.g. Ajanta Pharma Distributors"
                         />
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div className="space-y-1.5">
                             <Label className="text-sm">GSTIN</Label>
                             <Input
@@ -162,7 +162,7 @@ function DistributorForm({
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
                         Contact
                     </p>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div className="space-y-1.5">
                             <Label className="text-sm">
                                 Phone <span className="text-red-500">*</span>
@@ -230,7 +230,7 @@ function DistributorForm({
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
                         Financial
                     </p>
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                         <div className="space-y-1.5">
                             <Label className="text-sm">Credit Days</Label>
                             <div className="relative">
@@ -353,7 +353,7 @@ function DistributorCard({
 
     return (
         <Card className="group transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
-            <CardContent className="p-5">
+            <CardContent className="p-4 sm:p-5">
 
                 {/* Header */}
                 <div className="mb-3 flex items-start justify-between gap-3">
@@ -373,11 +373,11 @@ function DistributorCard({
                             )}
                         </div>
                     </div>
-                    <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                    <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 max-md:opacity-100">
                         <Button
                             variant="ghost"
                             size="sm"
-                            className="h-7 w-7 p-0"
+                            className="h-7 w-7 p-0 max-md:h-9 max-md:w-9"
                             onClick={onViewHistory}
                             title="Invoice History"
                         >
@@ -386,7 +386,7 @@ function DistributorCard({
                         <Button
                             variant="ghost"
                             size="sm"
-                            className="h-7 w-7 p-0"
+                            className="h-7 w-7 p-0 max-md:h-9 max-md:w-9"
                             onClick={onViewLedger}
                             title="View Ledger"
                         >
@@ -395,7 +395,7 @@ function DistributorCard({
                         <Button
                             variant="ghost"
                             size="sm"
-                            className="h-7 w-7 p-0"
+                            className="h-7 w-7 p-0 max-md:h-9 max-md:w-9"
                             onClick={onEdit}
                             title="Edit"
                         >
@@ -534,7 +534,7 @@ export function DistributorsTab() {
 
             {/* Header */}
             <div className="flex items-center justify-between gap-4">
-                <div>
+                <div className="min-w-0">
                     <p className="text-sm font-medium">
                         {distributors?.length ?? 0} distributor{(distributors?.length ?? 0) !== 1 ? 's' : ''}
                     </p>
@@ -594,7 +594,7 @@ export function DistributorsTab() {
 
             /* Empty */
             ) : !distributors?.length && activeForm !== 'add' ? (
-                <div className="flex flex-col items-center justify-center py-20 text-center">
+                <div className="flex flex-col items-center justify-center px-4 py-20 text-center">
                     <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-muted">
                         <Building2 className="h-8 w-8 text-muted-foreground" />
                     </div>
@@ -652,7 +652,7 @@ export function DistributorsTab() {
 
                     {/* Summary Cards */}
                     {historyData && (
-                        <div className="grid grid-cols-3 gap-3 mt-4">
+                        <div className="grid grid-cols-1 gap-3 mt-4 sm:grid-cols-3">
                             <div className="rounded-lg border bg-slate-50 p-3">
                                 <p className="text-xs text-muted-foreground">Total Invoices</p>
                                 <p className="text-xl font-bold">{historyData.pagination.totalRecords}</p>
@@ -687,7 +687,7 @@ export function DistributorsTab() {
                             </div>
                         ) : (
                             <>
-                                <Table>
+                                <Table className="max-sm:min-w-[560px] max-sm:[&_td]:whitespace-nowrap max-sm:[&_th]:whitespace-nowrap">
                                     <TableHeader>
                                         <TableRow>
                                             <TableHead>Date</TableHead>

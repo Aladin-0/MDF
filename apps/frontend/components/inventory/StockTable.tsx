@@ -54,12 +54,16 @@ const SCHEDULE_TONES: Record<string, string> = {
     Veterinary: 'bg-amber-50 text-amber-900 border-amber-200',
 };
 
+/** Phones show each product as a stacked card: the table elements are turned into blocks / a small grid, so the markup (and what a test or screen reader sees) is unchanged. Desktop is the plain table. */
+const M_ROW = 'max-md:grid max-md:grid-cols-[2rem_minmax(0,1fr)_auto] max-md:gap-x-2 max-md:gap-y-1.5 max-md:p-3';
+const M_DETAIL = 'max-md:col-span-2 max-md:col-start-2 max-md:flex max-md:items-center max-md:justify-between max-md:gap-3 max-md:p-0 max-md:before:content-[attr(data-label)] max-md:before:text-xs max-md:before:text-muted-foreground';
+
 function SortHeader({ label, sortKey, active, order, onSort, className }: {
     label: string; sortKey: SortKey; active: SortKey; order: 'asc' | 'desc'; onSort: (key: SortKey) => void; className?: string;
 }) {
     const isActive = active === sortKey;
     return (
-        <TableHead scope="col" aria-sort={isActive ? (order === 'asc' ? 'ascending' : 'descending') : 'none'} className={className}>
+        <TableHead scope="col" aria-sort={isActive ? (order === 'asc' ? 'ascending' : 'descending') : 'none'} className={cn('max-md:block max-md:h-auto max-md:p-0', className)}>
             <button
                 type="button"
                 onClick={() => onSort(sortKey)}
@@ -178,10 +182,10 @@ export function StockTable({ onAdjustClick, onEditClick }: StockTableProps) {
                     </div>
                 </div>
 
-                <div className="space-y-1.5">
+                <div className="space-y-1.5 max-sm:min-w-[9rem] max-sm:flex-1">
                     <Label htmlFor="stock-schedule" className="text-xs text-muted-foreground">Schedule</Label>
                     <Select value={params.schedule || ALL} onValueChange={(v) => update({ schedule: v })}>
-                        <SelectTrigger id="stock-schedule" className="w-40"><SelectValue /></SelectTrigger>
+                        <SelectTrigger id="stock-schedule" className="w-full sm:w-40"><SelectValue /></SelectTrigger>
                         <SelectContent>
                             <SelectItem value={ALL}>All Types</SelectItem>
                             {SCHEDULE_TYPE_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
@@ -190,10 +194,10 @@ export function StockTable({ onAdjustClick, onEditClick }: StockTableProps) {
                 </div>
 
                 <PermissionGate permission="edit_inventory">
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 max-sm:min-w-[9rem] max-sm:flex-1">
                         <Label htmlFor="stock-quick-edit" className="text-xs text-muted-foreground">Quick edit (all outlets)</Label>
                         <Select value={quickEdit} onValueChange={(v) => setQuickEdit(v as QuickEditField | typeof NO_QUICK_EDIT)}>
-                            <SelectTrigger id="stock-quick-edit" className="w-44"><SelectValue /></SelectTrigger>
+                            <SelectTrigger id="stock-quick-edit" className="w-full sm:w-44"><SelectValue /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value={NO_QUICK_EDIT}>Off</SelectItem>
                                 {(Object.keys(QUICK_EDIT_LABELS) as QuickEditField[]).map((f) => <SelectItem key={f} value={f}>{QUICK_EDIT_LABELS[f]}</SelectItem>)}
@@ -225,29 +229,30 @@ export function StockTable({ onAdjustClick, onEditClick }: StockTableProps) {
                 <div className="overflow-x-auto" aria-busy={isFetching}>
                     <Table // dim only while the PREVIOUS rows stand in for what the user just asked for (new sort, page or search);
                     // a quiet background refresh (after a save, say) must not make the whole table flash
-                    className={cn('min-w-[56rem] transition-opacity', isPlaceholderData && 'opacity-60')}>
+                    className={cn('md:min-w-[56rem] transition-opacity', isPlaceholderData && 'opacity-60')}>
                         <caption className="sr-only">Products in stock</caption>
-                        <TableHeader className="bg-muted/50">
-                            <TableRow className="hover:bg-transparent">
-                                <TableHead scope="col" className="w-10"><span className="sr-only">Show batches</span></TableHead>
-                                <SortHeader label="Product" sortKey="name" active={params.sort} order={params.order} onSort={onSort} className="min-w-[14rem]" />
-                                <TableHead scope="col">Schedule</TableHead>
-                                {quickEdit !== NO_QUICK_EDIT && <TableHead scope="col">{QUICK_EDIT_LABELS[quickEdit]}</TableHead>}
-                                <SortHeader label="Stock" sortKey="stock" active={params.sort} order={params.order} onSort={onSort} className="text-right" />
-                                <TableHead scope="col" className="text-center">Batches</TableHead>
+                        <TableHeader className="bg-muted/50 max-md:block">
+                            {/* phones: only the sortable headings stay, as a strip of sort buttons */}
+                            <TableRow className="hover:bg-transparent max-md:flex max-md:flex-wrap max-md:items-center max-md:gap-1 max-md:px-2 max-md:py-1 max-md:before:mr-1 max-md:before:text-xs max-md:before:text-muted-foreground max-md:before:content-['Sort:']">
+                                <TableHead scope="col" className="w-10 max-md:hidden"><span className="sr-only">Show batches</span></TableHead>
+                                <SortHeader label="Product" sortKey="name" active={params.sort} order={params.order} onSort={onSort} className="md:min-w-[14rem]" />
+                                <TableHead scope="col" className="max-md:hidden">Schedule</TableHead>
+                                {quickEdit !== NO_QUICK_EDIT && <TableHead scope="col" className="max-md:hidden">{QUICK_EDIT_LABELS[quickEdit]}</TableHead>}
+                                <SortHeader label="Stock" sortKey="stock" active={params.sort} order={params.order} onSort={onSort} className="text-right max-md:text-left" />
+                                <TableHead scope="col" className="text-center max-md:hidden">Batches</TableHead>
                                 <SortHeader label="Nearest Expiry" sortKey="expiry" active={params.sort} order={params.order} onSort={onSort} />
-                                <TableHead scope="col" className="text-right">Value</TableHead>
-                                <TableHead scope="col"><span className="sr-only">Actions</span></TableHead>
+                                <TableHead scope="col" className="text-right max-md:hidden">Value</TableHead>
+                                <TableHead scope="col" className="max-md:hidden"><span className="sr-only">Actions</span></TableHead>
                             </TableRow>
                         </TableHeader>
-                        <TableBody>
+                        <TableBody className="max-md:block">
                             {isLoading ? (
                                 Array.from({ length: 8 }, (_, i) => (
-                                    <TableRow key={i} className="hover:bg-transparent"><TableCell colSpan={columnCount}><Skeleton className="h-9 w-full" /></TableCell></TableRow>
+                                    <TableRow key={i} className="hover:bg-transparent max-md:block"><TableCell colSpan={columnCount} className="max-md:block"><Skeleton className="h-9 w-full" /></TableCell></TableRow>
                                 ))
                             ) : rows.length === 0 ? (
-                                <TableRow className="hover:bg-transparent">
-                                    <TableCell colSpan={columnCount} className="py-20 text-center">
+                                <TableRow className="hover:bg-transparent max-md:block">
+                                    <TableCell colSpan={columnCount} className="py-20 text-center max-md:block max-md:py-12">
                                         <PackageSearch className="mx-auto mb-3 h-10 w-10 text-muted-foreground/40" aria-hidden="true" />
                                         <p className="font-medium">{filtersOn ? 'No products match your filters' : 'No products in stock yet'}</p>
                                         <p className="mt-1 text-sm text-muted-foreground">{filtersOn ? 'Try a different search or clear the filters.' : 'Stock appears here once a purchase has been received.'}</p>
@@ -265,36 +270,36 @@ export function StockTable({ onAdjustClick, onEditClick }: StockTableProps) {
                                     const days = expiry ? daysUntil(expiry) : null;
                                     return (
                                         <React.Fragment key={p.id}>
-                                            <TableRow className={cn(open && 'bg-muted/30')}>
-                                                <TableCell className="w-10 pr-0">
+                                            <TableRow className={cn(M_ROW, open && 'bg-muted/30')}>
+                                                <TableCell className="w-10 pr-0 max-md:col-start-1 max-md:row-start-1 max-md:w-auto max-md:p-0">
                                                     {p.batches.length > 0 && (
                                                         <button
                                                             type="button"
                                                             onClick={() => toggle(p.id)}
                                                             aria-expanded={open}
                                                             aria-label={`${open ? 'Hide' : 'Show'} ${p.batches.length} batches of ${p.name}`}
-                                                            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                                            className="rounded p-1 max-md:p-2 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                                         >
                                                             {open ? <ChevronDown className="h-4 w-4" aria-hidden="true" /> : <ChevronRight className="h-4 w-4" aria-hidden="true" />}
                                                         </button>
                                                     )}
                                                 </TableCell>
-                                                <TableCell className="min-w-[14rem] max-w-[22rem]">
+                                                <TableCell className="min-w-[14rem] max-w-[22rem] max-md:col-start-2 max-md:row-start-1 max-md:min-w-0 max-md:max-w-none max-md:p-0">
                                                     <Link href={`/dashboard/inventory/${p.id}`} className="font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded">
                                                         {p.name}
                                                     </Link>
                                                     {p.composition && <div className="truncate text-xs text-muted-foreground" title={p.composition}>{p.composition}</div>}
                                                     {p.manufacturer && <div className="truncate text-xs text-muted-foreground/80">{p.manufacturer}</div>}
                                                 </TableCell>
-                                                <TableCell>
+                                                <TableCell data-label="Schedule" className={M_DETAIL}>
                                                     <span className={cn('inline-block rounded-full border px-2.5 py-0.5 text-xs font-semibold', SCHEDULE_TONES[p.scheduleType] ?? 'bg-muted text-foreground')}>{p.scheduleType}</span>
                                                 </TableCell>
                                                 {quickEdit !== NO_QUICK_EDIT && (
-                                                    <TableCell>
+                                                    <TableCell data-label={QUICK_EDIT_LABELS[quickEdit]} className={M_DETAIL}>
                                                         <InlineEditCell product={p} field={quickEdit} onSave={(v) => saveQuickEdit(p, quickEdit, v)} />
                                                     </TableCell>
                                                 )}
-                                                <TableCell className="whitespace-nowrap text-right tabular-nums">
+                                                <TableCell data-label="Stock" className={cn('whitespace-nowrap text-right tabular-nums', M_DETAIL)}>
                                                     {empty ? <span className="font-medium text-destructive">Out of stock</span> : (
                                                         <span className={cn('font-medium', p.isLowStock && 'text-destructive')}>
                                                             {stockText}
@@ -302,8 +307,8 @@ export function StockTable({ onAdjustClick, onEditClick }: StockTableProps) {
                                                         </span>
                                                     )}
                                                 </TableCell>
-                                                <TableCell className="text-center tabular-nums text-muted-foreground">{p.batches.length}</TableCell>
-                                                <TableCell className="whitespace-nowrap tabular-nums">
+                                                <TableCell data-label="Batches" className={cn('text-center tabular-nums text-muted-foreground', M_DETAIL)}>{p.batches.length}</TableCell>
+                                                <TableCell data-label="Nearest Expiry" className={cn('whitespace-nowrap tabular-nums max-md:text-right', M_DETAIL)}>
                                                     {expiry && days !== null ? (
                                                         <div>
                                                             <div>{formatDay(expiry)}</div>
@@ -313,16 +318,16 @@ export function StockTable({ onAdjustClick, onEditClick }: StockTableProps) {
                                                         </div>
                                                     ) : <span className="text-muted-foreground">—</span>}
                                                 </TableCell>
-                                                <TableCell className="whitespace-nowrap text-right tabular-nums font-medium">
+                                                <TableCell data-label="Value" className={cn('whitespace-nowrap text-right tabular-nums font-medium', M_DETAIL)}>
                                                     {formatCurrency(productValue(p.batches, valuationMode, p.packSize || 1))}
                                                 </TableCell>
-                                                <TableCell>
+                                                <TableCell className="max-md:col-start-3 max-md:row-start-1 max-md:p-0">
                                                     <div className="flex items-center justify-end gap-1">
-                                                        <Button asChild type="button" variant="ghost" size="icon" className="h-8 w-8">
+                                                        <Button asChild type="button" variant="ghost" size="icon" className="h-8 w-8 max-md:h-9 max-md:w-9">
                                                             <Link href={`/dashboard/inventory/${p.id}`} aria-label={`View details of ${p.name}`} title="View details"><Eye aria-hidden="true" /></Link>
                                                         </Button>
                                                         <PermissionGate permission="edit_inventory">
-                                                            <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEditClick(p as unknown as MasterProduct)} aria-label={`Edit ${p.name}`} title="Edit product">
+                                                            <Button type="button" variant="ghost" size="icon" className="h-8 w-8 max-md:h-9 max-md:w-9" onClick={() => onEditClick(p as unknown as MasterProduct)} aria-label={`Edit ${p.name}`} title="Edit product">
                                                                 <Pencil aria-hidden="true" />
                                                             </Button>
                                                         </PermissionGate>
@@ -331,7 +336,7 @@ export function StockTable({ onAdjustClick, onEditClick }: StockTableProps) {
                                                                 type="button"
                                                                 variant="ghost"
                                                                 size="icon"
-                                                                className="h-8 w-8"
+                                                                className="h-8 w-8 max-md:h-9 max-md:w-9"
                                                                 disabled={p.batches.length === 0}
                                                                 onClick={() => onAdjustClick(p.batches.find((b) => b.qtyStrips > 0 || b.qtyLoose > 0) ?? p.batches[0], p)}
                                                                 aria-label={`Adjust stock of ${p.name}`}
@@ -344,8 +349,8 @@ export function StockTable({ onAdjustClick, onEditClick }: StockTableProps) {
                                                 </TableCell>
                                             </TableRow>
                                             {open && (
-                                                <TableRow className="hover:bg-transparent">
-                                                    <TableCell colSpan={columnCount} className="border-l-4 border-l-primary bg-muted/20 p-4">
+                                                <TableRow className="hover:bg-transparent max-md:block">
+                                                    <TableCell colSpan={columnCount} className="border-l-4 border-l-primary bg-muted/20 p-4 max-md:block max-md:p-3">
                                                         <BatchBreakdown product={p} onAdjust={onAdjustClick} />
                                                     </TableCell>
                                                 </TableRow>

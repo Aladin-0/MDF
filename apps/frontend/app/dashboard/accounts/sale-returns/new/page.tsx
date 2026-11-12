@@ -290,17 +290,17 @@ function NewCreditNoteContent() {
     }
 
     return (
-        <div className="w-full max-w-[1800px] mx-auto px-4 md:px-6 lg:px-8 py-6 space-y-4">
+        <div className="w-full max-w-[1800px] mx-auto px-1 sm:px-4 md:px-6 lg:px-8 py-3 sm:py-6 space-y-4">
             {/* Compressed Top Navigation Bar with Inline Primary Actions */}
-            <div className="w-full flex items-center justify-between pb-2 border-b border-slate-200">
-                <div className="flex items-center gap-2.5">
-                    <Button variant="ghost" size="icon" asChild className="h-8 w-8">
+            <div className="w-full flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pb-2 border-b border-slate-200">
+                <div className="flex min-w-0 items-center gap-2.5">
+                    <Button variant="ghost" size="icon" asChild className="h-9 w-9 shrink-0 sm:h-8 sm:w-8">
                         <Link href="/dashboard/accounts/sale-returns">
                             <ArrowLeft className="h-4 w-4" />
                         </Link>
                     </Button>
                     <div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                             <h1 className="text-lg font-bold text-slate-800 leading-none">New Sale Return</h1>
                             <span className="text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
                                 Credit Note
@@ -313,10 +313,10 @@ function NewCreditNoteContent() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" asChild disabled={saving} className="h-8 text-xs">
+                    <Button variant="outline" size="sm" asChild disabled={saving} className="h-9 sm:h-8 text-xs">
                         <Link href="/dashboard/accounts/sale-returns">Cancel</Link>
                     </Button>
-                    <Button onClick={handleSave} disabled={saving} size="sm" className="h-8 text-xs min-w-[140px] font-semibold gap-1.5 bg-blue-600 hover:bg-blue-700">
+                    <Button onClick={handleSave} disabled={saving} size="sm" className="h-9 sm:h-8 text-xs flex-1 sm:flex-none min-w-[140px] font-semibold gap-1.5 bg-blue-600 hover:bg-blue-700">
                         {saving ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         ) : (
@@ -338,7 +338,7 @@ function NewCreditNoteContent() {
                         <div className="relative">
                             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
                             <Input
-                                className="pl-8 h-8 text-xs bg-slate-50/70 border-slate-200 focus-visible:bg-white"
+                                className="pl-8 h-9 sm:h-8 text-xs bg-slate-50/70 border-slate-200 focus-visible:bg-white"
                                 placeholder="Search Invoice No. or Customer..."
                                 value={invoiceSearch}
                                 onChange={(e) => handleInvoiceSearch(e.target.value)}
@@ -358,8 +358,8 @@ function NewCreditNoteContent() {
                                         onClick={() => handleSelectInvoice(inv)}
                                         className="w-full text-left px-3 py-2 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0"
                                     >
-                                        <div className="flex justify-between items-start">
-                                            <div>
+                                        <div className="flex justify-between items-start gap-2">
+                                            <div className="min-w-0">
                                                 <span className="font-semibold text-xs text-slate-800">{inv.invoiceNo}</span>
                                                 {inv.isDaybook && (
                                                     <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded border border-amber-200">
@@ -387,7 +387,7 @@ function NewCreditNoteContent() {
                             type="date"
                             value={date}
                             onChange={(e) => setDate(e.target.value)}
-                            className="h-8 text-xs bg-slate-50/70 border-slate-200 focus-visible:bg-white"
+                            className="h-9 sm:h-8 text-xs bg-slate-50/70 border-slate-200 focus-visible:bg-white"
                         />
                     </div>
 
@@ -398,7 +398,7 @@ function NewCreditNoteContent() {
                         </label>
                         <div className="relative">
                             <Input
-                                className="h-8 text-xs bg-slate-50/70 border-slate-200 focus-visible:bg-white pr-7"
+                                className="h-9 sm:h-8 text-xs bg-slate-50/70 border-slate-200 focus-visible:bg-white pr-7"
                                 placeholder="Search Customer or Walk-in..."
                                 value={customerSearch}
                                 onChange={(e) => {
@@ -537,9 +537,9 @@ function NewCreditNoteContent() {
                                 <span>GST Value (Exact)</span>
                                 <span className="font-mono text-slate-600">₹{gstAmount.toFixed(2)}</span>
                             </div>
-                            <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                            <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
                                 <span className="font-semibold text-xs text-amber-900">Return Deduction / Fee (-)</span>
-                                <div className="relative w-28">
+                                <div className="relative w-28 shrink-0">
                                     <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">₹</span>
                                     <Input
                                         type="number"
@@ -548,7 +548,7 @@ function NewCreditNoteContent() {
                                         placeholder="0.00"
                                         value={deductionAmount}
                                         onChange={(e) => setDeductionAmount(e.target.value)}
-                                        className="h-7 text-xs font-mono font-bold text-right pl-5 pr-2 bg-amber-50/60 border-amber-200 focus-visible:ring-amber-500 text-amber-900"
+                                        className="h-9 sm:h-7 text-xs font-mono font-bold text-right pl-5 pr-2 bg-amber-50/60 border-amber-200 focus-visible:ring-amber-500 text-amber-900"
                                     />
                                 </div>
                             </div>

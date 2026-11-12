@@ -27,7 +27,7 @@ export default function PublicPurchaseOrderPage() {
 
     if (error) {
         return (
-            <main className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-2 p-6 text-center">
+            <main className="mx-auto flex min-h-[100dvh] max-w-md flex-col items-center justify-center gap-2 p-6 text-center">
                 <h1 className="text-xl font-semibold">This order link is not available</h1>
                 <p className="text-sm text-slate-500">{error} Please ask the store to send it again.</p>
             </main>
@@ -42,11 +42,11 @@ export default function PublicPurchaseOrderPage() {
         <main className="mx-auto max-w-3xl space-y-5 p-4 sm:p-6">
             <header className="space-y-1 border-b pb-4">
                 <p className="text-sm font-medium uppercase tracking-wide text-slate-500">Purchase order from</p>
-                <h1 className="text-2xl font-bold tracking-tight">{po.storeName}</h1>
+                <h1 className="text-2xl font-bold tracking-tight break-words">{po.storeName}</h1>
                 {po.storeAddress && <p className="text-sm text-slate-500">{po.storeAddress}</p>}
             </header>
 
-            <section className="grid gap-3 rounded-lg border bg-white p-4 sm:grid-cols-4">
+            <section className="grid gap-3 rounded-lg border bg-white p-4 grid-cols-2 sm:grid-cols-4">
                 <div><p className="text-xs text-slate-500">PO number</p><p className="font-semibold">{po.poNumber}</p></div>
                 <div><p className="text-xs text-slate-500">Date</p><p className="font-semibold">{fmt(po.orderDate)}</p></div>
                 <div><p className="text-xs text-slate-500">Expected</p><p className="font-semibold">{po.expectedDate ? fmt(po.expectedDate) : '—'}</p></div>
@@ -77,8 +77,8 @@ export default function PublicPurchaseOrderPage() {
             </div>
 
             <div className="flex flex-wrap gap-3 print:hidden">
-                <button type="button" onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium hover:bg-slate-50"><Printer className="h-4 w-4" />Print / save as PDF</button>
-                {po.storePhone && <a href={`tel:${po.storePhone}`} className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"><Phone className="h-4 w-4" />Call {po.storeName}</a>}
+                <button type="button" onClick={() => window.print()} className="inline-flex w-full sm:w-auto justify-center items-center gap-2 rounded-md border px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-slate-50"><Printer className="h-4 w-4" />Print / save as PDF</button>
+                {po.storePhone && <a href={`tel:${po.storePhone}`} className="inline-flex w-full sm:w-auto justify-center items-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 sm:py-2 text-sm font-medium text-white hover:bg-blue-700"><Phone className="h-4 w-4" />Call {po.storeName}</a>}
             </div>
             <p className="text-xs text-slate-400 print:hidden">This is a read-only view. Contact the store for any change.</p>
         </main>

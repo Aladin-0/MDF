@@ -9,7 +9,7 @@ export function GSTR3BSummaryCard({ data }: { data: any }) {
         return (
             <div className="py-3 border-b border-slate-100 last:border-0">
                 <div className="text-sm font-medium text-slate-700 mb-2">{label}</div>
-                <div className="grid grid-cols-4 gap-2 text-xs">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                     <div className="bg-slate-50 p-2 rounded flex flex-col">
                         <span className="text-slate-500 mb-1">IGST</span>
                         <span className="font-semibold">{formatCurrency(taxData.igst || 0)}</span>
@@ -43,7 +43,7 @@ export function GSTR3BSummaryCard({ data }: { data: any }) {
                 
                 <div className="mt-4 pt-4 border-t-2 border-slate-200">
                     <div className="text-sm font-bold text-slate-800 mb-2">Net Cash Payable</div>
-                    <div className="grid grid-cols-4 gap-2 text-xs">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                         <div className="bg-amber-50 p-2 rounded flex flex-col border border-amber-100">
                             <span className="text-amber-700 mb-1">IGST</span>
                             <span className="font-bold text-amber-900">{formatCurrency(data.cash_payable?.igst || 0)}</span>

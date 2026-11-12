@@ -24,7 +24,7 @@ export function Breadcrumb() {
     });
 
     return (
-        <nav aria-label="Breadcrumb" className="mt-1 flex items-center text-sm text-muted-foreground">
+        <nav aria-label="Breadcrumb" className="mt-1 flex flex-wrap items-center text-sm text-muted-foreground">
             {breadcrumbs.map((crumb, index) => (
                 <div key={crumb.href} className="flex items-center">
                     {index > 0 && <ChevronRight className="w-3.5 h-3.5 mx-1 opacity-50" />}

@@ -178,20 +178,20 @@ export default function ErpGrossProfitPage() {
     const parameterBar = (
         <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
             {/* Date Range Inputs */}
-            <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg p-1 shadow-2xs">
+            <div className="flex w-full sm:w-auto items-center gap-1.5 bg-white border border-slate-200 rounded-lg p-1 shadow-2xs">
                 <Calendar className="w-4 h-4 text-slate-400 ml-1.5" />
                 <Input
                     type="date"
                     value={dateRange.from}
                     onChange={(e) => setDateRange((prev) => ({ ...prev, from: e.target.value }))}
-                    className="h-7 w-32 border-none p-1 text-xs focus-visible:ring-0 shadow-none font-medium"
+                    className="h-7 min-w-0 flex-1 sm:flex-none sm:w-32 border-none p-1 text-xs focus-visible:ring-0 shadow-none font-medium"
                 />
                 <span className="text-slate-300 text-xs select-none">to</span>
                 <Input
                     type="date"
                     value={dateRange.to}
                     onChange={(e) => setDateRange((prev) => ({ ...prev, to: e.target.value }))}
-                    className="h-7 w-32 border-none p-1 text-xs focus-visible:ring-0 shadow-none font-medium"
+                    className="h-7 min-w-0 flex-1 sm:flex-none sm:w-32 border-none p-1 text-xs focus-visible:ring-0 shadow-none font-medium"
                 />
             </div>
 
@@ -315,7 +315,7 @@ export default function ErpGrossProfitPage() {
                             <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">Net Sales Revenue</span>
                             <Receipt className="w-4 h-4 text-slate-400" />
                         </div>
-                        <p className="text-lg sm:text-xl font-bold text-slate-900 mt-1.5">
+                        <p className="text-base sm:text-xl font-bold break-words text-slate-900 mt-1.5">
                             {formatCurrency(summary.total_sales)}
                         </p>
                     </div>
@@ -325,7 +325,7 @@ export default function ErpGrossProfitPage() {
                             <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">Cost of Goods (Landing)</span>
                             <Coins className="w-4 h-4 text-slate-400" />
                         </div>
-                        <p className="text-lg sm:text-xl font-bold text-slate-900 mt-1.5">
+                        <p className="text-base sm:text-xl font-bold break-words text-slate-900 mt-1.5">
                             {formatCurrency(summary.total_cogs)}
                         </p>
                     </div>
@@ -339,7 +339,7 @@ export default function ErpGrossProfitPage() {
                                 <TrendingDown className="w-4 h-4 text-rose-600" />
                             )}
                         </div>
-                        <p className={cn("text-lg sm:text-xl font-bold mt-1.5", getProfitColorClass(summary.total_gross_profit))}>
+                        <p className={cn("text-base sm:text-xl font-bold break-words mt-1.5", getProfitColorClass(summary.total_gross_profit))}>
                             {formatCurrency(summary.total_gross_profit)}
                         </p>
                     </div>
@@ -349,7 +349,7 @@ export default function ErpGrossProfitPage() {
                             <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">Gross Profit Margin %</span>
                             <Percent className="w-4 h-4 text-slate-400" />
                         </div>
-                        <p className={cn("text-lg sm:text-xl font-bold mt-1.5", getProfitColorClass(summary.profit_pct))}>
+                        <p className={cn("text-base sm:text-xl font-bold break-words mt-1.5", getProfitColorClass(summary.profit_pct))}>
                             {formatPercent(summary.profit_pct)}
                         </p>
                     </div>
@@ -406,7 +406,7 @@ export default function ErpGrossProfitPage() {
                 {!isLoading && !isError && rows.length > 0 && (
                     <div className="border border-slate-200 rounded-lg overflow-hidden shadow-2xs">
                         <div className="overflow-x-auto max-h-[600px]">
-                            <Table className="text-xs">
+                            <Table className="text-xs max-md:min-w-[1000px] max-md:[&_th]:whitespace-nowrap max-md:[&_td]:whitespace-nowrap">
                                 <TableHeader className="bg-slate-100/80 sticky top-0 z-10 border-b border-slate-200">
                                     <TableRow className="hover:bg-transparent">
                                         <TableHead className="w-28 font-bold text-slate-700">Date</TableHead>

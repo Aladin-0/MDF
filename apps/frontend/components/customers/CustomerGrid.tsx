@@ -79,7 +79,7 @@ export default function CustomerGrid({ filters, onEdit }: CustomerGridProps) {
                 return (
                     <Card
                         key={customer.id}
-                        className="bg-white rounded-2xl border p-5 hover:shadow-lg cursor-pointer transition-shadow"
+                        className="bg-white rounded-2xl border p-4 sm:p-5 hover:shadow-lg cursor-pointer transition-shadow"
                         onClick={() => router.push(`/dashboard/customers/${customer.id}`)}
                     >
                         {/* Top row */}
@@ -96,7 +96,7 @@ export default function CustomerGrid({ filters, onEdit }: CustomerGridProps) {
 
                         {/* Name + Contact */}
                         <div className="mt-3">
-                            <div className="text-base font-bold text-slate-900">{customer.name}</div>
+                            <div className="text-base font-bold text-slate-900 break-words">{customer.name}</div>
                             <FamilyBadge {...customer} className="mt-1" />
                             <div className="text-sm text-muted-foreground">
                                 {customer.phone.slice(0, 5)} {customer.phone.slice(5)}
@@ -148,17 +148,17 @@ export default function CustomerGrid({ filters, onEdit }: CustomerGridProps) {
 
                         {/* Actions */}
                         <div className="mt-3 flex gap-2" onClick={(e) => e.stopPropagation()}>
-                            <Button variant="ghost" size="sm" className="flex-1 text-xs h-8"
+                            <Button variant="ghost" size="sm" className="flex-1 text-xs h-9 sm:h-8"
                                 onClick={() => router.push(`/dashboard/customers/${customer.id}`)}>
                                 <ArrowRight className="w-3 h-3 mr-1" /> View
                             </Button>
                             {onEdit && (
-                                <Button variant="ghost" size="sm" className="text-xs h-8 px-2"
+                                <Button variant="ghost" size="sm" className="text-xs h-9 sm:h-8 px-3 sm:px-2"
                                     onClick={() => onEdit(customer)}>
                                     <Pencil className="w-3 h-3" />
                                 </Button>
                             )}
-                            <Button variant="outline" size="sm" className="flex-1 text-xs h-8"
+                            <Button variant="outline" size="sm" className="flex-1 text-xs h-9 sm:h-8"
                                 onClick={() => { setCustomer(customer); router.push('/billing'); }}>
                                 <Receipt className="w-3 h-3 mr-1" /> Quick Bill
                             </Button>

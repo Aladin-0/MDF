@@ -62,7 +62,7 @@ export function FixedExpensesModal({ initialData, onUpdate }: { initialData?: an
           <Settings className="w-4 h-4" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[calc(100dvh-1rem)] sm:max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Fixed Monthly Expenses</DialogTitle>
         </DialogHeader>

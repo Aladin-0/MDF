@@ -21,13 +21,13 @@ export default function AttendancePage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                    <div className="p-2.5 bg-primary/10 text-primary rounded-lg">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 items-center gap-3">
+                    <div className="shrink-0 p-2.5 bg-primary/10 text-primary rounded-lg">
                         <Clock className="w-6 h-6" />
                     </div>
-                    <div>
-                        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Attendance & Timesheets</h1>
+                    <div className="min-w-0">
+                        <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">Attendance & Timesheets</h1>
                         <p className="text-sm text-slate-500">
                             {isAdmin ? "Manage staff attendance across your outlet" : "View your monthly attendance summary"}
                         </p>

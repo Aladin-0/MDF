@@ -223,17 +223,17 @@ export function PODetailView({ orderId }: { orderId: string }) {
     const progress = po && po.orderedQty ? Math.min(100, Math.round((po.receivedQty / po.orderedQty) * 100)) : 0;
 
     return (
-        <div className="space-y-5 pb-24">
+        <div className="space-y-5 pb-32 sm:pb-24">
             {/* Header */}
             <div className="flex flex-col gap-3 md:flex-row md:items-center">
                 <Button variant="ghost" size="icon" asChild aria-label="Back to purchase orders"><Link href="/dashboard/purchases?tab=purchase_orders"><ArrowLeft className="w-5 h-5" /></Link></Button>
                 <div className="min-w-0">
-                    <h1 className="flex flex-wrap items-center gap-3 text-2xl font-bold tracking-tight">
+                    <h1 className="flex flex-wrap items-center gap-3 text-2xl font-bold tracking-tight max-sm:break-words">
                         {isNew ? 'New PO' : po!.poNumber}
                         <POStatusBadge status={status as any} />
                         {po?.closedShort && <span className="text-xs font-medium text-slate-500">closed short</span>}
                     </h1>
-                    <p className="mt-1 text-sm text-muted-foreground">
+                    <p className="mt-1 text-sm text-muted-foreground max-sm:break-words">
                         {distName ? <>Distributor: <span className="font-medium text-foreground">{distName}</span></> : 'No distributor yet'}
                         {po && <> · Ordered {format(new Date(po.orderDate), 'dd MMM yyyy')}</>}
                         {po?.overdue && <span className="ml-2 font-semibold text-red-600">Overdue</span>}
@@ -247,7 +247,7 @@ export function PODetailView({ orderId }: { orderId: string }) {
                     {allowed.has('receive') && <Button onClick={() => router.push(`/dashboard/purchases?tab=new&poId=${po!.id}`)}><PackageCheck className="w-4 h-4 mr-2" />Receive goods</Button>}
                     {allowed.has('close_short') && <Button variant="outline" onClick={() => setShortOpen(true)}><ClipboardCheck className="w-4 h-4 mr-2" />Close short</Button>}
                     <DropdownMenu>
-                        <DropdownMenuTrigger asChild><Button variant="outline" size="icon" aria-label="More actions"><MoreHorizontal className="w-4 h-4" /></Button></DropdownMenuTrigger>
+                        <DropdownMenuTrigger asChild><Button variant="outline" size="icon" aria-label="More actions" className="max-sm:h-10 max-sm:w-10"><MoreHorizontal className="w-4 h-4" /></Button></DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-52">
                             <DropdownMenuItem onClick={() => download('pdf')}><FileText className="w-4 h-4 mr-2" />Export PDF</DropdownMenuItem>
                             <DropdownMenuItem onClick={() => download('excel')}><TableIcon className="w-4 h-4 mr-2" />Export Excel</DropdownMenuItem>
@@ -384,12 +384,12 @@ export function PODetailView({ orderId }: { orderId: string }) {
                             return (
                                 <div key={l.productId} className="rounded-xl border bg-white p-3 shadow-sm">
                                     <div className="flex items-start justify-between gap-2">
-                                        <div className="min-w-0"><p className="font-semibold">{l.productName}</p><p className="text-xs text-muted-foreground">{l.packLabel || '—'} · stock {l.currentStock} · min {l.minQty}{l.onOrder ? ` · on order ${l.onOrder}` : ''}</p></div>
-                                        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-red-500" aria-label={`Remove ${l.productName}`} onClick={() => setLines((p) => p.filter((_, k) => k !== i))}><Trash2 className="h-4 w-4" /></Button>
+                                        <div className="min-w-0"><p className="font-semibold max-sm:break-words">{l.productName}</p><p className="text-xs text-muted-foreground">{l.packLabel || '—'} · stock {l.currentStock} · min {l.minQty}{l.onOrder ? ` · on order ${l.onOrder}` : ''}</p></div>
+                                        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-red-500 max-sm:h-9 max-sm:w-9" aria-label={`Remove ${l.productName}`} onClick={() => setLines((p) => p.filter((_, k) => k !== i))}><Trash2 className="h-4 w-4" /></Button>
                                     </div>
                                     <div className="mt-3 flex items-center justify-between gap-3">
                                         <QtyStepper value={l.qty} invalid={!!bad} onChange={(v) => setLine(i, { qty: v })} onStep={(d) => step(i, d)} />
-                                        <div className="flex items-center gap-2 text-sm"><span className="text-muted-foreground">₹</span><Input aria-label={`Rate for ${l.productName}`} type="number" step="0.01" min={0} className="h-8 w-24 text-right" value={l.rate} onChange={(e) => setLine(i, { rate: e.target.value })} /></div>
+                                        <div className="flex items-center gap-2 text-sm"><span className="text-muted-foreground">₹</span><Input aria-label={`Rate for ${l.productName}`} type="number" step="0.01" min={0} className="h-8 w-24 text-right max-sm:h-9" value={l.rate} onChange={(e) => setLine(i, { rate: e.target.value })} /></div>
                                     </div>
                                     {bad && <p className="mt-1 text-xs text-red-600">{lineProblem(l)}</p>}
                                     <p className="mt-2 text-right text-sm font-semibold">{money(lineTotal(l))}</p>
@@ -398,7 +398,7 @@ export function PODetailView({ orderId }: { orderId: string }) {
                         })}
                         {!editable && po!.items.map((it) => (
                             <div key={it.id} className="rounded-xl border bg-white p-3 shadow-sm">
-                                <p className="font-semibold">{it.productName}</p>
+                                <p className="font-semibold max-sm:break-words">{it.productName}</p>
                                 <p className="text-xs text-muted-foreground">{it.packLabel || '—'}</p>
                                 <div className="mt-2 grid grid-cols-3 text-center text-sm"><div><p className="text-xs text-muted-foreground">Ordered</p><b>{it.qty}</b></div><div><p className="text-xs text-muted-foreground">Received</p><b>{it.receivedQty}</b></div><div><p className="text-xs text-muted-foreground">Remaining</p><b className={it.remainingQty ? 'text-amber-700' : 'text-emerald-700'}>{it.remainingQty}</b></div></div>
                                 <p className="mt-2 text-right text-sm font-semibold">{money(it.lineTotal)}</p>
@@ -426,14 +426,14 @@ export function PODetailView({ orderId }: { orderId: string }) {
             </div>
 
             {/* Sticky footer */}
-            <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-white/95 px-4 py-3 backdrop-blur md:left-auto md:right-0 md:w-full" data-testid="po-footer">
+            <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur md:left-auto md:right-0 md:w-full" data-testid="po-footer">
                 <div className="mx-auto flex max-w-[1400px] flex-wrap items-center justify-between gap-3">
                     <div className="text-sm text-muted-foreground">
                         <b className="text-foreground">{editable ? totals.items : po!.itemCount}</b> items · <b className="text-foreground">{editable ? totals.qty : po!.orderedQty}</b> packs
                         {dirty && <span className="ml-3 font-medium text-amber-600">Unsaved changes</span>}
                     </div>
-                    <div className="flex items-center gap-4">
-                        <div className="text-lg font-bold">{money(editable ? totals.amount : po!.totalAmount)}</div>
+                    <div className="flex w-full items-center gap-2 sm:w-auto sm:gap-4">
+                        <div className="text-lg font-bold max-sm:mr-auto">{money(editable ? totals.amount : po!.totalAmount)}</div>
                         {editable && <Button variant="outline" onClick={() => save()} disabled={saving}>{saving ? 'Saving...' : 'Save draft'}</Button>}
                         {allowed.has('send') && <Button onClick={startSend} disabled={saving}><Send className="w-4 h-4 mr-2" />Send</Button>}
                     </div>
@@ -465,10 +465,10 @@ export function PODetailView({ orderId }: { orderId: string }) {
 function QtyStepper({ value, invalid, onChange, onStep }: { value: string; invalid: boolean; onChange: (v: string) => void; onStep: (d: number) => void }) {
     return (
         <div className="mx-auto inline-flex items-center">
-            <Button type="button" variant="outline" size="icon" className="h-8 w-8 rounded-r-none" aria-label="Decrease quantity" onClick={() => onStep(-1)}><Minus className="h-3.5 w-3.5" /></Button>
+            <Button type="button" variant="outline" size="icon" className="h-8 w-8 rounded-r-none max-sm:h-9 max-sm:w-9" aria-label="Decrease quantity" onClick={() => onStep(-1)}><Minus className="h-3.5 w-3.5" /></Button>
             <Input aria-label="Quantity" inputMode="numeric" type="number" min={0} value={value} onChange={(e) => onChange(e.target.value)}
-                className={cn('h-8 w-16 rounded-none border-x-0 text-center', invalid && 'border-red-400 bg-red-50')} />
-            <Button type="button" variant="outline" size="icon" className="h-8 w-8 rounded-l-none" aria-label="Increase quantity" onClick={() => onStep(1)}><Plus className="h-3.5 w-3.5" /></Button>
+                className={cn('h-8 w-16 rounded-none border-x-0 text-center max-sm:h-9', invalid && 'border-red-400 bg-red-50')} />
+            <Button type="button" variant="outline" size="icon" className="h-8 w-8 rounded-l-none max-sm:h-9 max-sm:w-9" aria-label="Increase quantity" onClick={() => onStep(1)}><Plus className="h-3.5 w-3.5" /></Button>
         </div>
     );
 }
@@ -490,9 +490,9 @@ function ShortbookPicker({ open, onClose, distributorId, have, onPick }: { open:
             {isLoading ? <p className="text-sm text-muted-foreground">Loading…</p> : rows.length === 0 ? <p className="text-sm text-muted-foreground">No pending Shortbook items for this distributor.</p> : (
                 <ul className="divide-y rounded-md border">
                     {rows.map((r) => (
-                        <li key={r.id}><label className="flex cursor-pointer items-center gap-3 px-3 py-2.5 hover:bg-muted/50">
+                        <li key={r.id}><label className="flex cursor-pointer items-center gap-3 px-3 py-2.5 hover:bg-muted/50 max-sm:py-3">
                             <input type="checkbox" className="accent-primary" checked={ticked.has(r.id)} onChange={() => toggle(r.id)} aria-label={r.productName} />
-                            <span className="min-w-0 flex-1"><span className="block text-sm font-medium">{r.productName}</span><span className="block text-xs text-muted-foreground">{r.sourceLabel} · needs {r.qtyNeeded}</span></span>
+                            <span className="min-w-0 flex-1"><span className="block text-sm font-medium max-sm:break-words">{r.productName}</span><span className="block text-xs text-muted-foreground">{r.sourceLabel} · needs {r.qtyNeeded}</span></span>
                         </label></li>
                     ))}
                 </ul>

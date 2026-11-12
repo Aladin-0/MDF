@@ -261,17 +261,17 @@ function NewDebitNoteContent() {
     }
 
     return (
-        <div className="w-full max-w-[1800px] mx-auto px-4 md:px-6 lg:px-8 py-6 space-y-4">
+        <div className="w-full max-w-[1800px] mx-auto px-1 sm:px-4 md:px-6 lg:px-8 py-3 sm:py-6 space-y-4">
             {/* Compressed Top Navigation Bar with Inline Primary Actions */}
-            <div className="w-full flex items-center justify-between pb-2 border-b border-slate-200">
-                <div className="flex items-center gap-2.5">
-                    <Button variant="ghost" size="icon" asChild className="h-8 w-8">
+            <div className="w-full flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pb-2 border-b border-slate-200">
+                <div className="flex min-w-0 items-center gap-2.5">
+                    <Button variant="ghost" size="icon" asChild className="h-9 w-9 shrink-0 sm:h-8 sm:w-8">
                         <Link href="/dashboard/accounts/purchase-returns">
                             <ArrowLeft className="h-4 w-4" />
                         </Link>
                     </Button>
                     <div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                             <h1 className="text-lg font-bold text-slate-800 leading-none">New Purchase Return</h1>
                             <span className="text-[10px] font-bold uppercase tracking-wider bg-purple-100 text-purple-700 px-2 py-0.5 rounded">
                                 Debit Note
@@ -284,10 +284,10 @@ function NewDebitNoteContent() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" asChild disabled={saving} className="h-8 text-xs">
+                    <Button variant="outline" size="sm" asChild disabled={saving} className="h-9 sm:h-8 text-xs">
                         <Link href="/dashboard/accounts/purchase-returns">Cancel</Link>
                     </Button>
-                    <Button onClick={handleSave} disabled={saving} size="sm" className="h-8 text-xs min-w-[140px] font-semibold gap-1.5 bg-purple-700 hover:bg-purple-800 text-white">
+                    <Button onClick={handleSave} disabled={saving} size="sm" className="h-9 sm:h-8 text-xs flex-1 sm:flex-none min-w-[140px] font-semibold gap-1.5 bg-purple-700 hover:bg-purple-800 text-white">
                         {saving ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         ) : (
@@ -309,7 +309,7 @@ function NewDebitNoteContent() {
                         <div className="relative">
                             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
                             <Input
-                                className="pl-8 h-8 text-xs bg-slate-50/70 border-slate-200 focus-visible:bg-white"
+                                className="pl-8 h-9 sm:h-8 text-xs bg-slate-50/70 border-slate-200 focus-visible:bg-white"
                                 placeholder="Search Invoice No. or Distributor..."
                                 value={invoiceSearch}
                                 onChange={(e) => handleInvoiceSearch(e.target.value)}
@@ -329,8 +329,8 @@ function NewDebitNoteContent() {
                                         onClick={() => handleSelectInvoice(inv)}
                                         className="w-full text-left px-3 py-2 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0"
                                     >
-                                        <div className="flex justify-between items-start">
-                                            <div>
+                                        <div className="flex justify-between items-start gap-2">
+                                            <div className="min-w-0">
                                                 <span className="font-semibold text-xs text-slate-800">Invoice #{inv.invoiceNo}</span>
                                                 <span className="text-[11px] text-slate-500 ml-2">{inv.distributorName}</span>
                                             </div>
@@ -353,7 +353,7 @@ function NewDebitNoteContent() {
                             type="date"
                             value={date}
                             onChange={(e) => setDate(e.target.value)}
-                            className="h-8 text-xs bg-slate-50/70 border-slate-200 focus-visible:bg-white"
+                            className="h-9 sm:h-8 text-xs bg-slate-50/70 border-slate-200 focus-visible:bg-white"
                         />
                     </div>
 
@@ -365,7 +365,7 @@ function NewDebitNoteContent() {
                         <select
                             value={distributorId}
                             onChange={(e) => setDistributorId(e.target.value)}
-                            className="w-full h-8 rounded-md border border-slate-200 bg-slate-50/70 px-2.5 text-xs text-slate-800 focus:bg-white focus:outline-none focus:ring-1 focus:ring-purple-500"
+                            className="w-full h-9 sm:h-8 rounded-md border border-slate-200 bg-slate-50/70 px-2.5 text-xs text-slate-800 focus:bg-white focus:outline-none focus:ring-1 focus:ring-purple-500"
                         >
                             <option value="">Select distributor...</option>
                             {distributors.map((d) => (
@@ -387,7 +387,7 @@ function NewDebitNoteContent() {
                                     Reason Code <span className="text-red-600">*</span>
                                 </Label>
                                 <select
-                                    className="w-full h-8 rounded-md border border-amber-200 bg-white px-2.5 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500"
+                                    className="w-full h-9 sm:h-8 rounded-md border border-amber-200 bg-white px-2.5 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500"
                                     value={revisionReasonCode}
                                     onChange={(e) => setRevisionReasonCode(e.target.value)}
                                 >
@@ -407,7 +407,7 @@ function NewDebitNoteContent() {
                                     placeholder="Explain why this return is being appended..."
                                     value={revisionReasonText}
                                     onChange={(e) => setRevisionReasonText(e.target.value)}
-                                    className="h-8 bg-white text-xs border-amber-200 focus-visible:ring-amber-500"
+                                    className="h-9 sm:h-8 bg-white text-xs border-amber-200 focus-visible:ring-amber-500"
                                 />
                             </div>
                         </div>

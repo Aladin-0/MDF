@@ -61,6 +61,37 @@ export function StaffTable({ onEdit }: StaffTableProps) {
         });
     };
 
+    const renderActions = (s: any) => (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" aria-label={`Actions for ${s.name}`}>
+                    <MoreVertical className="w-4 h-4" />
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                    onClick={() => setPerfTarget(s)}
+                >
+                    <BarChart3 className="w-4 h-4 mr-2" />
+                    View Performance
+                </DropdownMenuItem>
+                <PermissionGate permission="manage_staff">
+                    <DropdownMenuItem onClick={() => onEdit(s)}>
+                        <Pencil className="w-4 h-4 mr-2" />
+                        Edit
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                        className="text-red-600"
+                        onClick={() => setDeleteTarget(s)}
+                    >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Deactivate
+                    </DropdownMenuItem>
+                </PermissionGate>
+            </DropdownMenuContent>
+        </DropdownMenu>
+    );
+
     if (isLoading) {
         return (
             <Card>
@@ -74,7 +105,7 @@ export function StaffTable({ onEdit }: StaffTableProps) {
     return (
         <>
             {/* Search */}
-            <div className="relative mb-4 max-w-sm">
+            <div className="relative mb-4 w-full sm:max-w-sm">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                     placeholder="Search by name, phone, role..."
@@ -84,7 +115,54 @@ export function StaffTable({ onEdit }: StaffTableProps) {
                 />
             </div>
 
-            <Card>
+            {/* Phone: stacked cards (same data and actions as the table below) */}
+            <div className="space-y-3 md:hidden">
+                {filtered.length === 0 ? (
+                    <Card>
+                        <CardContent className="py-12 text-center text-muted-foreground">No staff found</CardContent>
+                    </Card>
+                ) : (
+                    filtered.map((s: any) => (
+                        <Card key={s.id}>
+                            <CardContent className="p-4 space-y-3">
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0">
+                                        <div className="font-medium text-slate-900 break-words">{s.name}</div>
+                                        {s.email && <div className="text-xs text-muted-foreground break-all">{s.email}</div>}
+                                    </div>
+                                    <div className="shrink-0 -mr-2 -mt-1">{renderActions(s)}</div>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${ROLE_COLORS[normalizeRole(s.role)]}`}>
+                                        {ROLE_LABELS[normalizeRole(s.role)]}
+                                    </span>
+                                    {!ROLE_LABELS[s.role] && (
+                                        <span className="text-[10px] font-semibold text-amber-700">legacy role</span>
+                                    )}
+                                    <Badge variant={s.isActive ? 'default' : 'secondary'}>
+                                        {s.isActive ? 'Active' : 'Inactive'}
+                                    </Badge>
+                                </div>
+                                <div className="flex items-center gap-1 text-sm text-slate-600">
+                                    <Phone className="w-3 h-3" />
+                                    {s.phone || '—'}
+                                </div>
+                                {(s.canEditRate || s.canCreatePurchases || s.canAccessReports || s.canViewPurchaseRates) && (
+                                    <div className="flex flex-wrap gap-1">
+                                        {s.canEditRate && <span className="text-xs bg-orange-50 text-orange-600 px-1.5 py-0.5 rounded">Edit Rate</span>}
+                                        {s.canCreatePurchases && <span className="text-xs bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">Purchases</span>}
+                                        {s.canAccessReports && <span className="text-xs bg-green-50 text-green-600 px-1.5 py-0.5 rounded">Reports</span>}
+                                        {s.canViewPurchaseRates && <span className="text-xs bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded">Rates</span>}
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    ))
+                )}
+            </div>
+
+            {/* Tablet / desktop: table */}
+            <Card className="hidden md:block">
                 <CardContent className="p-0">
                     <Table>
                         <TableHeader>
@@ -173,34 +251,7 @@ export function StaffTable({ onEdit }: StaffTableProps) {
 
                                         {/* Actions */}
                                         <TableCell className="text-right">
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" size="icon">
-                                                        <MoreVertical className="w-4 h-4" />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end">
-                                                    <DropdownMenuItem
-                                                        onClick={() => setPerfTarget(s)}
-                                                    >
-                                                        <BarChart3 className="w-4 h-4 mr-2" />
-                                                        View Performance
-                                                    </DropdownMenuItem>
-                                                    <PermissionGate permission="manage_staff">
-                                                        <DropdownMenuItem onClick={() => onEdit(s)}>
-                                                            <Pencil className="w-4 h-4 mr-2" />
-                                                            Edit
-                                                        </DropdownMenuItem>
-                                                        <DropdownMenuItem
-                                                            className="text-red-600"
-                                                            onClick={() => setDeleteTarget(s)}
-                                                        >
-                                                            <Trash2 className="w-4 h-4 mr-2" />
-                                                            Deactivate
-                                                        </DropdownMenuItem>
-                                                    </PermissionGate>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
+                                            {renderActions(s)}
                                         </TableCell>
                                     </TableRow>
                                 ))

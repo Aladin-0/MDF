@@ -210,13 +210,13 @@ export default function LedgerStatementPage() {
         <div className="space-y-5">
             {/* ── Breadcrumb header ── */}
             <div className="flex items-center gap-3">
-                <Button variant="ghost" size="icon" asChild className="rounded-full">
+                <Button variant="ghost" size="icon" asChild className="rounded-full shrink-0">
                     <Link href="/dashboard/accounts/ledgers">
                         <ArrowLeft className="h-4 w-4" />
                     </Link>
                 </Button>
-                <div className="flex-1">
-                    <h1 className="text-xl font-bold text-slate-900">
+                <div className="flex-1 min-w-0">
+                    <h1 className="text-xl font-bold text-slate-900 break-words">
                         {statement?.ledger.name ?? 'Ledger Statement'}
                     </h1>
                     {statement && (
@@ -231,20 +231,20 @@ export default function LedgerStatementPage() {
 
             {/* ── Filter bar ── */}
             <div className="flex flex-wrap items-end gap-3">
-                <div className="space-y-1">
+                <div className="space-y-1 min-w-[140px] flex-1 sm:flex-none">
                     <Label className="text-xs text-slate-500">From</Label>
-                    <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-9 w-40 text-sm" />
+                    <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-9 w-full sm:w-40 text-sm" />
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1 min-w-[140px] flex-1 sm:flex-none">
                     <Label className="text-xs text-slate-500">To</Label>
-                    <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-9 w-40 text-sm" />
+                    <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-9 w-full sm:w-40 text-sm" />
                 </div>
-                <Button onClick={() => setApplied({ from, to })} disabled={fetching} variant="outline" className="h-9">
+                <Button onClick={() => setApplied({ from, to })} disabled={fetching} variant="outline" className="h-9 w-full sm:w-auto">
                     {fetching ? <RefreshCw className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
                     Apply Filter
                 </Button>
 
-                <div className="ml-auto flex items-center gap-2.5">
+                <div className="flex w-full flex-wrap items-center gap-2.5 sm:ml-auto sm:w-auto sm:flex-nowrap">
                     <SortDropdown
                         options={LEDGER_SORT_OPTIONS}
                         defaultValue="desc"
@@ -253,7 +253,7 @@ export default function LedgerStatementPage() {
                     />
 
                     {/* Search */}
-                    <div className="relative w-64">
+                    <div className="relative w-full min-w-0 sm:w-64">
                         <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
                         <Input
                             className="h-9 pl-9 pr-8 text-sm"
@@ -335,7 +335,8 @@ export default function LedgerStatementPage() {
                         </div>
                     ) : (
                         <div className={cn('overflow-hidden rounded-xl border bg-white shadow-sm transition-opacity', fetching && 'opacity-60')}>
-                            <table className="w-full text-sm">
+                            <div className="overflow-x-auto">
+                            <table className="w-full min-w-[760px] text-sm">
                                 <thead>
                                     <tr className="border-b bg-slate-50">
                                         <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Date</th>
@@ -413,10 +414,10 @@ export default function LedgerStatementPage() {
                                                 </td>
                                                 <td className="px-2 py-3 text-center">
                                                     {clickable && (
-                                                        <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <div className="flex items-center justify-center gap-1 transition-opacity md:opacity-0 md:group-hover:opacity-100">
                                                             <button 
                                                                 onClick={(e) => { e.stopPropagation(); handleRowClick(tx); }}
-                                                                className="inline-flex items-center justify-center rounded-full p-1.5 text-indigo-400 hover:bg-indigo-100 transition-colors"
+                                                                className="inline-flex items-center justify-center rounded-full p-2.5 md:p-1.5 text-indigo-400 hover:bg-indigo-100 transition-colors"
                                                                 title="View Details"
                                                             >
                                                                 <Eye className="h-3.5 w-3.5" />
@@ -427,7 +428,7 @@ export default function LedgerStatementPage() {
                                                                         e.stopPropagation(); 
                                                                         router.push(`/dashboard/accounts/vouchers?party=${statement.ledger.id}&search=${tx.voucherNo}`); 
                                                                     }}
-                                                                    className="inline-flex items-center justify-center rounded-full p-1.5 text-emerald-500 hover:bg-emerald-100 transition-colors"
+                                                                    className="inline-flex items-center justify-center rounded-full p-2.5 md:p-1.5 text-emerald-500 hover:bg-emerald-100 transition-colors"
                                                                     title="View in Register"
                                                                 >
                                                                     <List className="h-3.5 w-3.5" />
@@ -460,10 +461,11 @@ export default function LedgerStatementPage() {
                                     </tr>
                                 </tfoot>
                             </table>
+                            </div>
                             {pageInfo && pageInfo.total_pages > 1 && (
                                 <nav aria-label="Statement pages" className="flex flex-wrap items-center justify-between gap-3 border-t bg-white px-4 py-3 text-sm text-slate-600">
                                     <span>Showing {firstShown}–{lastShown} of {matching} entries</span>
-                                    <span className="flex items-center gap-2">
+                                    <span className="flex flex-wrap items-center gap-2">
                                         <Button variant="outline" size="sm" disabled={pageInfo.page <= 1 || fetching} onClick={() => goToPage(1)}>First</Button>
                                         <Button variant="outline" size="sm" disabled={pageInfo.page <= 1 || fetching} onClick={() => goToPage(pageInfo.page - 1)}>Previous</Button>
                                         <span>Page {pageInfo.page} of {pageInfo.total_pages}</span>

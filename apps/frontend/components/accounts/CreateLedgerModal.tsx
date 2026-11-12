@@ -218,24 +218,24 @@ export function CreateLedgerModal({
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50">
-            <div className="bg-background rounded-lg shadow-xl w-full max-w-3xl mx-4 max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="bg-background rounded-lg shadow-xl w-full max-w-3xl mx-3 sm:mx-4 max-h-[90dvh] flex flex-col overflow-hidden">
                 {/* Header */}
-                <div className="flex items-center justify-between px-6 py-4 border-b shrink-0">
+                <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b shrink-0">
                     <h2 className="text-lg font-semibold">
                         {isQuickCustomerMode ? 'Add Quick Customer' : (ledgerToEdit ? 'Edit Ledger' : 'Create Ledger')}
                     </h2>
-                    <button type="button" onClick={onClose} className="p-1.5 rounded hover:bg-muted">
+                    <button type="button" onClick={onClose} className="p-2.5 sm:p-1.5 rounded hover:bg-muted">
                         <X className="w-4 h-4" />
                     </button>
                 </div>
 
                 {/* Scrollable body */}
-                <div className="overflow-y-auto flex-1 px-6 py-4 space-y-6">
+                <div className="overflow-y-auto flex-1 px-4 sm:px-6 py-4 space-y-6">
                     {/* Section 1 — Basic */}
                     <div>
                         <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Basic</h3>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-1.5 col-span-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="space-y-1.5 sm:col-span-2">
                                 <Label>{isQuickCustomerMode ? 'Customer Name *' : 'Ledger Name *'}</Label>
                                 <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. ABC Pharma" />
                             </div>
@@ -266,7 +266,7 @@ export function CreateLedgerModal({
                                     {/* Accounting fields previously in Basic */}
                                     <div>
                                         <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Accounting</h4>
-                                        <div className="grid grid-cols-2 gap-4">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                             <div className="space-y-1.5">
                                                 <Label>Station</Label>
                                                 <Input value={station} onChange={(e) => setStation(e.target.value)} placeholder="City / Station" />
@@ -349,7 +349,7 @@ export function CreateLedgerModal({
                                     {/* Contact (Secondary) */}
                                     <div>
                                         <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Contact (Secondary)</h4>
-                                        <div className="grid grid-cols-2 gap-4">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                             <div className="space-y-1.5">
                                                 <Label>Mail To</Label>
                                                 <Input value={mailTo} onChange={(e) => setMailTo(e.target.value)} />
@@ -392,7 +392,7 @@ export function CreateLedgerModal({
                                     {/* Compliance */}
                                     <div>
                                         <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Compliance & Tax</h4>
-                                        <div className="grid grid-cols-2 gap-4">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                             <div className="space-y-1.5">
                                                 <Label>GSTIN No.</Label>
                                                 <Input value={gstin} onChange={(e) => setGstin(e.target.value)} placeholder="15-char GSTIN" />
@@ -463,7 +463,7 @@ export function CreateLedgerModal({
                                     {/* Settings */}
                                     <div>
                                         <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Settings</h4>
-                                        <div className="grid grid-cols-2 gap-4">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                             <div className="space-y-1.5">
                                                 <Label>Bill Export</Label>
                                                 <select
@@ -560,7 +560,7 @@ export function CreateLedgerModal({
                         </div>
                 </div>
 {/* Footer */}
-                <div className="flex gap-3 px-6 py-4 border-t shrink-0">
+                <div className="flex gap-3 px-4 sm:px-6 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] border-t shrink-0">
                     <Button onClick={handleSave} disabled={saving} className="flex-1">
                         {saving ? 'Saving...' : ledgerToEdit ? 'Update' : 'Save'}
                     </Button>

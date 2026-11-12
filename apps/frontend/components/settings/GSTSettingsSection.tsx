@@ -91,7 +91,7 @@ export function GSTSettingsSection({ onDirty, onSaved, discardKey }: GSTSettings
                     <Label className="text-sm font-medium">GST Type</Label>
                     <p className="text-xs text-muted-foreground mt-0.5">Select based on your state registration</p>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {(['intrastate', 'interstate'] as const).map((type) => (
                         <button
                             key={type}

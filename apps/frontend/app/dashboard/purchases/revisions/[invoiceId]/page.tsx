@@ -45,13 +45,13 @@ export default function RevisionDetailPage({ params }: { params: { invoiceId: st
                 <ArrowLeft className="mr-2 h-4 w-4" /> Back
             </Button>
 
-            <div className="flex justify-between items-center bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                        <FileText className="h-6 w-6 text-primary" />
+            <div className="flex justify-between items-center max-sm:flex-col max-sm:items-start max-sm:gap-3 bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-100">
+                <div className="max-sm:min-w-0 max-sm:max-w-full">
+                    <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center gap-2 max-sm:break-words">
+                        <FileText className="h-6 w-6 text-primary max-sm:shrink-0" />
                         Invoice History: {invoice.invoiceNo}
                     </h1>
-                    <div className="flex gap-4 mt-2 text-sm text-gray-500">
+                    <div className="flex gap-4 mt-2 text-sm text-gray-500 max-sm:flex-wrap max-sm:gap-y-1">
                         <span className="flex items-center gap-1"><Clock className="h-4 w-4" /> Created: {format(new Date(invoice.createdAt), 'dd MMM yyyy, hh:mm a')}</span>
                         <span className="flex items-center gap-1"><User className="h-4 w-4" /> By: {invoice.createdBy}</span>
                     </div>
@@ -63,20 +63,20 @@ export default function RevisionDetailPage({ params }: { params: { invoiceId: st
                 )}
             </div>
 
-            <div className="relative border-l-2 border-gray-200 ml-4 pl-8 py-4 space-y-12">
+            <div className="relative border-l-2 border-gray-200 ml-4 pl-8 max-sm:ml-2 max-sm:pl-6 py-4 space-y-12">
                 {revisions.length === 0 ? (
                     <div className="text-gray-500 italic">No revisions found for this invoice.</div>
                 ) : (
                     revisions.map((rev: any, idx: number) => (
                         <div key={rev.id} className="relative">
-                            <div className="absolute -left-[41px] bg-white border-2 border-primary rounded-full p-1.5 shadow-sm">
+                            <div className="absolute -left-[41px] max-sm:-left-[33px] bg-white border-2 border-primary rounded-full p-1.5 shadow-sm">
                                 <Clock className="h-4 w-4 text-primary" />
                             </div>
                             
                             <Card className="border-0 shadow-lg ring-1 ring-black/5 overflow-hidden">
-                                <div className="bg-gray-50/80 px-6 py-4 border-b flex justify-between items-center">
+                                <div className="bg-gray-50/80 px-4 sm:px-6 py-4 border-b flex justify-between items-center max-sm:flex-col max-sm:items-start max-sm:gap-2">
                                     <div>
-                                        <div className="flex items-center gap-3">
+                                        <div className="flex items-center gap-3 max-sm:flex-wrap">
                                             <Badge className="bg-primary/10 text-primary hover:bg-primary/20">{rev.revision_number}</Badge>
                                             <span className="text-sm font-medium text-gray-600">{format(new Date(rev.created_at), 'dd MMM yyyy, hh:mm a')}</span>
                                         </div>
@@ -85,7 +85,7 @@ export default function RevisionDetailPage({ params }: { params: { invoiceId: st
                                         <User className="h-4 w-4" /> {rev.modified_by ? rev.modified_by.name : 'System'}
                                     </div>
                                 </div>
-                                <CardContent className="p-6 space-y-6">
+                                <CardContent className="p-4 sm:p-6 space-y-6">
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div className="space-y-4">
                                             <div>
@@ -96,7 +96,7 @@ export default function RevisionDetailPage({ params }: { params: { invoiceId: st
                                                 <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Reason</h4>
                                                 <div className="bg-yellow-50 text-yellow-800 p-3 rounded-md text-sm border border-yellow-100 flex gap-2">
                                                     <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                                                    <div>
+                                                    <div className="max-sm:min-w-0 max-sm:break-words">
                                                         <strong>{rev.reason_code}</strong>: {rev.reason_text}
                                                     </div>
                                                 </div>
@@ -141,12 +141,12 @@ export default function RevisionDetailPage({ params }: { params: { invoiceId: st
                                             <div className="bg-amber-50/50 border border-amber-100 rounded-md overflow-hidden divide-y divide-amber-100">
                                                 {rev.diff_summary_json.items_modified.map((mod: any, i: number) => (
                                                     <div key={i} className="p-3 text-sm">
-                                                        <div className="font-medium text-amber-900 mb-2">{mod.name || 'Unknown Product'} (Batch: {mod.batch_no || 'N/A'})</div>
+                                                        <div className="font-medium text-amber-900 mb-2 max-sm:break-words">{mod.name || 'Unknown Product'} (Batch: {mod.batch_no || 'N/A'})</div>
                                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
                                                             {Object.entries(mod.changes).map(([field, vals]: [string, any]) => (
                                                                 <div key={field} className="flex flex-col bg-white p-2 rounded border border-amber-100/50">
                                                                     <span className="text-xs text-amber-700/70 font-medium uppercase tracking-wider mb-1">{field.replace(/_/g, ' ')}</span>
-                                                                    <div className="flex items-center gap-2 text-xs font-mono">
+                                                                    <div className="flex items-center gap-2 text-xs font-mono max-sm:flex-wrap max-sm:break-all">
                                                                         <span className="text-gray-500 line-through bg-gray-50 px-1 rounded">{vals.old}</span>
                                                                         <ArrowRight className="h-3 w-3 text-amber-400" />
                                                                         <span className="text-amber-700 bg-amber-100/50 px-1 rounded font-medium">{vals.new}</span>
@@ -166,7 +166,7 @@ export default function RevisionDetailPage({ params }: { params: { invoiceId: st
                                             <h5 className="text-sm font-medium text-green-700">Items Added</h5>
                                             <div className="bg-green-50/50 border border-green-100 rounded-md overflow-hidden divide-y divide-green-100">
                                                 {rev.diff_summary_json.items_added.map((item: any, i: number) => (
-                                                    <div key={i} className="p-3 text-sm flex justify-between items-center text-green-800">
+                                                    <div key={i} className="p-3 text-sm flex justify-between items-center text-green-800 max-sm:flex-col max-sm:items-start max-sm:gap-1">
                                                         <span>{item.custom_product_name || 'Product'} (Batch: {item.batch_no || 'N/A'})</span>
                                                         <span className="font-mono text-xs">Qty: {item.qty} | Amt: ₹{item.total_amount}</span>
                                                     </div>
@@ -181,7 +181,7 @@ export default function RevisionDetailPage({ params }: { params: { invoiceId: st
                                             <h5 className="text-sm font-medium text-red-700">Items Removed</h5>
                                             <div className="bg-red-50/50 border border-red-100 rounded-md overflow-hidden divide-y divide-red-100">
                                                 {rev.diff_summary_json.items_removed.map((item: any, i: number) => (
-                                                    <div key={i} className="p-3 text-sm flex justify-between items-center text-red-800">
+                                                    <div key={i} className="p-3 text-sm flex justify-between items-center text-red-800 max-sm:flex-col max-sm:items-start max-sm:gap-1">
                                                         <span>{item.custom_product_name || 'Product'} (Batch: {item.batch_no || 'N/A'})</span>
                                                         <span className="font-mono text-xs line-through">Qty: {item.qty} | Amt: ₹{item.total_amount}</span>
                                                     </div>
@@ -197,7 +197,7 @@ export default function RevisionDetailPage({ params }: { params: { invoiceId: st
                 
                 {/* Original Creation Event marker */}
                 <div className="relative">
-                    <div className="absolute -left-[41px] bg-green-100 border-2 border-green-500 rounded-full p-1.5 shadow-sm">
+                    <div className="absolute -left-[41px] max-sm:-left-[33px] bg-green-100 border-2 border-green-500 rounded-full p-1.5 shadow-sm">
                         <FileText className="h-4 w-4 text-green-600" />
                     </div>
                     <div className="text-sm font-medium text-gray-500 pt-1">

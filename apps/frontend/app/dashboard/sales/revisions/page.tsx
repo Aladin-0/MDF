@@ -62,26 +62,26 @@ export default function RevisionHistoryPage() {
     };
 
     return (
-        <div className="space-y-6 max-w-7xl mx-auto p-4 md:p-6 lg:p-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="space-y-6 max-w-7xl mx-auto p-0 sm:p-4 md:p-6 lg:p-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div className="flex items-center gap-3">
-                    <div className="p-2 bg-primary/10 rounded-lg">
+                <div className="flex items-center gap-3 min-w-0">
+                    <div className="p-2 bg-primary/10 rounded-lg shrink-0">
                         <History className="h-6 w-6 text-primary" />
                     </div>
                     <div>
-                        <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">Revision History</h1>
-                        <p className="text-muted-foreground mt-1 text-lg">Audit trail of all invoice modifications</p>
+                        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">Revision History</h1>
+                        <p className="text-muted-foreground mt-1 text-sm sm:text-lg">Audit trail of all invoice modifications</p>
                     </div>
                 </div>
-                <div className="flex gap-2">
-                    <Button variant="outline" onClick={handleExport}>
+                <div className="flex gap-2 w-full sm:w-auto">
+                    <Button variant="outline" onClick={handleExport} className="w-full sm:w-auto">
                         Export CSV
                     </Button>
                 </div>
             </div>
 
             {stats && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
                     <Card>
                         <CardHeader className="py-4">
                             <CardTitle className="text-sm font-medium text-muted-foreground">Modified Today</CardTitle>
@@ -119,6 +119,54 @@ export default function RevisionHistoryPage() {
 
             <Card className="border-0 shadow-lg ring-1 ring-black/5 bg-white/50 backdrop-blur-xl">
                 <CardContent className="p-0">
+                    {/* Phone: stacked cards (same data + actions as the table below) */}
+                    <div className="md:hidden divide-y">
+                        {loading ? (
+                            <div className="animate-pulse space-y-4 py-8">
+                                <div className="h-4 bg-gray-200 rounded w-1/4 mx-auto"></div>
+                                <div className="h-4 bg-gray-200 rounded w-1/2 mx-auto"></div>
+                            </div>
+                        ) : revisions.length === 0 ? (
+                            <div className="text-center py-8 text-muted-foreground">No revision history found.</div>
+                        ) : (
+                            revisions.map((rev) => (
+                                <div key={rev.id} className="p-3 space-y-2">
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div className="min-w-0">
+                                            <p className="text-sm font-medium">{format(new Date(rev.created_at), 'dd MMM yyyy, hh:mm a')}</p>
+                                            <p className="text-xs text-muted-foreground mt-0.5">Revision {rev.revision_number}</p>
+                                        </div>
+                                        <div className="shrink-0">{getRevisionTypeBadge(rev.revision_type)}</div>
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                                        <Button variant="link" className="p-0 h-auto min-w-0 break-all" onClick={() => router.push(`/dashboard/sales/revisions/${rev.old_snapshot_json?.id || rev.original_document_id}`)}>
+                                            {rev.document_no || rev.old_snapshot_json?.header?.invoice_no || 'Unknown Invoice'}
+                                        </Button>
+                                        {rev.resulting_document_id && (
+                                            <Button variant="link" className="p-0 h-auto" onClick={() => router.push(`/dashboard/sales/revisions/${rev.resulting_document_id}`)}>
+                                                View New Invoice <ArrowRight className="h-3 w-3 ml-1" />
+                                            </Button>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center justify-between gap-2">
+                                        <span className="text-xs text-muted-foreground">By {rev.modified_by ? rev.modified_by.name : 'System'}</span>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => router.push(`/dashboard/sales/revisions/${rev.old_snapshot_json?.id || rev.original_document_id}`)}
+                                            className="h-9"
+                                        >
+                                            <Eye className="h-4 w-4 mr-2" />
+                                            View Details
+                                        </Button>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+
+                    {/* Tablet / desktop: full table */}
+                    <div className="hidden md:block">
                     <Table>
                         <TableHeader className="bg-gray-50/50">
                             <TableRow>
@@ -173,7 +221,7 @@ export default function RevisionHistoryPage() {
                                                 variant="ghost" 
                                                 size="sm" 
                                                 onClick={() => router.push(`/dashboard/sales/revisions/${rev.old_snapshot_json?.id || rev.original_document_id}`)}
-                                                className="opacity-0 group-hover:opacity-100 transition-opacity"
+                                                className="opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity"
                                             >
                                                 <Eye className="h-4 w-4 mr-2" />
                                                 View Details
@@ -184,6 +232,7 @@ export default function RevisionHistoryPage() {
                             )}
                         </TableBody>
                     </Table>
+                    </div>
                 </CardContent>
             </Card>
         </div>

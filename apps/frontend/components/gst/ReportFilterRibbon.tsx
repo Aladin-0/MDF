@@ -107,7 +107,7 @@ export function ReportFilterRibbon({
       {/* Left Group: Filters */}
       <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
         {showPeriodSelector && (
-          <div className="flex items-center gap-2">
+          <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto">
             <GSTPeriodSelector 
               selectedPeriod={activePeriod}
               onSelectPeriod={onSelectPeriod}
@@ -126,7 +126,7 @@ export function ReportFilterRibbon({
         <select 
           value={reportType}
           onChange={(e) => setReportType(e.target.value)}
-          className="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-purple-500 h-8"
+          className="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-purple-500 h-9 w-full sm:h-8 sm:w-auto"
         >
           <option value="all">Report Type: All</option>
           <option value="b2b">B2B (Registered)</option>
@@ -136,7 +136,7 @@ export function ReportFilterRibbon({
         <select 
           value={taxFilter}
           onChange={(e) => setTaxFilter(e.target.value)}
-          className="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-purple-500 h-8"
+          className="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-purple-500 h-9 w-full sm:h-8 sm:w-auto"
         >
           <option value="all">Tax Filter: All</option>
           <option value="with_gst">With GST</option>
@@ -147,7 +147,7 @@ export function ReportFilterRibbon({
           variant="default" 
           size="sm" 
           onClick={handleSearch}
-          className="bg-purple-600 hover:bg-purple-700 text-white shrink-0 h-8"
+          className="bg-purple-600 hover:bg-purple-700 text-white shrink-0 h-9 w-full sm:h-8 sm:w-auto"
         >
           <Search className="w-4 h-4 mr-1.5" />
           Search
@@ -155,7 +155,7 @@ export function ReportFilterRibbon({
       </div>
 
       {/* Right Group: Actions */}
-      <div className="flex items-center gap-2 shrink-0 self-end lg:self-auto">
+      <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:shrink-0 sm:self-end lg:self-auto">
         
         {customActionRight}
 

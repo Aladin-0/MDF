@@ -40,26 +40,26 @@ export function BatchDetailDrawer({ productId, product, isOpen, onClose, onAdjus
             <DrawerContent className="h-full w-full sm:w-[95vw] lg:w-[1200px] border-l rounded-none p-0 overflow-y-auto bg-slate-50/30">
                 
                 {/* Fixed Header with Close Button */}
-                <div className="sticky top-0 z-20 bg-white border-b px-10 py-8 flex justify-between items-start shadow-sm">
+                <div className="sticky top-0 z-20 bg-white border-b px-4 py-4 sm:px-10 sm:py-8 flex justify-between items-start gap-3 shadow-sm">
                     {isLoading ? (
                         <div className="space-y-3 w-full">
                             <Skeleton className="h-10 w-3/4" />
                             <Skeleton className="h-6 w-1/2" />
                         </div>
                     ) : (
-                        <div>
-                            <div className="flex items-center gap-4">
-                                <div className="bg-primary/10 p-3 rounded-xl">
-                                    <Layers className="w-8 h-8 text-primary" />
+                        <div className="min-w-0">
+                            <div className="flex items-center gap-3 sm:gap-4">
+                                <div className="bg-primary/10 p-2 sm:p-3 rounded-xl shrink-0">
+                                    <Layers className="w-6 h-6 sm:w-8 sm:h-8 text-primary" />
                                 </div>
-                                <h2 className="text-4xl font-black text-slate-900 tracking-tight">
+                                <h2 className="text-xl sm:text-4xl font-black text-slate-900 tracking-tight break-words min-w-0">
                                     {productInfo?.name || 'Unknown Product'}
                                 </h2>
                             </div>
-                            <p className="text-xl text-slate-500 font-medium mt-3 ml-14">
+                            <p className="text-base sm:text-xl text-slate-500 font-medium mt-2 sm:mt-3 sm:ml-14">
                                 {productInfo?.manufacturer || 'Unknown Manufacturer'}
                             </p>
-                            <div className="flex flex-wrap gap-3 mt-5 ml-14">
+                            <div className="flex flex-wrap gap-2 sm:gap-3 mt-3 sm:mt-5 sm:ml-14">
                                 {productInfo?.scheduleType && productInfo.scheduleType !== 'OTC' && (
                                     <span className="px-4 py-2 bg-red-100 text-red-700 text-sm font-bold rounded-lg border border-red-200">
                                         Schedule {productInfo.scheduleType}
@@ -79,32 +79,32 @@ export function BatchDetailDrawer({ productId, product, isOpen, onClose, onAdjus
                         </div>
                     )}
                     <DrawerClose asChild>
-                        <Button variant="ghost" size="icon" className="hover:bg-slate-100 h-12 w-12 rounded-full bg-white border shadow-sm">
+                        <Button variant="ghost" size="icon" className="hover:bg-slate-100 h-10 w-10 sm:h-12 sm:w-12 shrink-0 rounded-full bg-white border shadow-sm">
                             <X className="w-6 h-6 text-slate-500" />
                         </Button>
                     </DrawerClose>
                 </div>
 
-                <div className="p-10 space-y-12">
+                <div className="p-4 sm:p-10 space-y-8 sm:space-y-12">
                     
                     {/* SECTION 1: Stock Summary Metrics */}
                     {!isLoading && (
-                        <div className="grid grid-cols-3 gap-8">
-                            <div className="bg-white border border-slate-200 rounded-3xl p-8 flex flex-col items-center justify-center text-center shadow-sm hover:shadow-md transition-shadow">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-8">
+                            <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-8 flex flex-col items-center justify-center text-center shadow-sm hover:shadow-md transition-shadow">
                                 <Package className="w-10 h-10 text-indigo-500 mb-4" />
-                                <span className="text-6xl font-black text-slate-900 tracking-tight">{totalStrips}</span>
+                                <span className="text-4xl sm:text-6xl font-black text-slate-900 tracking-tight">{totalStrips}</span>
                                 <span className="text-base text-slate-500 font-bold mt-3 uppercase tracking-widest">Total {(productInfo?.packType || 'Strips').toLowerCase().endsWith('s') ? productInfo?.packType : productInfo?.packType + 's' || 'Strips'} Left</span>
                             </div>
-                            <div className={`bg-white border rounded-3xl p-8 flex flex-col items-center justify-center text-center shadow-sm hover:shadow-md transition-shadow ${totalStrips < (productInfo?.minQty || 10) ? 'border-red-300 bg-red-50/50' : 'border-slate-200'}`}>
+                            <div className={`bg-white border rounded-3xl p-5 sm:p-8 flex flex-col items-center justify-center text-center shadow-sm hover:shadow-md transition-shadow ${totalStrips < (productInfo?.minQty || 10) ? 'border-red-300 bg-red-50/50' : 'border-slate-200'}`}>
                                 <AlertTriangle className={`w-10 h-10 mb-4 ${totalStrips < (productInfo?.minQty || 10) ? 'text-red-500' : 'text-slate-400'}`} />
-                                <span className={`text-5xl font-black tracking-tight ${totalStrips < (productInfo?.minQty || 10) ? 'text-red-700' : 'text-slate-900'}`}>
+                                <span className={`text-3xl sm:text-5xl font-black tracking-tight ${totalStrips < (productInfo?.minQty || 10) ? 'text-red-700' : 'text-slate-900'}`}>
                                     {productInfo?.minQty || 10}
                                 </span>
                                 <span className="text-base text-slate-500 font-bold mt-3 uppercase tracking-widest">Reorder Level</span>
                             </div>
-                            <div className="bg-white border border-slate-200 rounded-3xl p-8 flex flex-col items-center justify-center text-center shadow-sm hover:shadow-md transition-shadow">
+                            <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-8 flex flex-col items-center justify-center text-center shadow-sm hover:shadow-md transition-shadow">
                                 <TrendingUp className="w-10 h-10 text-emerald-500 mb-4" />
-                                <span className="text-5xl font-black text-slate-900 tracking-tight mt-2">{formatCurrency(averageMrp)}</span>
+                                <span className="text-3xl sm:text-5xl font-black text-slate-900 tracking-tight mt-2">{formatCurrency(averageMrp)}</span>
                                 <span className="text-base text-slate-500 font-bold mt-3 uppercase tracking-widest">Average MRP</span>
                             </div>
                         </div>
@@ -112,8 +112,8 @@ export function BatchDetailDrawer({ productId, product, isOpen, onClose, onAdjus
 
                     {/* SECTION 2: Batches List */}
                     <div>
-                        <div className="flex justify-between items-end mb-8">
-                            <h3 className="text-2xl font-black text-slate-900 uppercase tracking-wide flex items-center gap-3">
+                        <div className="flex flex-wrap justify-between items-end gap-3 mb-4 sm:mb-8">
+                            <h3 className="text-lg sm:text-2xl font-black text-slate-900 uppercase tracking-wide flex items-center gap-3">
                                 <Layers className="w-7 h-7 text-primary" />
                                 Current Inventory Batches
                             </h3>
@@ -127,7 +127,7 @@ export function BatchDetailDrawer({ productId, product, isOpen, onClose, onAdjus
                                 ))}
                             </div>
                         ) : data.length > 0 ? (
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8">
                                 {data.map((batch: any) => {
                                     const exDate = new Date(batch.expiryDate);
                                     const now = new Date();
@@ -145,7 +145,7 @@ export function BatchDetailDrawer({ productId, product, isOpen, onClose, onAdjus
                                     }
 
                                     return (
-                                        <div key={batch.id} className={`rounded-3xl p-8 border-2 ${borderColor} relative overflow-hidden transition-all shadow-sm hover:shadow-xl bg-white flex flex-col justify-between h-full`}>
+                                        <div key={batch.id} className={`rounded-3xl p-4 sm:p-8 border-2 ${borderColor} relative overflow-hidden transition-all shadow-sm hover:shadow-xl bg-white flex flex-col justify-between h-full`}>
                                             {diffDays <= 0 && (
                                                 <div className="absolute top-6 -right-12 w-48 bg-red-600 text-white text-xs font-black py-2.5 text-center rotate-45 transform uppercase tracking-widest shadow-md">
                                                     Expired
@@ -153,36 +153,36 @@ export function BatchDetailDrawer({ productId, product, isOpen, onClose, onAdjus
                                             )}
                                             
                                             <div>
-                                                <div className="flex justify-between items-start mb-8">
+                                                <div className="flex flex-wrap justify-between items-start gap-3 mb-5 sm:mb-8">
                                                     <div>
                                                         <div className="text-sm uppercase text-slate-500 font-black tracking-widest mb-2">Batch Number</div>
-                                                        <div className="font-mono font-black text-3xl text-slate-900 tracking-tight">{batch.batchNo}</div>
+                                                        <div className="font-mono font-black text-2xl sm:text-3xl break-all text-slate-900 tracking-tight">{batch.batchNo}</div>
                                                         {batch.rackLocation && (
                                                             <div className="mt-2 text-sm font-bold text-slate-500 bg-slate-100 inline-block px-3 py-1 rounded-md">
                                                                 Rack: {batch.rackLocation}
                                                             </div>
                                                         )}
                                                     </div>
-                                                    <div className={`text-base font-black px-4 py-2 rounded-xl border-2 ${badgeColor}`}>
+                                                    <div className={`text-sm sm:text-base font-black px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl border-2 ${badgeColor}`}>
                                                         Exp: {exDate.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}
                                                     </div>
                                                 </div>
 
-                                                <div className="grid grid-cols-2 gap-5 mb-8">
-                                                    <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200">
+                                                <div className="grid grid-cols-2 gap-3 sm:gap-5 mb-5 sm:mb-8">
+                                                    <div className="bg-slate-50 p-3 sm:p-5 rounded-2xl border border-slate-200">
                                                         <div className="text-xs uppercase text-slate-500 font-black tracking-widest mb-2">Stock Left</div>
-                                                        <div className="font-black text-slate-900 text-3xl">
+                                                        <div className="font-black text-slate-900 text-xl sm:text-3xl">
                                                             {formatQty(batch.qtyStrips, batch.qtyLoose, productInfo?.packSize, productInfo?.packType, productInfo?.packUnit)}
                                                         </div>
                                                     </div>
 
-                                                    <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200">
+                                                    <div className="bg-slate-50 p-3 sm:p-5 rounded-2xl border border-slate-200">
                                                         <div className="text-xs uppercase text-slate-500 font-black tracking-widest mb-2">MRP</div>
                                                         <div className="font-black text-slate-700 text-xl">{formatCurrency(batch.mrp)}</div>
                                                     </div>
 
                                                     <PermissionGate permission="view_purchase_rates">
-                                                        <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200">
+                                                        <div className="bg-slate-50 p-3 sm:p-5 rounded-2xl border border-slate-200">
                                                             <div className="text-xs uppercase text-slate-500 font-black tracking-widest mb-2">Purchase Rate</div>
                                                             <div className="font-black text-slate-700 text-xl">{formatCurrency(batch.purchaseRate)}</div>
                                                         </div>

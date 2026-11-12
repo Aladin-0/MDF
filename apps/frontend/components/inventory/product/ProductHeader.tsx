@@ -68,7 +68,7 @@ export function ProductHeader({ product, isLow, level, refreshing, onRefresh, on
                     )}
                 </div>
 
-                <div className="ml-auto flex items-center gap-2">
+                <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
                     <Button type="button" variant="outline" size="sm" onClick={onRefresh} disabled={refreshing}>
                         <RefreshCw className={refreshing ? 'animate-spin motion-reduce:animate-none' : undefined} aria-hidden="true" /> Refresh
                     </Button>
@@ -88,7 +88,7 @@ export function ProductHeader({ product, isLow, level, refreshing, onRefresh, on
 
             <dl className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
                 {product.manufacturer && <Fact label="Maker">{product.manufacturer}</Fact>}
-                {product.composition && <Fact label="Salt" className="max-w-[28rem]"><span className="block truncate" title={product.composition}>{product.composition}</span></Fact>}
+                {product.composition && <Fact label="Salt" className="max-w-full sm:max-w-[28rem]"><span className="block truncate" title={product.composition}>{product.composition}</span></Fact>}
                 {product.drugType && <Fact label="Type"><span className="capitalize">{product.drugType}</span></Fact>}
                 <Fact label="HSN"><span translate="no" className="tabular-nums">{product.hsnCode || '—'}</span></Fact>
                 <Fact label="GST"><span className="tabular-nums">{product.gstRate != null ? `${product.gstRate}%` : '—'}</span></Fact>

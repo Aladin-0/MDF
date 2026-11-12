@@ -267,16 +267,16 @@ function GroupRow({ group, showZero, summaryMode, onLedgerClick, indent = 0 }: {
         <div className="border-b border-slate-100 last:border-b-0">
             <button
                 onClick={() => !summaryMode && setOpen(p => !p)}
-                className={cn('w-full flex items-center justify-between py-2 hover:bg-slate-50 transition-colors text-left',
+                className={cn('w-full flex items-center justify-between gap-2 py-2 hover:bg-slate-50 transition-colors text-left',
                     indent === 0 ? 'px-4' : 'px-6')}
             >
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 min-w-0">
                     {!summaryMode && (open
                         ? <ChevronDown className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                         : <ChevronRight className="h-3.5 w-3.5 text-slate-400 shrink-0" />)}
-                    <span className="text-sm font-semibold text-slate-700">{group.name}</span>
+                    <span className="text-sm font-semibold text-slate-700 break-words">{group.name}</span>
                 </div>
-                <span className="font-mono text-sm font-semibold text-slate-800 w-28 text-right pl-print-val">
+                <span className="font-mono text-sm font-semibold text-slate-800 w-28 text-right pl-print-val shrink-0">
                     {fmt(Math.abs(group.value))}
                 </span>
             </button>
@@ -289,14 +289,14 @@ function GroupRow({ group, showZero, summaryMode, onLedgerClick, indent = 0 }: {
                         <button
                             key={l.id ?? i}
                             onClick={() => l.id && onLedgerClick(l.id, l.name)}
-                            className={cn('w-full flex items-center justify-between px-8 py-1.5 text-left group/l transition-colors',
+                            className={cn('w-full flex items-center justify-between gap-2 pl-6 pr-4 sm:px-8 py-1.5 text-left group/l transition-colors',
                                 l.id ? 'hover:bg-indigo-50 hover:text-indigo-700 cursor-pointer' : 'cursor-default')}
                         >
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
                                 <div className="h-1.5 w-1.5 rounded-full bg-slate-300 group-hover/l:bg-indigo-400 shrink-0" />
-                                <span className="text-xs text-slate-600 group-hover/l:text-indigo-700">{l.name}</span>
+                                <span className="text-xs text-slate-600 group-hover/l:text-indigo-700 break-words">{l.name}</span>
                             </div>
-                            <span className="font-mono text-xs text-slate-700 group-hover/l:text-indigo-700 w-28 text-right">
+                            <span className="font-mono text-xs text-slate-700 group-hover/l:text-indigo-700 w-28 text-right shrink-0">
                                 {fmt(Math.abs(l.value))}
                             </span>
                         </button>
@@ -383,7 +383,7 @@ function LedgerDrilldown({ ledgerId, ledgerName, fromDate, toDate, onClose }: {
     return (
         <Sheet open={!!ledgerId} onOpenChange={o => !o && onClose()}>
             <SheetContent side="right" className="w-full sm:max-w-3xl flex flex-col bg-slate-50 p-0 overflow-hidden">
-                <SheetHeader className="px-5 pt-5 pb-3 border-b border-slate-200 bg-white shrink-0">
+                <SheetHeader className="pl-5 pr-12 sm:pr-5 pt-5 pb-3 border-b border-slate-200 bg-white shrink-0">
                     <SheetTitle className="text-base font-semibold text-slate-800 flex items-center gap-2">
                         <BarChart2 className="h-4 w-4 text-indigo-500" /> {ledgerName}
                     </SheetTitle>
@@ -600,9 +600,9 @@ function SectionPanel({ title, rows, total, totalLabel, summaryMode, showZero, o
             <div className="flex-1 divide-y divide-slate-100">
                 {rows}
             </div>
-            <div className="flex items-center justify-between px-4 py-2.5 bg-slate-700 text-white print-total-row">
+            <div className="flex items-center justify-between gap-2 px-4 py-2.5 bg-slate-700 text-white print-total-row">
                 <span className="text-xs font-bold uppercase tracking-wide">{totalLabel}</span>
-                <span className="font-mono text-sm font-bold">{fmtFull(total)}</span>
+                <span className="font-mono text-sm font-bold shrink-0">{fmtFull(total)}</span>
             </div>
         </div>
     );
@@ -613,13 +613,13 @@ function DataRow({ label, value, sub, bold, colorClass, indent = 0 }: {
     label: string; value: number | string; sub?: string; bold?: boolean; colorClass?: string; indent?: number;
 }) {
     return (
-        <div className={cn('flex items-center justify-between py-2.5 border-b border-slate-100 last:border-b-0',
+        <div className={cn('flex items-center justify-between gap-2 py-2.5 border-b border-slate-100 last:border-b-0',
             indent === 0 ? 'px-4' : indent === 1 ? 'px-6' : 'px-8')}>
-            <div>
+            <div className="min-w-0 break-words">
                 <span className={cn('text-sm text-slate-700', bold && 'font-bold')}>{label}</span>
                 {sub && <span className="ml-2 text-xs text-slate-400">{sub}</span>}
             </div>
-            <span className={cn('font-mono text-sm w-28 text-right pl-print-val', bold ? 'font-bold' : 'font-semibold', colorClass || 'text-slate-800')}>
+            <span className={cn('font-mono text-sm w-28 text-right pl-print-val shrink-0', bold ? 'font-bold' : 'font-semibold', colorClass || 'text-slate-800')}>
                 {typeof value === 'number' ? fmt(Math.abs(value)) : value}
             </span>
         </div>
@@ -937,7 +937,7 @@ export default function ProfitLossPage() {
                 }
             `}</style>
 
-            <div id="pl-print-root" className="space-y-4 p-4 lg:p-6 max-w-[1700px] mx-auto">
+            <div id="pl-print-root" className="space-y-4 p-0 sm:p-4 lg:p-6 max-w-[1700px] mx-auto">
 
                 {/* Print-only header */}
                 <div className="pl-print-company">
@@ -990,7 +990,7 @@ export default function ProfitLossPage() {
                                     {card.icon}
                                     <p className="text-xs text-slate-500">{card.label}</p>
                                 </div>
-                                <p className={cn('text-lg font-bold font-mono', card.color)}>{fmtFull(card.value)}</p>
+                                <p className={cn('text-base sm:text-lg font-bold font-mono max-sm:truncate', card.color)}>{fmtFull(card.value)}</p>
                                 {card.pct !== undefined && (
                                     <p className={cn('text-xs font-medium', (card.pct ?? 0) >= 0 ? 'text-emerald-600' : 'text-red-600')}>
                                         {fmtPct(card.pct ?? 0)} margin
@@ -1005,20 +1005,20 @@ export default function ProfitLossPage() {
                 <div className="bg-white border border-slate-200 rounded-xl px-4 py-3 space-y-3 no-print">
                     <div className="flex flex-wrap items-center gap-3">
                         {/* Date pickers */}
-                        <div className="flex items-center gap-2">
-                            <div className="flex flex-col gap-0.5">
+                        <div className="flex items-center gap-2 w-full sm:w-auto">
+                            <div className="flex flex-col gap-0.5 flex-1 min-w-0 sm:flex-none">
                                 <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">From Date</label>
                                 <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)}
                                     className="h-8 px-2 rounded-md border border-slate-300 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300" />
                             </div>
-                            <div className="flex flex-col gap-0.5">
+                            <div className="flex flex-col gap-0.5 flex-1 min-w-0 sm:flex-none">
                                 <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">To Date</label>
                                 <input type="date" value={toDate} onChange={e => setToDate(e.target.value)}
                                     className="h-8 px-2 rounded-md border border-slate-300 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300" />
                             </div>
                         </div>
 
-                        <div className="h-7 w-px bg-slate-200" />
+                        <div className="h-7 w-px bg-slate-200 hidden sm:block" />
 
                         {/* Quick presets */}
                         <div className="flex flex-col gap-0.5">
@@ -1036,7 +1036,7 @@ export default function ProfitLossPage() {
                             </select>
                         </div>
 
-                        <div className="h-7 w-px bg-slate-200" />
+                        <div className="h-7 w-px bg-slate-200 hidden sm:block" />
 
                         {/* Stock Settings */}
                         <Button variant="outline" size="sm" onClick={() => setShowStockDialog(true)}
@@ -1111,8 +1111,8 @@ export default function ProfitLossPage() {
                     const openingStockVal = ta.dr.opening_stock?.value ?? 0;
                     drTradingRows.push(
                         <div key="op-stock"
-                            className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100">
-                            <div className="flex items-center gap-2">
+                            className="flex items-center justify-between gap-2 px-4 py-2.5 border-b border-slate-100">
+                            <div className="flex items-center gap-2 min-w-0">
                                 <span className="text-sm text-slate-700">Opening Stock</span>
                                 {openingStockVal === 0 && (
                                     <span className="group relative inline-flex items-center">
@@ -1130,7 +1130,7 @@ export default function ProfitLossPage() {
                                     </span>
                                 )}
                             </div>
-                            <span className={`font-mono text-sm font-semibold w-28 text-right pl-print-val ${openingStockVal > 0 ? 'text-slate-800' : 'text-slate-400'}`}>
+                            <span className={`font-mono text-sm font-semibold w-28 text-right pl-print-val shrink-0 ${openingStockVal > 0 ? 'text-slate-800' : 'text-slate-400'}`}>
                                 {fmt(openingStockVal)}
                             </span>
                         </div>
@@ -1273,12 +1273,12 @@ export default function ProfitLossPage() {
                             {/* ── TRADING ACCOUNT ─────────────────────────────── */}
                             {/* Dr trading */}
                             <div className="border-r border-slate-200">
-                                <div className="px-3 py-2 bg-amber-600 flex items-center justify-between">
+                                <div className="px-3 py-2 bg-amber-600 flex items-center justify-between gap-2">
                                     <span className="text-xs font-bold text-white tracking-widest uppercase">Trading Account (Dr)</span>
                                     <span className="font-mono text-xs text-amber-100">{fmtFull(ta.trading_total_dr)}</span>
                                 </div>
                                 <div className="divide-y divide-slate-100">{drTradingRows}</div>
-                                <div className="flex items-center justify-between px-4 py-2.5 bg-amber-50 border-t border-amber-200 print-total-row">
+                                <div className="flex items-center justify-between gap-2 px-4 py-2.5 bg-amber-50 border-t border-amber-200 print-total-row">
                                     <span className="text-xs font-bold text-amber-900 uppercase tracking-wide">Total Trading (Dr)</span>
                                     <span className="font-mono text-sm font-bold text-amber-900">{fmtFull(ta.trading_total_dr)}</span>
                                 </div>
@@ -1286,29 +1286,29 @@ export default function ProfitLossPage() {
 
                             {/* Cr trading */}
                             <div>
-                                <div className="px-3 py-2 bg-amber-600 flex items-center justify-between">
+                                <div className="px-3 py-2 bg-amber-600 flex items-center justify-between gap-2">
                                     <span className="text-xs font-bold text-white tracking-widest uppercase">Trading Account (Cr)</span>
                                     <span className="font-mono text-xs text-amber-100">{fmtFull(ta.trading_total_cr)}</span>
                                 </div>
                                 <div className="divide-y divide-slate-100">{crTradingRows}</div>
-                                <div className="flex items-center justify-between px-4 py-2.5 bg-amber-50 border-t border-amber-200 print-total-row">
+                                <div className="flex items-center justify-between gap-2 px-4 py-2.5 bg-amber-50 border-t border-amber-200 print-total-row">
                                     <span className="text-xs font-bold text-amber-900 uppercase tracking-wide">Total Trading (Cr)</span>
                                     <span className="font-mono text-sm font-bold text-amber-900">{fmtFull(ta.trading_total_cr)}</span>
                                 </div>
                             </div>
 
                             {/* Vertical divider for print */}
-                            <div className="pl-vertical-divider hidden col-span-2" />
+                            <div className="pl-vertical-divider hidden col-span-full" />
 
                             {/* ── P&L ACCOUNT ─────────────────────────────────── */}
                             {/* Dr P&L */}
                             <div className="border-r border-t border-slate-200">
-                                <div className="px-3 py-2 bg-indigo-700 flex items-center justify-between">
+                                <div className="px-3 py-2 bg-indigo-700 flex items-center justify-between gap-2">
                                     <span className="text-xs font-bold text-white tracking-widest uppercase">P&L Account (Dr)</span>
                                     <span className="font-mono text-xs text-indigo-200">{fmtFull(pla.pl_total_dr)}</span>
                                 </div>
                                 <div className="divide-y divide-slate-100">{drPLRows}</div>
-                                <div className="flex items-center justify-between px-4 py-2.5 bg-indigo-50 border-t border-indigo-200 print-total-row">
+                                <div className="flex items-center justify-between gap-2 px-4 py-2.5 bg-indigo-50 border-t border-indigo-200 print-total-row">
                                     <span className="text-xs font-bold text-indigo-900 uppercase tracking-wide">Total P&L (Dr)</span>
                                     <span className="font-mono text-sm font-bold text-indigo-900">{fmtFull(pla.pl_total_dr)}</span>
                                 </div>
@@ -1316,29 +1316,29 @@ export default function ProfitLossPage() {
 
                             {/* Cr P&L */}
                             <div className="border-t border-slate-200">
-                                <div className="px-3 py-2 bg-indigo-700 flex items-center justify-between">
+                                <div className="px-3 py-2 bg-indigo-700 flex items-center justify-between gap-2">
                                     <span className="text-xs font-bold text-white tracking-widest uppercase">P&L Account (Cr)</span>
                                     <span className="font-mono text-xs text-indigo-200">{fmtFull(pla.pl_total_cr)}</span>
                                 </div>
                                 <div className="divide-y divide-slate-100">{crPLRows}</div>
-                                <div className="flex items-center justify-between px-4 py-2.5 bg-indigo-50 border-t border-indigo-200 print-total-row">
+                                <div className="flex items-center justify-between gap-2 px-4 py-2.5 bg-indigo-50 border-t border-indigo-200 print-total-row">
                                     <span className="text-xs font-bold text-indigo-900 uppercase tracking-wide">Total P&L (Cr)</span>
                                     <span className="font-mono text-sm font-bold text-indigo-900">{fmtFull(pla.pl_total_cr)}</span>
                                 </div>
                             </div>
 
                             {/* ── GRAND TOTAL ──────────────────────────────────── */}
-                            <div className="col-span-2 bg-slate-800 flex items-center justify-between px-4 py-3 print-total-row">
+                            <div className="col-span-full bg-slate-800 flex flex-col items-stretch gap-1 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3 print-total-row">
                                 <span className="text-sm font-bold text-white uppercase tracking-wide">Grand Total</span>
-                                <div className="flex items-center gap-6">
+                                <div className="flex items-center justify-between gap-3 sm:justify-start sm:gap-6">
                                     <div className="text-right">
                                         <p className="text-[10px] text-slate-400">Dr</p>
-                                        <p className="font-mono text-base font-bold text-red-300">{fmtFull(ta.trading_total_dr + pla.pl_total_dr)}</p>
+                                        <p className="font-mono text-sm sm:text-base font-bold text-red-300">{fmtFull(ta.trading_total_dr + pla.pl_total_dr)}</p>
                                     </div>
                                     <div className="w-px h-8 bg-slate-600" />
                                     <div className="text-right">
                                         <p className="text-[10px] text-slate-400">Cr</p>
-                                        <p className="font-mono text-base font-bold text-emerald-300">{fmtFull(ta.trading_total_cr + pla.pl_total_cr)}</p>
+                                        <p className="font-mono text-sm sm:text-base font-bold text-emerald-300">{fmtFull(ta.trading_total_cr + pla.pl_total_cr)}</p>
                                     </div>
                                 </div>
                             </div>

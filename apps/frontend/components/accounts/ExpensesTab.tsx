@@ -303,13 +303,13 @@ export function ExpensesTab() {
             {/* Right: Expense History */}
             <div className="space-y-4">
                 {/* Stat cards */}
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                     {[
                         { label: 'This Month', value: monthTotal },
                         { label: 'This Week',  value: weekTotal  },
                         { label: 'Today',      value: todayTotal },
-                    ].map((stat) => (
-                        <Card key={stat.label}>
+                    ].map((stat, i) => (
+                        <Card key={stat.label} className={cn(i === 0 && 'col-span-2 sm:col-span-1')}>
                             <CardContent className="p-4">
                                 <p className="text-xs text-muted-foreground">{stat.label}</p>
                                 <p className="mt-1 text-lg font-bold tabular-nums">{formatINR(stat.value)}</p>
@@ -320,23 +320,23 @@ export function ExpensesTab() {
 
                 {/* Filter bar */}
                 <div className="flex gap-2 flex-wrap">
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex w-full items-center gap-1.5 sm:w-auto">
                         <input
                             type="date"
                             value={filterFrom}
                             onChange={(e) => setFilterFrom(e.target.value)}
-                            className="h-8 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                            className="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring sm:h-8 sm:flex-none"
                         />
                         <span className="text-xs text-muted-foreground">to</span>
                         <input
                             type="date"
                             value={filterTo}
                             onChange={(e) => setFilterTo(e.target.value)}
-                            className="h-8 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                            className="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring sm:h-8 sm:flex-none"
                         />
                     </div>
                     <Select value={filterHead} onValueChange={setFilterHead}>
-                        <SelectTrigger className="h-8 text-xs w-36">
+                        <SelectTrigger className="h-9 w-full text-xs sm:h-8 sm:w-36">
                             <SelectValue placeholder="All categories" />
                         </SelectTrigger>
                         <SelectContent>
@@ -388,15 +388,15 @@ export function ExpensesTab() {
                                                     <Icon className="h-4 w-4" />
                                                 </div>
                                                 <div className="flex-1 min-w-0">
-                                                    <p className="font-medium text-sm">
+                                                    <p className="font-medium text-sm truncate">
                                                         {e.expenseHead === 'other' ? (e.customHead ?? 'Other') : headLabel(e.expenseHead)}
                                                     </p>
-                                                    <p className="text-xs text-muted-foreground">
+                                                    <p className="text-xs text-muted-foreground truncate">
                                                         {format(new Date(e.date + 'T12:00:00'), 'dd MMM yyyy')}
                                                         {e.notes && <> · {e.notes}</>}
                                                     </p>
                                                 </div>
-                                                <div className="text-right space-y-1">
+                                                <div className="shrink-0 text-right space-y-1">
                                                     <p className="font-semibold text-sm tabular-nums">{formatINR(e.amount)}</p>
                                                     <span className={cn('inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium', mColor)}>
                                                         {e.paymentMode === 'bank_transfer' ? 'Bank' : e.paymentMode.charAt(0).toUpperCase() + e.paymentMode.slice(1)}

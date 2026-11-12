@@ -127,7 +127,7 @@ export function AttendanceSettingsSection({ onDirty, onSaved, discardKey }: Atte
 
             {/* Grace Period */}
             <div className="rounded-xl border bg-white p-4 space-y-4">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-3">
                     <div>
                         <Label className="text-sm font-medium">Late Arrival Grace Period</Label>
                         <p className="text-xs text-muted-foreground mt-0.5">
@@ -176,7 +176,7 @@ export function AttendanceSettingsSection({ onDirty, onSaved, discardKey }: Atte
                 </div>
 
                 <div className="space-y-3">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-3">
                         <div>
                             <Label className="text-sm font-medium">Auto-reset timer</Label>
                             <p className="text-xs text-muted-foreground mt-0.5">
@@ -231,7 +231,7 @@ export function AttendanceSettingsSection({ onDirty, onSaved, discardKey }: Atte
                 <p className="text-sm font-semibold text-slate-800">Security & Restrictions (Dual Validation)</p>
 
                 <div className="space-y-3">
-                    <div className="flex justify-between items-center">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center">
                         <Label htmlFor="allowedAttendanceIps" className="text-sm font-medium">
                             Allowed Wi-Fi IP Addresses (Primary Check)
                         </Label>
@@ -248,7 +248,7 @@ export function AttendanceSettingsSection({ onDirty, onSaved, discardKey }: Atte
                 </div>
 
                 <div className="space-y-4 pt-4 border-t">
-                    <div className="flex justify-between items-center">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center">
                         <Label className="text-sm font-medium">GPS Geofencing (Fallback Check)</Label>
                         <Button type="button" variant="outline" size="sm" onClick={captureLocation}>
                             Capture Current Location

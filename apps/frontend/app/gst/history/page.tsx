@@ -43,7 +43,7 @@ export default function HistoryPage() {
 
             <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left">
+                    <table className="w-full min-w-[40rem] text-sm text-left">
                         <thead className="bg-slate-50 text-slate-500 border-b">
                             <tr>
                                 <th className="px-6 py-3 font-medium">Timestamp</th>
@@ -99,7 +99,7 @@ export default function HistoryPage() {
                     </table>
                 </div>
                 
-                <div className="flex items-center justify-between px-6 py-3 border-t bg-slate-50">
+                <div className="flex items-center justify-between px-3 sm:px-6 py-3 border-t bg-slate-50">
                     <Button 
                         variant="outline" 
                         size="sm" 

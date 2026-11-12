@@ -69,13 +69,13 @@ function CustomerCard({
                     </div>
                 </div>
                 <div className="mt-3 flex gap-2">
-                    <Button variant="outline" size="sm" className="flex-1 gap-1.5 h-8 text-xs" onClick={onViewLedger}>
+                    <Button variant="outline" size="sm" className="flex-1 gap-1.5 h-9 sm:h-8 text-xs" onClick={onViewLedger}>
                         <BookOpen className="h-3.5 w-3.5" />
                         View Ledger
                     </Button>
                     <Button
                         size="sm"
-                        className="flex-1 gap-1.5 h-8 text-xs bg-emerald-600 hover:bg-emerald-700"
+                        className="flex-1 gap-1.5 h-9 sm:h-8 text-xs bg-emerald-600 hover:bg-emerald-700"
                         onClick={onReceivePayment}
                     >
                         <User className="h-3.5 w-3.5" />

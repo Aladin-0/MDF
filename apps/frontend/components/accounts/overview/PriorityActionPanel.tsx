@@ -26,17 +26,17 @@ function ActionItem({ title, description, icon: Icon, count, href, variant }: Ac
     };
 
     return (
-        <div className={cn("flex items-center justify-between p-3 border rounded-lg", colors[variant])}>
-            <div className="flex items-center gap-3">
-                <Icon className="h-5 w-5" />
-                <div>
+        <div className={cn("flex items-center justify-between gap-3 p-3 border rounded-lg", colors[variant])}>
+            <div className="flex min-w-0 items-center gap-3">
+                <Icon className="h-5 w-5 shrink-0" />
+                <div className="min-w-0">
                     <p className="font-semibold text-sm">
                         {count} {title}
                     </p>
                     <p className="text-xs opacity-80">{description}</p>
                 </div>
             </div>
-            <Link href={href} className="text-xs font-medium hover:underline flex items-center gap-1">
+            <Link href={href} className="text-xs font-medium hover:underline flex shrink-0 items-center gap-1 py-2">
                 View <ArrowRight className="h-3 w-3" />
             </Link>
         </div>

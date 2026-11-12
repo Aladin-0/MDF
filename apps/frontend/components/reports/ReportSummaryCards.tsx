@@ -43,12 +43,12 @@ export function ReportSummaryCards({ cards, isLoading }: ReportSummaryCardsProps
                 return (
                     <div
                         key={i}
-                        className="bg-white rounded-xl border p-4 flex-1 min-w-[160px]"
+                        className="bg-white rounded-xl border p-3 sm:p-4 flex-1 min-w-0 md:min-w-[160px]"
                     >
                         <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
                             {card.label}
                         </p>
-                        <p className="text-2xl font-bold text-slate-900">{card.value}</p>
+                        <p className="text-lg sm:text-2xl font-bold text-slate-900 break-words">{card.value}</p>
                         {card.change !== undefined && (
                             <div className={cn('flex items-center gap-1 mt-1', trendColor)}>
                                 <TrendIcon className="w-3 h-3" />

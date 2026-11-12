@@ -46,10 +46,10 @@ export function SummaryCards({ summary, totalRecords, packSize, dimmed }: Summar
         <div role="group" aria-label="Summary for the selected period" className={cn('grid grid-cols-1 gap-3 transition-opacity sm:grid-cols-2 xl:grid-cols-4', dimmed && 'opacity-60')}>
             {cards.map((c) => (
                 <Card key={c.label}>
-                    <CardContent className="flex items-start justify-between gap-3 p-4">
+                    <CardContent className="flex items-start justify-between gap-3 p-3 sm:p-4">
                         <div className="min-w-0">
                             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{c.label}</p>
-                            <p className={cn('mt-1.5 truncate text-2xl font-semibold tabular-nums', TONE[c.tone].value)}>{c.value}</p>
+                            <p className={cn('mt-1 sm:mt-1.5 truncate text-xl sm:text-2xl font-semibold tabular-nums', TONE[c.tone].value)}>{c.value}</p>
                             <p className="mt-0.5 truncate text-xs text-muted-foreground tabular-nums">{c.sub}</p>
                         </div>
                         <span className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-full', TONE[c.tone].icon)}>{c.icon}</span>

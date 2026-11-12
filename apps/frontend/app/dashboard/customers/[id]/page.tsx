@@ -92,7 +92,7 @@ function InvoiceItemsExpanded({ invoiceId }: { invoiceId: string }) {
 
     if (isLoading) {
         return (
-            <div className="px-6 py-4">
+            <div className="px-3 sm:px-6 py-4">
                 <Skeleton className="h-10 w-full rounded-lg" />
             </div>
         );
@@ -100,7 +100,7 @@ function InvoiceItemsExpanded({ invoiceId }: { invoiceId: string }) {
 
     if (isError || items.length === 0) {
         return (
-            <div className="px-6 py-4 flex items-center gap-2 text-slate-400 text-sm">
+            <div className="px-3 sm:px-6 py-4 flex items-center gap-2 text-slate-400 text-sm">
                 <AlertCircle className="w-4 h-4" />
                 Could not load item details
             </div>
@@ -108,8 +108,8 @@ function InvoiceItemsExpanded({ invoiceId }: { invoiceId: string }) {
     }
 
     return (
-        <div className="px-6 py-4 bg-slate-50/50">
-            <table className="w-full text-sm text-left border-collapse">
+        <div className="px-3 sm:px-6 py-4 bg-slate-50/50 overflow-x-auto">
+            <table className="w-full min-w-[480px] text-sm text-left border-collapse">
                 <thead>
                     <tr className="border-b border-slate-200 text-xs text-slate-500 uppercase tracking-wide">
                         <th className="pb-2 font-medium w-8">#</th>
@@ -383,7 +383,7 @@ function InvoiceHistory({ customerId }: { customerId: string }) {
                         })}
                     </div>
                     <Select value={period} onValueChange={(v) => { setPeriod(v as PeriodFilter); resetPage(); }}>
-                        <SelectTrigger className="w-40 h-9 text-xs">
+                        <SelectTrigger className="w-full sm:w-40 h-9 text-xs">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -397,7 +397,117 @@ function InvoiceHistory({ customerId }: { customerId: string }) {
 
                 {/* Table */}
                 <div className="rounded-xl border border-slate-300 shadow-sm overflow-hidden bg-white">
-                    <div className="overflow-x-auto">
+                    {/* Phone: stacked cards (same data + actions as the table below) */}
+                    <div className="md:hidden divide-y divide-slate-200">
+                        {paginated.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center gap-3 py-12 px-4 text-muted-foreground">
+                                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                                    <Receipt className="h-6 w-6" />
+                                </div>
+                                <div className="text-center">
+                                    {allInvoices.length === 0 ? (
+                                        <>
+                                            <p className="font-medium text-foreground">No invoices found for this customer</p>
+                                            <p className="text-sm mt-0.5">Bills created for this customer will appear here</p>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <p className="font-medium text-foreground">No invoices match the selected filters</p>
+                                            <button
+                                                onClick={() => { setStatusFilter('all'); setPeriod('all'); setPage(1); }}
+                                                className="text-sm mt-1 text-blue-600 hover:underline"
+                                            >
+                                                Clear Filters
+                                            </button>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        ) : (
+                            paginated.map((inv) => {
+                                const invStatus = getInvoiceStatus(inv);
+                                const cfg = STATUS_CONFIG[invStatus];
+                                const isExpanded = expandedIds.has(inv.id);
+                                return (
+                                    <div key={inv.id} className={cn(isExpanded ? 'bg-slate-50' : 'bg-white')}>
+                                        <div className="p-3 space-y-2 cursor-pointer" onClick={() => toggleRow(inv.id)}>
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div className="flex items-start gap-2 min-w-0">
+                                                    <ChevronDown className={cn(
+                                                        'w-4 h-4 mt-0.5 shrink-0 text-slate-400 transition-transform duration-200',
+                                                        !isExpanded && '-rotate-90'
+                                                    )} />
+                                                    <div className="min-w-0">
+                                                        <div className="font-mono text-xs text-slate-900 font-semibold break-all">{inv.invoiceNo}</div>
+                                                        <div className="text-xs text-slate-500 mt-0.5">
+                                                            {format(new Date(inv.invoiceDate), 'dd MMM yyyy')} · {inv.itemsCount} item{inv.itemsCount !== 1 ? 's' : ''}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right shrink-0">
+                                                    <div className="font-semibold tabular-nums text-slate-900">{formatINR(inv.grandTotal)}</div>
+                                                    <span className={cn(
+                                                        'inline-flex items-center mt-1 px-2 py-0.5 rounded-md text-[11px] font-semibold border',
+                                                        cfg.classes
+                                                    )}>
+                                                        {cfg.label}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center justify-between text-xs tabular-nums">
+                                                <span className="text-emerald-600 font-medium">Paid {formatINR(inv.amountPaid)}</span>
+                                                <span className={inv.amountDue > 0 ? 'text-red-600 font-bold' : 'text-slate-400'}>
+                                                    Due {inv.amountDue > 0 ? formatINR(inv.amountDue) : '—'}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="flex-1 text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 gap-1.5 h-9 px-2"
+                                                    disabled={isRepeatLoading === inv.id || isPrintLoading === inv.id}
+                                                    onClick={async () => {
+                                                        await handleRepeatOrder(inv.id);
+                                                    }}
+                                                >
+                                                    {isRepeatLoading === inv.id ? (
+                                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                    ) : (
+                                                        <Repeat className="w-3.5 h-3.5" />
+                                                    )}
+                                                    Order Again
+                                                </Button>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="flex-1 text-slate-600 hover:text-blue-700 hover:bg-blue-50 border-slate-200 gap-1.5 h-9 px-2"
+                                                    disabled={isPrintLoading === inv.id || isRepeatLoading === inv.id}
+                                                    onClick={async () => {
+                                                        await handlePrintInvoiceClick(inv.id);
+                                                    }}
+                                                >
+                                                    {isPrintLoading === inv.id ? (
+                                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                    ) : (
+                                                        <FileText className="w-3.5 h-3.5" />
+                                                    )}
+                                                    PDF
+                                                </Button>
+                                            </div>
+                                        </div>
+                                        {isExpanded && (
+                                            <div className="border-t border-slate-200 border-l-4 border-l-primary/60 bg-slate-50 shadow-inner">
+                                                <InvoiceItemsExpanded invoiceId={inv.id} />
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+
+                    {/* Tablet / desktop: full table */}
+                    <div className="hidden md:block overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead className="bg-slate-100 border-b-2 border-slate-200 sticky top-0 z-10 text-slate-700">
                                 <tr>
@@ -548,13 +658,13 @@ function InvoiceHistory({ customerId }: { customerId: string }) {
 
                 {/* Pagination */}
                 {totalPages > 1 && (
-                    <div className="flex items-center justify-between text-sm text-muted-foreground mt-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground mt-4">
                         <span>
                             Showing {Math.min((page - 1) * PAGE_SIZE + 1, filtered.length)}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
                         </span>
                         <div className="flex items-center gap-1">
                             <Button
-                                variant="outline" size="sm" className="h-8 w-8 p-0"
+                                variant="outline" size="sm" className="h-9 w-9 sm:h-8 sm:w-8 p-0"
                                 disabled={page <= 1}
                                 onClick={() => setPage((p) => p - 1)}
                             >
@@ -575,7 +685,7 @@ function InvoiceHistory({ customerId }: { customerId: string }) {
                                                 key={p}
                                                 variant={page === p ? 'default' : 'outline'}
                                                 size="sm"
-                                                className="h-8 w-8 p-0"
+                                                className="h-9 w-9 sm:h-8 sm:w-8 p-0"
                                                 onClick={() => setPage(p as number)}
                                             >
                                                 {p}
@@ -584,7 +694,7 @@ function InvoiceHistory({ customerId }: { customerId: string }) {
                                 )
                             }
                             <Button
-                                variant="outline" size="sm" className="h-8 w-8 p-0"
+                                variant="outline" size="sm" className="h-9 w-9 sm:h-8 sm:w-8 p-0"
                                 disabled={page >= totalPages}
                                 onClick={() => setPage((p) => p + 1)}
                             >
@@ -627,12 +737,12 @@ export default function CustomerDetailPage() {
         return (
             <div className="space-y-6">
                 <Skeleton className="h-10 w-48" />
-                <div className="flex gap-6">
-                    <div className="w-1/3 space-y-4">
+                <div className="flex flex-col lg:flex-row gap-6">
+                    <div className="w-full lg:w-1/3 space-y-4">
                         <Skeleton className="h-48 rounded-xl" />
                         <Skeleton className="h-48 rounded-xl" />
                     </div>
-                    <div className="w-2/3">
+                    <div className="w-full lg:w-2/3">
                         <Skeleton className="h-96 rounded-xl" />
                     </div>
                 </div>
@@ -658,17 +768,17 @@ export default function CustomerDetailPage() {
     return (
         <div className="space-y-6">
             {/* Back + compact header */}
-            <div className="flex items-center gap-4 bg-white p-4 rounded-xl border">
-                <Button variant="ghost" size="icon" onClick={() => router.back()}>
+            <div className="flex flex-wrap items-center gap-3 sm:gap-4 bg-white p-3 sm:p-4 rounded-xl border">
+                <Button variant="ghost" size="icon" className="shrink-0" onClick={() => router.back()}>
                     <ArrowLeft className="w-4 h-4" />
                 </Button>
-                <div className="flex-1 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
+                <div className="flex-1 min-w-0 flex items-center gap-3">
+                    <div className="w-10 h-10 shrink-0 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
                         {customer.name.slice(0, 2).toUpperCase()}
                     </div>
-                    <div>
-                        <div className="flex items-center gap-2">
-                            <h1 className="text-lg font-bold text-slate-900 leading-none">{customer.name}</h1>
+                    <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <h1 className="text-lg font-bold text-slate-900 leading-tight sm:leading-none break-words">{customer.name}</h1>
                             <FamilyBadge {...customer} />
                             {customer.isChronic && (
                                 <Badge className="bg-purple-100 text-purple-700 border-purple-200 gap-1 h-5 px-1.5 text-[10px]">
@@ -686,7 +796,7 @@ export default function CustomerDetailPage() {
                         </div>
                     </div>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                     {customer.ledgerId && (
                         <Button variant="outline" size="sm" asChild>
                             <Link href={`/dashboard/accounts/ledgers/${customer.ledgerId}`}>

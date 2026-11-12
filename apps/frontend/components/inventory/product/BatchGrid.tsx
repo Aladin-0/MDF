@@ -176,7 +176,7 @@ export function BatchGrid({ product, batches, showRates, onSaveBatch, onSaved, o
                     <h2 id="batches-title" className="text-base font-semibold">Edit all batches</h2>
                     <span className="text-sm tabular-nums text-muted-foreground">{batches.length}</span>
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <p className="hidden text-xs text-muted-foreground sm:block">
                     <kbd className="rounded border bg-muted px-1">Tab</kbd> next cell · <kbd className="rounded border bg-muted px-1">Enter</kbd> / <kbd className="rounded border bg-muted px-1">↑↓</kbd> next row · <kbd className="rounded border bg-muted px-1">Ctrl+D</kbd> copy the cell above · paste a column from Excel
                 </p>
             </div>
@@ -272,7 +272,7 @@ export function BatchGrid({ product, batches, showRates, onSaveBatch, onSaved, o
             </Card>
 
             {/* the bar follows you down the page, so Save is always in reach however many batches there are */}
-            <div className="sticky bottom-3 z-20 rounded-xl border bg-card p-3 shadow-lg" aria-live="polite">
+            <div className="sticky bottom-3 z-20 rounded-xl border bg-card p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-lg sm:pb-3" aria-live="polite">
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                     <div className="min-w-0 flex-1 text-sm">
                         {rows.length === 0 ? (
@@ -308,7 +308,7 @@ export function BatchGrid({ product, batches, showRates, onSaveBatch, onSaved, o
                         </label>
                     )}
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex w-full items-center gap-2 sm:w-auto [&>button]:max-sm:flex-1">
                         <Button type="button" variant="outline" onClick={discard} disabled={busy}>{rows.length ? 'Discard' : 'Done'}</Button>
                         <Button type="button" onClick={saveAll} disabled={busy || rows.length === 0}>
                             <Check aria-hidden="true" />

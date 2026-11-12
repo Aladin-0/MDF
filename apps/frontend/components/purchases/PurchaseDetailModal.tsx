@@ -63,7 +63,7 @@ export function PurchaseDetailModal({ open, onOpenChange, invoice, onEdit }: Pur
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="invoice-print-container max-w-4xl max-h-[90vh] overflow-y-auto p-0 print:max-h-none print:overflow-visible print:p-0 print:border-none border-t-4 border-t-primary gap-0">
+            <DialogContent className="invoice-print-container max-w-4xl max-h-[calc(100dvh-1rem)] sm:max-h-[90vh] overflow-y-auto p-0 print:max-h-none print:overflow-visible print:p-0 print:border-none border-t-4 border-t-primary gap-0">
 
                 <style dangerouslySetInnerHTML={{
                     __html: `
@@ -88,14 +88,14 @@ export function PurchaseDetailModal({ open, onOpenChange, invoice, onEdit }: Pur
                     }
                 `}} />
 
-                <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-4 bg-white border-b print:hidden">
-                    <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <div className="sticky top-0 z-10 flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4 bg-white border-b print:hidden">
+                    <div className="flex items-center gap-3 max-sm:min-w-0 max-sm:pr-10">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary max-sm:shrink-0">
                             <FileText className="h-5 w-5" />
                         </div>
-                        <div>
+                        <div className="max-sm:min-w-0">
                             <DialogTitle className="text-xl">Purchase Invoice</DialogTitle>
-                            <div className="text-sm text-muted-foreground flex items-center gap-2 mt-0.5">
+                            <div className="text-sm text-muted-foreground flex items-center gap-2 mt-0.5 max-sm:flex-wrap max-sm:break-all">
                                 Invoice #{displayInvoice.invoiceNo}
                                 <span className={cn('px-2 py-0.5 rounded text-[10px] font-medium border uppercase tracking-widest', cfg.classes)}>
                                     {cfg.label}
@@ -104,7 +104,7 @@ export function PurchaseDetailModal({ open, onOpenChange, invoice, onEdit }: Pur
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 max-sm:grid max-sm:grid-cols-2">
 
                         {showEditBtn && (
                             <Button 
@@ -130,18 +130,18 @@ export function PurchaseDetailModal({ open, onOpenChange, invoice, onEdit }: Pur
                             <Printer className="w-4 h-4 mr-2" />
                             Print / PDF
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 ml-2" onClick={() => onOpenChange(false)}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 ml-2 max-sm:absolute max-sm:right-2 max-sm:top-3 max-sm:ml-0 max-sm:h-9 max-sm:w-9" onClick={() => onOpenChange(false)}>
                             <X className="w-4 h-4" />
                         </Button>
                     </div>
                 </div>
 
-                <div className="p-8 print:hidden bg-white">
-                    <div className="grid grid-cols-2 gap-8 mb-8 text-sm">
+                <div className="p-4 sm:p-8 print:hidden bg-white">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-8 mb-6 sm:mb-8 text-sm">
                         <div className="space-y-4">
                             <div>
                                 <h3 className="text-muted-foreground font-medium mb-1 text-xs uppercase tracking-wide">Distributor</h3>
-                                <p className="font-semibold text-lg text-foreground">{displayInvoice.distributor?.name || 'Unknown'}</p>
+                                <p className="font-semibold text-lg text-foreground max-sm:break-words">{displayInvoice.distributor?.name || 'Unknown'}</p>
                                 {displayInvoice.distributor?.gstin && <p className="text-muted-foreground">GSTIN: {displayInvoice.distributor.gstin}</p>}
                                 {displayInvoice.distributor?.phone && <p className="text-muted-foreground">Ph: {displayInvoice.distributor.phone}</p>}
                             </div>
@@ -180,25 +180,25 @@ export function PurchaseDetailModal({ open, onOpenChange, invoice, onEdit }: Pur
                                 </div>
                             </div>
 
-                            <div className="flex gap-4">
-                                <div className="flex-1 bg-emerald-50 text-emerald-900 border border-emerald-100 rounded-lg p-3">
+                            <div className="flex gap-4 max-sm:gap-2">
+                                <div className="flex-1 max-sm:min-w-0 bg-emerald-50 text-emerald-900 border border-emerald-100 rounded-lg p-3">
                                     <p className="text-emerald-700 text-xs font-medium uppercase mb-1">Amount Paid</p>
-                                    <p className="font-bold text-lg">{formatINR(displayInvoice.amountPaid)}</p>
+                                    <p className="font-bold text-lg max-sm:text-base max-sm:break-words">{formatINR(displayInvoice.amountPaid)}</p>
                                 </div>
-                                <div className="flex-1 bg-red-50 text-red-900 border border-red-100 rounded-lg p-3">
+                                <div className="flex-1 max-sm:min-w-0 bg-red-50 text-red-900 border border-red-100 rounded-lg p-3">
                                     <p className="text-red-700 text-xs font-medium uppercase mb-1">Outstanding</p>
-                                    <p className="font-bold text-lg">{formatINR(displayInvoice.outstanding)}</p>
+                                    <p className="font-bold text-lg max-sm:text-base max-sm:break-words">{formatINR(displayInvoice.outstanding)}</p>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <div className="rounded border bg-white overflow-hidden mb-6">
-                        <table className="w-full text-xs text-left">
+                    <div className="rounded border bg-white overflow-hidden max-sm:overflow-x-auto mb-6">
+                        <table className="w-full text-xs text-left max-sm:min-w-[42rem]">
                             <thead className="bg-muted/50 border-b">
                                 <tr>
                                     <th className="px-4 py-2.5 font-semibold text-muted-foreground uppercase">#</th>
-                                    <th className="px-4 py-2.5 font-semibold text-muted-foreground uppercase">Product Name</th>
+                                    <th className="px-4 py-2.5 font-semibold text-muted-foreground uppercase max-sm:min-w-[11rem]">Product Name</th>
                                     <th className="px-4 py-2.5 font-semibold text-muted-foreground uppercase">Batch</th>
                                     <th className="px-4 py-2.5 font-semibold text-muted-foreground uppercase text-right">Exp</th>
                                     <th className="px-4 py-2.5 font-semibold text-muted-foreground uppercase text-right">Qty</th>
@@ -250,7 +250,7 @@ export function PurchaseDetailModal({ open, onOpenChange, invoice, onEdit }: Pur
                     </div>
 
                     <div className="flex justify-end pt-2">
-                        <div className="w-72 space-y-2 text-sm">
+                        <div className="w-full sm:w-72 space-y-2 text-sm">
                             <div className="flex justify-between text-muted-foreground">
                                 <span>Subtotal</span>
                                 <span className="tabular-nums text-foreground font-medium">{formatINR(displayInvoice.subtotal)}</span>

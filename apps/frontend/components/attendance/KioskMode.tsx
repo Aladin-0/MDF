@@ -38,7 +38,7 @@ function WebcamCapture({ webcamRef, onError }: { webcamRef: React.MutableRefObje
     }, []);
 
     if (!Cam) return (
-        <div className="w-80 h-60 rounded-2xl border-4 border-slate-600 bg-slate-800 flex items-center justify-center">
+        <div className="w-80 max-w-full h-60 rounded-2xl border-4 border-slate-600 bg-slate-800 flex items-center justify-center">
             <div className="text-slate-400 text-sm">Loading camera...</div>
         </div>
     );
@@ -51,7 +51,7 @@ function WebcamCapture({ webcamRef, onError }: { webcamRef: React.MutableRefObje
             screenshotFormat="image/jpeg"
             mirrored={true}
             onUserMediaError={onError}
-            className="rounded-2xl border-4 border-slate-600"
+            className="max-w-full h-auto rounded-2xl border-4 border-slate-600"
         />
     );
 }
@@ -281,9 +281,9 @@ export function KioskMode({ onExit }: Props) {
 
     if (step === 'idle') {
         return (
-            <div className="fixed inset-0 bg-slate-900 text-white z-50 flex flex-col">
+            <div className="fixed inset-0 bg-slate-900 text-white z-50 flex flex-col overflow-y-auto">
                 {/* Top bar */}
-                <div className="flex items-center justify-between px-8 pt-6">
+                <div className="flex flex-col items-center gap-3 px-4 pt-4 sm:flex-row sm:justify-between sm:gap-0 sm:px-8 sm:pt-6">
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
                             <Building2 className="w-6 h-6 text-white" />
@@ -294,12 +294,12 @@ export function KioskMode({ onExit }: Props) {
                         </div>
                     </div>
                     <div className="text-center">
-                        <div className="text-5xl font-bold font-mono tracking-wide">
+                        <div className="text-4xl font-bold font-mono tracking-wide sm:text-5xl">
                             {format(currentTime, 'HH:mm:ss')}
                         </div>
                     </div>
-                    <div className="flex flex-col items-end gap-2">
-                        <div className="text-lg text-slate-300">
+                    <div className="flex flex-col items-center gap-2 sm:items-end">
+                        <div className="text-base text-slate-300 sm:text-lg">
                             {format(currentTime, 'EEEE, dd MMMM yyyy')}
                         </div>
                         <button
@@ -313,26 +313,26 @@ export function KioskMode({ onExit }: Props) {
                 </div>
 
                 {/* Center */}
-                <div className="flex flex-col items-center justify-center flex-1 gap-8">
-                    <Building2 className="w-24 h-24 text-slate-700" />
+                <div className="flex flex-col items-center justify-center flex-1 gap-5 py-4 sm:gap-8">
+                    <Building2 className="w-16 h-16 text-slate-700 sm:w-24 sm:h-24" />
                     <div className="text-center">
-                        <div className="text-4xl font-bold">Mark Attendance</div>
-                        <div className="text-xl text-slate-400 mt-2">
+                        <div className="text-3xl font-bold sm:text-4xl">Mark Attendance</div>
+                        <div className="px-4 text-base text-slate-400 mt-2 sm:text-xl">
                             Enter your PIN to check in or out
                         </div>
                     </div>
 
-                    <div className="flex gap-6">
+                    <div className="flex w-full max-w-md gap-3 px-4 sm:w-auto sm:max-w-none sm:gap-6 sm:px-0">
                         <button
                             onClick={() => { setActionType('check_in'); setStep('pin_entry'); }}
-                            className="w-64 h-40 rounded-3xl bg-green-500 hover:bg-green-600 active:scale-95 transition-all flex flex-col items-center justify-center gap-3 shadow-xl"
+                            className="h-32 flex-1 sm:h-40 sm:w-64 sm:flex-none rounded-3xl bg-green-500 hover:bg-green-600 active:scale-95 transition-all flex flex-col items-center justify-center gap-3 shadow-xl"
                         >
                             <LogIn className="w-12 h-12" />
                             <span className="text-2xl font-bold">Check In</span>
                         </button>
                         <button
                             onClick={() => { setActionType('check_out'); setStep('pin_entry'); }}
-                            className="w-64 h-40 rounded-3xl bg-blue-500 hover:bg-blue-600 active:scale-95 transition-all flex flex-col items-center justify-center gap-3 shadow-xl"
+                            className="h-32 flex-1 sm:h-40 sm:w-64 sm:flex-none rounded-3xl bg-blue-500 hover:bg-blue-600 active:scale-95 transition-all flex flex-col items-center justify-center gap-3 shadow-xl"
                         >
                             <LogOut className="w-12 h-12" />
                             <span className="text-2xl font-bold">Check Out</span>
@@ -340,7 +340,7 @@ export function KioskMode({ onExit }: Props) {
                     </div>
 
                     {/* Today's status strip */}
-                    <div className="bg-slate-800 rounded-2xl px-8 py-4 flex gap-6 flex-wrap justify-center max-w-2xl">
+                    <div className="bg-slate-800 rounded-2xl mx-4 px-4 py-4 flex gap-4 flex-wrap justify-center max-w-2xl sm:mx-0 sm:px-8 sm:gap-6">
                         {staffStatuses.map(({ id, name, record }: any) => (
                             <div key={id} className="flex flex-col items-center gap-1">
                                 <Avatar className="w-10 h-10">
@@ -377,9 +377,9 @@ export function KioskMode({ onExit }: Props) {
             actionType === 'check_in' ? 'bg-green-500 text-white' : 'bg-blue-500 text-white';
 
         return (
-            <div className="fixed inset-0 bg-slate-900 text-white z-50 flex flex-col items-center justify-center">
+            <div className="fixed inset-0 bg-slate-900 text-white z-50 flex flex-col items-center justify-center overflow-y-auto py-4">
                 <div className={cn(
-                    'bg-slate-800 rounded-3xl p-10 max-w-sm w-full mx-4',
+                    'bg-slate-800 rounded-3xl p-6 sm:p-10 max-w-sm w-[calc(100%-2rem)] mx-4',
                     shake && 'animate-shake'
                 )}>
                     <div className={cn('inline-block rounded-full px-4 py-1 text-sm font-bold mb-4', labelColor)}>
@@ -390,12 +390,12 @@ export function KioskMode({ onExit }: Props) {
                     </div>
 
                     {/* PIN circles */}
-                    <div className="flex gap-4 mt-6 justify-center">
+                    <div className="flex gap-3 mt-5 justify-center sm:gap-4 sm:mt-6">
                         {[0, 1, 2, 3].map(i => (
                             <div
                                 key={i}
                                 className={cn(
-                                    'w-14 h-14 rounded-full border-2 flex items-center justify-center text-2xl',
+                                    'w-12 h-12 sm:w-14 sm:h-14 rounded-full border-2 flex items-center justify-center text-2xl',
                                     displayPin.length > i
                                         ? 'bg-primary border-primary text-white'
                                         : 'border-slate-600 bg-transparent'
@@ -413,7 +413,7 @@ export function KioskMode({ onExit }: Props) {
                     )}
 
                     {/* Keypad */}
-                    <div className="mt-8 grid grid-cols-3 gap-3">
+                    <div className="mt-5 grid grid-cols-3 gap-3 sm:mt-8">
                         {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => (
                             <button
                                 key={n}
@@ -473,11 +473,11 @@ export function KioskMode({ onExit }: Props) {
 
     if (step === 'photo' && identifiedStaff) {
         return (
-            <div className="fixed inset-0 bg-slate-900 text-white z-50 flex flex-col items-center justify-center gap-6">
-                <div className="text-3xl font-bold">Hello, {identifiedStaff.name}!</div>
+            <div className="fixed inset-0 bg-slate-900 text-white z-50 flex flex-col items-center justify-center gap-6 overflow-y-auto px-4 py-4">
+                <div className="break-words text-center text-2xl font-bold sm:text-3xl">Hello, {identifiedStaff.name}!</div>
 
                 {/* Staff card */}
-                <div className="bg-slate-800 rounded-2xl p-4 flex items-center gap-4">
+                <div className="bg-slate-800 rounded-2xl p-4 flex max-w-full items-center gap-4">
                     <Avatar className="w-16 h-16">
                         <AvatarFallback className="bg-slate-600 text-white text-xl">
                             {identifiedStaff.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
@@ -490,7 +490,7 @@ export function KioskMode({ onExit }: Props) {
                 </div>
 
                 {/* Webcam */}
-                <div className="relative">
+                <div className="relative max-w-full">
                     {webcamAvailable ? (
                         <>
                             {mounted && <WebcamCapture
@@ -502,7 +502,7 @@ export function KioskMode({ onExit }: Props) {
                             </div>
                         </>
                     ) : (
-                        <div className="w-80 h-60 rounded-2xl border-4 border-slate-600 bg-slate-800 flex flex-col items-center justify-center gap-2">
+                        <div className="w-80 max-w-full h-60 rounded-2xl border-4 border-slate-600 bg-slate-800 flex flex-col items-center justify-center gap-2">
                             <div className="text-slate-400">Camera not available</div>
                             <div className="text-xs text-slate-500">Continuing without photo...</div>
                         </div>
@@ -542,12 +542,12 @@ export function KioskMode({ onExit }: Props) {
         const shiftEnd = outletSettings?.closingTime ?? '21:00';
 
         return (
-            <div className={cn('fixed inset-0 text-white z-50 flex flex-col items-center justify-center gap-6', bgClass)}>
+            <div className={cn('fixed inset-0 text-white z-50 flex flex-col items-center justify-center gap-6 overflow-y-auto px-4 py-4 text-center', bgClass)}>
                 <CheckCircle2
-                    className={cn('w-32 h-32', isCheckIn ? 'text-green-400' : 'text-blue-400')}
+                    className={cn('w-24 h-24 sm:w-32 sm:h-32', isCheckIn ? 'text-green-400' : 'text-blue-400')}
                     style={{ animation: 'scaleIn 0.4s ease-out' }}
                 />
-                <div className="text-5xl font-bold text-white mt-2">
+                <div className="text-4xl font-bold text-white mt-2 sm:text-5xl">
                     {isCheckIn ? 'Checked In!' : 'Checked Out!'}
                 </div>
                 <div className="text-2xl text-white/80">{identifiedStaff.name}</div>
@@ -585,13 +585,13 @@ export function KioskMode({ onExit }: Props) {
 
     if (step === 'error') {
         return (
-            <div className="fixed inset-0 bg-slate-900 text-white z-50 flex flex-col items-center justify-center gap-6">
+            <div className="fixed inset-0 bg-slate-900 text-white z-50 flex flex-col items-center justify-center gap-6 overflow-y-auto px-4 py-4 text-center">
                 <XCircle className="w-24 h-24 text-red-400" />
                 <div className="text-2xl text-white">{errorMessage}</div>
                 <div className="text-sm text-white/40">
                     Returning to home in {autoResetTimer}s
                 </div>
-                <div className="flex gap-4">
+                <div className="flex flex-wrap justify-center gap-4">
                     <Button
                         variant="outline"
                         onClick={() => { setStep('pin_entry'); setEnteredPin(''); setErrorMessage(null); }}

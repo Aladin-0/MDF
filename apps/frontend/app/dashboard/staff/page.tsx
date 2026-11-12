@@ -27,18 +27,18 @@ export default function StaffPage() {
     return (
         <div className="space-y-6">
             {/* Header (same pattern as Attendance: icon tile, title, subtitle, actions on the right) */}
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                    <div className="p-2.5 bg-primary/10 text-primary rounded-lg">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-3 min-w-0">
+                    <div className="p-2.5 bg-primary/10 text-primary rounded-lg shrink-0">
                         <UserCog className="w-6 h-6" />
                     </div>
-                    <div>
-                        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Staff Management</h1>
+                    <div className="min-w-0">
+                        <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">Staff Management</h1>
                         <p className="text-sm text-slate-500">Manage staff, PINs, roles, and performance tracking</p>
                     </div>
                 </div>
                 <PermissionGate permission="manage_staff">
-                    <Button onClick={() => setShowForm(true)}>
+                    <Button onClick={() => setShowForm(true)} className="w-full sm:w-auto">
                         <Plus className="w-4 h-4 mr-2" />
                         Add Staff Member
                     </Button>
@@ -49,12 +49,12 @@ export default function StaffPage() {
 
             {/* Tabs */}
             <Tabs defaultValue="staff">
-                <TabsList>
-                    <TabsTrigger value="staff" className="flex gap-2">
+                <TabsList className="w-full sm:w-auto">
+                    <TabsTrigger value="staff" className="flex flex-1 sm:flex-none gap-2">
                         <UserCog className="w-4 h-4" />
                         Staff List
                     </TabsTrigger>
-                    <TabsTrigger value="leaderboard" className="flex gap-2">
+                    <TabsTrigger value="leaderboard" className="flex flex-1 sm:flex-none gap-2">
                         <Trophy className="w-4 h-4" />
                         Leaderboard
                     </TabsTrigger>

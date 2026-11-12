@@ -12,7 +12,7 @@ interface ValuationToggleProps {
 /** "Value stock at: Purchase | Landing | MRP". It changes the Stock Value card and the Total Value column. */
 export function ValuationToggle({ value, onChange, className }: ValuationToggleProps) {
     return (
-        <div role="group" aria-label="Value stock at" className={cn('inline-flex rounded-md bg-muted p-0.5', className)}>
+        <div role="group" aria-label="Value stock at" className={cn('flex w-full rounded-md bg-muted p-0.5 sm:inline-flex sm:w-auto', className)}>
             {(Object.keys(VALUATION_LABELS) as ValuationMode[]).map((mode) => (
                 <button
                     key={mode}
@@ -20,7 +20,7 @@ export function ValuationToggle({ value, onChange, className }: ValuationToggleP
                     aria-pressed={value === mode}
                     onClick={() => onChange(mode)}
                     className={cn(
-                        'rounded px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                        'max-sm:flex-1 rounded px-2.5 py-1.5 sm:py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                         value === mode ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
                     )}
                 >

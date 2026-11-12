@@ -133,7 +133,7 @@ function CustomerFormFields({
                     <Button
                         variant="ghost"
                         size="icon"
-                        className="h-7 w-7 text-slate-400 hover:text-slate-600"
+                        className="h-9 w-9 sm:h-7 sm:w-7 text-slate-400 hover:text-slate-600"
                         onClick={onCancel}
                         disabled={isSaving}
                         aria-label="Close"

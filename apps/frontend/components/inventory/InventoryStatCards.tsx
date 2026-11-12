@@ -30,7 +30,7 @@ interface CardProps {
 
 function StatCard({ title, icon, tone, loading, error, onRetry, value, subtitle, footer, onSelect, selectLabel }: CardProps) {
     const body = (
-        <div className="flex items-start gap-4">
+        <div className="flex items-start gap-3 sm:gap-4">
             <span className={cn('flex h-11 w-11 shrink-0 items-center justify-center rounded-full', tone)} aria-hidden="true">{icon}</span>
             <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-muted-foreground">{title}</p>
@@ -44,7 +44,7 @@ function StatCard({ title, icon, tone, loading, error, onRetry, value, subtitle,
                     <p className="mt-1 text-sm text-destructive">Couldn&apos;t load this figure.</p>
                 ) : (
                     <>
-                        <p className="mt-1 truncate text-2xl font-semibold tabular-nums">{value}</p>
+                        <p className="mt-1 truncate text-xl sm:text-2xl font-semibold tabular-nums">{value}</p>
                         <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>
                     </>
                 )}
@@ -60,17 +60,17 @@ function StatCard({ title, icon, tone, loading, error, onRetry, value, subtitle,
                     type="button"
                     onClick={onSelect}
                     aria-label={selectLabel}
-                    className="w-full flex-1 rounded-xl p-5 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="w-full flex-1 rounded-xl p-4 text-left sm:p-5 transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                     {body}
                 </button>
             ) : (
-                <div className="flex-1 p-5">{body}</div>
+                <div className="flex-1 p-4 sm:p-5">{body}</div>
             )}
             {error && (
-                <div className="px-5 pb-4"><Button type="button" size="sm" variant="outline" onClick={onRetry}>Try Again</Button></div>
+                <div className="px-4 pb-4 sm:px-5"><Button type="button" size="sm" variant="outline" onClick={onRetry}>Try Again</Button></div>
             )}
-            {footer && <div className="border-t px-5 py-3">{footer}</div>}
+            {footer && <div className="border-t px-4 py-3 sm:px-5">{footer}</div>}
         </div>
     );
 }
@@ -87,7 +87,7 @@ export function InventoryStatCards({ onTabChange }: { onTabChange?: (tab: Invent
     const activeBatches: number | undefined = data?.activeBatches;
 
     return (
-        <section aria-label="Inventory summary" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section aria-label="Inventory summary" className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
             <StatCard
                 title="Products in Stock"
                 icon={<Package className="h-5 w-5" />}

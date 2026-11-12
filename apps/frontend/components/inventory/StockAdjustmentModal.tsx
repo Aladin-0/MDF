@@ -206,7 +206,7 @@ function AdjustDialog({ batch: initial, batches, productName, onClose, onSubmit 
                 </div>
 
                 {reasonType === 'correction' && (
-                    <div role="group" aria-label="Direction of the correction" className="mt-3 inline-flex rounded-md bg-muted p-0.5">
+                    <div role="group" aria-label="Direction of the correction" className="mt-3 flex w-full rounded-md bg-muted p-0.5 sm:inline-flex sm:w-auto">
                         {(['add', 'remove'] as const).map((d) => (
                             <button
                                 key={d}
@@ -214,7 +214,7 @@ function AdjustDialog({ batch: initial, batches, productName, onClose, onSubmit 
                                 aria-pressed={chosenDirection === d}
                                 onClick={() => setChosenDirection(d)}
                                 className={cn(
-                                    'rounded px-3 py-1.5 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                                    'max-sm:flex-1 rounded px-3 py-1.5 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                                     chosenDirection === d ? 'bg-background shadow-sm' : 'text-muted-foreground',
                                 )}
                             >
@@ -292,7 +292,7 @@ function AdjustDialog({ batch: initial, batches, productName, onClose, onSubmit 
                         />
                         {fieldError('reason')}
                     </div>
-                    <div className="w-48">
+                    <div className="w-full sm:w-48">
                         <Label htmlFor="adj-pin">Staff PIN</Label>
                         <Input
                             id="adj-pin"

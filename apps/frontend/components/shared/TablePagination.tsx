@@ -40,13 +40,13 @@ export function TablePagination({ page, totalPages, totalRecords, pageSize, onPa
     const last = Math.min(page * pageSize, totalRecords);
 
     return (
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t bg-muted/30 px-4 py-3">
+        <div className="flex flex-col items-stretch gap-2 border-t bg-muted/30 px-3 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-3 sm:px-4">
             <p className="text-sm text-muted-foreground tabular-nums" role="status" aria-live="polite">
                 Showing <span className="font-medium text-foreground">{count.format(first)}–{count.format(last)}</span> of{' '}
                 <span className="font-medium text-foreground">{count.format(totalRecords)}</span> {noun}
             </p>
 
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 sm:justify-end">
                 <div className="flex items-center gap-2">
                     <Label htmlFor={sizeId} className="text-xs text-muted-foreground">Rows</Label>
                     <Select value={String(pageSize)} onValueChange={(v) => onPageSize(Number(v))}>
@@ -63,14 +63,14 @@ export function TablePagination({ page, totalPages, totalRecords, pageSize, onPa
                     </Button>
                     {pageWindow(page, totalPages).map((n, i) =>
                         n === 'gap' ? (
-                            <span key={`gap-${i}`} className="px-1 text-muted-foreground" aria-hidden="true">…</span>
+                            <span key={`gap-${i}`} className="hidden px-1 text-muted-foreground sm:inline" aria-hidden="true">…</span>
                         ) : (
                             <Button
                                 key={n}
                                 type="button"
                                 size="sm"
                                 variant={n === page ? 'default' : 'outline'}
-                                className="min-w-9 px-2 tabular-nums"
+                                className={`min-w-9 px-2 tabular-nums ${n === page ? '' : 'hidden sm:inline-flex'}`}
                                 aria-label={`Page ${n}`}
                                 aria-current={n === page ? 'page' : undefined}
                                 onClick={() => onPage(n)}

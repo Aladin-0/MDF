@@ -258,23 +258,23 @@ export function ScheduleReportTab() {
           <p className="text-sm text-slate-500 mt-1">Regulatory compliance register — all historical records</p>
         </div>
 
-        <div className="flex items-center bg-slate-100 rounded-xl p-1 gap-1">
+        <div className="flex w-full sm:w-auto items-center bg-slate-100 rounded-xl p-1 gap-1">
           <button
             onClick={() => { setMode('sales'); setSearch(''); }}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+            className={`flex flex-1 sm:flex-none items-center justify-center gap-2 px-2 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
               mode === 'sales' ? 'bg-white shadow text-emerald-700 border border-emerald-100' : 'text-slate-500 hover:text-slate-700'
             }`}
           >
-            <TrendingUp className="w-4 h-4" />
+            <TrendingUp className="hidden sm:block w-4 h-4" />
             Sales Dispensations
           </button>
           <button
             onClick={() => { setMode('purchases'); setSearch(''); }}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+            className={`flex flex-1 sm:flex-none items-center justify-center gap-2 px-2 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
               mode === 'purchases' ? 'bg-white shadow text-blue-700 border border-blue-100' : 'text-slate-500 hover:text-slate-700'
             }`}
           >
-            <ShoppingCart className="w-4 h-4" />
+            <ShoppingCart className="hidden sm:block w-4 h-4" />
             Procurement Records
           </button>
         </div>
@@ -289,7 +289,7 @@ export function ScheduleReportTab() {
             Schedule:
           </div>
           <Select value={scheduleFilter} onValueChange={v => { setScheduleFilter(v); setSearch(''); }}>
-            <SelectTrigger className="w-56">
+            <SelectTrigger className="w-full sm:w-56">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -300,7 +300,7 @@ export function ScheduleReportTab() {
           </Select>
 
           {/* Quick date presets */}
-          <div className="flex items-center gap-1 border border-slate-200 rounded-lg p-1 bg-slate-50">
+          <div className="flex max-w-full items-center gap-1 overflow-x-auto no-scrollbar border border-slate-200 rounded-lg p-1 bg-slate-50">
             {[
               { key: 'all',        label: 'All Time' },
               { key: 'this_month', label: 'This Month' },
@@ -311,7 +311,7 @@ export function ScheduleReportTab() {
               <button
                 key={p.key}
                 onClick={() => setPreset(p.key)}
-                className={`px-3 py-1 rounded text-xs font-semibold transition-all ${
+                className={`shrink-0 whitespace-nowrap px-3 py-1 rounded text-xs font-semibold transition-all ${
                   preset === p.key
                     ? 'bg-white shadow text-slate-800 border border-slate-200'
                     : 'text-slate-500 hover:text-slate-700'
@@ -336,7 +336,7 @@ export function ScheduleReportTab() {
 
         {/* Custom date pickers */}
         {preset === 'custom' && (
-          <div className="flex items-center gap-3 pt-1">
+          <div className="flex flex-wrap items-center gap-3 pt-1">
             <Calendar className="w-4 h-4 text-slate-400" />
             <input
               type="date"
@@ -429,7 +429,7 @@ export function ScheduleReportTab() {
                   <EmptyState icon={TrendingUp} title="No sales records found" />
                 ) : (
                   <div className="overflow-x-auto">
-                    <Table>
+                    <Table className="max-md:min-w-[900px] max-md:[&_th]:whitespace-nowrap max-md:[&_td]:whitespace-nowrap">
                       <TableHeader>
                         <TableRow className="bg-slate-50 hover:bg-slate-50">
                           <TableHead><Calendar className="w-3 h-3 inline mr-1" />Date</TableHead>
@@ -475,7 +475,7 @@ export function ScheduleReportTab() {
 
             {/* Sale Details Dialog */}
             <Dialog open={!!selectedSale} onOpenChange={(open) => !open && setSelectedSale(null)}>
-              <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+              <DialogContent className="max-w-3xl max-h-[calc(100dvh-1rem)] sm:max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle className="flex items-center gap-2 text-xl">
                     <FileText className="w-5 h-5 text-emerald-600" />
@@ -677,7 +677,7 @@ export function ScheduleReportTab() {
                   <EmptyState icon={ShoppingCart} title="No procurement records found" />
                 ) : (
                   <div className="overflow-x-auto">
-                    <Table>
+                    <Table className="max-md:min-w-[900px] max-md:[&_th]:whitespace-nowrap max-md:[&_td]:whitespace-nowrap">
                       <TableHeader>
                         <TableRow className="bg-slate-50 hover:bg-slate-50">
                           <TableHead><Calendar className="w-3 h-3 inline mr-1" />Date</TableHead>

@@ -79,8 +79,8 @@ export function POSettingsTab() {
                 <div className="space-y-1.5"><Label>WhatsApp message</Label>
                     <textarea aria-label="WhatsApp message" rows={3} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" placeholder={DEFAULT_TEMPLATE} value={form.whatsappTemplate} onChange={(e) => set('whatsappTemplate', e.target.value)} />
                     <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">Insert:
-                        {PLACEHOLDERS.map((p) => <button key={p} type="button" className="rounded border bg-muted px-1.5 py-0.5 font-mono hover:bg-muted/70" onClick={() => set('whatsappTemplate', (form.whatsappTemplate || '') + p)}>{p}</button>)}
-                        <button type="button" className="ml-auto font-semibold text-primary" onClick={() => set('whatsappTemplate', '')}>Use the standard message</button></div></div>
+                        {PLACEHOLDERS.map((p) => <button key={p} type="button" className="rounded border bg-muted px-1.5 py-0.5 font-mono hover:bg-muted/70 max-sm:py-1.5" onClick={() => set('whatsappTemplate', (form.whatsappTemplate || '') + p)}>{p}</button>)}
+                        <button type="button" className="ml-auto font-semibold text-primary max-sm:py-1.5" onClick={() => set('whatsappTemplate', '')}>Use the standard message</button></div></div>
             </section>
 
             <section className="space-y-4">

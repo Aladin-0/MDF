@@ -35,7 +35,7 @@ export default function SaleReturnsPage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="space-y-1">
                     <div className="flex items-center gap-2.5">
                         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -47,7 +47,7 @@ export default function SaleReturnsPage() {
                         Accept returned goods from customers and restore stock
                     </p>
                 </div>
-                <Button asChild>
+                <Button asChild className="w-full sm:w-auto">
                     <Link href="/dashboard/accounts/sale-returns/new">
                         <Plus className="mr-2 h-4 w-4" /> New Return
                     </Link>
@@ -68,7 +68,59 @@ export default function SaleReturnsPage() {
                     </Button>
                 </div>
             ) : (
-                <div className="rounded-lg border overflow-hidden">
+                <>
+                <div className="space-y-3 md:hidden">
+                    {returns.map((r) => (
+                        <div
+                            key={r.id}
+                            className="rounded-lg border bg-card p-3 space-y-2 cursor-pointer active:bg-muted/30"
+                            onClick={() => setSelectedReturnId(r.id)}
+                        >
+                            <div className="flex items-start justify-between gap-2">
+                                <span className="font-mono text-xs font-semibold text-primary break-all">{r.returnNo}</span>
+                                <span className="shrink-0 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                    {REFUND_MODE_LABELS[r.refundMode] ?? r.refundMode}
+                                </span>
+                            </div>
+                            <div className="flex items-end justify-between gap-2">
+                                <div className="min-w-0 text-sm">
+                                    <p className="truncate font-medium">{r.customerName || '—'}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                        {format(new Date(r.returnDate), 'dd MMM yyyy')}
+                                        {' · '}
+                                        <span className="font-mono">{r.originalInvoiceNo || '—'}</span>
+                                    </p>
+                                </div>
+                                <span className="shrink-0 font-semibold">
+                                    ₹{Number(r.totalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                </span>
+                            </div>
+                            <div className="flex items-center justify-end gap-1.5 pt-1" onClick={(e) => e.stopPropagation()}>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setSelectedReturnId(r.id)}
+                                    className="h-9 px-3 text-xs"
+                                    title="View return details"
+                                >
+                                    <Eye className="w-3.5 h-3.5 mr-1" /> View
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    asChild
+                                    className="h-9 px-3 text-xs border-amber-300 text-amber-700 hover:bg-amber-50"
+                                    title="Edit return"
+                                >
+                                    <Link href={`/dashboard/accounts/sale-returns/${r.id}/edit`}>
+                                        <Pencil className="w-3.5 h-3.5 mr-1" /> Edit
+                                    </Link>
+                                </Button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+                <div className="hidden md:block rounded-lg border overflow-hidden overflow-x-auto">
                     <table className="w-full text-sm">
                         <thead className="bg-muted/50">
                             <tr>
@@ -131,6 +183,7 @@ export default function SaleReturnsPage() {
                         </tbody>
                     </table>
                 </div>
+                </>
             )}
 
             <SaleReturnDetailModal 

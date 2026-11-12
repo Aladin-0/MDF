@@ -43,6 +43,14 @@ type PeriodFilter = 'this_week' | 'this_month' | 'last_month' | 'all';
 
 const PAGE_SIZE = 10;
 
+// Below md each invoice row becomes a card (CSS only, same cells and actions as the table row).
+// Grid: [chevron | left column | right column]; every cell is placed on an explicit row.
+const M_ROW = 'max-md:grid max-md:grid-cols-[1.25rem_minmax(0,1fr)_minmax(0,1fr)] max-md:gap-x-3 max-md:gap-y-2 max-md:p-3';
+const M_CELL = 'max-md:min-w-0 max-md:p-0';
+const M_LABEL = 'max-md:flex max-md:flex-col max-md:gap-0.5 max-md:before:content-[attr(data-label)] max-md:before:text-[10px] max-md:before:font-normal max-md:before:uppercase max-md:before:tracking-wide max-md:before:text-muted-foreground';
+const M_LEFT = `${M_CELL} ${M_LABEL} max-md:col-start-2 max-md:items-start max-md:text-left`;
+const M_RIGHT = `${M_CELL} ${M_LABEL} max-md:col-start-3 max-md:items-end max-md:text-right`;
+
 function getPeriodBounds(period: PeriodFilter): { start: string; end: string } | null {
     if (period === 'all') return null;
     const today = new Date();
@@ -192,7 +200,7 @@ export function PurchasesList({
 
             {/* ── Active Highlight Alert Banner ── */}
             {activeHighlightId && (
-                <div className="flex items-center justify-between gap-3 p-3.5 rounded-xl border border-amber-300 bg-amber-50/90 text-amber-900 text-sm shadow-sm animate-in fade-in slide-in-from-top-2">
+                <div className="flex items-center justify-between gap-3 max-sm:flex-col max-sm:items-start p-3.5 rounded-xl border border-amber-300 bg-amber-50/90 text-amber-900 text-sm shadow-sm animate-in fade-in slide-in-from-top-2">
                     <div className="flex items-center gap-2.5">
                         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-200 text-amber-800">
                             <Sparkles className="w-3.5 h-3.5 animate-pulse" />
@@ -257,7 +265,7 @@ export function PurchasesList({
                         {search && (
                             <button
                                 onClick={() => { setSearch(''); resetPage(); }}
-                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                                className="absolute right-2.5 max-sm:right-0 max-sm:p-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                             >
                                 <X className="w-3.5 h-3.5" />
                             </button>
@@ -292,7 +300,7 @@ export function PurchasesList({
                     )}
                 </div>
 
-                <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-2 flex-wrap max-sm:w-full">
                     {/* Status pills with Modified status filter */}
                     {(['all', 'modified', 'draft', 'paid', 'partial', 'unpaid', 'overdue'] as StatusFilter[]).map((s) => {
                         const isActive = statusFilter === s;
@@ -302,7 +310,7 @@ export function PurchasesList({
                                 key={s}
                                 onClick={() => { setStatusFilter(s); resetPage(); }}
                                 className={cn(
-                                    'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all duration-150',
+                                    'flex items-center gap-1.5 px-3 py-1.5 max-sm:py-2 rounded-full text-xs font-medium border transition-all duration-150',
                                     isActive
                                         ? (isMod
                                             ? 'bg-amber-600 text-white border-amber-600 shadow-sm'
@@ -323,7 +331,7 @@ export function PurchasesList({
                         value={period}
                         onValueChange={(v) => { setPeriod(v as PeriodFilter); resetPage(); }}
                     >
-                        <SelectTrigger className="w-36 h-9 text-xs">
+                        <SelectTrigger className="w-36 max-sm:w-full h-9 max-sm:h-10 text-xs">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -339,9 +347,9 @@ export function PurchasesList({
             {/* ── Table ── */}
             <div className="rounded-xl border border-border overflow-hidden">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                        {/* sticky header */}
-                        <thead className="bg-muted/50 border-b border-border sticky top-0 z-10">
+                    <table className="w-full text-sm max-md:block">
+                        {/* sticky header (the cards below md carry their own labels) */}
+                        <thead className="bg-muted/50 border-b border-border sticky top-0 z-10 max-md:hidden">
                             <tr>
                                 <th className="w-10" />
                                 <th className="text-left px-4 py-3 font-medium text-muted-foreground whitespace-nowrap">Date</th>
@@ -357,21 +365,21 @@ export function PurchasesList({
                             </tr>
                         </thead>
 
-                        <tbody className="divide-y divide-border">
+                        <tbody className="divide-y divide-border max-md:block">
                             {isLoading ? (
                                 Array(5).fill(0).map((_, i) => (
-                                    <tr key={i}>
-                                        <td className="px-4 py-3"><Skeleton className="h-4 w-4 rounded" /></td>
+                                    <tr key={i} className="max-md:block max-md:space-y-2 max-md:p-3">
+                                        <td className="px-4 py-3 max-md:hidden"><Skeleton className="h-4 w-4 rounded" /></td>
                                         {[120, 80, 160, 40, 80, 80, 80, 80, 60, 60].map((w, j) => (
-                                            <td key={j} className="px-4 py-3">
+                                            <td key={j} className={cn('px-4 py-3', j < 2 ? 'max-md:block max-md:p-0' : 'max-md:hidden')}>
                                                 <Skeleton className={`h-4 w-[${w}px]`} />
                                             </td>
                                         ))}
                                     </tr>
                                 ))
                             ) : allInvoices.length === 0 ? (
-                                <tr>
-                                    <td colSpan={11}>
+                                <tr className="max-md:block">
+                                    <td colSpan={11} className="max-md:block">
                                         <div className="flex flex-col items-center justify-center gap-3 py-16 text-muted-foreground">
                                             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
                                                 <PackageOpen className="h-6 w-6" />
@@ -400,22 +408,23 @@ export function PurchasesList({
                                             id={`purchase-row-${inv.id}`}
                                             className={cn(
                                                 'group cursor-pointer transition-all duration-300',
+                                                M_ROW,
                                                 isHighlighted
                                                     ? 'bg-amber-100/70 dark:bg-amber-950/40 ring-2 ring-amber-400 border-amber-300 shadow-sm'
                                                     : isExpanded ? 'bg-muted/30' : 'hover:bg-muted/40'
                                             )}
                                             onClick={() => setExpandedId(isExpanded ? null : inv.id)}
                                         >
-                                            <td className="pl-3 pr-0 py-3 text-muted-foreground">
+                                            <td className="pl-3 pr-0 py-3 text-muted-foreground max-md:col-start-1 max-md:row-start-1 max-md:self-center max-md:p-0">
                                                 <ChevronDown className={cn(
                                                     'w-4 h-4 transition-transform duration-200',
                                                     !isExpanded && '-rotate-90'
                                                 )} />
                                             </td>
-                                            <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+                                            <td data-label="Date" className={cn('px-4 py-3 text-muted-foreground whitespace-nowrap', M_LEFT, 'max-md:row-start-3')}>
                                                 {inv.invoiceDate ? format(new Date(inv.invoiceDate), 'dd MMM yyyy') : (inv.createdAt ? format(new Date(inv.createdAt), 'dd MMM yyyy') : '—')}
                                             </td>
-                                            <td className="px-4 py-3 font-mono text-xs text-foreground whitespace-nowrap">
+                                            <td className={cn('px-4 py-3 font-mono text-xs text-foreground whitespace-nowrap', M_CELL, 'max-md:col-start-2 max-md:row-start-2 max-md:whitespace-normal max-md:break-all')}>
                                                 <div className="flex items-center gap-1.5 flex-wrap">
                                                     <span>{inv.status === 'SAVED' ? '—' : inv.invoiceNo}</span>
                                                     {inv.isModified && (
@@ -437,7 +446,7 @@ export function PurchasesList({
                                                     )}
                                                 </div>
                                             </td>
-                                            <td className="px-4 py-3 text-foreground max-w-[180px] truncate">
+                                            <td className={cn('px-4 py-3 text-foreground max-w-[180px] truncate', M_CELL, 'max-md:col-span-2 max-md:col-start-2 max-md:row-start-1 max-md:max-w-none max-md:whitespace-normal max-md:break-words max-md:font-semibold')}>
                                                 {inv.distributor?.name || (inv.status === 'SAVED' && (inv.ocrData?.header?.distributor_name || inv.ocrData?.header?.partyName)
                                                     ? `OCR: ${inv.ocrData.header.distributor_name || inv.ocrData.header.partyName}`
                                                     : (inv.status === 'SAVED' ? 'Pending OCR...' : '—'))}
@@ -447,19 +456,19 @@ export function PurchasesList({
                                                     </span>
                                                 )}
                                             </td>
-                                            <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
+                                            <td data-label="Items" className={cn('px-4 py-3 text-right tabular-nums text-muted-foreground', M_LEFT, 'max-md:row-start-4')}>
                                                 {inv.status === 'SAVED' && inv.ocrData ? (inv.ocrData?.items?.length ?? 0) : (inv.items?.length ?? 0)}
                                             </td>
-                                            <td className="px-4 py-3 text-right tabular-nums text-foreground whitespace-nowrap">
+                                            <td data-label="Goods Value" className={cn('px-4 py-3 text-right tabular-nums text-foreground whitespace-nowrap', M_RIGHT, 'max-md:row-start-4')}>
                                                 {formatINR(inv.status === 'SAVED' && inv.ocrData ? (inv.ocrData?.totals?.subtotal ?? 0) : (inv.subtotal ?? 0))}
                                             </td>
-                                            <td className="px-4 py-3 text-right tabular-nums text-muted-foreground whitespace-nowrap">
+                                            <td data-label="Discount" className={cn('px-4 py-3 text-right tabular-nums text-muted-foreground whitespace-nowrap', M_LEFT, 'max-md:row-start-5')}>
                                                 −{formatINR(inv.status === 'SAVED' && inv.ocrData ? (inv.ocrData?.totals?.discount ?? 0) : (inv.discountAmount ?? 0))}
                                             </td>
-                                            <td className="px-4 py-3 text-right tabular-nums font-semibold text-foreground whitespace-nowrap">
+                                            <td data-label="Net Amount" className={cn('px-4 py-3 text-right tabular-nums font-semibold text-foreground whitespace-nowrap', M_RIGHT, 'max-md:row-start-3')}>
                                                 {formatINR(inv.status === 'SAVED' && inv.ocrData ? (inv.ocrData?.totals?.grandTotal ?? 0) : (inv.grandTotal ?? 0))}
                                             </td>
-                                            <td className="px-4 py-3">
+                                            <td data-label="Payment" className={cn('px-4 py-3', M_RIGHT, 'max-md:row-start-5')}>
                                                 <PaymentBreakdownCell
                                                     paymentMode={inv.paymentMode || inv.purchaseType || 'credit'}
                                                     cashPaid={inv.cashPaid}
@@ -471,7 +480,7 @@ export function PurchasesList({
                                                     payments={inv.payments}
                                                 />
                                             </td>
-                                            <td className="px-4 py-3 text-center">
+                                            <td className="px-4 py-3 text-center max-md:col-start-3 max-md:row-start-2 max-md:justify-self-end max-md:p-0">
                                                 <span className={cn(
                                                     'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border',
                                                     cfg.classes
@@ -479,13 +488,13 @@ export function PurchasesList({
                                                     {cfg.label}
                                                 </span>
                                             </td>
-                                            <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                                            <td className="px-4 py-3 text-right max-md:col-span-3 max-md:col-start-1 max-md:row-start-6 max-md:border-t max-md:border-border max-md:p-0 max-md:pt-2" onClick={(e) => e.stopPropagation()}>
                                                 {inv.status === 'SAVED' ? (
-                                                    <div className="flex justify-end gap-2">
+                                                    <div className="flex justify-end gap-2 max-md:w-full">
                                                         <Button 
                                                             variant="outline" 
                                                             size="sm" 
-                                                            className="h-7 px-2 text-xs gap-1 border-red-200 text-red-600 hover:bg-red-50" 
+                                                            className="h-7 px-2 text-xs gap-1 border-red-200 text-red-600 hover:bg-red-50 max-md:h-9 max-md:flex-1" 
                                                             onClick={() => handleDeleteDraft(inv.id)}
                                                             disabled={deleteDraft.isPending}
                                                         >
@@ -494,14 +503,14 @@ export function PurchasesList({
                                                         <Button 
                                                             variant="default" 
                                                             size="sm" 
-                                                            className="h-7 px-2 text-xs gap-1 bg-blue-600 hover:bg-blue-700" 
+                                                            className="h-7 px-2 text-xs gap-1 bg-blue-600 hover:bg-blue-700 max-md:h-9 max-md:flex-1" 
                                                             onClick={() => onEditInvoice && onEditInvoice(inv)}
                                                         >
                                                             Review Scan
                                                         </Button>
                                                     </div>
                                                 ) : (
-                                                    <Button variant="ghost" size="sm" className="h-7 px-2 text-xs gap-1" onClick={() => setSelectedInvoice(inv)}>
+                                                    <Button variant="ghost" size="sm" className="h-7 px-2 text-xs gap-1 max-md:h-9 max-md:w-full max-md:border" onClick={() => setSelectedInvoice(inv)}>
                                                         <FileText className="h-3.5 w-3.5" />
                                                         View
                                                     </Button>
@@ -519,12 +528,12 @@ export function PurchasesList({
                 {allInvoices.map((inv) => {
                     if (expandedId !== inv.id) return null;
                     return (
-                        <div key={`${inv.id}-expand`} className="border-t border-border bg-muted/20 px-6 py-4">
+                        <div key={`${inv.id}-expand`} className="border-t border-border bg-muted/20 px-3 py-3 sm:px-6 sm:py-4">
                             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
                                 Line Items — {inv.items?.length ?? 0} products
                             </p>
-                            <div className="rounded-lg border border-border overflow-hidden">
-                                <table className="w-full text-xs">
+                            <div className="rounded-lg border border-border overflow-hidden max-sm:overflow-x-auto">
+                                <table className="w-full text-xs max-sm:min-w-[34rem]">
                                     <thead className="bg-muted/60 border-b border-border">
                                         <tr>
                                             <th className="text-left px-3 py-2 font-medium text-muted-foreground">Product</th>
@@ -562,13 +571,13 @@ export function PurchasesList({
 
             {/* ── Pagination ── */}
             {totalPages > 1 && (
-                <div className="flex items-center justify-between text-sm text-muted-foreground">
+                <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
                     <span>
                         Showing {Math.min((page - 1) * PAGE_SIZE + 1, totalRecords)}–{Math.min(page * PAGE_SIZE, totalRecords)} of {totalRecords}
                     </span>
                     <div className="flex items-center gap-1">
                         <Button
-                            variant="outline" size="sm" className="h-8 w-8 p-0"
+                            variant="outline" size="sm" className="h-9 w-9 p-0 sm:h-8 sm:w-8"
                             disabled={page <= 1}
                             onClick={() => setPage((p) => p - 1)}
                         >
@@ -585,13 +594,13 @@ export function PurchasesList({
                             }, [])
                             .map((p, idx) =>
                                 p === '...'
-                                    ? <span key={`ellipsis-${idx}`} className="px-1">…</span>
+                                    ? <span key={`ellipsis-${idx}`} className="px-1 max-sm:hidden">…</span>
                                     : (
                                         <Button
                                             key={p}
                                             variant={page === p ? 'default' : 'outline'}
                                             size="sm"
-                                            className="h-8 w-8 p-0"
+                                            className="h-8 w-8 p-0 max-sm:hidden"
                                             onClick={() => setPage(p as number)}
                                         >
                                             {p}
@@ -601,7 +610,7 @@ export function PurchasesList({
                         }
 
                         <Button
-                            variant="outline" size="sm" className="h-8 w-8 p-0"
+                            variant="outline" size="sm" className="h-9 w-9 p-0 sm:h-8 sm:w-8"
                             disabled={page >= totalPages}
                             onClick={() => setPage((p) => p + 1)}
                         >

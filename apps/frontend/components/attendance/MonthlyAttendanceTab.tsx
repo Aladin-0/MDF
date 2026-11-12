@@ -112,7 +112,7 @@ function DayCell({ day, record, weeklyOffDay }: { day: Date; record?: Attendance
                 >
                     <span className="text-xs font-medium">{dayNum}</span>
                     {record.checkInTime && (
-                        <span className="text-[10px] opacity-80">{formatTime12h(record.checkInTime)}</span>
+                        <span className="whitespace-nowrap text-[9px] leading-none opacity-80 sm:text-[10px]">{formatTime12h(record.checkInTime)}</span>
                     )}
                 </button>
             </PopoverTrigger>
@@ -185,7 +185,7 @@ function TeamGrid({ records, month, year }: { records: AttendanceRecord[]; month
             <table className="min-w-max text-xs w-full border-collapse">
                 <thead>
                     <tr>
-                        <th className="text-left pl-6 pr-4 py-4 font-semibold text-slate-500 sticky left-0 bg-white/95 backdrop-blur-sm border-b border-slate-100 z-10 w-48">Staff Member</th>
+                        <th className="text-left pl-3 pr-2 sm:pl-6 sm:pr-4 py-4 font-semibold text-slate-500 sticky left-0 bg-white/95 backdrop-blur-sm border-b border-slate-100 z-10 w-28 sm:w-48">Staff Member</th>
                         {days.map(d => (
                             <th key={format(d, 'd')} className="w-10 text-center py-4 font-semibold text-slate-500 border-b border-slate-100">
                                 {format(d, 'd')}
@@ -196,9 +196,9 @@ function TeamGrid({ records, month, year }: { records: AttendanceRecord[]; month
                 <tbody>
                     {(staffList as any[]).map(staff => (
                         <tr key={staff.id} className="group hover:bg-slate-50/50 transition-colors">
-                            <td className="pl-6 pr-4 py-3 font-medium text-sm sticky left-0 bg-white/95 group-hover:bg-slate-50/95 backdrop-blur-sm border-b border-slate-50 transition-colors z-10">
-                                <div className="flex items-center gap-3">
-                                    <Avatar className="w-7 h-7 border border-slate-100">
+                            <td className="pl-3 pr-2 sm:pl-6 sm:pr-4 py-3 font-medium text-sm sticky left-0 bg-white/95 group-hover:bg-slate-50/95 backdrop-blur-sm border-b border-slate-50 transition-colors z-10">
+                                <div className="flex items-center gap-2 sm:gap-3">
+                                    <Avatar className="hidden sm:flex w-7 h-7 border border-slate-100">
                                         <AvatarFallback className="bg-primary/5 text-primary text-[10px] font-bold">
                                             {staff.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
                                         </AvatarFallback>
@@ -224,7 +224,7 @@ function TeamGrid({ records, month, year }: { records: AttendanceRecord[]; month
                                 return (
                                     <td key={dateStr} className="text-center py-3 border-b border-slate-50">
                                         <Popover>
-                                            <PopoverTrigger className="focus:outline-none hover:scale-125 transition-transform duration-200">
+                                            <PopoverTrigger className="-m-2.5 p-2.5 focus:outline-none hover:scale-125 transition-transform duration-200 sm:m-0 sm:p-0">
                                                 <div className={cn('w-3.5 h-3.5 rounded-full mx-auto shadow-sm ring-2 ring-white', STATUS_DOT[rec.status] ?? 'bg-slate-300')} />
                                             </PopoverTrigger>
                                             <PopoverContent className="w-56 p-3">
@@ -282,11 +282,11 @@ export function MonthlyAttendanceTab({
 
     return (
         <Card>
-            <CardHeader className="pb-4">
+            <CardHeader className="px-3 pb-4 sm:px-6">
                 <div className="flex flex-wrap items-center gap-3">
                     {/* Month navigator */}
                     <div className="flex items-center gap-2">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={prevMonth}>
+                        <Button variant="ghost" size="icon" className="h-9 w-9 sm:h-8 sm:w-8" onClick={prevMonth}>
                             <ChevronLeft className="w-4 h-4" />
                         </Button>
                         <span className="text-sm font-semibold min-w-32 text-center">
@@ -295,7 +295,7 @@ export function MonthlyAttendanceTab({
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8"
+                            className="h-9 w-9 sm:h-8 sm:w-8"
                             onClick={nextMonth}
                             disabled={isFutureMonth}
                         >
@@ -305,7 +305,7 @@ export function MonthlyAttendanceTab({
 
                     {/* Staff selector */}
                     <Select value={selectedStaffId} onValueChange={onStaffChange}>
-                        <SelectTrigger className="w-44">
+                        <SelectTrigger className="w-full sm:w-44">
                             <SelectValue placeholder="Select staff" />
                         </SelectTrigger>
                         <SelectContent>
@@ -317,7 +317,7 @@ export function MonthlyAttendanceTab({
                     </Select>
                 </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="px-3 sm:px-6">
                 {isLoading ? (
                     <div className="text-center py-8 text-muted-foreground text-sm">Loading...</div>
                 ) : selectedStaffId !== 'all' ? (

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid,
     Tooltip, Legend, ResponsiveContainer,
@@ -22,6 +22,15 @@ const helper = createColumnHelper<StockValuationRow>();
 export function StockValuationTab() {
     const { data, isLoading } = useStockValuation();
     const [sorting, setSorting] = useState<SortingState>([]);
+    // Phones get a smaller chart margin so the bars have room
+    const [narrow, setNarrow] = useState(false);
+    useEffect(() => {
+        const mq = window.matchMedia('(max-width: 639px)');
+        const update = () => setNarrow(mq.matches);
+        update();
+        mq.addEventListener('change', update);
+        return () => mq.removeEventListener('change', update);
+    }, []);
 
     const topProducts = useMemo(() => {
         if (!data) return [];
@@ -108,7 +117,7 @@ export function StockValuationTab() {
                     <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
                         Total Stock Value
                     </p>
-                    <p className="text-2xl font-bold text-slate-900">
+                    <p className="text-xl sm:text-2xl font-bold text-slate-900">
                         {formatCurrency(data?.totalStockValue ?? 0)}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">At purchase rate</p>
@@ -117,7 +126,7 @@ export function StockValuationTab() {
                     <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
                         Total MRP Value
                     </p>
-                    <p className="text-2xl font-bold text-green-700">
+                    <p className="text-xl sm:text-2xl font-bold text-green-700">
                         {formatCurrency(data?.totalMrpValue ?? 0)}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">At MRP rate</p>
@@ -126,7 +135,7 @@ export function StockValuationTab() {
                     <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
                         Potential Margin
                     </p>
-                    <p className="text-2xl font-bold text-primary">
+                    <p className="text-xl sm:text-2xl font-bold text-primary">
                         {data?.potentialMarginPct ?? 0}%
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">MRP vs purchase cost</p>
@@ -134,13 +143,13 @@ export function StockValuationTab() {
             </div>
 
             {/* Horizontal Bar Chart - Top 8 Products */}
-            <div className="bg-white rounded-xl border p-4">
+            <div className="bg-white rounded-xl border p-3 sm:p-4">
                 <h3 className="text-sm font-semibold text-slate-700 mb-4">Top 8 Products by Value</h3>
                 <ResponsiveContainer width="100%" height={280}>
                     <BarChart
                         data={topProducts}
                         layout="vertical"
-                        margin={{ left: 80, right: 20, top: 5, bottom: 5 }}
+                        margin={{ left: narrow ? 0 : 80, right: 20, top: 5, bottom: 5 }}
                     >
                         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                         <XAxis
@@ -165,7 +174,7 @@ export function StockValuationTab() {
             {/* Stock Valuation Table */}
             <div className="bg-white rounded-xl border overflow-hidden">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                    <table className="w-full min-w-[900px] text-sm">
                         <thead>
                             {table.getHeaderGroups().map(hg => (
                                 <tr key={hg.id} className="bg-slate-50 border-b">

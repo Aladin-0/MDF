@@ -64,9 +64,9 @@ export function VoucherDetailModal({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-w-2xl max-h-[90dvh] overflow-y-auto">
                 <DialogHeader>
-                    <DialogTitle className="flex items-center justify-between text-base">
+                    <DialogTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
                         <div className="flex items-center gap-2">
                             <FileText className="h-4 w-4 text-slate-500" />
                             {data?.isJournalEntry 
@@ -74,7 +74,7 @@ export function VoucherDetailModal({
                                 : 'Voucher Details'}
                         </div>
                         {data && !data.isJournalEntry && (
-                            <div className="flex items-center gap-2 mr-6">
+                            <div className="flex items-center gap-2 sm:mr-6">
                                 <Button variant="outline" size="sm" asChild className="h-8 shadow-sm">
                                     <Link href={`/dashboard/accounts/voucher-entry/revisions/${data.id}`}>
                                         <History className="h-3.5 w-3.5 mr-1.5" />
@@ -101,10 +101,10 @@ export function VoucherDetailModal({
                     <div className="space-y-5 text-sm">
 
                         {/* Header strip */}
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 rounded-xl bg-slate-50 border p-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 rounded-xl bg-slate-50 border p-3 sm:p-4">
                             <div>
                                 <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-0.5">Voucher No</p>
-                                <p className="font-mono font-bold text-slate-800">{data.voucherNo}</p>
+                                <p className="font-mono font-bold text-slate-800 break-all">{data.voucherNo}</p>
                             </div>
                             <div>
                                 <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-0.5">Type</p>
@@ -140,7 +140,7 @@ export function VoucherDetailModal({
                                 </p>
                             </div>
                             {data.narration && (
-                                <div className="col-span-4 border-t pt-3">
+                                <div className="col-span-2 sm:col-span-4 border-t pt-3 break-words">
                                     <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-0.5">Narration</p>
                                     <p className="text-slate-700 italic">&ldquo;{data.narration}&rdquo;</p>
                                 </div>
@@ -154,8 +154,8 @@ export function VoucherDetailModal({
                                     <Receipt className="h-3.5 w-3.5" />
                                     Bill-by-Bill Payment Breakdown
                                 </p>
-                                <div className="overflow-hidden rounded-xl border">
-                                    <table className="w-full text-xs">
+                                <div className="overflow-x-auto rounded-xl border">
+                                    <table className="w-full min-w-[480px] text-xs">
                                         <thead className="bg-slate-50 border-b">
                                             <tr>
                                                 <th className="px-4 py-2.5 text-left font-semibold text-slate-500">Bill No</th>
@@ -206,8 +206,8 @@ export function VoucherDetailModal({
                                 <CreditCard className="h-3.5 w-3.5" />
                                 Ledger Entries
                             </p>
-                            <div className="overflow-hidden rounded-xl border">
-                                <table className="w-full text-xs">
+                            <div className="overflow-x-auto rounded-xl border">
+                                <table className="w-full min-w-[300px] text-xs">
                                     <thead className="bg-slate-50 border-b">
                                         <tr>
                                             <th className="px-4 py-2.5 text-left font-semibold text-slate-500">Ledger</th>

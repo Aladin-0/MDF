@@ -109,7 +109,7 @@ export function SmartCheckInAction() {
         return (
             <Button 
                 variant="outline"
-                className="border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                className="w-full border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 sm:w-auto"
                 onClick={() => handleAction('check_out')}
                 disabled={isLoading}
             >
@@ -120,7 +120,7 @@ export function SmartCheckInAction() {
 
     return (
         <Button 
-            className="bg-amber-600 hover:bg-amber-700 text-white"
+            className="w-full bg-amber-600 hover:bg-amber-700 text-white sm:w-auto"
             onClick={() => handleAction('check_in')}
             disabled={isLoading}
         >

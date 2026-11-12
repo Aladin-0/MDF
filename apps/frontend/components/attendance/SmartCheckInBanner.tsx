@@ -153,7 +153,7 @@ export function SmartCheckInBanner() {
 
     if (status === 'checked_in') {
         return (
-            <div className="bg-blue-50 border-b border-blue-200 px-4 py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm z-40 relative">
+            <div className="bg-blue-50 border-b border-blue-200 px-4 py-2 sm:py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 shadow-sm z-40 relative">
                 <div className="flex items-center gap-3">
                     <div className="bg-blue-100 p-2 rounded-full">
                         <Clock className="w-5 h-5 text-blue-600" />
@@ -162,7 +162,7 @@ export function SmartCheckInBanner() {
                         <h3 className="text-sm font-semibold text-blue-900">
                             You are checked in
                         </h3>
-                        <p className="text-xs text-blue-700 mt-0.5">
+                        <p className="hidden sm:block text-xs text-blue-700 mt-0.5">
                             Don't forget to check out before leaving today.
                         </p>
                     </div>
@@ -177,7 +177,7 @@ export function SmartCheckInBanner() {
                     >
                         {isCheckingOut ? 'Verifying...' : 'Check Out Now'}
                     </Button>
-                    <button onClick={() => setIsDismissed(true)} className="ml-2 text-blue-400 hover:text-blue-600 p-1">
+                    <button onClick={() => setIsDismissed(true)} className="ml-2 min-h-9 min-w-9 text-blue-400 hover:text-blue-600 p-1 sm:min-h-0 sm:min-w-0">
                         &times;
                     </button>
                 </div>
@@ -186,7 +186,7 @@ export function SmartCheckInBanner() {
     }
 
     return (
-        <div className="bg-amber-50 border-b border-amber-200 px-4 py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm z-40 relative">
+        <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 sm:py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 shadow-sm z-40 relative">
             <div className="flex items-center gap-3">
                 <div className="bg-amber-100 p-2 rounded-full">
                     <Clock className="w-5 h-5 text-amber-600" />
@@ -195,7 +195,7 @@ export function SmartCheckInBanner() {
                     <h3 className="text-sm font-semibold text-amber-900">
                         You haven't checked in today
                     </h3>
-                    <p className="text-xs text-amber-700 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                    <p className="hidden sm:flex text-xs text-amber-700 mt-0.5 items-center gap-1.5 flex-wrap">
                         <Wifi className="w-3 h-3" /> Connect to outlet Wi-Fi OR 
                         <MapPin className="w-3 h-3 ml-1" /> Be within {attendanceRadiusMeters || 100}m of the store.
                     </p>
@@ -211,7 +211,7 @@ export function SmartCheckInBanner() {
                 >
                     {isCheckingIn ? 'Verifying Location...' : 'Mark Present Now'}
                 </Button>
-                <button onClick={() => setIsDismissed(true)} className="ml-2 text-amber-400 hover:text-amber-600 p-1 text-lg font-medium leading-none">
+                <button onClick={() => setIsDismissed(true)} className="ml-2 min-h-9 min-w-9 text-amber-400 hover:text-amber-600 p-1 text-lg font-medium leading-none sm:min-h-0 sm:min-w-0">
                     &times;
                 </button>
             </div>

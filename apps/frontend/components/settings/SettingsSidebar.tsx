@@ -52,10 +52,10 @@ interface SettingsSidebarProps {
 
 export function SettingsSidebar({ active, onChange, hasUnsavedChanges }: SettingsSidebarProps) {
     return (
-        <div className="w-56 shrink-0 bg-slate-50 py-4 sticky top-0 self-start">
+        <div className="flex md:block w-full md:w-56 md:shrink-0 bg-slate-50 px-2 py-2 md:px-0 md:py-4 gap-1 overflow-x-auto md:overflow-visible no-scrollbar border-b md:border-b-0 md:sticky md:top-0 md:self-start">
             {NAV_GROUPS.map((group) => (
-                <div key={group.label} className="mb-2">
-                    <p className="text-xs text-slate-400 uppercase tracking-wider px-4 py-2 mt-1 font-medium">
+                <div key={group.label} className="flex md:block gap-1 shrink-0 md:mb-2">
+                    <p className="hidden md:block text-xs text-slate-400 uppercase tracking-wider px-4 py-2 mt-1 font-medium">
                         {group.label}
                     </p>
                     {group.items.map((item) => {
@@ -66,8 +66,8 @@ export function SettingsSidebar({ active, onChange, hasUnsavedChanges }: Setting
                                 key={item.id}
                                 onClick={() => onChange(item.id)}
                                 className={cn(
-                                    'w-full flex items-center gap-3 px-4 py-2.5 rounded-lg mx-2 cursor-pointer text-sm transition-colors text-left',
-                                    'w-[calc(100%-1rem)]',
+                                    'flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2.5 rounded-lg md:mx-2 cursor-pointer text-sm transition-colors text-left whitespace-nowrap shrink-0 md:shrink',
+                                    'w-auto md:w-[calc(100%-1rem)]',
                                     isActive
                                         ? 'bg-primary/10 text-primary font-medium'
                                         : 'text-slate-600 hover:bg-slate-200 hover:text-slate-900'

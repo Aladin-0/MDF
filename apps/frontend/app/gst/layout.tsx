@@ -49,16 +49,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <div className="flex-1 w-full flex flex-col">
                 
                 {/* Page Header Container */}
-                <div className="bg-white shadow-sm border-b border-slate-200 mt-6 w-full">
+                <div className="bg-white shadow-sm border-b border-slate-200 mt-3 sm:mt-6 w-full">
                     <div className="max-w-[1600px] mx-auto px-4 sm:px-6">
                         {/* Title */}
-                        <div className="pt-8 pb-6 flex items-center justify-between">
-                            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">GST - GSTR & Reconciliations</h1>
+                        <div className="pt-5 pb-4 sm:pt-8 sm:pb-6 flex items-center justify-between">
+                            <h1 className="text-xl sm:text-3xl font-bold text-slate-900 tracking-tight">GST - GSTR & Reconciliations</h1>
 
                         </div>
 
                         {/* GST Sub-Navigation */}
-                        <div className="flex gap-8 overflow-x-auto whitespace-nowrap" role="tablist">
+                        <div className="flex gap-5 sm:gap-8 overflow-x-auto no-scrollbar whitespace-nowrap" role="tablist">
                             {tabs.map(tab => (
                                 <a 
                                     key={tab.name}
@@ -66,7 +66,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                     role="tab"
                                     aria-selected={pathname === tab.href}
                                     className={cn(
-                                        "pb-3 px-1 text-sm font-semibold border-b-[3px] transition-colors",
+                                        "shrink-0 pb-3 px-1 text-sm font-semibold border-b-[3px] transition-colors",
                                         pathname === tab.href 
                                             ? "border-purple-600 text-purple-700" 
                                             : "border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300"
@@ -79,7 +79,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     </div>
                 </div>
 
-                <main className="flex-1 w-full max-w-[1600px] mx-auto p-4 sm:p-8 mt-8 print:p-0 print:mt-0">
+                <main className="flex-1 w-full max-w-[1600px] mx-auto p-3 sm:p-8 mt-4 sm:mt-8 print:p-0 print:mt-0">
                     <RouteGuard>{children}</RouteGuard>
                 </main>
             </div>

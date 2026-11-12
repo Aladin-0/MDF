@@ -35,16 +35,16 @@ export default function CustomerCreditDetail({
     const customer = account.customer;
 
     return (
-        <div className="bg-white rounded-xl border shadow-sm flex flex-col h-[calc(100vh-220px)] sticky top-6">
+        <div className="bg-white lg:rounded-xl border shadow-sm flex flex-col h-[80dvh] lg:h-[calc(100vh-220px)] lg:sticky lg:top-6">
             {/* Header */}
-            <div className="border-b px-5 py-4 flex justify-between items-start">
-                <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
+            <div className="border-b px-4 sm:px-5 py-4 flex justify-between items-start gap-2">
+                <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-12 h-12 shrink-0 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
                         {customer.name.slice(0, 2).toUpperCase()}
                     </div>
-                    <div>
-                        <div className="flex items-center gap-2">
-                            <h3 className="text-lg font-bold text-slate-900">{customer.name}</h3>
+                    <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="text-lg font-bold text-slate-900 break-words">{customer.name}</h3>
                             {customer.isChronic && (
                                 <span className="bg-purple-100 text-purple-700 text-[10px] font-medium px-2 py-0.5 rounded-full">
                                     Chronic
@@ -56,10 +56,10 @@ export default function CustomerCreditDetail({
                         </div>
                     </div>
                 </div>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 shrink-0">
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                            <Button variant="ghost" size="sm" className="h-9 w-9 sm:h-8 sm:w-8 p-0">
                                 <MoreVertical className="w-4 h-4" />
                             </Button>
                         </DropdownMenuTrigger>
@@ -68,14 +68,14 @@ export default function CustomerCreditDetail({
                             <DropdownMenuItem>View Bill History</DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={onClose}>
+                    <Button variant="ghost" size="sm" className="h-9 w-9 sm:h-8 sm:w-8 p-0" onClick={onClose}>
                         <X className="w-4 h-4" />
                     </Button>
                 </div>
             </div>
 
             {/* Summary strip */}
-            <div className="bg-slate-50 border-b px-5 py-3">
+            <div className="bg-slate-50 border-b px-4 sm:px-5 py-3">
                 <div className="grid grid-cols-2 gap-3">
                     <div>
                         <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Outstanding</div>
@@ -104,7 +104,7 @@ export default function CustomerCreditDetail({
             </div>
 
             {/* Action buttons */}
-            <div className="px-5 py-3 flex gap-2 border-b">
+            <div className="px-4 sm:px-5 py-3 flex gap-2 border-b">
                 <Button className="flex-1 h-9" onClick={onPayClick}>
                     <IndianRupee className="w-4 h-4 mr-1" />
                     Record Payment
@@ -123,7 +123,7 @@ export default function CustomerCreditDetail({
             </div>
 
             {/* Transaction Ledger */}
-            <div className="px-5 py-4 flex-1 overflow-y-auto">
+            <div className="px-4 sm:px-5 py-4 flex-1 min-h-0 overflow-y-auto">
                 <h4 className="text-sm font-semibold text-slate-900 mb-1">Transaction History</h4>
                 <p className="text-[10px] text-muted-foreground mb-4">Showing all credit activity</p>
 

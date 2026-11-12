@@ -43,7 +43,7 @@ export function GSTPeriodSelector({ selectedPeriod: propSelectedPeriod, onSelect
     }
 
     return (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex min-w-0 max-w-full items-center gap-2 overflow-x-auto no-scrollbar sm:flex-wrap sm:overflow-visible">
             {periods.map(p => {
                 const periodValue = typeof p === 'string' ? p : p.period;
                 const status = typeof p === 'string' ? 'draft' : (p.status || 'draft');
@@ -56,7 +56,7 @@ export function GSTPeriodSelector({ selectedPeriod: propSelectedPeriod, onSelect
                         key={periodValue}
                         onClick={() => handlePeriodClick(periodValue)}
                         className={cn(
-                            "relative flex items-center gap-1.5 px-3 py-1.5 h-8 rounded-md border text-xs sm:text-sm font-medium transition-colors cursor-pointer outline-none focus:ring-2 focus:ring-primary/50",
+                            "relative flex shrink-0 items-center gap-1.5 px-3 py-1.5 h-8 rounded-md border text-xs sm:text-sm font-medium transition-colors cursor-pointer outline-none focus:ring-2 focus:ring-primary/50",
                             isSelected 
                                 ? "bg-primary text-primary-foreground border-primary"
                                 : "bg-white text-slate-700 border-slate-200 hover:border-primary/50 hover:bg-slate-50"

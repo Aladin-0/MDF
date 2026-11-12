@@ -29,6 +29,10 @@ const WINDOWS: { value: Span; label: string }[] = [
     { value: 90, label: '90 Days' },
 ];
 
+/** Phones show each row as a stacked card (the table elements become blocks / a small grid, so the markup is unchanged). Desktop is the plain table. */
+const M_ROW = 'max-md:grid max-md:grid-cols-[minmax(0,1fr)_auto] max-md:items-start max-md:gap-x-2 max-md:gap-y-1.5 max-md:p-3';
+const M_DETAIL = 'max-md:col-span-2 max-md:flex max-md:items-center max-md:justify-between max-md:gap-3 max-md:p-0 max-md:before:content-[attr(data-label)] max-md:before:text-xs max-md:before:text-muted-foreground';
+
 interface Row { product: ProductSearchResult; batch: Batch; days: number; value: number }
 
 export function ExpiryTable({ onAdjustClick }: { onAdjustClick: (batch: Batch, product: ProductSearchResult) => void }) {
@@ -129,9 +133,9 @@ export function ExpiryTable({ onAdjustClick }: { onAdjustClick: (batch: Batch, p
 
             <div className="overflow-hidden rounded-xl border bg-card">
                 <div className="overflow-x-auto">
-                    <Table className="min-w-[48rem]">
+                    <Table className="md:min-w-[48rem]">
                         <caption className="sr-only">Batches that expire soon or have expired</caption>
-                        <TableHeader className="bg-muted/50">
+                        <TableHeader className="bg-muted/50 max-md:hidden">
                             <TableRow className="hover:bg-transparent">
                                 <TableHead scope="col">Product</TableHead>
                                 <TableHead scope="col">Batch</TableHead>
@@ -142,12 +146,12 @@ export function ExpiryTable({ onAdjustClick }: { onAdjustClick: (batch: Batch, p
                                 <TableHead scope="col"><span className="sr-only">Actions</span></TableHead>
                             </TableRow>
                         </TableHeader>
-                        <TableBody>
+                        <TableBody className="max-md:block">
                             {isLoading ? (
-                                Array.from({ length: 5 }, (_, i) => <TableRow key={i} className="hover:bg-transparent"><TableCell colSpan={7}><Skeleton className="h-9 w-full" /></TableCell></TableRow>)
+                                Array.from({ length: 5 }, (_, i) => <TableRow key={i} className="hover:bg-transparent max-md:block"><TableCell colSpan={7} className="max-md:block"><Skeleton className="h-9 w-full" /></TableCell></TableRow>)
                             ) : visible.length === 0 ? (
-                                <TableRow className="hover:bg-transparent">
-                                    <TableCell colSpan={7} className="py-16 text-center">
+                                <TableRow className="hover:bg-transparent max-md:block">
+                                    <TableCell colSpan={7} className="py-16 text-center max-md:block max-md:py-12">
                                         <CheckCircle2 className="mx-auto mb-3 h-10 w-10 text-emerald-500/60" aria-hidden="true" />
                                         <p className="font-medium">{span === 'expired' ? 'No expired stock on the shelves' : `Nothing expires within ${span} days`}</p>
                                         <p className="mt-1 text-sm text-muted-foreground">{span === 'expired' ? 'Everything in stock is within its date.' : 'Try a longer span to see what is coming up.'}</p>
@@ -157,14 +161,14 @@ export function ExpiryTable({ onAdjustClick }: { onAdjustClick: (batch: Batch, p
                                 visible.map(({ product, batch, days, value }) => {
                                     const expired = days < 0;
                                     return (
-                                        <TableRow key={batch.id}>
-                                            <TableCell className="max-w-[20rem]">
+                                        <TableRow key={batch.id} className={M_ROW}>
+                                            <TableCell className="max-w-[20rem] max-md:col-start-1 max-md:row-start-1 max-md:min-w-0 max-md:max-w-none max-md:p-0">
                                                 <div className="font-medium">{product.name}</div>
                                                 {product.composition && <div className="truncate text-xs text-muted-foreground" title={product.composition}>{product.composition}</div>}
                                             </TableCell>
-                                            <TableCell><span translate="no" className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{batch.batchNo}</span></TableCell>
-                                            <TableCell className="whitespace-nowrap tabular-nums">
-                                                <div>{formatDay(batch.expiryDate)}</div>
+                                            <TableCell data-label="Batch" className={M_DETAIL}><span translate="no" className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{batch.batchNo}</span></TableCell>
+                                            <TableCell data-label="Expiry" className={cn('whitespace-nowrap tabular-nums', M_DETAIL)}>
+                                                <div className="max-md:text-right">{formatDay(batch.expiryDate)}</div>
                                                 <span className={cn(
                                                     'mt-1 inline-block rounded px-2 py-0.5 text-xs font-medium',
                                                     expired ? 'bg-red-600 text-white' : days <= 30 ? 'bg-red-100 text-red-800' : days <= 60 ? 'bg-amber-100 text-amber-800' : 'bg-yellow-100 text-yellow-800',
@@ -172,10 +176,10 @@ export function ExpiryTable({ onAdjustClick }: { onAdjustClick: (batch: Batch, p
                                                     {expiryText(days)}
                                                 </span>
                                             </TableCell>
-                                            <TableCell className="whitespace-nowrap text-right tabular-nums">{formatQty(batch.qtyStrips, batch.qtyLoose, batch.packSize, batch.packType, batch.packUnit)}</TableCell>
-                                            <TableCell>{batch.rackLocation || '—'}</TableCell>
-                                            <TableCell className="whitespace-nowrap text-right tabular-nums">{formatCurrency(value)}</TableCell>
-                                            <TableCell className="text-right">
+                                            <TableCell data-label="In Stock" className={cn('whitespace-nowrap text-right tabular-nums', M_DETAIL)}>{formatQty(batch.qtyStrips, batch.qtyLoose, batch.packSize, batch.packType, batch.packUnit)}</TableCell>
+                                            <TableCell data-label="Rack" className={M_DETAIL}>{batch.rackLocation || '—'}</TableCell>
+                                            <TableCell data-label="Value" className={cn('whitespace-nowrap text-right tabular-nums', M_DETAIL)}>{formatCurrency(value)}</TableCell>
+                                            <TableCell className="text-right max-md:col-start-2 max-md:row-start-1 max-md:p-0">
                                                 <PermissionGate permission="adjust_stock">
                                                     <Button
                                                         type="button"

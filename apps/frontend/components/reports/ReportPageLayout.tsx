@@ -88,7 +88,7 @@ export function ReportPageLayout({
                     </div>
 
                     {/* Right: Export Actions (download buttons, print, format options) */}
-                    <div className="flex items-center gap-2 shrink-0 self-end md:self-auto">
+                    <div className="flex flex-wrap items-center gap-2 md:shrink-0 md:self-auto">
                         {exportActions}
                     </div>
                 </div>

@@ -15,7 +15,8 @@ interface BatchBreakdownProps {
 /** The batches of one product, shown under its row. Each can be adjusted on its own (the row's own button used to pick the first batch for you). */
 export function BatchBreakdown({ product, onAdjust }: BatchBreakdownProps) {
     return (
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[34rem] text-sm">
             <caption className="sr-only">Batches of {product.name}</caption>
             <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
@@ -70,5 +71,6 @@ export function BatchBreakdown({ product, onAdjust }: BatchBreakdownProps) {
                 })}
             </tbody>
         </table>
+        </div>
     );
 }

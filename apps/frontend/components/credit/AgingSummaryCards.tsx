@@ -93,7 +93,7 @@ export default function AgingSummaryCards({ onBucketClick, activeBucket }: Aging
     ];
 
     return (
-        <div className="flex gap-3 overflow-x-auto pb-2">
+        <div className="grid grid-cols-2 gap-3 sm:flex sm:overflow-x-auto sm:pb-2">
             {cards.map((card) => {
                 const Icon = card.icon;
                 const isActive = activeBucket === card.key;
@@ -101,7 +101,8 @@ export default function AgingSummaryCards({ onBucketClick, activeBucket }: Aging
                     <Card
                         key={card.key}
                         className={cn(
-                            'min-w-[160px] rounded-xl p-4 cursor-pointer transition-all hover:shadow-md',
+                            'min-w-0 sm:min-w-[160px] rounded-xl p-3 sm:p-4 cursor-pointer transition-all hover:shadow-md',
+                            card.key === 'all' && 'col-span-2 sm:col-span-1',
                             card.className,
                             isActive && 'ring-2 ring-primary ring-offset-2'
                         )}
@@ -116,7 +117,7 @@ export default function AgingSummaryCards({ onBucketClick, activeBucket }: Aging
                             {card.title}
                             {card.subtitle && <span className="ml-1">· {card.subtitle}</span>}
                         </div>
-                        <div className={cn('text-2xl font-bold mt-1', card.valueColor)}>
+                        <div className={cn('text-xl sm:text-2xl font-bold mt-1 max-sm:break-words', card.valueColor)}>
                             {formatCurrency(card.value)}
                         </div>
                         <div className={cn('text-xs mt-1', card.key === 'all' ? 'text-white/60' : 'text-muted-foreground')}>

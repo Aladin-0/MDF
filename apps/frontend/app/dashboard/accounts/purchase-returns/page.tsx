@@ -37,7 +37,7 @@ export default function PurchaseReturnsPage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="space-y-1">
                     <div className="flex items-center gap-2.5">
                         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -49,7 +49,7 @@ export default function PurchaseReturnsPage() {
                         Debit notes — return goods to distributors
                     </p>
                 </div>
-                <Button asChild>
+                <Button asChild className="w-full sm:w-auto">
                     <Link href="/dashboard/accounts/purchase-returns/new">
                         <Plus className="mr-2 h-4 w-4" /> New Return
                     </Link>
@@ -70,7 +70,55 @@ export default function PurchaseReturnsPage() {
                     </Button>
                 </div>
             ) : (
-                <div className="rounded-lg border overflow-hidden">
+                <>
+                <div className="space-y-3 md:hidden">
+                    {notes.map((note) => (
+                        <div
+                            key={note.id}
+                            className="rounded-lg border bg-card p-3 space-y-2 cursor-pointer active:bg-muted/30"
+                            onClick={() => setSelectedNote(note)}
+                        >
+                            <div className="flex items-start justify-between gap-2">
+                                <span className="font-mono text-xs font-semibold text-primary break-all">{note.debitNoteNo}</span>
+                                <span className={cn('shrink-0 px-2 py-0.5 rounded-full text-xs font-medium', STATUS_COLORS[note.status])}>
+                                    {note.status.charAt(0).toUpperCase() + note.status.slice(1)}
+                                </span>
+                            </div>
+                            <div className="flex items-end justify-between gap-2">
+                                <div className="min-w-0 text-sm">
+                                    <p className="truncate font-medium">{note.distributorName}</p>
+                                    <p className="text-xs text-muted-foreground">{format(new Date(note.date), 'dd MMM yyyy')}</p>
+                                </div>
+                                <span className="shrink-0 font-semibold">
+                                    ₹{note.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                </span>
+                            </div>
+                            <div className="flex items-center justify-end gap-1.5 pt-1" onClick={(e) => e.stopPropagation()}>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setSelectedNote(note)}
+                                    className="h-9 px-3 text-xs"
+                                    title="View return details"
+                                >
+                                    <Eye className="w-3.5 h-3.5 mr-1" /> View
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    asChild
+                                    className="h-9 px-3 text-xs border-amber-300 text-amber-700 hover:bg-amber-50"
+                                    title="Edit debit note"
+                                >
+                                    <Link href={`/dashboard/accounts/purchase-returns/${note.id}/edit`}>
+                                        <Pencil className="w-3.5 h-3.5 mr-1" /> Edit
+                                    </Link>
+                                </Button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+                <div className="hidden md:block rounded-lg border overflow-hidden overflow-x-auto">
                     <table className="w-full text-sm">
                         <thead className="bg-muted/50">
                             <tr>
@@ -131,6 +179,7 @@ export default function PurchaseReturnsPage() {
                         </tbody>
                     </table>
                 </div>
+                </>
             )}
             
             <PurchaseReturnDetailModal

@@ -44,8 +44,8 @@ export default function RefillAlertsBanner({ isExpanded, onToggle }: RefillAlert
         <Collapsible open={isExpanded} onOpenChange={onToggle}>
             <CollapsibleTrigger asChild>
                 <div className="bg-purple-50 border border-purple-200 rounded-xl px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-purple-100 transition-colors">
-                    <div className="flex items-center gap-2">
-                        <RefreshCw className="w-4 h-4 text-purple-500" />
+                    <div className="flex flex-wrap items-center gap-x-2 min-w-0">
+                        <RefreshCw className="w-4 h-4 text-purple-500 shrink-0" />
                         <span className="text-sm font-medium text-purple-800">
                             {alertList.length} chronic {alertList.length === 1 ? 'patient' : 'patients'} due for refill
                         </span>
@@ -63,7 +63,7 @@ export default function RefillAlertsBanner({ isExpanded, onToggle }: RefillAlert
                     {alertList.map((alert: any) => (
                         <div
                             key={alert.customer.id}
-                            className="bg-white rounded-lg border px-4 py-3 flex items-center justify-between gap-4"
+                            className="bg-white rounded-lg border px-3 sm:px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4"
                         >
                             {/* Patient info */}
                             <div className="flex items-center gap-3 min-w-0">
@@ -91,7 +91,7 @@ export default function RefillAlertsBanner({ isExpanded, onToggle }: RefillAlert
                             </div>
 
                             {/* Due badge + actions */}
-                            <div className="flex items-center gap-2 flex-shrink-0">
+                            <div className="flex flex-wrap items-center gap-2 sm:flex-shrink-0">
                                 <span className={cn(
                                     'text-xs font-medium px-2 py-1 rounded-full',
                                     alert.daysOverdue > 0
@@ -107,11 +107,11 @@ export default function RefillAlertsBanner({ isExpanded, onToggle }: RefillAlert
                                         : `Due in ${Math.abs(alert.daysOverdue)}d`
                                     }
                                 </span>
-                                <Button size="sm" className="h-7 text-xs" onClick={() => handleQuickBill(alert)}>
+                                <Button size="sm" className="h-9 sm:h-7 text-xs" onClick={() => handleQuickBill(alert)}>
                                     <Receipt className="w-3 h-3 mr-1" />
                                     Quick Bill
                                 </Button>
-                                <Button size="sm" variant="outline" className="h-7 text-xs border-green-300 text-green-600 hover:bg-green-50" onClick={() => handleWhatsApp(alert)}>
+                                <Button size="sm" variant="outline" className="h-9 sm:h-7 text-xs border-green-300 text-green-600 hover:bg-green-50" onClick={() => handleWhatsApp(alert)}>
                                     <MessageCircle className="w-3 h-3" />
                                 </Button>
                             </div>

@@ -42,7 +42,7 @@ export default function CustomerFiltersBar({
     return (
         <div className="flex gap-3 flex-wrap items-center">
             {/* Search */}
-            <div className="relative w-64">
+            <div className="relative w-full sm:w-64">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                     placeholder="Search name, phone, address..."
@@ -53,7 +53,7 @@ export default function CustomerFiltersBar({
             </div>
 
             {/* Filter pills */}
-            <div className="flex gap-1.5">
+            <div className="flex flex-wrap gap-1.5">
                 {FILTERS.map((f) => {
                     const count = getCount(f.key);
                     return (
@@ -61,7 +61,7 @@ export default function CustomerFiltersBar({
                             key={f.key}
                             onClick={() => onFilterChange(f.key)}
                             className={cn(
-                                'px-3 py-1.5 rounded-full text-xs font-medium transition-colors',
+                                'px-3 py-2 sm:py-1.5 rounded-full text-xs font-medium transition-colors',
                                 activeFilter === f.key
                                     ? 'bg-primary text-white'
                                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -75,7 +75,7 @@ export default function CustomerFiltersBar({
 
             {/* Sort */}
             <Select value={sortBy} onValueChange={onSortChange}>
-                <SelectTrigger className="w-44">
+                <SelectTrigger className="flex-1 min-w-0 sm:flex-none sm:w-44">
                     <SelectValue placeholder="Sort by..." />
                 </SelectTrigger>
                 <SelectContent>
@@ -91,7 +91,7 @@ export default function CustomerFiltersBar({
                 <button
                     onClick={() => onViewModeChange('grid')}
                     className={cn(
-                        'p-2 rounded-lg transition-colors',
+                        'p-2.5 sm:p-2 rounded-lg transition-colors',
                         viewMode === 'grid' ? 'bg-primary text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                     )}
                 >
@@ -100,7 +100,7 @@ export default function CustomerFiltersBar({
                 <button
                     onClick={() => onViewModeChange('list')}
                     className={cn(
-                        'p-2 rounded-lg transition-colors',
+                        'p-2.5 sm:p-2 rounded-lg transition-colors',
                         viewMode === 'list' ? 'bg-primary text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                     )}
                 >

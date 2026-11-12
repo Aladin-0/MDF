@@ -75,7 +75,7 @@ export function DataManagementSection() {
                 {/* Data Overview */}
                 <div className="bg-slate-50 rounded-xl p-5 space-y-3">
                     <p className="text-sm font-semibold text-slate-700">Data Overview</p>
-                    <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                         {[
                             { label: 'Total Customers', value: '8' },
                             { label: 'Total Products', value: '10' },
@@ -84,7 +84,7 @@ export function DataManagementSection() {
                             { label: 'Data Since', value: 'Jan 2025' },
                             { label: 'Storage Used', value: '~2.4 MB' },
                         ].map(({ label, value }) => (
-                            <div key={label} className="flex justify-between bg-white rounded-lg px-3 py-2 border">
+                            <div key={label} className="flex justify-between gap-2 bg-white rounded-lg px-3 py-2 border">
                                 <span className="text-slate-500">{label}</span>
                                 <span className="font-medium text-slate-900">{value}</span>
                             </div>
@@ -101,7 +101,7 @@ export function DataManagementSection() {
                             variant="outline"
                             onClick={handleBackup}
                             disabled={isBackingUp}
-                            className="w-fit"
+                            className="w-full sm:w-fit"
                         >
                             <Download className="w-4 h-4 mr-2" />
                             {isBackingUp ? 'Creating backup...' : 'Create Backup'}
@@ -121,7 +121,7 @@ export function DataManagementSection() {
                     </p>
                     <Button
                         variant="outline"
-                        className="border-red-300 text-red-600 hover:bg-red-100 hover:text-red-700"
+                        className="w-full sm:w-auto border-red-300 text-red-600 hover:bg-red-100 hover:text-red-700"
                         onClick={() => setShowResetConfirm(true)}
                     >
                         <RotateCcw className="w-4 h-4 mr-2" />

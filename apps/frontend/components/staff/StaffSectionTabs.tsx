@@ -22,12 +22,12 @@ export function StaffSectionTabs() {
     if (visible.length < 2) return null;
 
     return (
-        <nav aria-label="Staff section" className="inline-flex h-10 items-center rounded-md bg-muted p-1 text-muted-foreground">
+        <nav aria-label="Staff section" className="flex w-full sm:inline-flex sm:w-auto h-10 items-center rounded-md bg-muted p-1 text-muted-foreground">
             {visible.map(({ href, label, icon: Icon }) => {
                 const active = pathname === href || pathname.startsWith(href + '/');
                 return (
                     <Link key={href} href={href} aria-current={active ? 'page' : undefined}
-                        className={cn('inline-flex items-center gap-2 whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium transition-all',
+                        className={cn('inline-flex flex-1 sm:flex-none justify-center items-center gap-2 whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium transition-all',
                             active ? 'bg-background text-foreground shadow-sm' : 'hover:text-foreground')}>
                         <Icon className="w-4 h-4" /> {label}
                     </Link>

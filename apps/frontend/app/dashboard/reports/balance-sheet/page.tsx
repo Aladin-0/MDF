@@ -258,7 +258,7 @@ function PrintDialog({
                     {/* Detail level */}
                     <div className="space-y-2">
                         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Detail Level</p>
-                        <RadioGroup value={detail} onValueChange={v => setDetail(v as 'with' | 'without')} className="flex gap-3">
+                        <RadioGroup value={detail} onValueChange={v => setDetail(v as 'with' | 'without')} className="flex flex-wrap gap-3">
                             {[{ v: 'with', l: 'With Detail' }, { v: 'without', l: 'Group Totals Only' }].map(o => (
                                 <label key={o.v} className={cn('flex items-center gap-2 rounded-lg border px-3 py-2 cursor-pointer text-sm transition-colors', detail === o.v ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600 hover:border-slate-300')}>
                                     <RadioGroupItem value={o.v} />
@@ -327,7 +327,7 @@ function SectionBlock({
     return (
         <div className="space-y-0">
             {/* Section header */}
-            <div className="flex items-center justify-between px-3 py-2 bg-slate-700">
+            <div className="flex items-center justify-between gap-2 px-3 py-2 bg-slate-700">
                 <span className="text-xs font-bold tracking-widest text-slate-200 uppercase">{title}</span>
                 <span className="font-mono text-xs font-bold text-slate-200">{fmtFull(total)}</span>
             </div>
@@ -349,17 +349,17 @@ function SectionBlock({
                         {/* Group header row */}
                         <button
                             onClick={() => toggle(group.id)}
-                            className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors"
+                            className="w-full flex items-center justify-between gap-2 px-4 py-2.5 hover:bg-slate-50 transition-colors"
                         >
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 min-w-0 text-left">
                                 {!summaryMode && (
                                     isOpen
                                         ? <ChevronDown className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                                         : <ChevronRight className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                                 )}
-                                <span className="text-sm font-semibold text-slate-700">{group.name}</span>
+                                <span className="text-sm font-semibold text-slate-700 break-words">{group.name}</span>
                             </div>
-                            <div className="flex items-center gap-6">
+                            <div className="flex items-center gap-2 sm:gap-6 shrink-0">
                                 {showOpening && (
                                     <span className="font-mono text-xs text-slate-400 w-24 text-right">
                                         {openingNet > 0 ? fmt(openingNet) : '—'}
@@ -383,13 +383,13 @@ function SectionBlock({
                                         <button
                                             key={ledger.id}
                                             onClick={() => onLedgerClick(ledger.id, ledger.name)}
-                                            className="w-full flex items-center justify-between px-8 py-1.5 hover:bg-indigo-50 hover:text-indigo-700 transition-colors text-left group/l"
+                                            className="w-full flex items-center justify-between gap-2 pl-6 pr-4 sm:px-8 py-1.5 hover:bg-indigo-50 hover:text-indigo-700 transition-colors text-left group/l"
                                         >
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-2 min-w-0">
                                                 <div className="h-1.5 w-1.5 rounded-full bg-slate-300 group-hover/l:bg-indigo-400 transition-colors shrink-0" />
-                                                <span className="text-xs text-slate-600 group-hover/l:text-indigo-700">{ledger.name}</span>
+                                                <span className="text-xs text-slate-600 group-hover/l:text-indigo-700 break-words">{ledger.name}</span>
                                             </div>
-                                            <div className="flex items-center gap-6">
+                                            <div className="flex items-center gap-2 sm:gap-6 shrink-0">
                                                 {showOpening && (
                                                     <span className="font-mono text-[11px] text-slate-400 w-24 text-right">
                                                         {ledger.opening_balance > 0 ? fmt(ledger.opening_balance) : '—'}
@@ -472,7 +472,7 @@ function LedgerDrilldown({
         <Sheet open={!!ledgerId} onOpenChange={o => !o && onClose()}>
             <SheetContent side="right" className="w-full sm:max-w-3xl flex flex-col bg-slate-50 p-0 overflow-hidden">
                 {/* Header */}
-                <SheetHeader className="px-5 pt-5 pb-3 border-b border-slate-200 bg-white shrink-0">
+                <SheetHeader className="pl-5 pr-12 sm:pr-5 pt-5 pb-3 border-b border-slate-200 bg-white shrink-0">
                     <SheetTitle className="text-base font-semibold text-slate-800 flex items-center gap-2">
                         <BarChart2 className="h-4 w-4 text-indigo-500" />
                         {ledgerName}
@@ -951,7 +951,7 @@ export default function BalanceSheetPage() {
                 }
             `}</style>
 
-            <div id="bs-print-root" className="space-y-4 p-4 lg:p-6 max-w-[1700px] mx-auto">
+            <div id="bs-print-root" className="space-y-4 p-0 sm:p-4 lg:p-6 max-w-[1700px] mx-auto">
 
                 {/* ── Print-only header ──────────────────────────────────── */}
                 <div className="bs-print-company">
@@ -1000,17 +1000,17 @@ export default function BalanceSheetPage() {
                             <Label htmlFor="period-mode" className="text-sm text-slate-600 cursor-pointer">Period View</Label>
                         </div>
 
-                        <div className="h-7 w-px bg-slate-200" />
+                        <div className="h-7 w-px bg-slate-200 hidden sm:block" />
 
                         {/* Date pickers */}
                         {periodMode ? (
-                            <div className="flex items-center gap-2">
-                                <div className="flex flex-col gap-0.5">
+                            <div className="flex items-center gap-2 w-full sm:w-auto">
+                                <div className="flex flex-col gap-0.5 flex-1 min-w-0 sm:flex-none">
                                     <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">From Date</label>
                                     <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)}
                                         className="h-8 px-2 rounded-md border border-slate-300 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300" />
                                 </div>
-                                <div className="flex flex-col gap-0.5">
+                                <div className="flex flex-col gap-0.5 flex-1 min-w-0 sm:flex-none">
                                     <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">As On Date</label>
                                     <input type="date" value={asOnDate} onChange={e => setAsOnDate(e.target.value)}
                                         className="h-8 px-2 rounded-md border border-slate-300 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300" />
@@ -1042,7 +1042,7 @@ export default function BalanceSheetPage() {
                             </select>
                         </div>
 
-                        <div className="h-7 w-px bg-slate-200" />
+                        <div className="h-7 w-px bg-slate-200 hidden sm:block" />
 
                         {/* Stock Settings */}
                         <Button variant="outline" size="sm" onClick={() => setShowStockDialog(true)}
@@ -1106,21 +1106,21 @@ export default function BalanceSheetPage() {
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 no-print">
                         <div className="bg-white rounded-xl border border-slate-200 p-3">
                             <p className="text-xs text-slate-500">Total Liabilities</p>
-                            <p className="text-lg font-bold text-red-600 font-mono">{fmtFull(totalLiab)}</p>
+                            <p className="text-base sm:text-lg font-bold text-red-600 font-mono truncate">{fmtFull(totalLiab)}</p>
                         </div>
                         <div className="bg-white rounded-xl border border-slate-200 p-3">
                             <p className="text-xs text-slate-500">Total Assets</p>
-                            <p className="text-lg font-bold text-green-600 font-mono">{fmtFull(totalAssets)}</p>
+                            <p className="text-base sm:text-lg font-bold text-green-600 font-mono truncate">{fmtFull(totalAssets)}</p>
                         </div>
                         <div className="bg-white rounded-xl border border-slate-200 p-3">
                             <p className="text-xs text-slate-500">Net {isProfit ? 'Profit' : 'Loss'} (FY)</p>
-                            <p className={cn('text-lg font-bold font-mono', isProfit ? 'text-emerald-600' : 'text-red-600')}>
+                            <p className={cn('text-base sm:text-lg font-bold font-mono truncate', isProfit ? 'text-emerald-600' : 'text-red-600')}>
                                 {fmtFull(Math.abs(netProfit))}
                             </p>
                         </div>
                         <div className="bg-white rounded-xl border border-slate-200 p-3">
                             <p className="text-xs text-slate-500">Stock in Hand</p>
-                            <p className="text-lg font-bold text-indigo-600 font-mono">{fmtFull(data.assets.stock_in_hand.value)}</p>
+                            <p className="text-base sm:text-lg font-bold text-indigo-600 font-mono truncate">{fmtFull(data.assets.stock_in_hand.value)}</p>
                         </div>
                     </div>
                 )}
@@ -1143,12 +1143,12 @@ export default function BalanceSheetPage() {
 
                         {/* ── LEFT: LIABILITIES ──────────────────────────── */}
                         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-                            <div className="bg-gradient-to-r from-red-600 to-rose-700 px-4 py-3 flex items-center justify-between">
+                            <div className="bg-gradient-to-r from-red-600 to-rose-700 px-4 py-3 flex items-center justify-between gap-3">
                                 <div>
                                     <h2 className="text-white font-bold text-sm tracking-wide">LIABILITIES &amp; CAPITAL</h2>
                                     <p className="text-red-100 text-xs">Capital + Loans + Current Liabilities</p>
                                 </div>
-                                <span className="text-white font-mono text-base font-bold">{fmtFull(totalLiab)}</span>
+                                <span className="text-white font-mono text-sm sm:text-base font-bold shrink-0">{fmtFull(totalLiab)}</span>
                             </div>
 
                             {/* Column-level Expand / Collapse (Feature 5) */}
@@ -1166,7 +1166,7 @@ export default function BalanceSheetPage() {
 
                             {/* Opening column header (Feature 6) */}
                             {showOpening && (
-                                <div className="flex items-center justify-end gap-6 px-4 py-1.5 bg-blue-50 border-b border-blue-100 text-[10px] font-semibold text-blue-600 uppercase tracking-wide">
+                                <div className="flex items-center justify-end gap-2 sm:gap-6 px-4 py-1.5 bg-blue-50 border-b border-blue-100 text-[10px] font-semibold text-blue-600 uppercase tracking-wide">
                                     <span className="w-24 text-right">Opening</span>
                                     <span className="w-24 text-right">Closing</span>
                                 </div>
@@ -1186,7 +1186,7 @@ export default function BalanceSheetPage() {
                                                     <span className="text-xs text-slate-400 ml-1">(FY {fyStart} to {asOnDate})</span>
                                                 </span>
                                             </div>
-                                            <div className="flex items-center gap-6">
+                                            <div className="flex items-center gap-2 sm:gap-6 shrink-0">
                                                 {showOpening && <span className="w-24 text-right text-xs text-slate-400">—</span>}
                                                 <span className={cn('font-mono text-sm font-semibold w-24 text-right', isProfit ? 'text-emerald-700' : 'text-red-600')}>
                                                     {fmtFull(Math.abs(netProfit))}
@@ -1215,12 +1215,12 @@ export default function BalanceSheetPage() {
 
                         {/* ── RIGHT: ASSETS ──────────────────────────────── */}
                         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-                            <div className="bg-gradient-to-r from-emerald-600 to-teal-700 px-4 py-3 flex items-center justify-between">
+                            <div className="bg-gradient-to-r from-emerald-600 to-teal-700 px-4 py-3 flex items-center justify-between gap-3">
                                 <div>
                                     <h2 className="text-white font-bold text-sm tracking-wide">ASSETS</h2>
                                     <p className="text-emerald-100 text-xs">Fixed Assets + Current Assets + Stock</p>
                                 </div>
-                                <span className="text-white font-mono text-base font-bold">{fmtFull(totalAssets)}</span>
+                                <span className="text-white font-mono text-sm sm:text-base font-bold shrink-0">{fmtFull(totalAssets)}</span>
                             </div>
 
                             {/* Column-level Expand / Collapse */}
@@ -1237,7 +1237,7 @@ export default function BalanceSheetPage() {
                             </div>
 
                             {showOpening && (
-                                <div className="flex items-center justify-end gap-6 px-4 py-1.5 bg-blue-50 border-b border-blue-100 text-[10px] font-semibold text-blue-600 uppercase tracking-wide">
+                                <div className="flex items-center justify-end gap-2 sm:gap-6 px-4 py-1.5 bg-blue-50 border-b border-blue-100 text-[10px] font-semibold text-blue-600 uppercase tracking-wide">
                                     <span className="w-24 text-right">Opening</span>
                                     <span className="w-24 text-right">Closing</span>
                                 </div>
@@ -1265,7 +1265,7 @@ export default function BalanceSheetPage() {
                                                     {stockLabel}
                                                 </Badge>
                                             </div>
-                                            <div className="flex items-center gap-6">
+                                            <div className="flex items-center gap-2 sm:gap-6 shrink-0">
                                                 {showOpening && <span className="w-24 text-right text-xs text-slate-400">—</span>}
                                                 <span className="font-mono text-sm font-semibold text-indigo-700 w-24 text-right">
                                                     {fmtFull(data.assets.stock_in_hand.value)}
@@ -1288,7 +1288,7 @@ export default function BalanceSheetPage() {
                 {/* ── Tally Indicator ────────────────────────────────────── */}
                 {!isLoading && data && (
                     <div className={cn(
-                        'flex items-center justify-center gap-3 rounded-xl border px-6 py-4 no-print',
+                        'flex items-center justify-center gap-3 rounded-xl border px-4 py-3 sm:px-6 sm:py-4 no-print',
                         isTallied ? 'border-emerald-200 bg-emerald-50' : 'border-red-200 bg-red-50'
                     )}>
                         {isTallied ? (

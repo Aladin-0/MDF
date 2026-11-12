@@ -85,7 +85,7 @@ export default function BulkReminderModal({ isOpen, onClose }: BulkReminderModal
                     </div>
 
                     {/* Customer list */}
-                    <div className="max-h-[300px] overflow-y-auto space-y-2">
+                    <div className="max-h-[40dvh] sm:max-h-[300px] overflow-y-auto space-y-2">
                         {overdueAccounts.map((account: any) => {
                             const daysOverdue = account.lastTransactionDate
                                 ? differenceInDays(new Date(), new Date(account.lastTransactionDate))
@@ -109,7 +109,7 @@ export default function BulkReminderModal({ isOpen, onClose }: BulkReminderModal
                                         <div className="text-sm font-medium">{account.customer.name}</div>
                                         <div className="text-xs text-muted-foreground">{account.customer.phone}</div>
                                     </div>
-                                    <div className="text-right">
+                                    <div className="text-right shrink-0">
                                         <div className="text-sm font-semibold text-red-600">{formatCurrency(account.totalOutstanding)}</div>
                                         <div className="text-[10px] text-muted-foreground">{daysOverdue} days overdue</div>
                                     </div>

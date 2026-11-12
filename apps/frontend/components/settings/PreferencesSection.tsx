@@ -92,7 +92,7 @@ export function PreferencesSection({ onDirty, onSaved, discardKey }: Preferences
             {/* Theme */}
             <div className="rounded-xl border bg-white p-4 space-y-3">
                 <p className="text-sm font-semibold text-slate-800">Theme</p>
-                <div className="flex gap-3">
+                <div className="flex flex-wrap gap-3">
                     {THEME_OPTIONS.map(({ id, label, icon: Icon, comingSoon, bgClass }) => (
                         <button
                             key={id}
@@ -132,7 +132,7 @@ export function PreferencesSection({ onDirty, onSaved, discardKey }: Preferences
             <div className="rounded-xl border bg-white p-4 space-y-2">
                 <Label className="text-sm font-medium">Date Format</Label>
                 <Select value={store.dateFormat} onValueChange={handleDateFormat}>
-                    <SelectTrigger className="w-64">
+                    <SelectTrigger className="w-full sm:w-64">
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -149,7 +149,7 @@ export function PreferencesSection({ onDirty, onSaved, discardKey }: Preferences
 
             {/* Language */}
             <div className="rounded-xl border bg-white p-4 space-y-2">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                     <Label className="text-sm font-medium">Language</Label>
                     <Badge className="bg-blue-50 text-blue-700 border-blue-200 text-xs font-normal">
                         Full multilingual support in Phase 2

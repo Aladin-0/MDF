@@ -28,13 +28,13 @@ function KPICard({
 }) {
     return (
         <Card>
-            <CardContent className="flex items-center gap-4 p-5">
-                <div className={cn('rounded-xl p-3', color)}>
+            <CardContent className="flex items-center gap-3 p-4 sm:gap-4 sm:p-5">
+                <div className={cn('shrink-0 rounded-xl p-3', color)}>
                     <Icon className="h-5 w-5 text-white" />
                 </div>
-                <div>
+                <div className="min-w-0">
                     <p className="text-xs font-medium text-slate-500">{title}</p>
-                    <p className="text-xl font-bold text-slate-900">{value}</p>
+                    <p className="break-words text-xl font-bold text-slate-900">{value}</p>
                     {sub && <p className="text-xs text-slate-400">{sub}</p>}
                 </div>
             </CardContent>
@@ -100,19 +100,19 @@ export default function ChainDashboardPage() {
     }
 
     return (
-        <div className="space-y-6 p-6">
+        <div className="space-y-4 p-0 sm:space-y-6 sm:p-6">
             {/* Header */}
-            <div className="flex items-center justify-between">
-                <div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
                     <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
                         <Building2 className="h-6 w-6 text-primary" />
                         Chain Dashboard
                     </h1>
                     {data && (
-                        <p className="text-sm text-slate-500 mt-0.5">{data.organization.name}</p>
+                        <p className="text-sm text-slate-500 mt-0.5 break-words">{data.organization.name}</p>
                     )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                     <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching || !!rangeError}>
                         <RefreshCw className={cn('mr-2 h-4 w-4', isFetching && 'animate-spin')} />
                         Refresh
@@ -122,14 +122,14 @@ export default function ChainDashboardPage() {
             </div>
 
             {/* Date range */}
-            <div className="flex items-end gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div className="space-y-1">
+            <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:gap-4 sm:p-4">
+                <div className="min-w-0 flex-1 space-y-1 sm:flex-none">
                     <Label className="text-xs font-medium text-slate-500">From</Label>
-                    <Input type="date" className="h-9 w-40 text-sm" value={from} onChange={(e) => setFrom(e.target.value)} />
+                    <Input type="date" className="h-9 w-full text-sm sm:w-40" value={from} onChange={(e) => setFrom(e.target.value)} />
                 </div>
-                <div className="space-y-1">
+                <div className="min-w-0 flex-1 space-y-1 sm:flex-none">
                     <Label className="text-xs font-medium text-slate-500">To</Label>
-                    <Input type="date" className="h-9 w-40 text-sm" value={to} onChange={(e) => setTo(e.target.value)} />
+                    <Input type="date" className="h-9 w-full text-sm sm:w-40" value={to} onChange={(e) => setTo(e.target.value)} />
                 </div>
                 <Badge variant="outline" className="mb-0.5 text-xs">
                     {data ? `${data.outlets.length} outlets` : '—'}
@@ -194,7 +194,74 @@ export default function ChainDashboardPage() {
                         Loading...
                     </div>
                 ) : (
-                    <div className="overflow-x-auto">
+                    <>
+                    {/* phones: one card per outlet; md and up: the table below */}
+                    <div className="divide-y divide-slate-100 md:hidden">
+                        {(data?.outlets ?? []).map((outlet: ChainOutletRow) => {
+                            const sharePct = data && data.totalSales.total > 0
+                                ? (outlet.periodSales / data.totalSales.total) * 100
+                                : 0;
+                            return (
+                                <div key={outlet.id} className="space-y-3 p-4">
+                                    <div className="min-w-0">
+                                        <p className="break-words font-medium text-slate-800">{outlet.name}</p>
+                                        <p className="break-words text-xs text-slate-500">{outlet.city}, {outlet.state}</p>
+                                    </div>
+                                    <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
+                                        <div>
+                                            <dt className="text-xs text-slate-500">Today</dt>
+                                            <dd className="font-mono text-slate-700">{fmt(outlet.todaySales)}</dd>
+                                        </div>
+                                        <div>
+                                            <dt className="text-xs text-slate-500">Period Sales</dt>
+                                            <dd className="font-mono font-semibold text-slate-800">{fmt(outlet.periodSales)}</dd>
+                                        </div>
+                                        <div>
+                                            <dt className="text-xs text-slate-500">Period Invoices</dt>
+                                            <dd className="text-slate-700">{outlet.periodInvoices}</dd>
+                                        </div>
+                                        <div>
+                                            <dt className="text-xs text-slate-500">Share</dt>
+                                            <dd className="flex items-center gap-2">
+                                                <span className="h-1.5 w-12 rounded-full bg-slate-100">
+                                                    <span className="block h-1.5 rounded-full bg-primary" style={{ width: `${Math.min(sharePct, 100)}%` }} />
+                                                </span>
+                                                <span className="text-xs text-slate-500">{sharePct.toFixed(1)}%</span>
+                                            </dd>
+                                        </div>
+                                    </dl>
+                                    <Button
+                                        variant={outlet.id === activeOutletId ? "secondary" : "outline"}
+                                        size="sm"
+                                        disabled={outlet.id === activeOutletId || switching}
+                                        onClick={() => switchMutation.mutate(outlet.id)}
+                                        className="h-9 w-full text-xs"
+                                    >
+                                        {switchMutation.variables === outlet.id && switching ? (
+                                            <Loader2 className="h-3 w-3 animate-spin mx-auto" />
+                                        ) : outlet.id === activeOutletId ? (
+                                            <span className="text-slate-500">Current</span>
+                                        ) : (
+                                            <>
+                                                Enter
+                                                <ArrowRight className="ml-1 h-3 w-3" />
+                                            </>
+                                        )}
+                                    </Button>
+                                </div>
+                            );
+                        })}
+                        {(!data?.outlets || data.outlets.length === 0) && (
+                            <p className="px-5 py-8 text-center text-sm text-slate-400">No outlet data available</p>
+                        )}
+                        {data && data.outlets.length > 1 && (
+                            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-700">
+                                <span className="text-slate-600">Total ({data.outlets.length} outlets)</span>
+                                <span className="font-mono">{fmt(data.totalSales.total)}</span>
+                            </div>
+                        )}
+                    </div>
+                    <div className="hidden overflow-x-auto md:block">
                         <table className="w-full text-sm">
                             <thead className="border-b border-slate-100 bg-slate-50/50">
                                 <tr>
@@ -291,6 +358,7 @@ export default function ChainDashboardPage() {
                             )}
                         </table>
                     </div>
+                    </>
                 )}
             </div>
         </div>

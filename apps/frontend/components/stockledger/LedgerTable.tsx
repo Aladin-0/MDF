@@ -39,16 +39,19 @@ function TxnBadge({ type, label }: { type: string; label: string }) {
 }
 
 const NUM = 'text-right tabular-nums';
+// Phones: one DOM, restyled with CSS. Each movement row becomes a small 2-column card (no duplicate markup).
+const CARD_CELL = 'max-md:p-0 max-md:text-left max-md:min-w-0';
+const CARD_LABEL = 'max-md:before:mb-0.5 max-md:before:block max-md:before:text-[10px] max-md:before:font-medium max-md:before:uppercase max-md:before:tracking-wide max-md:before:text-muted-foreground max-md:before:content-[attr(data-label)]';
 
 export function LedgerTable({ entries, loading, fetching, dimmed, hasFilters, onClearFilters, showProduct }: LedgerTableProps) {
     const columns = showProduct ? 9 : 8;
 
     return (
         // Our own scroll area (the shared <Table> wrapper would stop the header from sticking).
-        <div className="max-h-[68dvh] overflow-auto overscroll-contain" aria-busy={fetching}>
-            <table className={cn('w-full caption-bottom text-sm transition-opacity', dimmed && !loading && 'opacity-60')}>
+        <div className="max-h-[68dvh] max-md:max-h-none overflow-auto overscroll-contain" aria-busy={fetching}>
+            <table className={cn('w-full caption-bottom text-sm transition-opacity max-md:block', dimmed && !loading && 'opacity-60')}>
                 <caption className="sr-only">Stock movements, newest first</caption>
-                <TableHeader className="sticky top-0 z-10 bg-muted/95 backdrop-blur [&_tr]:border-b">
+                <TableHeader className="sticky top-0 z-10 bg-muted/95 backdrop-blur [&_tr]:border-b max-md:hidden">
                     <TableRow className="hover:bg-transparent">
                         <TableHead scope="col" className="h-10 whitespace-nowrap">Date</TableHead>
                         <TableHead scope="col" className="h-10">Type</TableHead>
@@ -61,16 +64,16 @@ export function LedgerTable({ entries, loading, fetching, dimmed, hasFilters, on
                         <TableHead scope="col" className={cn('h-10', NUM)}>Balance</TableHead>
                     </TableRow>
                 </TableHeader>
-                <TableBody>
+                <TableBody className="max-md:block">
                     {loading ? (
                         Array.from({ length: 8 }, (_, i) => (
-                            <TableRow key={i} className="hover:bg-transparent">
-                                <TableCell colSpan={columns}><Skeleton className="h-9 w-full" /></TableCell>
+                            <TableRow key={i} className="hover:bg-transparent max-md:block">
+                                <TableCell colSpan={columns} className="max-md:block"><Skeleton className="h-9 w-full" /></TableCell>
                             </TableRow>
                         ))
                     ) : entries.length === 0 ? (
-                        <TableRow className="hover:bg-transparent">
-                            <TableCell colSpan={columns} className="py-20 text-center">
+                        <TableRow className="hover:bg-transparent max-md:block">
+                            <TableCell colSpan={columns} className="py-20 max-md:py-12 text-center max-md:block">
                                 <FileText className="mx-auto mb-3 h-10 w-10 text-muted-foreground/40" aria-hidden="true" />
                                 <p className="font-medium">{hasFilters ? 'No movements match your filters' : 'No stock movements in this period'}</p>
                                 <p className="mt-1 text-sm text-muted-foreground">
@@ -85,21 +88,21 @@ export function LedgerTable({ entries, loading, fetching, dimmed, hasFilters, on
                         entries.map((e) => {
                             const exp = e.expiry_date ? expiryTone(e.expiry_date) : null;
                             return (
-                                <TableRow key={e.id}>
-                                    <TableCell className="whitespace-nowrap">
+                                <TableRow key={e.id} className="max-md:grid max-md:grid-cols-2 max-md:gap-x-3 max-md:gap-y-2 max-md:px-3 max-md:py-3">
+                                    <TableCell className={cn('whitespace-nowrap', CARD_CELL)}>
                                         <div className="font-medium tabular-nums">{formatDay(e.txn_date)}</div>
                                         <div className="text-xs text-muted-foreground tabular-nums">{formatTime(e.created_at)}</div>
                                     </TableCell>
-                                    <TableCell><TxnBadge type={e.txn_type} label={e.txn_type_label || e.txn_type} /></TableCell>
-                                    <TableCell className="whitespace-nowrap">
+                                    <TableCell className="max-md:p-0 max-md:justify-self-end max-md:self-start"><TxnBadge type={e.txn_type} label={e.txn_type_label || e.txn_type} /></TableCell>
+                                    <TableCell className={cn('whitespace-nowrap', CARD_CELL)}>
                                         <div translate="no" className="font-medium">{e.voucher_number || '—'}</div>
                                         <div className="text-xs text-muted-foreground">{e.voucher_type || 'System'}</div>
                                     </TableCell>
-                                    <TableCell className="max-w-[10rem]">
+                                    <TableCell data-label="Party" className={cn('max-w-[10rem] max-md:max-w-none', CARD_CELL, CARD_LABEL)}>
                                         <span className="block truncate" title={e.party_name || undefined}>{e.party_name || '—'}</span>
                                     </TableCell>
                                     {showProduct && (
-                                        <TableCell className="max-w-[16rem]">
+                                        <TableCell className={cn('max-w-[16rem] max-md:max-w-none max-md:col-span-2', CARD_CELL)}>
                                             <div className="truncate font-medium" title={e.product_name}>{e.product_name}</div>
                                             <div className="mt-0.5 flex items-center gap-2 text-xs">
                                                 <span translate="no" className="rounded bg-muted px-1.5 py-0.5 font-mono text-muted-foreground">{e.batch_number}</span>
@@ -111,7 +114,7 @@ export function LedgerTable({ entries, loading, fetching, dimmed, hasFilters, on
                                             </div>
                                         </TableCell>
                                     )}
-                                    <TableCell className={NUM}>
+                                    <TableCell data-label="In" className={cn(NUM, CARD_CELL, CARD_LABEL, 'max-md:border-t max-md:pt-2')}>
                                         {e.qty_in > 0 ? (
                                             <>
                                                 <div className="font-semibold text-emerald-700">+{formatDecimalQty(e.qty_in, e.pack_size)}</div>
@@ -119,7 +122,7 @@ export function LedgerTable({ entries, loading, fetching, dimmed, hasFilters, on
                                             </>
                                         ) : <span className="text-muted-foreground/50" aria-label="None">—</span>}
                                     </TableCell>
-                                    <TableCell className={NUM}>
+                                    <TableCell data-label="Out" className={cn(NUM, CARD_CELL, CARD_LABEL, 'max-md:border-t max-md:pt-2')}>
                                         {e.qty_out > 0 ? (
                                             <>
                                                 <div className="font-semibold text-rose-700">−{formatDecimalQty(e.qty_out, e.pack_size)}</div>
@@ -127,8 +130,8 @@ export function LedgerTable({ entries, loading, fetching, dimmed, hasFilters, on
                                             </>
                                         ) : <span className="text-muted-foreground/50" aria-label="None">—</span>}
                                     </TableCell>
-                                    <TableCell className={cn(NUM, 'text-muted-foreground')}>{formatInr(e.rate)}</TableCell>
-                                    <TableCell className={NUM}>
+                                    <TableCell data-label="Rate" className={cn(NUM, 'text-muted-foreground', CARD_CELL, CARD_LABEL)}>{formatInr(e.rate)}</TableCell>
+                                    <TableCell data-label="Balance" className={cn(NUM, CARD_CELL, CARD_LABEL)}>
                                         <div className="whitespace-nowrap font-semibold">{formatDecimalQty(e.running_qty, e.pack_size)}</div>
                                         <div className="text-xs text-muted-foreground">{formatInr(e.running_value)}</div>
                                     </TableCell>

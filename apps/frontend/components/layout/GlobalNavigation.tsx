@@ -40,6 +40,7 @@ export function GlobalNavigation() {
     const [focusedTopIndex, setFocusedTopIndex] = useState<number>(initialFocusedTopIndex);
     const [focusedChildIndex, setFocusedChildIndex] = useState<number>(-1);
     const [openMenuIndex, setOpenMenuIndex] = useState<number>(-1);
+    const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
     // Refs for focusing DOM elements
     const topItemRefs = useRef<(HTMLAnchorElement | HTMLButtonElement | null)[]>([]);
@@ -61,6 +62,7 @@ export function GlobalNavigation() {
     useEffect(() => {
         setOpenMenuIndex(-1);
         setFocusedChildIndex(-1);
+        setMobileNavOpen(false);
     }, [pathname]);
 
     // Keep focus in sync with state
@@ -199,23 +201,26 @@ export function GlobalNavigation() {
             ref={navRef}
         >
             {/* Top Row: Main Nav */}
-            <div className="w-full h-12 flex items-center px-4 relative">
+            <div className="w-full h-12 flex items-center px-2 sm:px-4 relative">
                 {/* Mobile Hamburger Drawer */}
-                <div className="lg:hidden mr-3">
-                    <Sheet>
+                <div className="lg:hidden mr-1 sm:mr-3">
+                    <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
                         <SheetTrigger asChild>
-                            <button className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors">
+                            <button
+                                className="flex h-10 w-10 items-center justify-center rounded hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors"
+                                aria-label="Open menu"
+                            >
                                 <Menu className="w-5 h-5" />
                             </button>
                         </SheetTrigger>
-                        <SheetContent side="left" className="p-0 w-[240px] border-r-0">
-                            <Sidebar isCollapsed={false} onToggle={() => { }} isMobile={true} />
+                        <SheetContent side="left" className="p-0 w-[85vw] max-w-[300px] border-r-0">
+                            <Sidebar isCollapsed={false} onToggle={() => setMobileNavOpen(false)} isMobile={true} />
                         </SheetContent>
                     </Sheet>
                 </div>
 
                 {/* Logo */}
-                <Link href="/dashboard" className="flex items-center gap-2 mr-6 shrink-0 nav-item" tabIndex={-1}>
+                <Link href="/dashboard" className="flex items-center gap-2 mr-2 sm:mr-6 shrink-0 nav-item" tabIndex={-1}>
                     <Pill className="text-primary w-6 h-6" />
                     <span className="font-bold text-slate-900 tracking-tight text-lg">MediFlow</span>
                 </Link>
@@ -354,7 +359,7 @@ export function GlobalNavigation() {
                     {/* User Dropdown */}
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                            <button className="nav-item flex items-center gap-2 hover:bg-slate-50 p-1 rounded-md transition-colors border border-transparent hover:border-slate-200" tabIndex={-1}>
+                            <button className="nav-item flex items-center gap-2 min-h-10 min-w-10 justify-center md:min-h-0 md:min-w-0 md:justify-start hover:bg-slate-50 p-1 rounded-md transition-colors border border-transparent hover:border-slate-200" tabIndex={-1}>
                                 <Avatar className="w-7 h-7 rounded-md">
                                     <AvatarFallback className="bg-primary/10 text-primary font-bold text-xs rounded-md">
                                         {getInitials(user?.name)}
@@ -366,7 +371,7 @@ export function GlobalNavigation() {
                                 </div>
                             </button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-56 z-50">
+                        <DropdownMenuContent align="end" className="w-56 max-w-[calc(100vw-1rem)] z-50">
                             <div className="px-2 py-2 mb-1 border-b border-slate-100">
                                 <p className="text-sm font-medium">{user?.name}</p>
                                 <p className="text-xs text-slate-500 truncate">{user?.phone || 'No phone provided'}</p>

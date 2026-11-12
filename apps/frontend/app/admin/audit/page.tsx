@@ -100,7 +100,7 @@ export default function AuditPage() {
 
     if (error) {
         return (
-            <div className="p-6">
+            <div className="p-0 sm:p-6">
                 <Card className="border-red-200">
                     <CardHeader>
                         <CardTitle className="text-red-600">Access Denied</CardTitle>
@@ -115,18 +115,18 @@ export default function AuditPage() {
     }
 
     return (
-        <div className="p-6 max-w-7xl mx-auto space-y-6">
-            <div className="flex justify-between items-center">
-                <h1 className="text-3xl font-bold tracking-tight">Audit Logs</h1>
-                <Button onClick={handleExport} variant="outline" className="bg-white">
+        <div className="p-0 sm:p-6 max-w-7xl mx-auto space-y-4 sm:space-y-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
+                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Audit Logs</h1>
+                <Button onClick={handleExport} variant="outline" className="bg-white w-full sm:w-auto">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
                     Export CSV
                 </Button>
             </div>
             
-            <div className="flex flex-wrap gap-4 items-center">
+            <div className="flex flex-wrap gap-3 sm:gap-4 items-center">
                 <Select value={filterModule} onValueChange={(val) => { setFilterModule(val); setPage(1); }}>
-                    <SelectTrigger className="w-[180px]">
+                    <SelectTrigger className="w-full sm:w-[180px]">
                         <SelectValue placeholder="All Modules" />
                     </SelectTrigger>
                     <SelectContent>
@@ -143,7 +143,7 @@ export default function AuditPage() {
                 </Select>
                 
                 <Select value={filterUser} onValueChange={(val) => { setFilterUser(val); setPage(1); }}>
-                    <SelectTrigger className="w-[180px]">
+                    <SelectTrigger className="w-full sm:w-[180px]">
                         <SelectValue placeholder="All Users" />
                     </SelectTrigger>
                     <SelectContent>
@@ -152,20 +152,20 @@ export default function AuditPage() {
                     </SelectContent>
                 </Select>
 
-                <div className="flex items-center space-x-2">
+                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                     <span className="text-sm text-gray-500">From</span>
                     <Input 
                         type="date"
                         value={filterStartDate}
                         onChange={(e) => { setFilterStartDate(e.target.value); setPage(1); }}
-                        className="w-auto"
+                        className="w-auto flex-1 min-w-[9rem] sm:flex-none"
                     />
                     <span className="text-sm text-gray-500">To</span>
                     <Input 
                         type="date"
                         value={filterEndDate}
                         onChange={(e) => { setFilterEndDate(e.target.value); setPage(1); }}
-                        className="w-auto"
+                        className="w-auto flex-1 min-w-[9rem] sm:flex-none"
                     />
                 </div>
                 
@@ -173,14 +173,14 @@ export default function AuditPage() {
                     placeholder="Filter by Action..." 
                     value={filterAction}
                     onChange={(e) => { setFilterAction(e.target.value); setPage(1); }}
-                    className="w-[160px]"
+                    className="w-full sm:w-[160px]"
                 />
 
                 <Input 
                     placeholder="Search description or entity..." 
                     value={filterSearch}
                     onChange={(e) => { setFilterSearch(e.target.value); setPage(1); }}
-                    className="flex-1 min-w-[200px]"
+                    className="w-full sm:w-auto sm:flex-1 sm:min-w-[200px]"
                 />
             </div>
 
@@ -250,7 +250,7 @@ export default function AuditPage() {
                 </CardContent>
             </Card>
 
-            <div className="flex justify-between items-center px-2">
+            <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center px-2">
                 <div className="text-sm text-gray-500">
                     Showing page {page} of {totalPages} ({totalRecords} records)
                 </div>
@@ -265,7 +265,7 @@ export default function AuditPage() {
                     <DialogHeader>
                         <DialogTitle>Change Diff: {selectedLog?.action} on {selectedLog?.entity_label}</DialogTitle>
                     </DialogHeader>
-                    <div className="mt-4 max-h-[60vh] overflow-y-auto">
+                    <div className="mt-4 max-h-[60dvh] overflow-auto">
                         {selectedLog?.changes_json && (
                             <Table>
                                 <TableHeader>

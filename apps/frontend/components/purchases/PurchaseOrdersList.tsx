@@ -86,7 +86,7 @@ export function PurchaseOrdersList() {
         <div className="space-y-4">
             {/* View switch + new */}
             <div className="flex flex-wrap items-center gap-3">
-                <div role="tablist" aria-label="Purchase order view" className="inline-flex h-10 items-center rounded-md bg-muted p-1 text-muted-foreground">
+                <div role="tablist" aria-label="Purchase order view" className="inline-flex h-10 w-full items-center rounded-md bg-muted p-1 text-muted-foreground max-sm:[&>button]:flex-1 sm:w-auto">
                     {VIEWS.map((v) => (
                         <button key={v.id} role="tab" aria-selected={view === v.id} onClick={() => setParam({ view: v.id === 'orders' ? null : v.id })}
                             className={cn('rounded-sm px-3 py-1.5 text-sm font-medium transition-all', view === v.id ? 'bg-background text-foreground shadow-sm' : 'hover:text-foreground')}>{v.label}</button>
@@ -127,10 +127,10 @@ export function PurchaseOrdersList() {
                                 </Command>
                             </PopoverContent>
                         </Popover>
-                        <div className="md:w-auto"><DatePickerWithRange date={dateRange} setDate={setDateRange} /></div>
+                        <div className="w-full md:w-auto"><DatePickerWithRange date={dateRange} setDate={setDateRange} /></div>
                     </>
                 )}
-                {hasFilters && <Button variant="ghost" onClick={clear}><XCircle className="mr-2 h-4 w-4" />Clear</Button>}
+                {hasFilters && <Button variant="ghost" className="max-md:w-full" onClick={clear}><XCircle className="mr-2 h-4 w-4" />Clear</Button>}
             </div>
 
             {/* Status chips with counts */}
@@ -141,7 +141,7 @@ export function PurchaseOrdersList() {
                         const n = counts[c.id];
                         return (
                             <button key={c.id} type="button" aria-pressed={active} onClick={() => setParam({ status: c.id === 'OPEN' ? null : c.id })}
-                                className={cn('inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-medium transition-colors', active ? 'border-primary bg-primary text-primary-foreground' : 'border-input bg-white hover:bg-muted')}>
+                                className={cn('inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-medium transition-colors max-sm:py-1.5', active ? 'border-primary bg-primary text-primary-foreground' : 'border-input bg-white hover:bg-muted')}>
                                 {c.label}{n !== undefined && <span className={cn('rounded-full px-1.5 text-xs', active ? 'bg-white/20' : 'bg-muted text-muted-foreground')}>{n}</span>}
                             </button>
                         );
@@ -194,15 +194,18 @@ export function PurchaseOrdersList() {
                     {/* mobile cards */}
                     <div className="space-y-3 md:hidden">
                         {orders.data.results.map((po) => (
-                            <Link key={po.id} href={`/dashboard/purchases/orders/${po.id}`} className="block rounded-xl border bg-white p-3 shadow-sm">
-                                <div className="flex items-center justify-between"><span className="font-semibold text-primary">{po.poNumber}</span><POStatusBadge status={po.status} /></div>
-                                <p className="mt-1 text-sm font-medium">{po.distributorName}</p>
-                                <div className="mt-2 flex items-center justify-between text-sm text-muted-foreground">
-                                    <span>{format(new Date(po.orderDate), 'dd MMM yyyy')} · {po.itemCount} items{po.status !== 'SAVED' ? ` · ${po.receivedQty}/${po.orderedQty} received` : ''}</span>
-                                    <span className="font-semibold text-foreground">{money(po.totalAmount)}</span>
-                                </div>
-                                {po.overdue && <p className="mt-1 text-xs font-semibold text-red-600">Overdue</p>}
-                            </Link>
+                            <div key={po.id} className="flex items-start rounded-xl border bg-white shadow-sm">
+                                <Link href={`/dashboard/purchases/orders/${po.id}`} className="block min-w-0 flex-1 p-3">
+                                    <div className="flex items-center justify-between gap-2"><span className="min-w-0 truncate font-semibold text-primary">{po.poNumber}</span><POStatusBadge status={po.status} /></div>
+                                    <p className="mt-1 break-words text-sm font-medium">{po.distributorName}</p>
+                                    <div className="mt-2 flex items-center justify-between gap-3 text-sm text-muted-foreground">
+                                        <span>{format(new Date(po.orderDate), 'dd MMM yyyy')} · {po.itemCount} items{po.status !== 'SAVED' ? ` · ${po.receivedQty}/${po.orderedQty} received` : ''}</span>
+                                        <span className="shrink-0 font-semibold text-foreground">{money(po.totalAmount)}</span>
+                                    </div>
+                                    {po.overdue && <p className="mt-1 text-xs font-semibold text-red-600">Overdue</p>}
+                                </Link>
+                                <div className="shrink-0 pr-1 pt-1.5"><RowMenu po={po} canCreate={canCreate} canSend={canSend} canCancel={canCancel} onDuplicate={duplicate} onCancel={setCancelFor} /></div>
+                            </div>
                         ))}
                     </div>
                     <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
@@ -218,7 +221,7 @@ export function PurchaseOrdersList() {
             ) : (
                 <>
                     <div className="overflow-x-auto rounded-md border bg-white shadow-sm">
-                        <Table>
+                        <Table className="max-md:min-w-[640px] max-md:[&_td]:whitespace-nowrap max-md:[&_th]:whitespace-nowrap">
                             <TableHeader className="bg-slate-50"><TableRow><TableHead>Product</TableHead><TableHead>PO</TableHead><TableHead>Distributor</TableHead><TableHead className="text-center">Ordered</TableHead><TableHead className="text-center">Received</TableHead><TableHead className="text-center">Remaining</TableHead><TableHead className="text-center">Age</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
                             <TableBody>
                                 {items.data.results.map((r) => (
@@ -244,7 +247,7 @@ export function PurchaseOrdersList() {
                 <Empty hasFilters={false} onClear={() => undefined} message="No open orders with any distributor." />
             ) : (
                 <div className="overflow-x-auto rounded-md border bg-white shadow-sm">
-                    <Table>
+                    <Table className="max-md:min-w-[520px] max-md:[&_td]:whitespace-nowrap max-md:[&_th]:whitespace-nowrap">
                         <TableHeader className="bg-slate-50"><TableRow><TableHead>Distributor</TableHead><TableHead className="text-center">Open orders</TableHead><TableHead className="text-right">Open value</TableHead><TableHead className="text-center">Overdue</TableHead><TableHead>Last sent</TableHead></TableRow></TableHeader>
                         <TableBody>
                             {byDist.data.results.map((d) => (
@@ -273,7 +276,7 @@ function RowMenu({ po, canCreate, canSend, canCancel, onDuplicate, onCancel }: {
     const open = `/dashboard/purchases/orders/${po.id}`;
     return (
         <DropdownMenu>
-            <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8" aria-label={`Actions for ${po.poNumber}`}><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
+            <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 max-md:h-9 max-md:w-9" aria-label={`Actions for ${po.poNumber}`}><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
                 <DropdownMenuItem onClick={() => router.push(open)}>Open</DropdownMenuItem>
                 {po.status === 'SAVED' && canSend && <DropdownMenuItem onClick={() => router.push(`${open}?send=1`)}><Send className="mr-2 h-4 w-4" />Send</DropdownMenuItem>}
@@ -288,7 +291,7 @@ function RowMenu({ po, canCreate, canSend, canCancel, onDuplicate, onCancel }: {
 function Pager({ pag, pageSize, onPage, onSize }: { pag?: { page: number; totalPages: number; totalRecords: number }; pageSize: number; onPage: (p: number) => void; onSize: (s: number) => void }) {
     if (!pag) return null;
     return (
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 max-sm:flex-wrap">
             <label className="flex items-center gap-2 text-muted-foreground">Rows
                 <select aria-label="Rows per page" className="h-8 rounded-md border border-input bg-background px-2" value={pageSize} onChange={(e) => onSize(Number(e.target.value))}>
                     {[25, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
@@ -307,7 +310,7 @@ function ListSkeleton() {
 
 function Empty({ hasFilters, onClear, message }: { hasFilters: boolean; onClear: () => void; message?: string }) {
     return (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-white py-16 text-center">
+        <div className="flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-16 text-center">
             <ClipboardList className="mb-4 h-12 w-12 text-slate-300" />
             <h3 className="text-lg font-medium">{hasFilters ? 'No purchase orders match' : 'No purchase orders yet'}</h3>
             <p className="mt-1 max-w-md text-sm text-muted-foreground">

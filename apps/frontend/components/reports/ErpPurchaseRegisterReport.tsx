@@ -262,20 +262,20 @@ export function ErpPurchaseRegisterReport({ kind }: { kind: ErpPurchaseReportKin
 
     const parameterBar = (
         <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-            <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg p-1 shadow-2xs">
+            <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg p-1 shadow-2xs w-full sm:w-auto">
                 <Calendar className="w-4 h-4 text-slate-400 ml-1.5" />
                 <Input
                     type="date"
                     value={dateRange.from}
                     onChange={(e) => setDateRange((prev) => ({ ...prev, from: e.target.value }))}
-                    className="h-7 w-32 border-none p-1 text-xs focus-visible:ring-0 shadow-none font-medium"
+                    className="h-7 min-w-0 flex-1 sm:w-32 sm:flex-none border-none p-1 text-xs focus-visible:ring-0 shadow-none font-medium"
                 />
                 <span className="text-slate-300 text-xs select-none">to</span>
                 <Input
                     type="date"
                     value={dateRange.to}
                     onChange={(e) => setDateRange((prev) => ({ ...prev, to: e.target.value }))}
-                    className="h-7 w-32 border-none p-1 text-xs focus-visible:ring-0 shadow-none font-medium"
+                    className="h-7 min-w-0 flex-1 sm:w-32 sm:flex-none border-none p-1 text-xs focus-visible:ring-0 shadow-none font-medium"
                 />
             </div>
 
@@ -329,7 +329,7 @@ export function ErpPurchaseRegisterReport({ kind }: { kind: ErpPurchaseReportKin
                 size="sm"
                 onClick={() => refetch()}
                 disabled={isFetching}
-                className="h-8 w-8 p-0 bg-white border-slate-200 shadow-2xs"
+                className="h-9 w-9 sm:h-8 sm:w-8 p-0 bg-white border-slate-200 shadow-2xs"
                 title="Refresh Report Data"
             >
                 <RefreshCw className={cn('w-3.5 h-3.5 text-slate-600', isFetching && 'animate-spin')} />
@@ -418,10 +418,10 @@ export function ErpPurchaseRegisterReport({ kind }: { kind: ErpPurchaseReportKin
                 {!isLoading && !isError && rows.length > 0 && (
                     <div className="border border-slate-200 rounded-lg overflow-hidden shadow-2xs">
                         <div className="overflow-x-auto max-h-[600px]">
-                            <Table className="text-xs">
+                            <Table className="text-xs whitespace-nowrap [@media_screen_and_(max-width:639px)]:min-w-[780px]">
                                 <TableHeader className="bg-slate-100/80 sticky top-0 z-10 border-b border-slate-200">
                                     <TableRow className="hover:bg-transparent">
-                                        <TableHead className="w-24 font-bold text-slate-700">Date</TableHead>
+                                        <TableHead className="w-24 font-bold text-slate-700 max-sm:sticky max-sm:left-0 max-sm:z-10 max-sm:bg-slate-100">Date</TableHead>
                                         {detailed ? (
                                             <>
                                                 <TableHead className="w-32 font-bold text-slate-700">Bill No</TableHead>
@@ -450,7 +450,7 @@ export function ErpPurchaseRegisterReport({ kind }: { kind: ErpPurchaseReportKin
                                                     showReturnBadge && 'bg-rose-50/40 text-rose-800'
                                                 )}
                                             >
-                                                <TableCell className="font-mono text-slate-600">{row.date}</TableCell>
+                                                <TableCell className="font-mono text-slate-600 max-sm:sticky max-sm:left-0 max-sm:bg-white">{row.date}</TableCell>
                                                 {detailed ? (
                                                     <>
                                                         <TableCell className="font-medium font-mono text-slate-800">

@@ -267,21 +267,21 @@ export function EditProductModal({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-2xl p-0 gap-0 overflow-hidden max-h-[90vh] flex flex-col">
-                <DialogHeader className="px-6 pt-6 pb-4 border-b bg-gradient-to-r from-indigo-50 to-purple-50 shrink-0">
+            <DialogContent className="max-w-2xl p-0 gap-0 overflow-hidden max-h-[calc(100dvh-1rem)] sm:max-h-[90vh] flex flex-col">
+                <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-4 pr-10 sm:pr-6 border-b bg-gradient-to-r from-indigo-50 to-purple-50 shrink-0">
                     <div className="flex items-center gap-3">
-                        <div className="rounded-full bg-indigo-100 p-2">
+                        <div className="rounded-full bg-indigo-100 p-2 shrink-0">
                             <Package className="h-5 w-5 text-indigo-600" />
                         </div>
-                        <div>
+                        <div className="min-w-0">
                             <DialogTitle className="text-lg font-bold text-slate-800">
                                 Edit Product
                             </DialogTitle>
-                            <p className="text-sm text-slate-500 mt-0.5 font-mono truncate max-w-md">
+                            <p className="text-sm text-slate-500 mt-0.5 font-mono truncate max-w-full sm:max-w-md">
                                 {product.name}
                             </p>
                         </div>
-                        <div className="ml-auto flex gap-2">
+                        <div className="ml-auto flex flex-wrap justify-end gap-2">
                             {product.isFridge && (
                                 <Badge variant="outline" className="bg-blue-50 text-blue-600 border-blue-200 text-xs">
                                     <Thermometer className="h-3 w-3 mr-1" /> Cold Chain
@@ -298,22 +298,22 @@ export function EditProductModal({
 
                 <form ref={formRef} onSubmit={handleSubmit(onSubmit)} className="flex flex-col flex-1 overflow-hidden">
                     <div className="flex-1 overflow-y-auto">
-                        <div className="px-6 pt-5 pb-6">
+                        <div className="px-4 sm:px-6 pt-5 pb-6">
                             <Tabs defaultValue="attributes" className="w-full">
-                                <TabsList className="w-full grid grid-cols-3 mb-6 bg-slate-100">
-                                    <TabsTrigger value="attributes">Attributes</TabsTrigger>
-                                    <TabsTrigger value="compliance">Compliance</TabsTrigger>
-                                    <TabsTrigger value="batches">Batches & Pricing</TabsTrigger>
+                                <TabsList className="w-full flex sm:grid sm:grid-cols-3 mb-6 bg-slate-100">
+                                    <TabsTrigger value="attributes" className="max-sm:flex-1">Attributes</TabsTrigger>
+                                    <TabsTrigger value="compliance" className="max-sm:flex-1">Compliance</TabsTrigger>
+                                    <TabsTrigger value="batches" className="max-sm:flex-1">Batches & Pricing</TabsTrigger>
                                 </TabsList>
 
                                 <TabsContent value="attributes" className="space-y-6 outline-none">
                                     {/* ── Section: Basic Info ── */}
                                     <Section icon={<Pill className="h-4 w-4 text-indigo-500" />} title="Basic Information">
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <Field label="Product Name *" error={fieldErr('name')} className="col-span-2">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            <Field label="Product Name *" error={fieldErr('name')} className="sm:col-span-2">
                                                 <Input {...register('name', { required: 'Name is required' })} placeholder="e.g. Paracetamol 500mg" />
                                             </Field>
-                                            <Field label="Composition" error={fieldErr('composition')} className="col-span-2">
+                                            <Field label="Composition" error={fieldErr('composition')} className="sm:col-span-2">
                                                 <Input {...register('composition')} placeholder="e.g. Paracetamol IP 500mg" />
                                             </Field>
                                             <Field label="Manufacturer" error={fieldErr('manufacturer')}>
@@ -327,7 +327,7 @@ export function EditProductModal({
                                     <Separator />
                                     {/* ── Section: Packaging Information ── */}
                                     <Section icon={<Package className="h-4 w-4 text-emerald-500" />} title="Packaging Information">
-                                        <div className="grid grid-cols-3 gap-4">
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                             <Field label="Pack Type" error={fieldErr('packType')}>
                                                 <Controller
                                                     name="packType"
@@ -368,7 +368,7 @@ export function EditProductModal({
                                     <Separator />
                                     {/* ── Section: Stock Management ── */}
                                     <Section icon={<RotateCcw className="h-4 w-4 text-blue-500" />} title="Stock Management (Current Outlet)">
-                                        <div className="grid grid-cols-2 gap-4">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                             <Field label="Low Stock Alert (strips)" error={fieldErr('minQty')}>
                                                 <Input type="number" min={0} {...register('minQty', { valueAsNumber: true, min: 0 })} />
                                             </Field>
@@ -482,7 +482,7 @@ export function EditProductModal({
                         </div>
                     </div>
 
-                    <DialogFooter className="bg-white border-t border-gray-200 px-6 py-4 shrink-0">
+                    <DialogFooter className="bg-white border-t border-gray-200 px-4 sm:px-6 py-4 shrink-0">
                         <Button variant="outline" type="button" onClick={() => onOpenChange(false)} disabled={saving}>
                             Cancel
                         </Button>

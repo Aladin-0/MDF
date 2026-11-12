@@ -47,6 +47,11 @@ export default function PurchasesPage() {
     const shortbookCount = useShortbook({ countsOnly: 1 }).data?.counts.pending ?? 0;     // just the number for the badge: no rows, no stock scan
     const openPoCount = usePOList({ status: 'OPEN', pageSize: 1 }).data?.statusCounts.OPEN ?? 0;
 
+    // On a phone the tab strip scrolls sideways: bring the active tab into view (no-op when every tab already fits).
+    useEffect(() => {
+        document.querySelector<HTMLElement>('[data-purchases-tab-active="true"]')?.scrollIntoView?.({ inline: 'center', block: 'nearest' });
+    }, [activeTab]);
+
     const handleEditInvoice = (invoice: PurchaseInvoiceFull) => {
         setEditingInvoice(invoice);
         setActiveTab('new');
@@ -68,7 +73,7 @@ export default function PurchasesPage() {
             {/* ── Page Header ── */}
             {activeTab !== 'new' && (
                 <>
-                    <div className="flex items-center justify-between gap-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                         <div className="space-y-1">
                             <div className="flex items-center gap-2.5">
                                 <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -80,11 +85,11 @@ export default function PurchasesPage() {
                         </div>
                         {/* the main action follows the tab */}
                         {activeTab === 'shortbook' && canCreate ? (
-                            <Button size="sm" className="shrink-0 gap-1.5" onClick={() => setAddShortbookOpen(true)}><Plus className="h-4 w-4" />Add to Shortbook</Button>
+                            <Button size="sm" className="w-full shrink-0 gap-1.5 sm:w-auto" onClick={() => setAddShortbookOpen(true)}><Plus className="h-4 w-4" />Add to Shortbook</Button>
                         ) : activeTab === 'purchase_orders' && canCreate ? (
-                            <Button size="sm" className="shrink-0 gap-1.5" onClick={() => setNewPoOpen(true)}><Plus className="h-4 w-4" />New PO</Button>
+                            <Button size="sm" className="w-full shrink-0 gap-1.5 sm:w-auto" onClick={() => setNewPoOpen(true)}><Plus className="h-4 w-4" />New PO</Button>
                         ) : (
-                            <Button size="sm" className="shrink-0 gap-1.5" onClick={() => { setEditingInvoice(null); setActiveTab('new'); }}><Plus className="h-4 w-4" />New Purchase</Button>
+                            <Button size="sm" className="w-full shrink-0 gap-1.5 sm:w-auto" onClick={() => { setEditingInvoice(null); setActiveTab('new'); }}><Plus className="h-4 w-4" />New Purchase</Button>
                         )}
                     </div>
                     <Separator />
@@ -95,16 +100,17 @@ export default function PurchasesPage() {
             <Tabs value={activeTab} onValueChange={handleTabChange}>
 
                 {/* Custom tab bar */}
-                <div className={cn('flex overflow-x-auto border-b border-border', activeTab === 'new' && 'bg-white')}>
+                <div className={cn('flex overflow-x-auto border-b border-border max-sm:no-scrollbar', activeTab === 'new' && 'bg-white')}>
                     {tabs.map(({ value, label, icon: Icon }) => {
                         const isActive = activeTab === value;
                         const isEditTab = value === 'new' && !!editingInvoice && editingInvoice.status !== 'DRAFT';
                         return (
                             <button
                                 key={value}
+                                data-purchases-tab-active={isActive ? 'true' : undefined}
                                 onClick={() => handleTabChange(value)}
                                 className={cn(
-                                    'flex shrink-0 items-center gap-2 px-3 font-medium transition-all duration-150',
+                                    'flex shrink-0 items-center gap-2 px-3 font-medium transition-all duration-150 max-sm:whitespace-nowrap',
                                     activeTab === 'new' ? 'py-1.5 text-xs' : 'py-2 text-sm',
                                     'border-b-2 -mb-px',
                                     'border-transparent text-muted-foreground hover:text-foreground hover:border-border',

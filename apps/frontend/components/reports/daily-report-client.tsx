@@ -175,7 +175,7 @@ export function DailyReportClient() {
           <p className="text-muted-foreground text-sm">Comprehensive End-of-Day Till Reconciliation & Audit.</p>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-3">
           <DateRangePicker value={dateRange} onChange={setDateRange} />
           <PartnerSettingsModal onUpdate={fetchData} />
           {data?.fixedExpenses && <FixedExpensesModal initialData={data.fixedExpenses} onUpdate={fetchData} />}
@@ -193,44 +193,44 @@ export function DailyReportClient() {
       ) : data ? (
         <div className="space-y-6">
           {/* Top KPIs */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
             <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200 shadow-sm">
-              <CardContent className="p-6">
+              <CardContent className="p-3 sm:p-6">
                 <div className="flex items-center justify-between pb-2">
                   <p className="text-sm font-semibold text-green-800">Gross Profit</p>
                   <TrendingUp className="h-4 w-4 text-green-600" />
                 </div>
-                <div className="text-2xl font-bold text-green-900">{formatCurrency(data.financials.grossProfit)}</div>
+                <div className="text-lg sm:text-2xl font-bold text-green-900 truncate">{formatCurrency(data.financials.grossProfit)}</div>
               </CardContent>
             </Card>
             
             <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200 shadow-sm">
-              <CardContent className="p-6">
+              <CardContent className="p-3 sm:p-6">
                 <div className="flex items-center justify-between pb-2">
                   <p className="text-sm font-semibold text-red-800">Fixed Exp (Per Day)</p>
                   <IndianRupee className="h-4 w-4 text-red-600" />
                 </div>
-                <div className="text-2xl font-bold text-red-900">{formatCurrency(data.fixedExpenses.perDay)}</div>
+                <div className="text-lg sm:text-2xl font-bold text-red-900 truncate">{formatCurrency(data.fixedExpenses.perDay)}</div>
               </CardContent>
             </Card>
             
             <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200 shadow-sm">
-              <CardContent className="p-6">
+              <CardContent className="p-3 sm:p-6">
                 <div className="flex items-center justify-between pb-2">
                   <p className="text-sm font-bold text-blue-900">NET PROFIT</p>
                   <Briefcase className="h-4 w-4 text-blue-700" />
                 </div>
-                <div className="text-3xl font-extrabold text-blue-900">{formatCurrency(data.financials.netProfit)}</div>
+                <div className="text-xl sm:text-3xl font-extrabold text-blue-900 truncate">{formatCurrency(data.financials.netProfit)}</div>
               </CardContent>
             </Card>
 
             <Card className="shadow-sm">
-              <CardContent className="p-6">
+              <CardContent className="p-3 sm:p-6">
                 <div className="flex items-center justify-between pb-2">
                   <p className="text-sm font-semibold text-muted-foreground">Current Stock</p>
                   <Package className="h-4 w-4 text-muted-foreground" />
                 </div>
-                <div className="text-2xl font-bold text-gray-900">{formatCurrency(data.financials.stockValue)}</div>
+                <div className="text-lg sm:text-2xl font-bold text-gray-900 truncate">{formatCurrency(data.financials.stockValue)}</div>
               </CardContent>
             </Card>
           </div>
@@ -241,7 +241,7 @@ export function DailyReportClient() {
             <div className="xl:col-span-7 space-y-4">
               <Card className="bg-white border-gray-200 shadow-sm overflow-hidden">
                 <CardHeader className="pb-3 border-b bg-gray-50/70">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <div>
                       <CardTitle className="text-lg flex items-center gap-2 text-gray-900">
                         <Calculator className="w-5 h-5 text-indigo-600"/> 
@@ -501,7 +501,7 @@ export function DailyReportClient() {
                   <div className="pt-3 border-t-2 border-dashed border-gray-300 space-y-2.5">
                     
                     {/* CASH REQUIRED */}
-                    <div className="flex justify-between items-center py-3 bg-gradient-to-r from-amber-100 via-amber-200 to-amber-100 px-4 rounded-xl border border-amber-300 shadow-sm">
+                    <div className="flex justify-between items-center gap-3 py-3 bg-gradient-to-r from-amber-100 via-amber-200 to-amber-100 px-4 rounded-xl border border-amber-300 shadow-sm">
                       <div>
                         <span className="font-extrabold text-amber-950 text-base tracking-wide flex items-center gap-1.5">
                           <Banknote className="w-5 h-5 text-amber-800" />
@@ -515,7 +515,7 @@ export function DailyReportClient() {
                     </div>
 
                     {/* ACTUAL CASH */}
-                    <div className="flex justify-between items-center py-3 bg-amber-50 px-4 rounded-xl border border-amber-200 shadow-xs">
+                    <div className="flex justify-between items-center gap-3 py-3 bg-amber-50 px-4 rounded-xl border border-amber-200 shadow-xs">
                       <div>
                         <span className="font-bold text-amber-900 text-sm">ACTUAL CASH (Counted Notes + Side Cash)</span>
                         <p className="text-xs text-muted-foreground">Sum of physical cash denominations counted</p>
@@ -526,7 +526,7 @@ export function DailyReportClient() {
                     </div>
                     
                     {/* (+EXTRA) / (-SHORT) COMPARISON */}
-                    <div className={`flex justify-between items-center py-3 px-4 rounded-xl font-bold shadow-sm transition-all duration-300 ${
+                    <div className={`flex justify-between items-center gap-3 py-3 px-4 rounded-xl font-bold shadow-sm transition-all duration-300 ${
                       dynamicExtraShort >= 0 
                         ? 'bg-emerald-600 text-white' 
                         : 'bg-rose-600 text-white'
@@ -610,7 +610,7 @@ export function DailyReportClient() {
                   </div>
 
                   <div className="pt-3 border-t space-y-2">
-                    <div className="flex items-center justify-between text-sm bg-white p-2 rounded-lg border border-gray-100">
+                    <div className="flex items-center justify-between gap-2 text-sm bg-white p-2 rounded-lg border border-gray-100">
                       <span className="font-medium text-gray-700">Side Cash (Coins / Loose Cash)</span>
                       <div className="relative">
                         <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-xs">₹</span>
@@ -653,7 +653,7 @@ export function DailyReportClient() {
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between text-sm bg-white p-2 rounded-lg border border-gray-100">
+                    <div className="flex items-center justify-between gap-2 text-sm bg-white p-2 rounded-lg border border-gray-100">
                       <span className="font-medium text-gray-700">Next Day Opening Target</span>
                       <div className="relative">
                         <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-xs">₹</span>
@@ -839,7 +839,7 @@ function BreakdownRow({
               No itemized records found for this entry.
             </div>
           ) : (
-            <table className="w-full text-xs text-left">
+            <table className="w-full min-w-[520px] text-xs text-left">
               <thead>
                 <tr className="border-b border-gray-200 text-gray-500 uppercase tracking-wider font-semibold">
                   <th className="pb-2 pl-2">Ref / No</th>

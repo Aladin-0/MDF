@@ -18,11 +18,11 @@ interface StatCardProps {
 function StatCard({ label, value, subtitle, icon: Icon, iconBg, valueColor }: StatCardProps) {
     return (
         <Card>
-            <CardContent className="p-4 flex items-center gap-4">
-                <div className={cn('w-12 h-12 rounded-xl flex items-center justify-center shrink-0', iconBg)}>
+            <CardContent className="p-3 sm:p-4 flex items-center gap-3 sm:gap-4">
+                <div className={cn('w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center shrink-0', iconBg)}>
                     <Icon className="w-6 h-6" />
                 </div>
-                <div>
+                <div className="min-w-0">
                     <div className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
                         {label}
                     </div>
@@ -52,7 +52,7 @@ export function AttendanceTodaySummary() {
     const notMarkedCount = totalStaff - presentCount;
 
     return (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             <StatCard
                 label="Present Today"
                 value={presentCount}

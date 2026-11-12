@@ -37,13 +37,13 @@ export function ModalShell({ open, onClose, title, size = 'md', footer, children
     return createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
             <div role="dialog" aria-modal="true" aria-labelledby={titleId}
-                className={cn('bg-background rounded-lg shadow-xl w-full mx-4 max-h-[90vh] flex flex-col overflow-hidden', SIZES[size])}>
-                <div className="flex items-center justify-between px-6 py-4 border-b shrink-0">
+                className={cn('bg-background rounded-lg shadow-xl w-full mx-2 sm:mx-4 max-h-[92dvh] sm:max-h-[90vh] flex flex-col overflow-hidden', SIZES[size])}>
+                <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b shrink-0">
                     <h2 id={titleId} className="text-lg font-semibold">{title}</h2>
                     <button type="button" aria-label="Close" onClick={onClose} className="p-1.5 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
                 </div>
-                <div className="overflow-y-auto flex-1 px-6 py-4 space-y-6">{children}</div>
-                {footer && <div className="flex gap-3 px-6 py-4 border-t shrink-0">{footer}</div>}
+                <div className="overflow-y-auto flex-1 px-4 sm:px-6 py-4 space-y-6">{children}</div>
+                {footer && <div className="flex gap-3 px-4 sm:px-6 py-3 sm:py-4 border-t shrink-0">{footer}</div>}
             </div>
         </div>,
         document.body,

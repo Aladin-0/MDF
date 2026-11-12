@@ -138,12 +138,13 @@ export function VoucherLinesGrid({
     return (
         <div className="space-y-3">
             <div className="border border-border/80 rounded-lg bg-card overflow-hidden shadow-sm">
-                <table className="w-full text-sm border-collapse">
+                <div className="overflow-x-auto md:overflow-visible">
+                <table className="w-full min-w-[440px] md:min-w-0 text-sm border-collapse">
                     <thead>
                         <tr className="bg-muted/50 border-b border-border text-xs font-semibold text-muted-foreground select-none">
                             <th className="w-16 py-2 px-2.5 text-center font-semibold">Type</th>
                             <th className="py-2 px-3 text-left font-semibold">Account Ledger</th>
-                            <th className="w-40 py-2 px-3 text-right font-semibold">Amount (₹)</th>
+                            <th className="w-32 sm:w-40 py-2 px-3 text-right font-semibold">Amount (₹)</th>
                             <th className="w-10 py-2 px-2 text-center font-semibold"></th>
                         </tr>
                     </thead>
@@ -162,7 +163,7 @@ export function VoucherLinesGrid({
                                             value={line.side}
                                             onChange={(e) => updateLine(line.id, { side: e.target.value as 'debit' | 'credit' })}
                                             className={cn(
-                                                "h-7 w-12 text-center font-mono text-xs font-bold rounded border transition-colors cursor-pointer focus:outline-none focus:ring-1 select-none",
+                                                "h-9 w-12 sm:h-7 text-center font-mono text-xs font-bold rounded border transition-colors cursor-pointer focus:outline-none focus:ring-1 select-none",
                                                 line.side === 'debit'
                                                     ? "bg-blue-50 text-blue-700 border-blue-200 focus:ring-blue-400 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800"
                                                     : "bg-emerald-50 text-emerald-700 border-emerald-200 focus:ring-emerald-400 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800"
@@ -195,7 +196,7 @@ export function VoucherLinesGrid({
                                                 min="0"
                                                 step="0.01"
                                                 placeholder="0.00"
-                                                className="w-full h-8 pl-5 pr-2 text-right font-mono text-sm bg-transparent border border-transparent hover:border-slate-200 dark:hover:border-slate-700 focus:border-primary focus:bg-background focus:outline-none shadow-none rounded-none transition-colors"
+                                                className="w-full h-9 sm:h-8 pl-5 pr-2 text-right font-mono text-sm bg-transparent border border-transparent hover:border-slate-200 dark:hover:border-slate-700 focus:border-primary focus:bg-background focus:outline-none shadow-none rounded-none transition-colors"
                                                 value={line.amount}
                                                 onChange={(e) => updateLine(line.id, { amount: e.target.value })}
                                             />
@@ -211,7 +212,7 @@ export function VoucherLinesGrid({
                                             onClick={() => removeLine(line.id)}
                                             disabled={readOnly || lines.length <= 2}
                                             className={cn(
-                                                "h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded transition-colors",
+                                                "h-9 w-9 sm:h-7 sm:w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded transition-colors",
                                                 lines.length <= 2 && "opacity-20 cursor-not-allowed hover:bg-transparent hover:text-muted-foreground"
                                             )}
                                             title={lines.length <= 2 ? "Minimum 2 lines required" : "Delete line"}
@@ -240,13 +241,14 @@ export function VoucherLinesGrid({
                         </tr>
                     </tfoot>
                 </table>
+                </div>
 
                 {/* Dense Bottom Bar for Totals & Balancing Status */}
                 <div className="px-4 py-2.5 bg-muted/30 border-t border-border flex flex-wrap items-center justify-between gap-3 text-xs">
                     <div className="text-muted-foreground text-[11px] font-medium">
                         {lines.length} {lines.length === 1 ? 'line' : 'lines'} • Double-entry balanced
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-4">
                         <div className="flex items-center gap-1.5 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 px-2.5 py-1 rounded-md">
                             <span className="font-semibold text-blue-700 dark:text-blue-300">Total Dr:</span>
                             <span className="font-bold font-mono text-blue-900 dark:text-blue-100">

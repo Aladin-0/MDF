@@ -58,7 +58,7 @@ function DistributorLedgerContent({ entityId, from, to }: { entityId: string; fr
 
     if (isLoading) {
         return (
-            <div className="space-y-2 px-6 py-4">
+            <div className="space-y-2 px-4 py-4 sm:px-6">
                 {[...Array(5)].map((_, i) => (
                     <div key={i} className="flex gap-4">
                         <Skeleton className="h-4 w-20" />
@@ -91,7 +91,7 @@ function CustomerLedgerContent({ entityId, from, to }: { entityId: string; from:
 
     if (isLoading) {
         return (
-            <div className="space-y-2 px-6 py-4">
+            <div className="space-y-2 px-4 py-4 sm:px-6">
                 {[...Array(3)].map((_, i) => (
                     <div key={i} className="flex gap-4">
                         <Skeleton className="h-4 w-20" />
@@ -138,7 +138,7 @@ function LedgerTable({ entries, openingBalance, closingBalance }: {
 
     return (
         <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[640px] text-sm">
                 <thead className="bg-muted/50 border-b border-border sticky top-0 z-10">
                     <tr>
                         <th className="text-left px-4 py-2.5 font-medium text-muted-foreground whitespace-nowrap">Date</th>
@@ -233,15 +233,15 @@ export function LedgerDrawer({ entityType, entityId, entityName, open, onClose, 
             <SheetContent side="right" className="flex flex-col h-full p-0 sm:max-w-3xl w-full">
 
                 {/* Header */}
-                <SheetHeader className="shrink-0 border-b px-6 py-4">
+                <SheetHeader className="shrink-0 border-b px-4 py-3 sm:px-6 sm:py-4">
                     <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-center gap-3">
+                        <div className="flex min-w-0 items-center gap-3">
                             <div className={cn('flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold', color)}>
                                 {initials(entityName)}
                             </div>
-                            <div>
-                                <div className="flex items-center gap-2">
-                                    <p className="font-semibold text-base">{entityName}</p>
+                            <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                    <p className="font-semibold text-base break-words">{entityName}</p>
                                     <Badge variant="outline" className="text-[10px] h-5">
                                         {entityType === 'distributor' ? (
                                             <><Building2 className="h-2.5 w-2.5 mr-1" />Distributor</>
@@ -253,14 +253,14 @@ export function LedgerDrawer({ entityType, entityId, entityName, open, onClose, 
                                 <p className="text-sm text-muted-foreground mt-0.5">Account Ledger</p>
                             </div>
                         </div>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={onClose}>
+                        <Button variant="ghost" size="icon" className="h-9 w-9 sm:h-8 sm:w-8 shrink-0" onClick={onClose}>
                             <X className="h-4 w-4" />
                         </Button>
                     </div>
                 </SheetHeader>
 
                 {/* Controls */}
-                <div className="shrink-0 border-b px-6 py-3 flex flex-wrap items-center gap-3">
+                <div className="shrink-0 border-b px-4 py-3 sm:px-6 flex flex-wrap items-center gap-3">
                     <div className="flex items-center gap-2 flex-wrap">
                         <div className="flex items-center gap-1.5">
                             <label className="text-xs text-muted-foreground whitespace-nowrap">From</label>
@@ -281,7 +281,7 @@ export function LedgerDrawer({ entityType, entityId, entityName, open, onClose, 
                             />
                         </div>
                     </div>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex flex-wrap items-center gap-1.5">
                         <Button variant="outline" size="sm" className="h-7 text-xs" onClick={setThisMonth}>This Month</Button>
                         <Button variant="outline" size="sm" className="h-7 text-xs" onClick={setLastMonth}>Last Month</Button>
                         <Button variant="outline" size="sm" className="h-7 text-xs" onClick={setAllTime}>All Time</Button>
@@ -298,7 +298,7 @@ export function LedgerDrawer({ entityType, entityId, entityName, open, onClose, 
                 </div>
 
                 {/* Footer */}
-                <div className="shrink-0 border-t px-6 py-4 bg-background flex items-center justify-between gap-3">
+                <div className="shrink-0 border-t px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-4 bg-background flex flex-wrap items-center justify-between gap-3">
                     <div className="flex items-center gap-4">
                         <div>
                             <p className="text-xs text-muted-foreground">Closing Balance</p>

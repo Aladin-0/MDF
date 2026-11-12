@@ -60,7 +60,7 @@ export function ShortcutHelpModal({ open, onOpenChange }: ShortcutHelpModalProps
 
     return (
         <Dialog open={open} onOpenChange={(o) => { if (!o) setFilter(''); onOpenChange(o); }}>
-            <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto">
+            <DialogContent className="max-h-[85dvh] max-w-3xl overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <Keyboard className="h-5 w-5" /> Keyboard Shortcuts

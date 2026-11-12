@@ -90,7 +90,7 @@ export function ProductBatchTable({ product, metrics, onAdjust, onEdit, onSaveBa
                                     </>
                                 )}
                                 <TableHead scope="col" className={HEAD}>Rack</TableHead>
-                                <TableHead scope="col" className={cn(HEAD, 'w-36')}><span className="sr-only">Actions</span></TableHead>
+                                <TableHead scope="col" className={cn(HEAD, 'w-36 max-md:sticky max-md:right-0 max-md:bg-muted')}><span className="sr-only">Actions</span></TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -125,7 +125,7 @@ export function ProductBatchTable({ product, metrics, onAdjust, onEdit, onSaveBa
                                         <TableCell className={CELL}>
                                             {b.rackLocation ? <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-medium">{b.rackLocation}</span> : <span className="text-muted-foreground">—</span>}
                                         </TableCell>
-                                        <TableCell className={cn(CELL, 'text-right')}>
+                                        <TableCell className={cn(CELL, 'text-right max-md:sticky max-md:right-0 max-md:bg-card max-md:shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.2)]')}>
                                             <div className="flex items-center justify-end gap-1">
                                                 <PermissionGate permission="edit_inventory">
                                                     <Button type="button" variant="ghost" size="sm" className="h-8" onClick={() => onEdit(b)} aria-label={`Edit batch ${b.batchNo}`}>

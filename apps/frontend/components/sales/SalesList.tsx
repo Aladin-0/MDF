@@ -191,7 +191,10 @@ export default function SalesList() {
     useEffect(() => {
         if (!activeHighlightId || isLoading) return;
         const timer = setTimeout(() => {
-            const el = document.getElementById(`sale-row-${activeHighlightId}`);
+            const rowEl = document.getElementById(`sale-row-${activeHighlightId}`);
+            const el = rowEl && rowEl.offsetParent !== null
+                ? rowEl
+                : (document.getElementById(`sale-card-${activeHighlightId}`) ?? rowEl);
             if (el) {
                 el.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
@@ -295,13 +298,13 @@ export default function SalesList() {
                 </div>
                 
                 {/* ── Wholesale / Retail Toggle ── */}
-                <div className="flex bg-slate-100/50 p-1 rounded-xl border border-slate-200/60 shadow-sm mx-auto sm:mx-0">
+                <div className="flex w-full sm:w-auto bg-slate-100/50 p-1 rounded-xl border border-slate-200/60 shadow-sm mx-auto sm:mx-0">
                     {(['ALL', 'RETAIL', 'WHOLESALE'] as const).map(type => (
                         <button
                             key={type}
                             onClick={() => { setSaleType(type); setPage(1); }}
                             className={cn(
-                                "px-5 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 capitalize",
+                                "flex-1 sm:flex-none px-3 sm:px-5 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 capitalize",
                                 saleType === type 
                                     ? "bg-white text-primary shadow-sm ring-1 ring-black/5" 
                                     : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
@@ -317,7 +320,7 @@ export default function SalesList() {
                         useBillingStore.getState().resetBilling();
                         router.push('/billing');
                     }} 
-                    className="shrink-0"
+                    className="shrink-0 w-full sm:w-auto"
                 >
                     <PlusCircle className="w-4 h-4 mr-2" />
                     New Sale
@@ -340,26 +343,26 @@ export default function SalesList() {
                         {p.label}
                     </button>
                 ))}
-                <div className="flex items-center gap-2 ml-auto flex-wrap">
+                <div className="flex items-center gap-2 w-full sm:w-auto sm:ml-auto flex-wrap">
                     <CalendarRange className="w-4 h-4 text-muted-foreground shrink-0" />
                     <input
                         type="date"
                         value={startDate}
                         onChange={e => { setStartDate(e.target.value); setActivePreset('Custom'); setPage(1); }}
-                        className="border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-primary/60"
+                        className="min-w-0 flex-1 sm:flex-none border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-primary/60"
                     />
                     <span className="text-muted-foreground text-sm">to</span>
                     <input
                         type="date"
                         value={endDate}
                         onChange={e => { setEndDate(e.target.value); setActivePreset('Custom'); setPage(1); }}
-                        className="border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-primary/60"
+                        className="min-w-0 flex-1 sm:flex-none border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-primary/60"
                     />
                 </div>
             </div>
 
             {/* ── Selected Range Label ── */}
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs font-medium text-muted-foreground bg-slate-50 border border-slate-200 rounded-full px-3 py-1">
                     📅 Showing: {startDate === endDate ? format(new Date(startDate), 'dd MMM yyyy') : `${format(new Date(startDate), 'dd MMM yyyy')} → ${format(new Date(endDate), 'dd MMM yyyy')}`}
                 </span>
@@ -367,13 +370,13 @@ export default function SalesList() {
             </div>
 
             {/* ── Revenue Analytics Section ── */}
-            <div className="bg-gradient-to-br from-primary/5 to-blue-50/50 border border-primary/20 rounded-2xl p-5 space-y-4">
-                <div className="flex items-center gap-2">
+            <div className="bg-gradient-to-br from-primary/5 to-blue-50/50 border border-primary/20 rounded-2xl p-3 sm:p-5 space-y-4">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <BarChart3 className="w-4 h-4 text-primary" />
                     <h2 className="text-sm font-bold text-primary uppercase tracking-wide">
                         {saleType === 'ALL' ? 'Sales & Profit Analytics' : `${saleType} Sales Analytics`}
                     </h2>
-                    <span className="ml-auto text-xs text-muted-foreground">
+                    <span className="w-full sm:w-auto sm:ml-auto text-xs text-muted-foreground">
                         {isSearching
                             ? `Search results: ${totalBills} bills (all dates)`
                             : `Based on ${totalBills} bills · ${activePreset === 'Custom' ? 'custom range' : activePreset.toLowerCase()}`
@@ -388,57 +391,57 @@ export default function SalesList() {
 
                 {/* Main Revenue Metrics — 5 cards */}
                 <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-                    <div className="bg-white rounded-xl border border-slate-100 p-4 shadow-sm">
+                    <div className="bg-white rounded-xl border border-slate-100 p-3 sm:p-4 shadow-sm min-w-0">
                         <div className="flex items-center gap-2 mb-2">
                             <TrendingUp className="w-4 h-4 text-primary shrink-0" />
                             <p className="text-xs text-muted-foreground font-medium">Total Sales</p>
                         </div>
                         {isLoading
                             ? <div className="h-7 bg-slate-100 animate-pulse rounded" />
-                            : <p className="text-2xl font-bold text-primary tabular-nums">{fmtShort(totalRevenue)}</p>
+                            : <p className="text-xl sm:text-2xl font-bold text-primary tabular-nums break-words">{fmtShort(totalRevenue)}</p>
                         }
                         <p className="text-[10px] text-muted-foreground mt-1">{totalBills} bills (incl. GST)</p>
                     </div>
 
-                    <div className="bg-white rounded-xl border border-slate-100 p-4 shadow-sm">
+                    <div className="bg-white rounded-xl border border-slate-100 p-3 sm:p-4 shadow-sm min-w-0">
                         <div className="flex items-center gap-2 mb-2">
                             <Wallet className="w-4 h-4 text-emerald-600 shrink-0" />
                             <p className="text-xs text-muted-foreground font-medium">Collected</p>
                         </div>
                         {isLoading
                             ? <div className="h-7 bg-slate-100 animate-pulse rounded" />
-                            : <p className="text-2xl font-bold text-emerald-700 tabular-nums">{fmtShort(collectedTotal)}</p>
+                            : <p className="text-xl sm:text-2xl font-bold text-emerald-700 tabular-nums break-words">{fmtShort(collectedTotal)}</p>
                         }
                         <p className="text-[10px] text-muted-foreground mt-1">Cash + UPI + Card</p>
                     </div>
 
-                    <div className="bg-white rounded-xl border border-slate-100 p-4 shadow-sm">
+                    <div className="bg-white rounded-xl border border-slate-100 p-3 sm:p-4 shadow-sm min-w-0">
                         <div className="flex items-center gap-2 mb-2">
                             <Tag className="w-4 h-4 text-orange-500 shrink-0" />
                             <p className="text-xs text-muted-foreground font-medium">Credit Pending</p>
                         </div>
                         {isLoading
                             ? <div className="h-7 bg-slate-100 animate-pulse rounded" />
-                            : <p className="text-2xl font-bold text-orange-600 tabular-nums">{fmtShort(creditTotal)}</p>
+                            : <p className="text-xl sm:text-2xl font-bold text-orange-600 tabular-nums break-words">{fmtShort(creditTotal)}</p>
                         }
                         <p className="text-[10px] text-muted-foreground mt-1">Not yet collected</p>
                     </div>
 
-                    <div className="bg-white rounded-xl border border-slate-100 p-4 shadow-sm">
+                    <div className="bg-white rounded-xl border border-slate-100 p-3 sm:p-4 shadow-sm min-w-0">
                         <div className="flex items-center gap-2 mb-2">
                             <BarChart3 className="w-4 h-4 text-blue-600 shrink-0" />
                             <p className="text-xs text-muted-foreground font-medium">Avg Bill Value</p>
                         </div>
                         {isLoading
                             ? <div className="h-7 bg-slate-100 animate-pulse rounded" />
-                            : <p className="text-2xl font-bold text-blue-700 tabular-nums">{fmtShort(avgBillValue)}</p>
+                            : <p className="text-xl sm:text-2xl font-bold text-blue-700 tabular-nums break-words">{fmtShort(avgBillValue)}</p>
                         }
                         <p className="text-[10px] text-muted-foreground mt-1">Per bill average</p>
                     </div>
 
                     {/* ── Profit Card ── */}
                     <div className={cn(
-                        'rounded-xl border p-4 shadow-sm',
+                        'col-span-2 sm:col-span-1 min-w-0 rounded-xl border p-3 sm:p-4 shadow-sm',
                         totalProfit >= 0 ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
                     )}>
                         <div className="flex items-center gap-2 mb-2">
@@ -447,7 +450,7 @@ export default function SalesList() {
                         </div>
                         {isLoading
                             ? <div className="h-7 bg-slate-100 animate-pulse rounded" />
-                            : <p className={cn('text-2xl font-bold tabular-nums', totalProfit >= 0 ? 'text-green-700' : 'text-red-700')}>{fmtShort(totalProfit)}</p>
+                            : <p className={cn('text-xl sm:text-2xl font-bold tabular-nums break-words', totalProfit >= 0 ? 'text-green-700' : 'text-red-700')}>{fmtShort(totalProfit)}</p>
                         }
                         <p className="text-[10px] text-muted-foreground mt-1">
                             {isLoading ? '...' : `Sale − Cost · ${profitMarginPct.toFixed(1)}% margin`}
@@ -456,19 +459,19 @@ export default function SalesList() {
                 </div>
 
                 {/* Payment mode breakdown */}
-                <div className="bg-white rounded-xl border border-slate-100 p-4 shadow-sm">
-                    <div className="flex items-center justify-between mb-3">
+                <div className="bg-white rounded-xl border border-slate-100 p-3 sm:p-4 shadow-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 mb-3">
                         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Payment Mode Breakdown</p>
                         {currentPaymentMode !== 'all' && (
                             <button
-                                onClick={() => handlePaymentModeChange('all')}
+                                onClick={() => handleFilterChange('all')}
                                 className="text-xs text-primary hover:underline font-medium"
                             >
                                 Clear payment filter
                             </button>
                         )}
                     </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4">
                         {[
                             { label: 'Cash', value: 'cash', amount: cashTotal, icon: Banknote, color: 'text-emerald-700', activeRing: 'ring-2 ring-emerald-500 bg-emerald-50/50', bar: 'bg-emerald-500' },
                             { label: 'UPI', value: 'upi', amount: upiTotal, icon: Smartphone, color: 'text-blue-700', activeRing: 'ring-2 ring-blue-500 bg-blue-50/50', bar: 'bg-blue-500' },
@@ -480,9 +483,9 @@ export default function SalesList() {
                                 <button
                                     key={label}
                                     type="button"
-                                    onClick={() => handlePaymentModeChange(isSelected ? 'all' : value)}
+                                    onClick={() => handleFilterChange(isSelected ? 'all' : value)}
                                     className={cn(
-                                        'text-left space-y-1.5 p-2 rounded-xl border transition-all cursor-pointer group',
+                                        'text-left min-w-0 space-y-1.5 p-2 rounded-xl border transition-all cursor-pointer group',
                                         isSelected
                                             ? activeRing
                                             : 'border-transparent hover:bg-slate-50'
@@ -527,7 +530,7 @@ export default function SalesList() {
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                     {/* Big Prominent Search Bar */}
                     <div className={cn(
-                        'flex-1 flex items-center gap-3 bg-white border rounded-xl px-4 h-11 transition-all shadow-xs',
+                        'flex-1 min-w-0 flex items-center gap-3 bg-white border rounded-xl px-3 sm:px-4 h-11 transition-all shadow-xs',
                         isSearching
                             ? 'border-primary/60 ring-2 ring-primary/10 bg-primary/[0.01]'
                             : 'border-slate-200/90 hover:border-slate-300 focus-within:border-primary/60 focus-within:ring-2 focus-within:ring-primary/10'
@@ -538,12 +541,12 @@ export default function SalesList() {
                             placeholder="Search by invoice #, customer name, mobile number, doctor, hospital, staff..."
                             value={search}
                             onChange={e => { setSearch(e.target.value); setPage(1); }}
-                            className="flex-1 text-sm bg-transparent focus:outline-none placeholder:text-slate-400 text-slate-900 font-normal"
+                            className="flex-1 min-w-0 text-sm bg-transparent focus:outline-none placeholder:text-slate-400 text-slate-900 font-normal"
                         />
                         {search && (
                             <button
                                 onClick={() => setSearch('')}
-                                className="text-slate-400 hover:text-slate-700 p-1 rounded-md transition-colors"
+                                className="text-slate-400 hover:text-slate-700 p-1.5 sm:p-1 -m-1 sm:m-0 rounded-md transition-colors shrink-0"
                                 title="Clear search"
                             >
                                 <X className="w-4 h-4" />
@@ -552,10 +555,10 @@ export default function SalesList() {
                     </div>
 
                     {/* Filter & Sort Controls */}
-                    <div className="flex items-center gap-2.5 shrink-0 flex-wrap sm:flex-nowrap">
+                    <div className="flex items-center gap-2.5 sm:shrink-0 w-full sm:w-auto">
                         {/* Filter Selector (Payment Modes & Modified Bills) */}
                         <Select value={modifiedOnly ? 'modified' : currentPaymentMode} onValueChange={handleFilterChange}>
-                            <SelectTrigger className="h-11 min-w-[155px] px-3.5 bg-white text-xs font-medium border border-slate-200/90 rounded-xl shadow-xs hover:bg-slate-50 hover:border-slate-300 focus:ring-2 focus:ring-primary/10 transition-all">
+                            <SelectTrigger className="h-11 min-w-0 flex-1 sm:flex-none sm:min-w-[155px] px-3.5 bg-white text-xs font-medium border border-slate-200/90 rounded-xl shadow-xs hover:bg-slate-50 hover:border-slate-300 focus:ring-2 focus:ring-primary/10 transition-all">
                                 <div className="flex items-center gap-1.5 truncate">
                                     <span className="text-slate-400 text-xs font-normal shrink-0">Filter:</span>
                                     <SelectValue placeholder="All Payments" />
@@ -575,8 +578,8 @@ export default function SalesList() {
                             defaultValue="-invoice_date"
                             onChange={() => setPage(1)}
                             showIcon={false}
-                            triggerClassName="h-11 min-w-[150px] px-3.5 bg-white text-xs font-medium border border-slate-200/90 rounded-xl shadow-xs hover:bg-slate-50 hover:border-slate-300 focus:ring-2 focus:ring-primary/10 transition-all"
-                            className="shrink-0"
+                            triggerClassName="h-11 w-full min-w-0 sm:w-auto sm:min-w-[150px] px-3.5 bg-white text-xs font-medium border border-slate-200/90 rounded-xl shadow-xs hover:bg-slate-50 hover:border-slate-300 focus:ring-2 focus:ring-primary/10 transition-all"
+                            className="flex-1 min-w-0 sm:flex-none sm:shrink-0"
                         />
                     </div>
                 </div>
@@ -599,8 +602,8 @@ export default function SalesList() {
                             </span>
                         )}
                         {isSearching && (
-                            <span className="inline-flex items-center gap-1.5 bg-primary/10 text-primary border border-primary/20 px-2.5 py-1 rounded-lg text-xs font-medium">
-                                <span>Search: &ldquo;{search}&rdquo; (all dates)</span>
+                            <span className="inline-flex max-w-full items-center gap-1.5 bg-primary/10 text-primary border border-primary/20 px-2.5 py-1 rounded-lg text-xs font-medium">
+                                <span className="min-w-0 truncate">Search: &ldquo;{search}&rdquo; (all dates)</span>
                                 <button
                                     onClick={() => setSearch('')}
                                     className="hover:text-primary/70 p-0.5 rounded transition-colors"
@@ -625,7 +628,7 @@ export default function SalesList() {
                         <button
                             onClick={() => {
                                 setSearch('');
-                                handlePaymentModeChange('all');
+                                handleFilterChange('all');
                                 toggleModifiedOnly(false);
                             }}
                             className="text-xs text-slate-500 hover:text-slate-800 underline underline-offset-2 ml-1 transition-colors"
@@ -638,7 +641,145 @@ export default function SalesList() {
 
             {/* ── Table ── */}
             <Card className="overflow-hidden">
-                <div className="overflow-x-auto">
+                {/* Phone: stacked cards (same data + actions as the table below) */}
+                <div className="md:hidden divide-y">
+                    {isLoading && [...Array(4)].map((_, i) => (
+                        <div key={i} className="animate-pulse p-3 space-y-2">
+                            <div className="h-4 bg-slate-100 rounded w-1/2" />
+                            <div className="h-4 bg-slate-100 rounded w-3/4" />
+                            <div className="h-4 bg-slate-100 rounded w-1/3" />
+                        </div>
+                    ))}
+                    {!isLoading && filteredInvoices.length === 0 && (
+                        <div className="px-4 py-12 text-center text-muted-foreground">
+                            <ShoppingBag className="w-10 h-10 mx-auto mb-2 text-slate-200" />
+                            <p className="font-medium">No sales found</p>
+                            <p className="text-xs mt-1">Try changing the date range or search query</p>
+                        </div>
+                    )}
+                    {!isLoading && filteredInvoices.map(inv => {
+                        const isHighlighted = inv.id === activeHighlightId;
+                        return (
+                            <div
+                                key={inv.id}
+                                id={`sale-card-${inv.id}`}
+                                className={cn(
+                                    "p-3 space-y-2 transition-all duration-300",
+                                    isHighlighted
+                                        ? "bg-amber-100/70 ring-2 ring-inset ring-amber-400"
+                                        : "",
+                                    inv.isCancelled && !isHighlighted && "bg-slate-50/70 text-slate-400"
+                                )}
+                            >
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0 space-y-1">
+                                        <div className="flex items-center gap-1.5 flex-wrap font-mono text-xs font-semibold text-primary">
+                                            <span className={cn("break-all", inv.isCancelled && "line-through decoration-slate-400")}>{inv.invoiceNo}</span>
+                                            {inv.isCancelled && (
+                                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-300 no-underline">
+                                                    Cancelled
+                                                </span>
+                                            )}
+                                            {inv.isModified && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => router.push(`/dashboard/sales/revisions/${inv.id}`)}
+                                                    title={`Modified bill${inv.revisionCount ? ` (${inv.revisionCount} revisions)` : ''} - Click to view revision history`}
+                                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 transition-colors"
+                                                >
+                                                    <History className="w-2.5 h-2.5 text-amber-600" />
+                                                    Modified
+                                                    {inv.revisionCount && inv.revisionCount > 1 ? (
+                                                        <span className="text-[9px] text-amber-600 font-bold">v{inv.revisionCount}</span>
+                                                    ) : null}
+                                                </button>
+                                            )}
+                                            {saleType === 'ALL' && (
+                                                <span className={cn(
+                                                    "text-[9px] px-1.5 py-0.5 rounded-sm border uppercase font-medium tracking-wide",
+                                                    inv.saleType?.toUpperCase() === 'WHOLESALE'
+                                                        ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+                                                        : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                                )}>
+                                                    {inv.saleType?.toUpperCase() || 'RETAIL'}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <p className="text-xs text-slate-500">{format(new Date(inv.invoiceDate), 'dd MMM yyyy')}</p>
+                                    </div>
+                                    <p className={cn("shrink-0 text-base font-bold tabular-nums text-slate-900", inv.isCancelled && "text-slate-400 line-through decoration-slate-400")}>{fmt(inv.grandTotal)}</p>
+                                </div>
+
+                                <div className="flex items-start gap-1.5 text-sm text-slate-700 min-w-0">
+                                    <Users className="w-3.5 h-3.5 mt-0.5 text-muted-foreground shrink-0" />
+                                    <span className="min-w-0 break-words">
+                                        {inv.patientMemberName ?? inv.customer?.name ?? inv.walkInName ?? 'Walk-in'}
+                                        {inv.patientMemberName && inv.customer?.name && (
+                                            <span className="block text-[10px] text-slate-400">{inv.customer.name}</span>
+                                        )}
+                                    </span>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-slate-600">
+                                    {saleType === 'WHOLESALE' ? (
+                                        <>
+                                            <p className="min-w-0 break-words"><span className="text-slate-400">GSTIN: </span><span className="font-mono">{inv.customer?.gstin ?? '—'}</span></p>
+                                            <p className="min-w-0"><span className="text-slate-400">E-Way Bill: </span>{inv.eway_bill_status || 'N/A'}</p>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <p className="min-w-0 break-words"><span className="text-slate-400">Doctor: </span>{inv.doctorName ?? '—'}</p>
+                                            <p className="min-w-0 break-words"><span className="text-slate-400">Hospital: </span>{inv.hospitalName ?? '—'}</p>
+                                        </>
+                                    )}
+                                    <p className="min-w-0"><span className="text-slate-400">Items: </span>{inv.itemsCount ?? inv.items?.length ?? 0}</p>
+                                    <p className="min-w-0 break-words"><span className="text-slate-400">Billed by: </span>{inv.billedByName ?? '—'}</p>
+                                </div>
+
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="min-w-0">
+                                        <PaymentBreakdownCell
+                                            paymentMode={inv.paymentMode}
+                                            cashPaid={inv.cashPaid}
+                                            upiPaid={inv.upiPaid}
+                                            cardPaid={inv.cardPaid}
+                                            creditGiven={inv.creditGiven}
+                                            bankPaid={inv.bankPaid}
+                                            chequePaid={inv.chequePaid}
+                                            payments={inv.payments}
+                                        />
+                                    </div>
+                                    <div className="flex items-center justify-end gap-1 shrink-0">
+                                        {inv.isModified && (
+                                            <Button variant="ghost" size="icon" className="h-9 w-9 text-amber-700 hover:text-amber-800 hover:bg-amber-50" title="View Revision History" onClick={() => router.push(`/dashboard/sales/revisions/${inv.id}`)}>
+                                                <History className="w-4 h-4 text-amber-600" />
+                                            </Button>
+                                        )}
+                                        {inv.eway_bill_no && (
+                                            <Button variant="ghost" size="icon" className="h-9 w-9 text-blue-600 hover:text-blue-700 hover:bg-blue-50" title="Download E-Way Bill" onClick={() => handleDownloadEwb(inv.id)}>
+                                                <Download className="w-4 h-4" />
+                                            </Button>
+                                        )}
+                                        {((inv as any).irnStatus === 'FAILED' || (inv as any).irn_status === 'FAILED') && (
+                                            <Button variant="ghost" size="icon" className="h-9 w-9 text-amber-600 hover:text-amber-700 hover:bg-amber-50" title="Retry E-Invoice Generation" onClick={() => handleRetryEinvoice(inv.id)}>
+                                                <RefreshCw className="w-4 h-4" />
+                                            </Button>
+                                        )}
+                                        <Button variant="ghost" size="icon" className="h-9 w-9" title="View Invoice" onClick={() => setSelectedInvoiceId(inv.id)}>
+                                            <Eye className="w-4 h-4" />
+                                        </Button>
+                                        <Button variant="ghost" size="icon" className="h-9 w-9" title="Print Invoice" onClick={() => setSelectedInvoiceId(inv.id)}>
+                                            <Printer className="w-4 h-4" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+
+                {/* Tablet / desktop: full table */}
+                <div className="hidden md:block overflow-x-auto">
                     <table className="w-full text-sm text-left">
                         <thead className="bg-slate-50 border-b">
                             <tr>
@@ -690,13 +831,22 @@ export default function SalesList() {
                                         "transition-all duration-300",
                                         isHighlighted 
                                             ? "bg-amber-100/70 ring-2 ring-amber-400 border-amber-300 font-medium shadow-xs" 
-                                            : "hover:bg-slate-50"
+                                            : "hover:bg-slate-50",
+                                        inv.isCancelled && !isHighlighted && "bg-slate-50/70 text-slate-400"
                                     )}
                                 >
                                     <td className="px-4 py-3 font-mono text-xs font-semibold text-primary">
                                         <div className="flex flex-col gap-1 items-start">
                                             <div className="flex items-center gap-1.5 flex-wrap">
-                                                <span>{inv.invoiceNo}</span>
+                                                <span className={cn(inv.isCancelled && "line-through decoration-slate-400")}>{inv.invoiceNo}</span>
+                                                {inv.isCancelled && (
+                                                    <span
+                                                        title="This bill was cancelled (usually replaced by a new one). It keeps its number but is not counted in sales."
+                                                        className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-300 no-underline"
+                                                    >
+                                                        Cancelled
+                                                    </span>
+                                                )}
                                                 {inv.isModified && (
                                                     <button
                                                         type="button"
@@ -757,7 +907,7 @@ export default function SalesList() {
                                         </>
                                     )}
                                     <td className="px-4 py-3 text-right text-slate-600">{inv.itemsCount ?? inv.items?.length ?? 0}</td>
-                                    <td className="px-4 py-3 text-right font-semibold tabular-nums text-slate-900">{fmt(inv.grandTotal)}</td>
+                                    <td className={cn("px-4 py-3 text-right font-semibold tabular-nums text-slate-900", inv.isCancelled && "text-slate-400 line-through decoration-slate-400")}>{fmt(inv.grandTotal)}</td>
                                     <td className="px-4 py-3">
                                         <PaymentBreakdownCell
                                             paymentMode={inv.paymentMode}
@@ -811,15 +961,15 @@ export default function SalesList() {
 
                 {/* Pagination */}
                 {pagination && pagination.totalPages > 1 && (
-                    <div className="flex items-center justify-between px-4 py-3 border-t bg-slate-50">
-                        <p className="text-xs text-muted-foreground">
+                    <div className="flex items-center justify-between gap-2 px-3 sm:px-4 py-3 border-t bg-slate-50">
+                        <p className="text-xs text-muted-foreground min-w-0">
                             Page {pagination.page} of {pagination.totalPages} · {pagination.totalRecords} total records
                         </p>
                         <div className="flex items-center gap-1">
-                            <Button variant="outline" size="icon" className="h-7 w-7" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
+                            <Button variant="outline" size="icon" className="h-9 w-9 sm:h-7 sm:w-7" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
                                 <ChevronLeft className="w-4 h-4" />
                             </Button>
-                            <Button variant="outline" size="icon" className="h-7 w-7" disabled={page >= pagination.totalPages} onClick={() => setPage(p => p + 1)}>
+                            <Button variant="outline" size="icon" className="h-9 w-9 sm:h-7 sm:w-7" disabled={page >= pagination.totalPages} onClick={() => setPage(p => p + 1)}>
                                 <ChevronRight className="w-4 h-4" />
                             </Button>
                         </div>

@@ -92,14 +92,14 @@ export default function CreditPage() {
     return (
         <div className="space-y-6">
             {/* Page header */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900">Credit</h1>
                     <p className="text-muted-foreground text-sm mt-1">
                         Track outstanding balances and collect payments
                     </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                     {overdueCount > 0 && (
                         <Button
                             variant="outline"
@@ -121,7 +121,7 @@ export default function CreditPage() {
             <AgingSummaryCards onBucketClick={handleBucketClick} />
 
             {/* Keyboard hints */}
-            <div className="text-[10px] text-muted-foreground flex gap-3">
+            <div className="text-[10px] text-muted-foreground hidden sm:flex gap-3">
                 <span><kbd className="bg-slate-100 px-1.5 py-0.5 rounded text-[10px]">/</kbd> Search</span>
                 <span><kbd className="bg-slate-100 px-1.5 py-0.5 rounded text-[10px]">P</kbd> Pay</span>
                 <span><kbd className="bg-slate-100 px-1.5 py-0.5 rounded text-[10px]">W</kbd> WhatsApp</span>
@@ -151,7 +151,10 @@ export default function CreditPage() {
 
                 {/* Right: detail panel */}
                 {selectedAccountId && (
-                    <div className="hidden lg:block w-[420px] flex-shrink-0">
+                    <>
+                    {/* Phone / tablet: backdrop behind the bottom sheet */}
+                    <div className="fixed inset-0 z-40 bg-black/40 lg:hidden" onClick={() => setSelectedAccountId(null)} />
+                    <div className="fixed inset-x-0 bottom-0 z-50 rounded-t-2xl overflow-hidden bg-white pb-[env(safe-area-inset-bottom)] lg:static lg:z-auto lg:rounded-none lg:overflow-visible lg:bg-transparent lg:pb-0 lg:w-[420px] lg:flex-shrink-0">
                         <CustomerCreditDetail
                             accountId={selectedAccountId}
                             onClose={() => setSelectedAccountId(null)}
@@ -160,6 +163,7 @@ export default function CreditPage() {
                             onWhatsAppClick={() => handleWhatsApp()}
                         />
                     </div>
+                    </>
                 )}
             </div>
 

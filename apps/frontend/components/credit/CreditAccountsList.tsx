@@ -61,7 +61,7 @@ export default function CreditAccountsList({
         <div className="space-y-4">
             {/* Filter + Search */}
             <div className="flex gap-3 flex-wrap items-center">
-                <div className="relative w-64">
+                <div className="relative w-full sm:w-64">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
                         placeholder="Search name or phone..."
@@ -70,13 +70,13 @@ export default function CreditAccountsList({
                         className="pl-9"
                     />
                 </div>
-                <div className="flex gap-1.5">
+                <div className="flex flex-wrap gap-1.5">
                     {FILTERS.map((f) => (
                         <button
                             key={f.key}
                             onClick={() => onFilterChange(f.key)}
                             className={cn(
-                                'px-3 py-1.5 rounded-full text-xs font-medium transition-colors',
+                                'px-3 py-2 sm:py-1.5 rounded-full text-xs font-medium transition-colors',
                                 activeFilter === f.key
                                     ? 'bg-primary text-white'
                                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -119,14 +119,14 @@ export default function CreditAccountsList({
                                 onClick={() => onSelect(account.id)}
                             >
                                 {/* Row 1: Customer info */}
-                                <div className="flex justify-between items-start">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">
+                                <div className="flex justify-between items-start gap-2">
+                                    <div className="flex items-center gap-3 min-w-0">
+                                        <div className="w-10 h-10 shrink-0 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">
                                             {account.customer.name.slice(0, 2).toUpperCase()}
                                         </div>
-                                        <div>
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-sm font-bold text-slate-900">
+                                        <div className="min-w-0">
+                                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                                <span className="text-sm font-bold text-slate-900 break-words">
                                                     {account.customer.name}
                                                 </span>
                                                 {account.customer.isChronic && (
@@ -140,14 +140,14 @@ export default function CreditAccountsList({
                                             </div>
                                         </div>
                                     </div>
-                                    <span className={cn('text-[10px] font-medium px-2 py-1 rounded-full', status.badgeBg, status.badgeText)}>
+                                    <span className={cn('shrink-0 text-[10px] font-medium px-2 py-1 rounded-full', status.badgeBg, status.badgeText)}>
                                         {status.label}
                                     </span>
                                 </div>
 
                                 {/* Row 2: Balance */}
-                                <div className="flex justify-between items-end mt-3">
-                                    <div>
+                                <div className="flex justify-between items-end gap-2 mt-3">
+                                    <div className="min-w-0">
                                         <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Outstanding</div>
                                         <div className={cn(
                                             'text-xl font-bold',
@@ -167,7 +167,7 @@ export default function CreditAccountsList({
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="flex flex-col items-end gap-2">
+                                    <div className="flex flex-col items-end gap-2 shrink-0">
                                         {account.lastTransactionDate && (
                                             <span className="text-[10px] text-muted-foreground">
                                                 Last: {formatDistanceToNow(new Date(account.lastTransactionDate), { addSuffix: true })}
@@ -176,7 +176,7 @@ export default function CreditAccountsList({
                                         <div className="flex gap-1.5" onClick={(e) => e.stopPropagation()}>
                                             <Button
                                                 size="sm"
-                                                className="h-7 text-xs px-3"
+                                                className="h-9 sm:h-7 text-xs px-4 sm:px-3"
                                                 onClick={() => onPayClick(account.id)}
                                             >
                                                 Pay
@@ -185,7 +185,7 @@ export default function CreditAccountsList({
                                                 <Button
                                                     size="sm"
                                                     variant="outline"
-                                                    className="h-7 text-xs px-2 border-green-300 text-green-600 hover:bg-green-50"
+                                                    className="h-9 sm:h-7 text-xs px-3 sm:px-2 border-green-300 text-green-600 hover:bg-green-50"
                                                     onClick={() => onWhatsAppClick(account)}
                                                 >
                                                     <MessageCircle className="w-3.5 h-3.5" />

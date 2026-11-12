@@ -54,7 +54,7 @@ export function AddOutletModal({ orgId }: { orgId: string }) {
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button className="bg-primary text-white">
+                <Button className="w-full bg-primary text-white sm:w-auto">
                     <Store className="mr-2 h-4 w-4" />
                     Add Outlet
                 </Button>
@@ -74,8 +74,8 @@ export function AddOutletModal({ orgId }: { orgId: string }) {
                         </div>
                     )}
 
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-1 col-span-2">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div className="space-y-1 sm:col-span-2">
                             <Label>Outlet Name *</Label>
                             <Input
                                 required
@@ -85,7 +85,7 @@ export function AddOutletModal({ orgId }: { orgId: string }) {
                             />
                         </div>
 
-                        <div className="space-y-1 col-span-2">
+                        <div className="space-y-1 sm:col-span-2">
                             <Label>Address *</Label>
                             <Input
                                 required
@@ -158,7 +158,7 @@ export function AddOutletModal({ orgId }: { orgId: string }) {
                         </div>
                     </div>
 
-                    <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
+                    <div className="mt-6 flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end sm:gap-3">
                         <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                             Cancel
                         </Button>

@@ -111,7 +111,7 @@ export default function RecordCreditPaymentModal({ isOpen, accountId, onClose }:
                 <div className="space-y-4">
                     {/* Outstanding display */}
                     <div className="bg-slate-50 rounded-xl p-4">
-                        <div className="flex justify-between items-center">
+                        <div className="flex flex-wrap justify-between items-center gap-x-3">
                             <span className="text-sm text-muted-foreground">Total Outstanding</span>
                             <span className="text-2xl font-bold text-red-600">{formatCurrency(outstanding)}</span>
                         </div>
@@ -139,7 +139,7 @@ export default function RecordCreditPaymentModal({ isOpen, accountId, onClose }:
                                 max={outstanding}
                             />
                         </div>
-                        <div className="flex gap-2 mt-2">
+                        <div className="flex flex-wrap gap-2 mt-2">
                             <Button variant="outline" size="sm" className="text-xs" onClick={() => setAmount(String(outstanding))}>
                                 Full: {formatCurrency(outstanding)}
                             </Button>
@@ -171,7 +171,7 @@ export default function RecordCreditPaymentModal({ isOpen, accountId, onClose }:
                                         key={pm.key}
                                         onClick={() => setMode(pm.key)}
                                         className={cn(
-                                            'rounded-lg border p-3 text-center transition-colors',
+                                            'rounded-lg border p-2 sm:p-3 text-center transition-colors min-w-0',
                                             mode === pm.key ? 'border-primary bg-primary/5' : 'border-slate-200 hover:border-slate-300'
                                         )}
                                     >

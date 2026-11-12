@@ -29,7 +29,7 @@ export function SettingsToggleRow({
     return (
         <div className={cn('py-4 border-b last:border-b-0', className)}>
             <div className="flex items-start justify-between gap-4">
-                <div className="flex items-start gap-2 flex-1">
+                <div className="flex items-start gap-2 flex-1 min-w-0">
                     {icon && (
                         <span className="text-slate-500 mt-0.5 [&>svg]:w-4 [&>svg]:h-4 shrink-0">
                             {icon}

@@ -9,6 +9,13 @@
     font-size: 18px; /* Scales up the entire UI across the project */
   }
 
+  /* Phones: the 18px root makes every rem-sized control ~12% bigger than it needs to be on a 360-430px screen. */
+  @media (max-width: 639px) {
+    html {
+      font-size: 16px;
+    }
+  }
+
   :root {
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
@@ -141,4 +148,25 @@ select:focus-visible {
   --viz-2: #d95926;
   --viz-3: #199e70;
   --viz-4: #c98500;
+}
+
+
+@layer utilities {
+  /* Hide the scrollbar on horizontally scrolling strips (tab rows, chip rows) while keeping them scrollable. */
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Phones: iOS Safari zooms the page when a focused field is under 16px and never zooms back. Keep fields at 16px on touch screens. */
+@media (max-width: 639px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
 }

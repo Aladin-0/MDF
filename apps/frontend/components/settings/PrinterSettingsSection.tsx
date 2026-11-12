@@ -147,7 +147,7 @@ export function PrinterSettingsSection({ onDirty, onSaved, discardKey }: Printer
             />
 
             {/* Mode Switcher */}
-            <div className="flex gap-4 border-b pb-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:gap-4 border-b pb-2">
                 <Button 
                     type="button" 
                     variant={mode === 'retail' ? 'default' : 'outline'}
@@ -171,23 +171,23 @@ export function PrinterSettingsSection({ onDirty, onSaved, discardKey }: Printer
                     <p className="text-sm text-slate-500 mb-4">Toggle visibility and drag to reorder columns.</p>
                     <div className="space-y-2">
                         {activeConfig.columns.map((col, idx) => (
-                            <div key={col.id} className="flex items-center justify-between p-3 border rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors">
-                                <div className="flex items-center gap-3">
+                            <div key={col.id} className="flex items-center justify-between gap-2 p-3 border rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors">
+                                <div className="flex items-center gap-3 min-w-0">
                                     <input 
                                         type="checkbox" 
                                         checked={col.isVisible} 
                                         onChange={(e) => handleColumnToggle(col.id, e.target.checked)}
                                         className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary accent-primary"
                                     />
-                                    <span className="font-medium text-slate-700">{col.label}</span>
-                                    <span className="text-xs text-slate-400">({col.width})</span>
+                                    <span className="font-medium text-slate-700 truncate">{col.label}</span>
+                                    <span className="text-xs text-slate-400 shrink-0">({col.width})</span>
                                 </div>
-                                <div className="flex gap-2">
+                                <div className="flex gap-2 shrink-0">
                                     <Button 
                                         type="button" 
                                         variant="outline" 
                                         size="icon" 
-                                        className="h-8 w-8"
+                                        className="h-9 w-9 sm:h-8 sm:w-8"
                                         onClick={() => handleColumnMove(idx, 'up')}
                                         disabled={idx === 0}
                                     >
@@ -197,7 +197,7 @@ export function PrinterSettingsSection({ onDirty, onSaved, discardKey }: Printer
                                         type="button" 
                                         variant="outline" 
                                         size="icon" 
-                                        className="h-8 w-8"
+                                        className="h-9 w-9 sm:h-8 sm:w-8"
                                         onClick={() => handleColumnMove(idx, 'down')}
                                         disabled={idx === activeConfig.columns.length - 1}
                                     >
@@ -283,7 +283,7 @@ export function PrinterSettingsSection({ onDirty, onSaved, discardKey }: Printer
                 </div>
                 
                 <div className="flex justify-end pt-4">
-                    <Button type="submit">Save {mode === 'retail' ? 'Retail' : 'Wholesale'} Settings</Button>
+                    <Button type="submit" className="w-full sm:w-auto">Save {mode === 'retail' ? 'Retail' : 'Wholesale'} Settings</Button>
                 </div>
             </div>
             

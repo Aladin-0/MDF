@@ -35,6 +35,7 @@ export default function CustomerTable({ filters, onEdit }: CustomerTableProps) {
 
     return (
         <div className="bg-white rounded-xl border overflow-hidden">
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
                 <thead>
                     <tr className="border-b bg-slate-50">
@@ -56,13 +57,13 @@ export default function CustomerTable({ filters, onEdit }: CustomerTableProps) {
                             )}
                             onClick={() => router.push(`/dashboard/customers/${c.id}`)}
                         >
-                            <td className="px-4 py-3">
+                            <td className="px-3 sm:px-4 py-3">
                                 <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">
+                                    <div className="w-8 h-8 shrink-0 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">
                                         {c.name.slice(0, 2).toUpperCase()}
                                     </div>
-                                    <div>
-                                        <div className="flex items-center gap-1.5">
+                                    <div className="min-w-0">
+                                        <div className="flex flex-wrap items-center gap-1.5">
                                             <span className="font-medium text-slate-900">{c.name}</span>
                                             {c.isChronic && <Heart className="w-3 h-3 text-purple-500 fill-purple-500" />}
                                             <FamilyBadge {...c} />
@@ -80,7 +81,7 @@ export default function CustomerTable({ filters, onEdit }: CustomerTableProps) {
                                 <div className="font-medium text-slate-900">{c.totalVisits || 0}</div>
                                 {c.totalPurchases > 0 && <div className="text-xs">{formatCurrency(c.totalPurchases)}</div>}
                             </td>
-                            <td className="px-4 py-3 text-right">
+                            <td className="px-3 sm:px-4 py-3 text-right whitespace-nowrap">
                                 {c.outstanding > 0
                                     ? <span className="text-red-600 font-semibold">{formatCurrency(c.outstanding)}</span>
                                     : <span className="text-green-600">—</span>
@@ -104,10 +105,10 @@ export default function CustomerTable({ filters, onEdit }: CustomerTableProps) {
                             <td className="px-4 py-3 text-right text-xs text-muted-foreground hidden lg:table-cell">
                                 {c.createdAt ? formatDistanceToNow(new Date(c.createdAt), { addSuffix: true }) : '—'}
                             </td>
-                            <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                            <td className="px-2 sm:px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
-                                        <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-slate-200">
+                                        <Button variant="ghost" size="icon" className="h-9 w-9 sm:h-8 sm:w-8 hover:bg-slate-200">
                                             <MoreHorizontal className="w-4 h-4 text-slate-500" />
                                         </Button>
                                     </DropdownMenuTrigger>
@@ -132,6 +133,7 @@ export default function CustomerTable({ filters, onEdit }: CustomerTableProps) {
                     ))}
                 </tbody>
             </table>
+            </div>
             {customers.length === 0 && (
                 <div className="py-16 text-center text-sm text-muted-foreground">No customers found</div>
             )}

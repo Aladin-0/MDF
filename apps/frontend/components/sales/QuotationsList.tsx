@@ -312,7 +312,7 @@ export default function QuotationsList() {
                 
                 <div className="flex items-center gap-3 w-full sm:w-auto">
                     <select
-                        className="h-10 px-3 py-2 rounded-md border border-slate-200 bg-white text-sm"
+                        className="h-10 shrink-0 px-3 py-2 rounded-md border border-slate-200 bg-white text-sm"
                         value={typeFilter}
                         onChange={(e) => setTypeFilter(e.target.value as any)}
                     >
@@ -320,7 +320,7 @@ export default function QuotationsList() {
                         <option value="RETAIL">Retail</option>
                         <option value="WHOLESALE">Wholesale</option>
                     </select>
-                    <div className="relative flex-1 sm:w-64">
+                    <div className="relative flex-1 min-w-0 sm:flex-none sm:w-64">
                         <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                         <Input
                             placeholder="Search Quotation No, Customer..."
@@ -333,7 +333,98 @@ export default function QuotationsList() {
             </div>
 
             <Card className="shadow-sm border-slate-200 overflow-hidden">
-                <div className="overflow-x-auto">
+                {/* Phone: stacked cards (same data + actions as the table below) */}
+                <div className="md:hidden divide-y divide-slate-100">
+                    {isLoading ? (
+                        <div className="px-4 py-12 text-center text-slate-500">Loading quotations...</div>
+                    ) : filteredQuotations.length === 0 ? (
+                        <div className="px-4 py-12 text-center text-slate-500 flex justify-center flex-col items-center">
+                            <FileText className="w-12 h-12 text-slate-200 mb-3" />
+                            <p>No quotations found.</p>
+                        </div>
+                    ) : (
+                        filteredQuotations.map((q) => (
+                            <div key={q.id} className="p-3 space-y-2.5">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <div className="font-semibold text-slate-900 break-all">{q.quotationNo}</div>
+                                            {((q as any).saleType === 'WHOLESALE') ? (
+                                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">WHOLESALE</span>
+                                            ) : (
+                                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200">RETAIL</span>
+                                            )}
+                                        </div>
+                                        <div className="text-slate-500 text-xs mt-0.5">{fd(q.createdAt)}</div>
+                                    </div>
+                                    <div className="text-right shrink-0">
+                                        <div className="font-bold text-slate-900 text-base">{fmt(q.grandTotal)}</div>
+                                        <div className="text-slate-500 text-xs mt-0.5">{q.items?.length || 0} items</div>
+                                    </div>
+                                </div>
+                                <div className="flex items-center justify-between gap-3">
+                                    <div className="min-w-0">
+                                        {q.customer?.name ? (
+                                            <>
+                                                <div className="font-medium text-slate-800 flex items-center gap-1.5 text-sm">
+                                                    <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                                    <span className="min-w-0 break-words">{q.customer.name}</span>
+                                                </div>
+                                                <div className="text-slate-500 text-xs mt-0.5 ml-5">{q.customer.phone}</div>
+                                            </>
+                                        ) : (
+                                            <span className="text-slate-400 italic text-sm">Walk-in</span>
+                                        )}
+                                    </div>
+                                    <div className="shrink-0 text-xs text-slate-500 flex items-center gap-1.5">
+                                        <span>Valid:</span>
+                                        {q.validUntil ? (
+                                            <span className={cn(
+                                                "inline-flex items-center px-2 py-1 rounded text-xs font-medium",
+                                                new Date(q.validUntil) < new Date() ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"
+                                            )}>
+                                                {fdShort(q.validUntil)}
+                                            </span>
+                                        ) : (
+                                            <span className="text-slate-400">—</span>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    {q.status === 'converted' ? (
+                                        <span className="text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full">
+                                            ✓ Converted
+                                        </span>
+                                    ) : (
+                                        <>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => handleOpenPreview(q)}
+                                                className="h-9 flex-1 border-blue-200 text-blue-700 hover:bg-blue-50"
+                                            >
+                                                <Eye className="w-4 h-4 mr-1.5" />
+                                                Open
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                onClick={() => handleConvertToInvoice(q)}
+                                                disabled={convertingId === q.id}
+                                                className="h-9 flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                                            >
+                                                <CheckCircle2 className="w-4 h-4 mr-1.5" />
+                                                {convertingId === q.id ? 'Converting...' : 'Convert'}
+                                            </Button>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
+
+                {/* Tablet / desktop: full table */}
+                <div className="hidden md:block overflow-x-auto">
                     <table className="w-full text-sm text-left">
                         <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
                             <tr>

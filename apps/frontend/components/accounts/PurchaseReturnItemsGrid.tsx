@@ -34,8 +34,8 @@ export function PurchaseReturnItemsGrid({
 }: PurchaseReturnItemsGridProps) {
     return (
         <div className="space-y-2 w-full">
-            <div className="flex items-center justify-between px-0.5">
-                <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-0.5">
+                <div className="flex flex-wrap items-center gap-2">
                     <span className="text-xs font-bold uppercase tracking-wider text-slate-700">Debit Note Items Matrix</span>
                     <span className="text-[11px] font-medium text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full font-mono">
                         {items.length} {items.length === 1 ? 'item' : 'items'}
@@ -56,7 +56,7 @@ export function PurchaseReturnItemsGrid({
                             <th className="px-2 py-1.5 text-[11px] font-bold text-slate-600 uppercase tracking-wider w-10 text-center border-r border-slate-300">
                                 #
                             </th>
-                            <th className="px-3 py-1.5 text-[11px] font-bold text-slate-600 uppercase tracking-wider border-r border-slate-300 w-full min-w-[240px]">
+                            <th className="px-3 py-1.5 text-[11px] font-bold text-slate-600 uppercase tracking-wider border-r border-slate-300 w-full min-w-[200px] sm:min-w-[240px]">
                                 Product Details
                             </th>
                             <th className="px-2 py-1.5 text-[11px] font-bold text-slate-600 uppercase tracking-wider w-28 text-center border-r border-slate-300">
@@ -119,7 +119,7 @@ export function PurchaseReturnItemsGrid({
                                                     placeholder="Product name"
                                                     value={item.productName}
                                                     onChange={(e) => onUpdateItem(item.id, 'productName', e.target.value)}
-                                                    className="h-7 w-full text-xs font-semibold text-slate-800 bg-transparent border border-transparent hover:border-slate-300 focus:border-blue-500 focus:bg-white rounded px-1.5 transition-colors shadow-none outline-none"
+                                                    className="h-9 sm:h-7 w-full text-xs font-semibold text-slate-800 bg-transparent border border-transparent hover:border-slate-300 focus:border-blue-500 focus:bg-white rounded px-1.5 transition-colors shadow-none outline-none"
                                                 />
                                                 {item.packSize > 1 && (
                                                     <span className="inline-block text-[10px] text-slate-400 font-mono px-1.5">
@@ -153,7 +153,7 @@ export function PurchaseReturnItemsGrid({
                                             placeholder="0"
                                             value={item.qtyStrips}
                                             onChange={(e) => onUpdateItem(item.id, 'qtyStrips', e.target.value)}
-                                            className="h-7 w-full text-right font-mono text-xs font-bold text-blue-700 bg-transparent border border-transparent hover:border-slate-300 focus:border-blue-500 focus:bg-white rounded px-2 transition-colors shadow-none outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                            className="h-9 sm:h-7 w-full text-right font-mono text-xs font-bold text-blue-700 bg-transparent border border-transparent hover:border-slate-300 focus:border-blue-500 focus:bg-white rounded px-2 transition-colors shadow-none outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                         />
                                     </td>
 
@@ -166,7 +166,7 @@ export function PurchaseReturnItemsGrid({
                                             placeholder="0"
                                             value={item.qtyLoose}
                                             onChange={(e) => onUpdateItem(item.id, 'qtyLoose', e.target.value)}
-                                            className="h-7 w-full text-right font-mono text-xs font-bold text-slate-700 bg-transparent border border-transparent hover:border-slate-300 focus:border-blue-500 focus:bg-white rounded px-2 transition-colors shadow-none outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                            className="h-9 sm:h-7 w-full text-right font-mono text-xs font-bold text-slate-700 bg-transparent border border-transparent hover:border-slate-300 focus:border-blue-500 focus:bg-white rounded px-2 transition-colors shadow-none outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                         />
                                     </td>
 
@@ -184,7 +184,7 @@ export function PurchaseReturnItemsGrid({
                                                 placeholder="0.00"
                                                 value={item.rate}
                                                 onChange={(e) => onUpdateItem(item.id, 'rate', e.target.value)}
-                                                className="h-7 w-full text-right font-mono text-xs font-semibold text-slate-700 bg-transparent border border-transparent hover:border-slate-300 focus:border-blue-500 focus:bg-white rounded px-2 transition-colors shadow-none outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                className="h-9 sm:h-7 w-full text-right font-mono text-xs font-semibold text-slate-700 bg-transparent border border-transparent hover:border-slate-300 focus:border-blue-500 focus:bg-white rounded px-2 transition-colors shadow-none outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                             />
                                         )}
                                     </td>
@@ -203,7 +203,7 @@ export function PurchaseReturnItemsGrid({
                                                 placeholder="12"
                                                 value={item.gstRate}
                                                 onChange={(e) => onUpdateItem(item.id, 'gstRate', e.target.value)}
-                                                className="h-7 w-full text-right font-mono text-xs text-slate-600 bg-transparent border border-transparent hover:border-slate-300 focus:border-blue-500 focus:bg-white rounded px-1.5 transition-colors shadow-none outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                className="h-9 sm:h-7 w-full text-right font-mono text-xs text-slate-600 bg-transparent border border-transparent hover:border-slate-300 focus:border-blue-500 focus:bg-white rounded px-1.5 transition-colors shadow-none outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                             />
                                         )}
                                     </td>
@@ -218,7 +218,7 @@ export function PurchaseReturnItemsGrid({
                                         <select
                                             value={item.reason || 'damaged'}
                                             onChange={(e) => onUpdateItem(item.id, 'reason', e.target.value)}
-                                            className="h-7 w-full rounded border border-transparent hover:border-slate-300 focus:border-blue-500 bg-transparent px-1.5 text-[11px] font-medium text-slate-700 outline-none transition-colors"
+                                            className="h-9 sm:h-7 w-full rounded border border-transparent hover:border-slate-300 focus:border-blue-500 bg-transparent px-1.5 text-[11px] font-medium text-slate-700 outline-none transition-colors"
                                         >
                                             {RETURN_REASONS.map((r) => (
                                                 <option key={r.value} value={r.value}>
@@ -233,7 +233,7 @@ export function PurchaseReturnItemsGrid({
                                         <button
                                             type="button"
                                             onClick={() => onRemoveItem(item.id)}
-                                            className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                                            className="p-2.5 sm:p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
                                             title="Remove item"
                                         >
                                             <Trash2 className="h-3.5 w-3.5 mx-auto" />

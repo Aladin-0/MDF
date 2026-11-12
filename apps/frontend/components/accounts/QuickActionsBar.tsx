@@ -16,8 +16,8 @@ export function QuickActionsBar() {
     return (
         <>
             <Card className="bg-slate-50/50">
-                <CardContent className="p-4 flex flex-wrap items-center gap-3">
-                    <span className="text-sm font-semibold text-muted-foreground mr-2">Quick Actions:</span>
+                <CardContent className="p-3 sm:p-4 flex flex-wrap items-center gap-2 sm:gap-3">
+                    <span className="w-full text-sm font-semibold text-muted-foreground sm:mr-2 sm:w-auto">Quick Actions:</span>
                     
                     <Button variant="outline" size="sm" className="gap-2 bg-white" onClick={() => setReceiveOpen(true)}>
                         <ArrowDownRight className="h-4 w-4 text-emerald-600" />
@@ -39,7 +39,7 @@ export function QuickActionsBar() {
                         New Voucher
                     </Button>
                     
-                    <Button variant="outline" size="sm" className="gap-2 bg-white ml-auto" onClick={() => router.push('/dashboard/accounts/reconciliation')}>
+                    <Button variant="outline" size="sm" className="gap-2 bg-white sm:ml-auto" onClick={() => router.push('/dashboard/accounts/reconciliation')}>
                         <Scale className="h-4 w-4 text-slate-600" />
                         Reconcile Ledgers
                     </Button>

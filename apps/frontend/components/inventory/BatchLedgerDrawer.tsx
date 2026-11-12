@@ -20,7 +20,7 @@ export function BatchLedgerDrawer({ batchId, batchNo, medicineName, isOpen, onCl
     return (
         <Sheet open={isOpen} onOpenChange={(open: boolean) => !open && onClose()}>
             <SheetContent side="right" className="w-full sm:max-w-xl lg:max-w-2xl p-0 flex flex-col bg-slate-50 overflow-hidden">
-                <SheetHeader className="px-6 py-4 border-b bg-white shrink-0 shadow-sm flex flex-row items-center justify-between space-y-0">
+                <SheetHeader className="px-4 py-3 pr-12 sm:px-6 sm:py-4 border-b bg-white shrink-0 shadow-sm flex flex-row items-center justify-between space-y-0">
                     {isLoading ? (
                         <div className="space-y-2 w-full">
                             <Skeleton className="h-6 w-1/3" />
@@ -28,7 +28,7 @@ export function BatchLedgerDrawer({ batchId, batchNo, medicineName, isOpen, onCl
                         </div>
                     ) : (
                         <div className="text-left">
-                            <div className="flex items-center gap-3">
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                                 <SheetTitle className="text-xl font-bold text-slate-900">Batch Ledger</SheetTitle>
                                 <span className="px-2.5 py-0.5 bg-primary/10 text-primary font-semibold rounded text-sm">
                                     {batchNo}
@@ -41,9 +41,9 @@ export function BatchLedgerDrawer({ batchId, batchNo, medicineName, isOpen, onCl
                     )}
                 </SheetHeader>
 
-                <div className="flex-1 overflow-y-auto p-6">
-                    <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
-                        <table className="w-full text-sm">
+                <div className="flex-1 overflow-y-auto p-3 sm:p-6">
+                    <div className="bg-white border rounded-lg shadow-sm overflow-x-auto">
+                        <table className="w-full min-w-[34rem] text-sm">
                             <thead>
                                 <tr className="border-b bg-slate-50">
                                     <th className="py-3 px-4 text-left font-semibold text-slate-600">Date</th>

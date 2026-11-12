@@ -30,14 +30,14 @@ export function StaffLeaderboard() {
             {/* Date Filter */}
             <Card>
                 <CardContent className="pt-4">
-                    <div className="flex gap-4 items-end">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:gap-4 sm:items-end">
                         <div className="space-y-1">
                             <Label>From</Label>
                             <Input
                                 type="date"
                                 value={from}
                                 onChange={(e) => setFrom(e.target.value)}
-                                className="w-40"
+                                className="w-full sm:w-40"
                             />
                         </div>
                         <div className="space-y-1">
@@ -46,7 +46,7 @@ export function StaffLeaderboard() {
                                 type="date"
                                 value={to}
                                 onChange={(e) => setTo(e.target.value)}
-                                className="w-40"
+                                className="w-full sm:w-40"
                             />
                         </div>
                     </div>
@@ -78,9 +78,9 @@ export function StaffLeaderboard() {
                                 className={`border ${badge ? badge.bg : 'bg-white'}`}
                             >
                                 <CardContent className="py-4">
-                                    <div className="flex items-center gap-4">
+                                    <div className="flex items-center gap-3 sm:gap-4">
                                         {/* Rank */}
-                                        <div className="w-10 text-center">
+                                        <div className="w-10 shrink-0 text-center">
                                             {badge ? (
                                                 <BadgeIcon className={`w-7 h-7 mx-auto ${badge.color}`} />
                                             ) : (
@@ -91,15 +91,15 @@ export function StaffLeaderboard() {
                                         </div>
 
                                         {/* Name + Role */}
-                                        <div className="flex-1">
-                                            <p className="font-semibold text-slate-900">{s.staffName}</p>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="font-semibold text-slate-900 truncate">{s.staffName}</p>
                                             <p className="text-xs text-muted-foreground capitalize">
                                                 {s.role?.replace('_', ' ')}
                                             </p>
                                         </div>
 
                                         {/* Stats */}
-                                        <div className="text-right space-y-0.5">
+                                        <div className="text-right space-y-0.5 shrink-0">
                                             <p className="font-bold text-slate-900">
                                                 ₹{Number(s.totalSalesAmount ?? 0).toLocaleString('en-IN')}
                                             </p>

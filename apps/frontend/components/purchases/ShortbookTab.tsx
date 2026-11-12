@@ -26,6 +26,10 @@ const SOURCE_STYLE: Record<string, string> = { low_stock: 'bg-amber-50 text-ambe
 const GROUPS_PER_PAGE = 10;      // distributor groups per page
 const ITEMS_PER_PAGE = 25;       // items per page inside one open group
 
+/** Below md each table row becomes a card: checkbox | product | remove on top, then one "label ... value" line per field (labels come from data-label). */
+const M_ROW = 'max-md:grid max-md:grid-cols-[1.5rem_minmax(0,1fr)_auto] max-md:gap-x-3 max-md:gap-y-1.5 max-md:p-3';
+const M_DETAIL = 'max-md:col-span-2 max-md:col-start-2 max-md:flex max-md:items-center max-md:justify-between max-md:gap-3 max-md:p-0 max-md:text-right max-md:before:content-[attr(data-label)] max-md:before:text-xs max-md:before:text-muted-foreground';
+
 type Filters = { search: string; source: string; status: string };
 type Distributors = { id: string; name: string }[] | undefined;
 
@@ -34,9 +38,9 @@ function Pager({ info, noun, onPage, busy }: { info: PageInfo; noun: string; onP
     const from = (info.page - 1) * info.pageSize + 1;
     const to = Math.min(info.page * info.pageSize, info.totalRecords);
     return (
-        <nav aria-label={`${noun} pages`} className="flex items-center justify-between gap-3 px-4 py-2 text-sm text-muted-foreground">
+        <nav aria-label={`${noun} pages`} className="flex flex-col gap-2 px-4 py-2 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:gap-3">
             <span>{from}–{to} of {info.totalRecords} {noun}{info.totalRecords > 1 ? 's' : ''}</span>
-            <span className="flex items-center gap-2">
+            <span className="flex items-center justify-between gap-2 max-sm:w-full">
                 <Button variant="outline" size="sm" disabled={info.page <= 1 || busy} onClick={() => onPage(info.page - 1)}>Previous</Button>
                 <span>Page {info.page} of {info.totalPages}</span>
                 <Button variant="outline" size="sm" disabled={info.page >= info.totalPages || busy} onClick={() => onPage(info.page + 1)}>Next</Button>
@@ -61,27 +65,27 @@ const GroupItems = memo(function GroupItems({ group, filters, canCreate, distrib
     return (
         <>
             <div className={cn('overflow-x-auto transition-opacity', isFetching && 'opacity-60')}>
-                <table className="w-full text-sm">
-                    <thead className="bg-white text-left text-xs uppercase tracking-wide text-muted-foreground"><tr>
+                <table className="w-full text-sm max-md:block">
+                    <thead className="bg-white text-left text-xs uppercase tracking-wide text-muted-foreground max-md:hidden"><tr>
                         <th className="w-10 px-3 py-2" /><th className="px-3 py-2">Product</th><th className="px-3 py-2 text-center">Stock</th><th className="px-3 py-2 text-center">Min</th><th className="px-3 py-2 text-center">On order</th>
                         <th className="px-3 py-2 text-center">Qty</th><th className="px-3 py-2">Distributor</th><th className="px-3 py-2">Source</th><th className="px-3 py-2 text-right">Last rate</th><th className="px-3 py-2">Status</th><th className="w-10" />
                     </tr></thead>
-                    <tbody className="divide-y">
+                    <tbody className="divide-y max-md:block">
                         {rows.map((r) => {
                             const pending = r.status === 'PENDING';
                             return (
-                                <tr key={r.id} className={cn(!pending && 'bg-slate-50/60 text-muted-foreground')}>
-                                    <td className="px-3 py-2">{canCreate && pending && <input type="checkbox" aria-label={`Select ${r.productName}`} className="accent-primary" checked={allSelected || ticked.has(r.id)} disabled={allSelected} onChange={() => onToggle(r)} />}</td>
-                                    <td className="px-3 py-2"><div className="font-medium text-foreground">{r.productName}</div><div className="text-xs text-muted-foreground">{r.packLabel}{r.customerName ? ` · for ${r.customerName}` : ''}{r.note ? ` · ${r.note}` : ''}</div></td>
-                                    <td className="px-3 py-2 text-center">{r.currentStock}</td><td className="px-3 py-2 text-center">{r.minQty}</td><td className="px-3 py-2 text-center">{r.onOrder || '—'}</td>
-                                    <td className="px-3 py-2 text-center">{pending && canCreate ? <Input aria-label={`Quantity for ${r.productName}`} type="number" min={1} defaultValue={r.qtyNeeded} key={`${r.id}-${r.qtyNeeded}`} className="mx-auto h-8 w-20 text-center" onBlur={(e) => { const v = Number(e.target.value); if (v >= 1 && v !== r.qtyNeeded) onPatch(r, { qtyNeeded: v }); }} /> : r.qtyNeeded}</td>
-                                    <td className="px-3 py-2">{pending && canCreate ? (
-                                        <DistributorCombobox value={r.distributorId ?? ''} onChange={(v) => v && onPatch(r, { distributorId: v })} distributors={distributors} ariaLabel={`Distributor for ${r.productName}`} placeholder="Choose…" className={cn('h-8 w-44 text-sm', !r.distributorId && 'border-amber-400')} />
+                                <tr key={r.id} className={cn(M_ROW, !pending && 'bg-slate-50/60 text-muted-foreground')}>
+                                    <td className="px-3 py-2 max-md:col-start-1 max-md:row-start-1 max-md:p-0 max-md:pt-0.5">{canCreate && pending && <input type="checkbox" aria-label={`Select ${r.productName}`} className="accent-primary max-md:h-5 max-md:w-5" checked={allSelected || ticked.has(r.id)} disabled={allSelected} onChange={() => onToggle(r)} />}</td>
+                                    <td className="px-3 py-2 max-md:col-start-2 max-md:row-start-1 max-md:min-w-0 max-md:break-words max-md:p-0"><div className="font-medium text-foreground">{r.productName}</div><div className="text-xs text-muted-foreground">{r.packLabel}{r.customerName ? ` · for ${r.customerName}` : ''}{r.note ? ` · ${r.note}` : ''}</div></td>
+                                    <td data-label="Stock" className={cn('px-3 py-2 text-center', M_DETAIL)}>{r.currentStock}</td><td data-label="Min" className={cn('px-3 py-2 text-center', M_DETAIL)}>{r.minQty}</td><td data-label="On order" className={cn('px-3 py-2 text-center', M_DETAIL)}>{r.onOrder || '—'}</td>
+                                    <td data-label="Qty" className={cn('px-3 py-2 text-center', M_DETAIL)}>{pending && canCreate ? <Input aria-label={`Quantity for ${r.productName}`} type="number" min={1} defaultValue={r.qtyNeeded} key={`${r.id}-${r.qtyNeeded}`} className="mx-auto h-8 w-20 text-center max-md:mx-0 max-md:h-9" onBlur={(e) => { const v = Number(e.target.value); if (v >= 1 && v !== r.qtyNeeded) onPatch(r, { qtyNeeded: v }); }} /> : r.qtyNeeded}</td>
+                                    <td data-label="Distributor" className={cn('px-3 py-2', M_DETAIL)}>{pending && canCreate ? (
+                                        <DistributorCombobox value={r.distributorId ?? ''} onChange={(v) => v && onPatch(r, { distributorId: v })} distributors={distributors} ariaLabel={`Distributor for ${r.productName}`} placeholder="Choose…" className={cn('h-8 w-44 text-sm max-md:h-9 max-md:w-52 max-md:max-w-[65vw]', !r.distributorId && 'border-amber-400')} />
                                     ) : (r.distributorName ?? '—')}</td>
-                                    <td className="px-3 py-2"><span className={cn('rounded-full border px-2 py-0.5 text-xs', SOURCE_STYLE[r.source])}>{r.sourceLabel}</span></td>
-                                    <td className="px-3 py-2 text-right">{r.lastRate ? money(r.lastRate) : '—'}</td>
-                                    <td className="px-3 py-2 text-xs">{r.statusLabel}</td>
-                                    <td className="px-3 py-2">{pending && canCreate && <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" aria-label={`Remove ${r.productName}`} onClick={() => onRemove(r)}><Trash2 className="h-4 w-4" /></Button>}</td>
+                                    <td data-label="Source" className={cn('px-3 py-2', M_DETAIL)}><span className={cn('rounded-full border px-2 py-0.5 text-xs', SOURCE_STYLE[r.source])}>{r.sourceLabel}</span></td>
+                                    <td data-label="Last rate" className={cn('px-3 py-2 text-right', M_DETAIL)}>{r.lastRate ? money(r.lastRate) : '—'}</td>
+                                    <td data-label="Status" className={cn('px-3 py-2 text-xs', M_DETAIL)}>{r.statusLabel}</td>
+                                    <td className="px-3 py-2 max-md:col-start-3 max-md:row-start-1 max-md:p-0">{pending && canCreate && <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 max-md:h-9 max-md:w-9" aria-label={`Remove ${r.productName}`} onClick={() => onRemove(r)}><Trash2 className="h-4 w-4" /></Button>}</td>
                                 </tr>
                             );
                         })}
@@ -166,18 +170,18 @@ export function ShortbookTab() {
 
     const counts = data?.counts;
     return (
-        <div className="space-y-4 pb-24">
+        <div className="space-y-4 pb-32 sm:pb-24">
             <div className="flex flex-col gap-3 md:flex-row md:items-center">
                 <div className="relative flex-1"><Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" /><Input aria-label="Search the Shortbook" placeholder="Search a product" className="bg-white pl-9" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
-                <select aria-label="Source" className="h-10 rounded-md border border-input bg-white px-3 text-sm" value={source} onChange={(e) => setSource(e.target.value)}>{SOURCES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}</select>
-                <select aria-label="Status" className="h-10 rounded-md border border-input bg-white px-3 text-sm" value={status} onChange={(e) => setStatus(e.target.value)}>{STATUSES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}</select>
+                <select aria-label="Source" className="h-10 w-full rounded-md md:w-auto border border-input bg-white px-3 text-sm" value={source} onChange={(e) => setSource(e.target.value)}>{SOURCES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}</select>
+                <select aria-label="Status" className="h-10 w-full rounded-md md:w-auto border border-input bg-white px-3 text-sm" value={status} onChange={(e) => setStatus(e.target.value)}>{STATUSES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}</select>
             </div>
             {counts && <p className="text-sm text-muted-foreground" data-testid="shortbook-counts"><b className="text-foreground">{counts.pending}</b> pending · {counts.inDraft} in draft POs · {counts.ordered} ordered</p>}
 
             {error && <p role="alert" className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
             {isLoading ? <div className="space-y-3"><Skeleton className="h-12 w-full" /><Skeleton className="h-12 w-full" /><Skeleton className="h-12 w-full" /></div> : groups.length === 0 ? (
-                <div className="flex flex-col items-center rounded-xl border bg-white py-16 text-center">
+                <div className="flex flex-col items-center rounded-xl border bg-white px-4 py-16 text-center">
                     <ClipboardList className="mb-4 h-12 w-12 text-slate-300" />
                     <h3 className="text-lg font-medium">Nothing to order</h3>
                     <p className="mt-1 max-w-md text-sm text-muted-foreground">Items appear here when stock drops below its minimum (turn that on in Purchase order settings), when a bill runs short, or when you add them.</p>
@@ -212,13 +216,13 @@ export function ShortbookTab() {
             )}
 
             {itemCount > 0 && (
-                <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-white/95 px-4 py-3 backdrop-blur" data-testid="shortbook-bar">
+                <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur" data-testid="shortbook-bar">
                     <div className="mx-auto flex max-w-[1400px] flex-wrap items-center justify-between gap-3">
                         <p className="text-sm"><b>{itemCount}</b> items · <b>{distributorCount}</b> distributor{distributorCount > 1 ? 's' : ''}{wholeList.length === 0 && <> · <b>{money(selectedValue)}</b></>}</p>
-                        <div className="flex items-center gap-2">
+                        <div className="flex w-full items-center gap-2 sm:w-auto">
                             <Button variant="ghost" onClick={clearSelection} disabled={busy}>Clear</Button>
                             <Button variant="outline" className="text-red-600" onClick={() => setRemoveOpen(true)} disabled={busy}>Remove</Button>
-                            <Button onClick={createPOs} disabled={busy}>{busy ? 'Creating…' : 'Create POs'}</Button>
+                            <Button className="max-sm:flex-1" onClick={createPOs} disabled={busy}>{busy ? 'Creating…' : 'Create POs'}</Button>
                         </div>
                     </div>
                 </div>
@@ -316,7 +320,7 @@ export function AddToShortbook({ open, onClose, initialProduct }: { open: boolea
                                     <InfoChip label="Min" value={info.minQty || '—'} />
                                     <InfoChip label="On order" value={info.onOrder || '—'} />
                                     <InfoChip label="Last rate" value={info.lastRate ? money(info.lastRate) : '—'} />
-                                </>) : <Skeleton className="h-6 w-64" />}
+                                </>) : <Skeleton className="h-6 w-64 max-w-full" />}
                             </div>
                             {info?.inShortbook && (
                                 <p role="status" className="mt-2 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-800">

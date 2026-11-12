@@ -192,7 +192,7 @@ export default function GrossLossOnReturnPage() {
             )}
             {!isLoading && !isError && rows.length > 0 && (
                 <div className="overflow-x-auto rounded-lg border border-slate-200">
-                    <Table>
+                    <Table className="max-md:min-w-[640px] max-md:[&_th]:whitespace-nowrap max-md:[&_td]:whitespace-nowrap">
                         <TableHeader>
                             <TableRow className="bg-slate-50">
                                 <TableHead>Date</TableHead>

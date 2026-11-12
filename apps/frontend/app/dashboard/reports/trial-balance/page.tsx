@@ -442,8 +442,8 @@ export default function TrialBalancePage() {
             {/* ── Ledger drilldown Sheet — outside print-root so it doesn't print ── */}
             <Sheet open={!!selectedLedgerId} onOpenChange={(open) => !open && setSelectedLedgerId(null)}>
                 <SheetContent side="right" className="w-full sm:max-w-3xl lg:max-w-4xl overflow-y-auto bg-slate-50">
-                    <SheetHeader className="bg-white p-6 border-b -mx-6 -mt-6 rounded-t-xl mb-6 shadow-sm">
-                        <SheetTitle className="text-2xl text-slate-800 tracking-tight">
+                    <SheetHeader className="bg-white p-4 pr-12 sm:p-6 border-b sm:-mx-6 sm:-mt-6 sm:rounded-t-xl mb-4 sm:mb-6 shadow-sm">
+                        <SheetTitle className="text-lg sm:text-2xl text-slate-800 tracking-tight break-words">
                             Ledger Drilldown: {selectedLedgerName}
                         </SheetTitle>
                         <p className="text-slate-500 text-sm mt-1">
@@ -456,8 +456,8 @@ export default function TrialBalancePage() {
                     ) : !ledgerStatement?.transactions ? (
                         <div className="text-center text-slate-400 py-10">No transactions found</div>
                     ) : (
-                        <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
-                            <Table className="text-sm">
+                        <div className="bg-white border rounded-xl shadow-sm overflow-hidden mx-3 mb-3 sm:mx-0 sm:mb-0">
+                            <Table className="text-sm [@media_screen_and_(max-width:639px)]:min-w-[640px]">
                                 <TableHeader className="bg-slate-100/80 border-b-2 border-slate-200">
                                     <TableRow>
                                         <TableHead className="font-semibold text-slate-700">Date</TableHead>
@@ -531,7 +531,7 @@ export default function TrialBalancePage() {
             </Sheet>
 
             {/* ── Printable report root ─────────────────────────────────────── */}
-            <div id="tb-print-root" className="space-y-6 p-6 print:p-0 print:space-y-4">
+            <div id="tb-print-root" className="space-y-6 p-0 sm:p-6 print:p-0 print:space-y-4">
 
                 {/* Print-only header — hidden on screen, shown in print */}
                 <div className="tb-print-company">
@@ -553,17 +553,17 @@ export default function TrialBalancePage() {
                         </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
-                        <div className="bg-white border rounded-lg p-1.5 flex items-center shadow-sm">
+                        <div className="bg-white border rounded-lg p-1.5 flex items-center shadow-sm w-full sm:w-auto">
                             <input
                                 type="date"
-                                className="bg-transparent text-sm border-none outline-none focus:ring-0 px-2"
+                                className="bg-transparent text-sm border-none outline-none focus:ring-0 px-2 min-w-0 flex-1 sm:flex-none"
                                 value={fromDate}
                                 onChange={e => setFromDate(e.target.value)}
                             />
                             <span className="text-slate-400 mx-1">to</span>
                             <input
                                 type="date"
-                                className="bg-transparent text-sm border-none outline-none focus:ring-0 px-2"
+                                className="bg-transparent text-sm border-none outline-none focus:ring-0 px-2 min-w-0 flex-1 sm:flex-none"
                                 value={toDate}
                                 onChange={e => setToDate(e.target.value)}
                             />
@@ -595,7 +595,7 @@ export default function TrialBalancePage() {
                 {/* ── Report card ────────────────────────────────────────────── */}
                 <Card className="print:border-none print:shadow-none print:bg-transparent">
                     <CardHeader className="print:hidden pb-4">
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
                             <CardTitle className="text-base text-slate-800">
                                 For the period {fromDate} to {toDate}
                             </CardTitle>
@@ -609,7 +609,7 @@ export default function TrialBalancePage() {
 
                     <CardContent className="print:p-0">
                         <div className="overflow-x-auto border rounded-lg print:border-t print:border-x-0 print:border-b-0 print:rounded-none">
-                            <Table className="w-full text-sm print-table">
+                            <Table className="w-full text-sm print-table [@media_screen_and_(max-width:767px)]:min-w-[860px]">
                                 <TableHeader className="bg-slate-100/80 sticky top-0 z-10 print:bg-white print:border-b-2 print:border-gray-800">
                                     <TableRow className="hover:bg-transparent">
                                         <TableHead className="font-semibold px-4 w-[30%]">Particulars</TableHead>
@@ -778,7 +778,7 @@ function TBPrintDialog({
             }}
             onClick={e => { if (e.target === e.currentTarget) onClose(); }}
         >
-            <div style={{ background: 'white', borderRadius: 12, padding: 24, width: 360, boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+            <div style={{ background: 'white', borderRadius: 12, padding: 24, width: 360, maxWidth: 'calc(100vw - 72px)', maxHeight: '90dvh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
                 <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
                     🖨️ Print Settings
                 </h3>

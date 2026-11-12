@@ -211,7 +211,7 @@ export function OutletSettingsSection({ onDirty, onSaved, discardKey }: OutletSe
             </div>
 
             {/* Pharmacy Details */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                     <Label htmlFor="outletName">Pharmacy Name <span className="text-red-500">*</span></Label>
                     <Input id="outletName" {...register('outletName')} />
@@ -228,7 +228,7 @@ export function OutletSettingsSection({ onDirty, onSaved, discardKey }: OutletSe
                     )}
                 </div>
 
-                <div className="space-y-1.5 col-span-2">
+                <div className="space-y-1.5 sm:col-span-2">
                     <Label htmlFor="outletEmail">Email</Label>
                     <Input id="outletEmail" type="email" {...register('outletEmail')} />
                     {errors.outletEmail && (
@@ -236,7 +236,7 @@ export function OutletSettingsSection({ onDirty, onSaved, discardKey }: OutletSe
                     )}
                 </div>
 
-                <div className="space-y-1.5 col-span-2">
+                <div className="space-y-1.5 sm:col-span-2">
                     <Label htmlFor="outletAddress">Address <span className="text-red-500">*</span></Label>
                     <Textarea id="outletAddress" rows={2} {...register('outletAddress')} />
                     {errors.outletAddress && (
@@ -292,7 +292,7 @@ export function OutletSettingsSection({ onDirty, onSaved, discardKey }: OutletSe
                     )}
                 </div>
 
-                <div className="space-y-1.5 col-span-2">
+                <div className="space-y-1.5 sm:col-span-2">
                     <Label htmlFor="outletGstin">GSTIN</Label>
                     <div className="relative">
                         <Input

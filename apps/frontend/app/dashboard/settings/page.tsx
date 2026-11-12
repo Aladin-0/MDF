@@ -75,8 +75,8 @@ function SettingsPageContent() {
     return (
         <div className="relative">
             {/* Keyboard hint */}
-            <div className="flex items-center justify-between mb-4">
-                <div>
+            <div className="flex items-center justify-between gap-3 mb-4">
+                <div className="min-w-0">
                     <h1 className="text-2xl font-bold text-slate-900">Settings</h1>
                     <p className="text-muted-foreground text-sm mt-1">
                         Pharmacy profile, printer setup, and preferences
@@ -88,7 +88,7 @@ function SettingsPageContent() {
             </div>
 
             {/* Two-column layout */}
-            <div className="flex gap-0 min-h-[calc(100vh-10rem)] rounded-xl border bg-white overflow-hidden">
+            <div className="flex flex-col md:flex-row gap-0 md:min-h-[calc(100vh-10rem)] rounded-xl border bg-white overflow-hidden">
                 {/* Left sidebar */}
                 <SettingsSidebar
                     active={activeSection}
@@ -99,7 +99,7 @@ function SettingsPageContent() {
                 />
 
                 {/* Right content panel */}
-                <div className="flex-1 p-8 overflow-y-auto max-w-3xl pb-24">
+                <div className="flex-1 w-full min-w-0 p-4 sm:p-8 overflow-y-auto max-w-3xl pb-24 sm:pb-24">
                     {activeSection === 'outlet' && (
                         <OutletSettingsSection {...sectionProps} />
                     )}
@@ -135,14 +135,14 @@ function SettingsPageContent() {
 
             {/* Unsaved changes banner */}
             {hasUnsavedChanges && (
-                <div className="fixed bottom-0 left-0 right-0 z-50 bg-amber-50 border-t border-amber-200 px-8 py-3 flex items-center justify-between">
+                <div className="fixed bottom-0 left-0 right-0 z-50 bg-amber-50 border-t border-amber-200 px-4 sm:px-8 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-center gap-2">
                         <span className="text-amber-500 text-sm">●</span>
                         <p className="text-sm font-medium text-amber-800">
                             You have unsaved changes
                         </p>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 justify-end">
                         <Button variant="ghost" size="sm" onClick={handleDiscard}>
                             Discard
                         </Button>

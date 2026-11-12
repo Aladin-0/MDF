@@ -409,7 +409,7 @@ export function VoucherForm({ initialType = 'receipt', voucherId, onSuccess }: V
                 )}
 
                 {/* Voucher Type Tabs */}
-                <div className="flex gap-2 border-b pb-3">
+                <div className="flex gap-2 border-b pb-3 overflow-x-auto no-scrollbar">
                     {(['receipt', 'payment', 'contra', 'journal'] as VoucherType[]).map((t) => (
                         <button
                             key={t}
@@ -420,7 +420,7 @@ export function VoucherForm({ initialType = 'receipt', voucherId, onSuccess }: V
                                 handleClear();
                             }}
                             className={cn(
-                                'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all',
+                                'flex shrink-0 items-center gap-2 px-3 py-2 sm:px-4 rounded-lg text-sm font-semibold transition-all',
                                 voucherType === t
                                     ? 'bg-primary text-primary-foreground shadow-sm'
                                     : 'text-muted-foreground hover:bg-muted/80',
@@ -438,9 +438,9 @@ export function VoucherForm({ initialType = 'receipt', voucherId, onSuccess }: V
                     ))}
                 </div>
 
-                <div className="bg-card text-card-foreground border rounded-xl shadow-sm p-6 space-y-6">
+                <div className="bg-card text-card-foreground border rounded-xl shadow-sm p-4 sm:p-6 space-y-6">
                     {/* Date + Voucher No */}
-                    <div className="grid grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6">
                         <div className="space-y-2">
                             <Label className="text-slate-500 font-medium">Date</Label>
                             <Input
@@ -462,7 +462,7 @@ export function VoucherForm({ initialType = 'receipt', voucherId, onSuccess }: V
 
                     {/* ── Multi-Line Voucher Grid (Universal Dynamic Tally/SAP Table) ── */}
                     <div className="space-y-2">
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
                             <Label className="text-sm font-bold text-foreground">
                                 Transaction Entries (Dr / Cr)
                             </Label>
@@ -487,7 +487,7 @@ export function VoucherForm({ initialType = 'receipt', voucherId, onSuccess }: V
                                             {loadingBills ? 'Loading bills...' : `Outstanding Bills for ${partyLedger.name} (${visibleBills.length})`}
                                         </span>
                                         {targetAdjustAmount > 0 && (
-                                            <div className="flex items-center gap-1.5 text-xs">
+                                            <div className="flex flex-wrap items-center gap-1.5 text-xs">
                                                 <span className="px-2 py-0.5 rounded bg-muted font-medium text-muted-foreground border">
                                                     Target: {fmt(targetAdjustAmount)}
                                                 </span>
@@ -508,7 +508,7 @@ export function VoucherForm({ initialType = 'receipt', voucherId, onSuccess }: V
                                         )}
                                     </div>
                                     {visibleBills.length > 0 && !loadingBills && (
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex flex-wrap items-center gap-2">
                                             {targetAdjustAmount > 0 && (
                                                 <button
                                                     type="button"
@@ -542,7 +542,8 @@ export function VoucherForm({ initialType = 'receipt', voucherId, onSuccess }: V
                                         <Loader2 className="w-4 h-4 animate-spin" /> Loading bills...
                                     </div>
                                 ) : (
-                                    <table className="w-full text-sm">
+                                    <div className="overflow-x-auto">
+                                    <table className="w-full min-w-[560px] md:min-w-0 text-sm">
                                         <thead className="bg-muted/30">
                                             <tr>
                                                 <th className="px-4 py-2 text-left font-medium text-muted-foreground w-8"></th>
@@ -620,7 +621,7 @@ export function VoucherForm({ initialType = 'receipt', voucherId, onSuccess }: V
                                             <tr>
                                                 <td colSpan={4} className="px-4 py-2.5 text-sm font-semibold text-right text-muted-foreground">
                                                     {targetAdjustAmount > 0 ? (
-                                                        <div className="flex justify-end items-center gap-3 text-xs">
+                                                        <div className="flex flex-wrap justify-end items-center gap-3 text-xs">
                                                             <span>Voucher Target: <strong className="text-foreground">{fmt(targetAdjustAmount)}</strong></span>
                                                             <span>·</span>
                                                             <span>Remaining: <strong className={remainingToAdjust > 0 ? "text-amber-700 font-bold" : "text-emerald-600 font-bold"}>{fmt(remainingToAdjust)}</strong></span>
@@ -640,6 +641,7 @@ export function VoucherForm({ initialType = 'receipt', voucherId, onSuccess }: V
                                             </tr>
                                         </tfoot>
                                     </table>
+                                    </div>
                                 )}
                             </div>
                         </div>

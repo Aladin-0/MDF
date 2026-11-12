@@ -44,7 +44,7 @@ export function PurchaseReturnDetailModal({ open, onOpenChange, note }: Purchase
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="invoice-print-container max-w-4xl max-h-[90vh] overflow-y-auto p-0 print:max-h-none print:overflow-visible print:p-0 print:border-none border-t-4 border-t-blue-500 gap-0">
+            <DialogContent className="invoice-print-container max-w-4xl max-h-[90dvh] overflow-y-auto p-0 print:max-h-none print:overflow-visible print:p-0 print:border-none border-t-4 border-t-blue-500 gap-0">
                 
                 {/* ── Print Styles ── */}
                 <style dangerouslySetInnerHTML={{ __html: `
@@ -70,9 +70,9 @@ export function PurchaseReturnDetailModal({ open, onOpenChange, note }: Purchase
                 `}} />
 
                 {/* ── Screen header ── */}
-                <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-4 bg-white border-b print:hidden">
-                    <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
+                <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4 bg-white border-b print:hidden">
+                    <div className="flex min-w-0 items-center gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
                             <ArrowUpRight className="h-5 w-5" />
                         </div>
                         <div>
@@ -83,7 +83,7 @@ export function PurchaseReturnDetailModal({ open, onOpenChange, note }: Purchase
                         </div>
                     </div>
                     
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                         {displayNote && (
                             <>
                                 <Button
@@ -110,8 +110,8 @@ export function PurchaseReturnDetailModal({ open, onOpenChange, note }: Purchase
                 </div>
                 <div className="bg-white">
                     {/* ── Screen View (Hidden when printing) ── */}
-                    <div className="p-8 print:hidden">
-                        <div className="grid grid-cols-2 gap-8 mb-8 text-sm">
+                    <div className="p-4 sm:p-8 print:hidden">
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-8 mb-8 text-sm">
                             {/* Left Details */}
                             <div className="space-y-4">
                                 <div>
@@ -155,8 +155,8 @@ export function PurchaseReturnDetailModal({ open, onOpenChange, note }: Purchase
                         </div>
 
                         {/* ── Table ── */}
-                        <div className="rounded border bg-white overflow-hidden mb-6">
-                            <table className="w-full text-xs text-left">
+                        <div className="rounded border bg-white overflow-hidden overflow-x-auto mb-6">
+                            <table className="w-full min-w-[520px] sm:min-w-0 text-xs text-left">
                                 <thead className="bg-muted/50 border-b">
                                     <tr>
                                         <th className="px-4 py-2.5 font-semibold text-muted-foreground uppercase">Product Name</th>

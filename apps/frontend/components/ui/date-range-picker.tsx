@@ -26,6 +26,16 @@ export function DatePickerWithRange({
   date,
   setDate,
 }: DatePickerWithRangeProps) {
+  // One month on a phone (two side by side are ~600px wide), two from tablet up.
+  const [months, setMonths] = React.useState(2)
+  React.useEffect(() => {
+    const mq = window.matchMedia("(min-width: 640px)")
+    const apply = () => setMonths(mq.matches ? 2 : 1)
+    apply()
+    mq.addEventListener("change", apply)
+    return () => mq.removeEventListener("change", apply)
+  }, [])
+
   return (
     <div className={cn("grid gap-2", className)}>
       <Popover>
@@ -34,7 +44,7 @@ export function DatePickerWithRange({
             id="date"
             variant={"outline"}
             className={cn(
-              "w-full sm:w-[260px] h-8 justify-start text-left font-normal bg-white text-xs sm:text-sm border-slate-200 text-slate-700 hover:bg-slate-50",
+              "w-full sm:w-[260px] h-9 sm:h-8 justify-start text-left font-normal bg-white text-xs sm:text-sm border-slate-200 text-slate-700 hover:bg-slate-50",
               !date && "text-muted-foreground",
               buttonClassName
             )}
@@ -60,7 +70,7 @@ export function DatePickerWithRange({
             defaultMonth={date?.from}
             selected={date}
             onSelect={setDate}
-            numberOfMonths={2}
+            numberOfMonths={months}
           />
         </PopoverContent>
       </Popover>

@@ -210,7 +210,7 @@ export function ScanBillDialog({ open, onClose, outletId, onUploaded }: Props) {
                 </>
             ) : (
                 <ModalSection title={`Pages of this bill (${pages.length}/${MAX_SCAN_PAGES})`}>
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                         {pages.map((p, i) => (
                             <div key={p.id} className="relative overflow-hidden rounded-md border bg-muted">
                                 <img src={p.url} alt={`Page ${i + 1}`} className="h-28 w-full object-cover" />
@@ -219,7 +219,7 @@ export function ScanBillDialog({ open, onClose, outletId, onUploaded }: Props) {
                                 </span>
                                 {!busy && (
                                     <button type="button" aria-label={`Remove page ${i + 1}`} onClick={() => removePage(p.id)}
-                                        className="absolute right-1 top-1 rounded bg-background/90 p-0.5 hover:bg-destructive hover:text-destructive-foreground">
+                                        className="absolute right-1 top-1 rounded bg-background/90 p-0.5 max-sm:p-2.5 hover:bg-destructive hover:text-destructive-foreground">
                                         <X className="h-3.5 w-3.5" />
                                     </button>
                                 )}

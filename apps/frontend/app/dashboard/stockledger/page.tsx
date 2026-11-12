@@ -131,7 +131,7 @@ function StockLedgerView() {
             </header>
 
             {/* ── Filters ── */}
-            <Card className="p-4">
+            <Card className="p-3 sm:p-4">
                 <FilterBar filters={filters} onChange={update} hasFilters={hasFilters} onClear={clearFilters} />
             </Card>
 
@@ -187,7 +187,7 @@ function StockLedgerView() {
 
                     {/* The batch being looked at */}
                     {filters.batch && (
-                        <Card className="flex flex-wrap items-center gap-x-6 gap-y-3 p-4">
+                        <Card className="flex flex-wrap items-center gap-x-6 gap-y-3 p-3 sm:p-4">
                             <div className="min-w-0 flex-1">
                                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Batch</p>
                                 <p className="truncate text-base font-semibold">

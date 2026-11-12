@@ -63,7 +63,7 @@ export function Sidebar({ isCollapsed, onToggle, isMobile = false }: SidebarProp
         <div
             className={cn(
                 'flex flex-col h-full bg-white border-r border-slate-200 transition-all duration-300 ease-in-out relative',
-                isCollapsed ? 'w-16' : 'w-64'
+                isMobile ? 'w-full' : isCollapsed ? 'w-16' : 'w-64'
             )}
         >
             {/* Top section: Logo */}
@@ -137,7 +137,8 @@ export function Sidebar({ isCollapsed, onToggle, isMobile = false }: SidebarProp
                                                     href={sub.href}
                                                     onClick={isMobile ? onToggle : undefined}
                                                     className={cn(
-                                                        'flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium transition-all',
+                                                        'flex items-center gap-2 rounded-md px-2 text-xs font-medium transition-all',
+                                                        isMobile ? 'py-2.5' : 'py-1.5',
                                                         subActive
                                                             ? 'bg-primary/10 text-primary font-semibold'
                                                             : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
@@ -157,7 +158,7 @@ export function Sidebar({ isCollapsed, onToggle, isMobile = false }: SidebarProp
             </div>
 
             {/* Bottom section: User card */}
-            <div className="border-t border-slate-100 p-3 bg-slate-50/50 mt-auto">
+            <div className="border-t border-slate-100 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-slate-50/50 mt-auto">
                 {isCollapsed && !isMobile ? (
                     <TooltipProvider>
                         <Tooltip>
@@ -210,7 +211,7 @@ export function Sidebar({ isCollapsed, onToggle, isMobile = false }: SidebarProp
 
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <button className="shrink-0 p-1.5 rounded-md hover:bg-slate-200 text-slate-400 hover:text-slate-600 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/20">
+                                <button className="shrink-0 p-1.5 max-lg:p-2.5 rounded-md hover:bg-slate-200 text-slate-400 hover:text-slate-600 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/20">
                                     <MoreVertical className="w-4 h-4" />
                                 </button>
                             </DropdownMenuTrigger>
@@ -255,7 +256,7 @@ function NavItem({ href, icon: Icon, label, shortcut, isActive, isCollapsed, isM
             onClick={isMobile ? onToggle : undefined}
             className={cn(
                 'group flex items-center gap-3 rounded-lg text-sm font-medium transition-all duration-200 relative overflow-hidden',
-                isCollapsed ? 'justify-center py-3' : 'px-3 py-2.5',
+                isCollapsed ? 'justify-center py-3' : 'px-3 py-3 lg:py-2.5',
                 isActive
                     ? 'bg-primary text-white shadow-sm shadow-primary/20 font-semibold'
                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'

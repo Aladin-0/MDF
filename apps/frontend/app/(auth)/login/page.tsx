@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 
 export default function LoginPage() {
     return (
-        <div className="min-h-[100dvh] bg-slate-50 flex flex-col items-center justify-center p-4 overflow-hidden">
+        <div className="min-h-[100dvh] bg-slate-50 flex flex-col items-center justify-center p-4 py-6 overflow-x-hidden">
             <div className="max-w-md w-full">
                 <div className="flex flex-col items-center mb-6">
                     <Pill className="h-10 w-10 text-primary mb-2" />

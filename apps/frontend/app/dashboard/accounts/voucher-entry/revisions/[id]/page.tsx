@@ -75,20 +75,20 @@ export default function VoucherRevisionsPage({ params }: { params: { id: string 
                 <ArrowLeft className="mr-2 h-4 w-4" /> Back
             </Button>
 
-            <div className="flex justify-between items-center bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+            <div className="flex justify-between items-center bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-100">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                    <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center gap-2 break-words">
                         <History className="h-6 w-6 text-primary" />
                         Voucher History: {voucher.voucherNo}
                     </h1>
-                    <div className="flex gap-4 mt-2 text-sm text-gray-500">
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-sm text-gray-500">
                         <span className="flex items-center gap-1"><Clock className="h-4 w-4" /> Created: {format(new Date(voucher.createdAt || new Date()), 'dd MMM yyyy, hh:mm a')}</span>
                         <span className="flex items-center gap-1"><User className="h-4 w-4" /> By: {voucher.createdBy || 'System'}</span>
                     </div>
                 </div>
             </div>
 
-            <div className="relative border-l-2 border-gray-200 ml-4 pl-8 py-4 space-y-12">
+            <div className="relative border-l-2 border-gray-200 ml-3 pl-6 sm:ml-4 sm:pl-8 py-4 space-y-8 sm:space-y-12">
                 {revisions.length === 0 ? (
                     <div className="text-gray-500 italic">No revisions found for this voucher.</div>
                 ) : (
@@ -97,12 +97,12 @@ export default function VoucherRevisionsPage({ params }: { params: { id: string 
                         
                         return (
                             <div key={rev.id} className="relative">
-                                <div className="absolute -left-[41px] bg-white border-2 border-primary rounded-full p-1.5 shadow-sm">
+                                <div className="absolute -left-[33px] sm:-left-[41px] bg-white border-2 border-primary rounded-full p-1.5 shadow-sm">
                                     <Clock className="h-4 w-4 text-primary" />
                                 </div>
                                 
                                 <Card className="border-0 shadow-lg ring-1 ring-black/5 overflow-hidden">
-                                    <div className="bg-gray-50/80 px-6 py-4 border-b flex justify-between items-center">
+                                    <div className="bg-gray-50/80 px-4 py-3 sm:px-6 sm:py-4 border-b flex flex-wrap gap-2 justify-between items-center">
                                         <div>
                                             <div className="flex items-center gap-3">
                                                 <Badge className="bg-primary/10 text-primary hover:bg-primary/20">{rev.revisionNumber}</Badge>
@@ -113,7 +113,7 @@ export default function VoucherRevisionsPage({ params }: { params: { id: string 
                                             <User className="h-4 w-4" /> {rev.modifiedByName}
                                         </div>
                                     </div>
-                                    <CardContent className="p-6 space-y-6">
+                                    <CardContent className="p-4 sm:p-6 space-y-6">
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                             <div className="space-y-4">
                                                 <div>
@@ -169,7 +169,7 @@ export default function VoucherRevisionsPage({ params }: { params: { id: string 
                 
                 {/* Original Creation Event marker */}
                 <div className="relative">
-                    <div className="absolute -left-[41px] bg-green-100 border-2 border-green-500 rounded-full p-1.5 shadow-sm">
+                    <div className="absolute -left-[33px] sm:-left-[41px] bg-green-100 border-2 border-green-500 rounded-full p-1.5 shadow-sm">
                         <FileText className="h-4 w-4 text-green-600" />
                     </div>
                     <div className="text-sm font-medium text-gray-500 pt-1">

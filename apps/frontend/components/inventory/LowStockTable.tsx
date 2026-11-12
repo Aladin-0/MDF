@@ -22,6 +22,10 @@ import { poApi } from '@/lib/poApi';
 import { cn, formatQty } from '@/lib/utils';
 import type { ProductSearchResult } from '@/types';
 
+/** Phones show each row as a stacked card (the table elements become blocks / a small grid, so the markup is unchanged). Desktop is the plain table. */
+const M_ROW = 'max-md:grid max-md:grid-cols-[minmax(0,1fr)_auto] max-md:items-start max-md:gap-x-2 max-md:gap-y-1.5 max-md:p-3';
+const M_DETAIL = 'max-md:col-span-2 max-md:flex max-md:items-center max-md:justify-between max-md:gap-3 max-md:p-0 max-md:before:content-[attr(data-label)] max-md:before:text-xs max-md:before:text-muted-foreground';
+
 const packs = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 1 });
 
 export function LowStockTable({ onReorderClick }: { onReorderClick: () => void }) {
@@ -108,9 +112,9 @@ export function LowStockTable({ onReorderClick }: { onReorderClick: () => void }
 
             <div className="overflow-hidden rounded-xl border bg-card">
                 <div className="overflow-x-auto">
-                    <Table className="min-w-[44rem]">
+                    <Table className="md:min-w-[44rem]">
                         <caption className="sr-only">Products below their reorder level</caption>
-                        <TableHeader className="bg-muted/50">
+                        <TableHeader className="bg-muted/50 max-md:hidden">
                             <TableRow className="hover:bg-transparent">
                                 <TableHead scope="col">Product</TableHead>
                                 <TableHead scope="col" className="w-56">In Stock</TableHead>
@@ -120,12 +124,12 @@ export function LowStockTable({ onReorderClick }: { onReorderClick: () => void }
                                 <TableHead scope="col"><span className="sr-only">Actions</span></TableHead>
                             </TableRow>
                         </TableHeader>
-                        <TableBody>
+                        <TableBody className="max-md:block">
                             {isLoading ? (
-                                Array.from({ length: 5 }, (_, i) => <TableRow key={i} className="hover:bg-transparent"><TableCell colSpan={6}><Skeleton className="h-9 w-full" /></TableCell></TableRow>)
+                                Array.from({ length: 5 }, (_, i) => <TableRow key={i} className="hover:bg-transparent max-md:block"><TableCell colSpan={6} className="max-md:block"><Skeleton className="h-9 w-full" /></TableCell></TableRow>)
                             ) : visible.length === 0 ? (
-                                <TableRow className="hover:bg-transparent">
-                                    <TableCell colSpan={6} className="py-16 text-center">
+                                <TableRow className="hover:bg-transparent max-md:block">
+                                    <TableCell colSpan={6} className="py-16 text-center max-md:block max-md:py-12">
                                         <CheckCircle2 className="mx-auto mb-3 h-10 w-10 text-emerald-500/60" aria-hidden="true" />
                                         <p className="font-medium">Nothing is running low</p>
                                         <p className="mt-1 text-sm text-muted-foreground">Every product is above its reorder level.</p>
@@ -141,13 +145,13 @@ export function LowStockTable({ onReorderClick }: { onReorderClick: () => void }
                                     const shortage = shortageOf(p);
                                     const done = added.has(p.id);
                                     return (
-                                        <TableRow key={p.id}>
-                                            <TableCell className="max-w-[20rem]">
+                                        <TableRow key={p.id} className={M_ROW}>
+                                            <TableCell className="max-w-[20rem] max-md:col-span-2 max-md:min-w-0 max-md:max-w-none max-md:p-0">
                                                 <div className="font-medium">{p.name}</div>
                                                 {p.composition && <div className="truncate text-xs text-muted-foreground" title={p.composition}>{p.composition}</div>}
                                                 {p.manufacturer && <div className="truncate text-xs text-muted-foreground/80">{p.manufacturer}</div>}
                                             </TableCell>
-                                            <TableCell>
+                                            <TableCell className="max-md:col-span-2 max-md:p-0">
                                                 <div className={cn('text-lg font-semibold tabular-nums', qty === 0 ? 'text-destructive' : 'text-foreground')}>
                                                     {qty === 0 ? 'Out of stock' : formatQty(anyP.total_qty_strips ?? Math.floor(qty), anyP.totalLoose ?? 0, p.packSize || 1, p.packType || 'strip', p.packUnit || 'tablet')}
                                                 </div>
@@ -157,10 +161,10 @@ export function LowStockTable({ onReorderClick }: { onReorderClick: () => void }
                                                     className="mt-2 h-1.5"
                                                 />
                                             </TableCell>
-                                            <TableCell className="whitespace-nowrap text-right tabular-nums text-muted-foreground">{packs.format(level)} {word}</TableCell>
-                                            <TableCell className="whitespace-nowrap text-right font-medium tabular-nums text-destructive">Need {packs.format(Math.ceil(shortage))} more</TableCell>
-                                            <TableCell className="whitespace-nowrap tabular-nums">{hasExpiry(p.nearestExpiry) ? formatMonth(p.nearestExpiry) : <span className="text-muted-foreground">—</span>}</TableCell>
-                                            <TableCell className="text-right">
+                                            <TableCell data-label="Reorder Level" className={cn('whitespace-nowrap text-right tabular-nums text-muted-foreground', M_DETAIL)}>{packs.format(level)} {word}</TableCell>
+                                            <TableCell data-label="Shortage" className={cn('whitespace-nowrap text-right font-medium tabular-nums text-destructive', M_DETAIL)}>Need {packs.format(Math.ceil(shortage))} more</TableCell>
+                                            <TableCell data-label="Nearest Expiry" className={cn('whitespace-nowrap tabular-nums', M_DETAIL)}>{hasExpiry(p.nearestExpiry) ? formatMonth(p.nearestExpiry) : <span className="text-muted-foreground">—</span>}</TableCell>
+                                            <TableCell className="text-right max-md:col-span-2 max-md:p-0">
                                                 {canOrder && (
                                                     <Button
                                                         type="button"

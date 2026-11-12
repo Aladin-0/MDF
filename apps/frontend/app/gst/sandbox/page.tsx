@@ -192,7 +192,7 @@ export default function SandboxPage() {
         <div className="space-y-6 max-w-4xl mx-auto pb-12">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
+                    <h1 className="text-2xl font-bold text-slate-900 flex flex-wrap items-center gap-x-3 gap-y-1">
                         {providerMode === 'live' ? 'GST Provider Integration' : 'GST Sandbox'}
                         {isSandboxEnv && providerMode === 'test' && <Badge variant="destructive" className="uppercase tracking-widest text-xs">SANDBOX ONLY</Badge>}
                     </h1>
@@ -249,7 +249,7 @@ export default function SandboxPage() {
                         <CardDescription>Target sandbox provider and taxpayer binding.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4 text-sm">
-                        <div className="grid grid-cols-2 gap-4 border-b pb-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-b pb-4">
                             <div>
                                 <p className="text-slate-500 font-medium">Provider</p>
                                 <p className="text-slate-900 font-mono mt-1">{provider}</p>
@@ -259,7 +259,7 @@ export default function SandboxPage() {
                                 <p className="text-slate-900 mt-1">{outlet_name}</p>
                             </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                                 <p className="text-slate-500 font-medium">GSTIN</p>
                                 <p className="text-slate-900 font-mono mt-1">{masked_gstin || 'Unknown'}</p>
@@ -389,7 +389,7 @@ export default function SandboxPage() {
                             syncJob.status === 'IN_PROGRESS' ? 'bg-indigo-50 border-indigo-200 text-indigo-900' :
                             'bg-red-50 border-red-200 text-red-900'
                         }`}>
-                            <div className="flex justify-between items-center">
+                            <div className="flex flex-wrap justify-between items-center gap-3">
                                 <div>
                                     <h4 className="font-semibold text-sm">Status: {syncJob.status.replace(/_/g, ' ')}</h4>
                                     {syncJob.status === 'NO_CHANGE' && (

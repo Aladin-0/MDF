@@ -46,7 +46,7 @@ export function FilterBar({ filters, onChange, hasFilters, onClear }: FilterBarP
     return (
         <div className="space-y-2">
             <div className="flex flex-wrap items-end gap-3">
-                <div className="space-y-1.5">
+                <div className="min-w-0 flex-1 space-y-1.5 sm:flex-none">
                     <Label htmlFor="ledger-from" className="text-xs text-muted-foreground">From</Label>
                     <Input
                         id="ledger-from"
@@ -57,10 +57,10 @@ export function FilterBar({ filters, onChange, hasFilters, onClear }: FilterBarP
                         onChange={(e) => onChange({ from: e.target.value })}
                         aria-invalid={rangeBad || undefined}
                         aria-describedby={rangeBad ? 'ledger-range-error' : undefined}
-                        className="w-[10.5rem]"
+                        className="w-full sm:w-[10.5rem]"
                     />
                 </div>
-                <div className="space-y-1.5">
+                <div className="min-w-0 flex-1 space-y-1.5 sm:flex-none">
                     <Label htmlFor="ledger-to" className="text-xs text-muted-foreground">To</Label>
                     <Input
                         id="ledger-to"
@@ -71,14 +71,14 @@ export function FilterBar({ filters, onChange, hasFilters, onClear }: FilterBarP
                         onChange={(e) => onChange({ to: e.target.value })}
                         aria-invalid={rangeBad || undefined}
                         aria-describedby={rangeBad ? 'ledger-range-error' : undefined}
-                        className="w-[10.5rem]"
+                        className="w-full sm:w-[10.5rem]"
                     />
                 </div>
 
-                <div className="space-y-1.5">
+                <div className="w-full space-y-1.5 sm:w-auto">
                     <Label htmlFor="ledger-type" className="text-xs text-muted-foreground">Type</Label>
                     <Select value={filters.type || ALL} onValueChange={(v) => onChange({ type: v === ALL ? '' : v })}>
-                        <SelectTrigger id="ledger-type" className="w-[11rem]"><SelectValue /></SelectTrigger>
+                        <SelectTrigger id="ledger-type" className="w-full sm:w-[11rem]"><SelectValue /></SelectTrigger>
                         <SelectContent>
                             <SelectItem value={ALL}>All Types</SelectItem>
                             {TXN_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
@@ -86,7 +86,7 @@ export function FilterBar({ filters, onChange, hasFilters, onClear }: FilterBarP
                     </Select>
                 </div>
 
-                <div className="min-w-[14rem] flex-1 space-y-1.5">
+                <div className="w-full min-w-0 space-y-1.5 sm:w-auto sm:min-w-[14rem] sm:flex-1">
                     <Label htmlFor="ledger-search" className="text-xs text-muted-foreground">Search</Label>
                     <div className="relative">
                         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
@@ -115,7 +115,7 @@ export function FilterBar({ filters, onChange, hasFilters, onClear }: FilterBarP
                 </div>
 
                 {hasFilters && (
-                    <Button type="button" variant="ghost" onClick={onClear}>
+                    <Button type="button" variant="ghost" onClick={onClear} className="w-full sm:w-auto">
                         <X aria-hidden="true" /> Clear Filters
                     </Button>
                 )}

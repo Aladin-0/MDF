@@ -60,18 +60,18 @@ export default function CustomerStatCards({ onFilterChronic, onFilterOutstanding
     ];
 
     return (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             {cards.map((card) => (
                 <Card
                     key={card.title}
                     className={cn(
-                        'rounded-xl p-4 cursor-pointer transition-all hover:shadow-md flex flex-col justify-center',
+                        'rounded-xl p-3 sm:p-4 min-w-0 cursor-pointer transition-all hover:shadow-md flex flex-col justify-center',
                         card.pulse && 'animate-pulse'
                     )}
                     onClick={card.onClick}
                 >
                     <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">{card.title}</div>
-                    <div className="text-2xl font-bold text-slate-900">{card.value}</div>
+                    <div className="text-xl sm:text-2xl font-bold text-slate-900 break-words">{card.value}</div>
                     <div className="text-xs text-muted-foreground mt-1">{card.subtitle}</div>
                 </Card>
             ))}

@@ -15,9 +15,9 @@ interface Props {
 export function PurchaseSummaryCards({ invoices }: Props) {
     if (!invoices || invoices.length === 0) {
         return (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 max-sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 {[...Array(4)].map((_, i) => (
-                    <Skeleton key={i} className="h-28 w-full rounded-xl" />
+                    <Skeleton key={i} className="h-28 w-full rounded-xl max-sm:h-20" />
                 ))}
             </div>
         );
@@ -36,7 +36,7 @@ export function PurchaseSummaryCards({ invoices }: Props) {
     const invoiceCount = thisMonth.length;
 
     return (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 max-sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             <StatCard
                 icon={<TrendingUp className="text-blue-600 w-5 h-5" />}
                 bg="bg-blue-100"
@@ -87,14 +87,14 @@ function StatCard({
 }) {
     return (
         <Card>
-            <CardContent className="p-6">
+            <CardContent className="p-3 sm:p-6">
                 <div className="flex items-center gap-4">
-                    <div className={`p-3 rounded-full flex items-center justify-center h-12 w-12 ${bg}`}>
+                    <div className={`p-3 rounded-full flex items-center justify-center h-12 w-12 max-sm:hidden ${bg}`}>
                         {icon}
                     </div>
-                    <div>
+                    <div className="max-sm:min-w-0">
                         <p className="text-sm text-slate-500 font-medium">{title}</p>
-                        <h3 className={`text-2xl font-bold mt-1 ${valueClass ?? 'text-slate-900'}`}>{value}</h3>
+                        <h3 className={`text-2xl max-sm:text-lg max-sm:break-words font-bold mt-1 ${valueClass ?? 'text-slate-900'}`}>{value}</h3>
                         <p className="text-sm text-slate-500 mt-1">{subtitle}</p>
                     </div>
                 </div>
