@@ -1,35 +1,31 @@
 'use client';
 
-import { useRouter, useSearchParams, usePathname } from 'next/navigation';
-import { StockFilters, DrugSchedule } from '@/types';
+import { useCallback, useMemo } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { applyInventoryPatch, readInventoryParams, type InventoryParams } from '@/lib/inventoryParams';
 
+/**
+ * Inventory page state in the URL: a refresh keeps your place, Back works, and a link can be shared
+ * (it used to keep the tab and the page in component state, so both were lost on refresh).
+ */
 export function useInventoryFilters() {
     const router = useRouter();
-    const searchParams = useSearchParams();
     const pathname = usePathname();
+    const searchParams = useSearchParams();
 
-    const filters: StockFilters = {
-        search: searchParams.get('q') ?? '',
-        scheduleType: (searchParams.get('schedule') as DrugSchedule) ?? 'all',
-        lowStock: searchParams.get('lowStock') === 'true',
-        expiringSoon: searchParams.get('expiring') === 'true',
-        sortBy: (searchParams.get('sort') as StockFilters['sortBy']) ?? 'name',
-        sortOrder: (searchParams.get('order') as 'asc' | 'desc') ?? 'asc',
-    };
+    const params = useMemo(() => readInventoryParams(new URLSearchParams(searchParams.toString())), [searchParams]);
 
-    const setFilter = (key: string, value: string | boolean) => {
-        const params = new URLSearchParams(searchParams.toString());
-        if (value === '' || value === false || value === 'all') {
-            params.delete(key);
-        } else {
-            params.set(key, String(value));
-        }
-        router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-    };
+    const update = useCallback(
+        (patch: Partial<InventoryParams>) => {
+            // read the live URL so two changes in one tick do not overwrite each other
+            const current = new URLSearchParams(typeof window === 'undefined' ? '' : window.location.search);
+            const qs = applyInventoryPatch(current, patch).toString();
+            router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+        },
+        [router, pathname],
+    );
 
-    const clearFilters = () => {
-        router.replace(pathname, { scroll: false });
-    };
+    const clearFilters = useCallback(() => update({ q: '', schedule: 'all' }), [update]);
 
-    return { filters, setFilter, clearFilters };
+    return { params, update, clearFilters };
 }

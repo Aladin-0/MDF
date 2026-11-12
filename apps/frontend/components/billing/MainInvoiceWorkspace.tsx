@@ -12,6 +12,7 @@ import { poApi } from '@/lib/poApi';
 import { getExpiryStatus } from '@/utils/expiry';
 import { calculateLineMargin, calculateTotalMargin } from '@/lib/billingMarginUtils';
 import { canViewBillingMargins } from '@/lib/access';
+import { allowsLoose, wholePackWord } from '@/lib/packRules';
 import { useProductSearch } from '@/hooks/useProductSearch';
 import { useOutletSettings } from '@/hooks/useOutletSettings';
 import { Batch, ProductSearchResult, BillTotals } from '@/types';
@@ -263,8 +264,9 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
             return; // Needs qty
         }
 
-        // FIX: Allow loose quantities for ANY item where packSize > 1, ignoring packType strings.
-        const hasLoose = quickAddBatch.packSize > 1;
+        // Same answer the server gives (it sends allowsLoose): this used to be "packSize > 1" here
+        // while the server said "strip/blister only", so the Loose box appeared and the sale was refused.
+        const hasLoose = allowsLoose(quickAddBatch);
         const effectiveLoose = hasLoose ? l : 0;
 
         const totalQtyLoose = (s * quickAddBatch.packSize) + effectiveLoose;
@@ -387,8 +389,7 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                                         <div className="mt-auto pt-2 border-t border-slate-200/50 flex items-center">
                                             <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-[10px] font-bold tracking-wider uppercase">
                                                 {(() => {
-                                                    const isStrip = batch.packType?.toLowerCase() === 'strip' || batch.packType?.toLowerCase() === 'blister';
-                                                    if (!isStrip) return `${batch.qtyStrips} ${batch.packUnit || 'Unit'}`;
+                                                    if (!allowsLoose(batch)) return `${batch.qtyStrips} ${batch.packUnit || 'Unit'}`;
                                                     if (batch.qtyStrips > 0 && batch.qtyLoose > 0) return `${batch.qtyStrips} Str + ${batch.qtyLoose} Ls`;
                                                     if (batch.qtyStrips > 0) return `${batch.qtyStrips} Strips`;
                                                     if (batch.qtyLoose > 0) return `${batch.qtyLoose} Loose`;
@@ -426,7 +427,7 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                             />
                         </div>
 
-                        {quickAddBatch.packSize > 1 && (
+                        {allowsLoose(quickAddBatch) && (
                             <div>
                                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1 flex items-center justify-between">
                                     Loose <span className="text-[9px] font-normal text-slate-400 ml-2">of {quickAddBatch.packSize}</span>
@@ -478,7 +479,7 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                                             const s = parseInt(qtyStrips) || 0;
                                             const l = parseInt(qtyLoose) || 0;
                                             const d = parseFloat(discountPct) || 0;
-                                            const effectiveL = quickAddBatch.packSize > 1 ? l : 0;
+                                            const effectiveL = allowsLoose(quickAddBatch) ? l : 0;
                                             const tQtyFractional = s + (effectiveL / quickAddBatch.packSize);
                                             const rate = Number(quickAddBatch.pts) > 0 ? Number(quickAddBatch.pts) : (Number(quickAddBatch.ptr) > 0 ? Number(quickAddBatch.ptr) : Number(quickAddBatch.mrp));
                                             return ((rate * (1 - d/100)) * tQtyFractional).toFixed(2);
@@ -495,7 +496,7 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                                             const s = parseInt(qtyStrips) || 0;
                                             const l = parseInt(qtyLoose) || 0;
                                             const d = parseFloat(discountPct) || 0;
-                                            const effectiveL = quickAddBatch.packSize > 1 ? l : 0;
+                                            const effectiveL = allowsLoose(quickAddBatch) ? l : 0;
                                             const tQtyFractional = s + (effectiveL / quickAddBatch.packSize);
                                             const rate = Number(quickAddBatch.mrp) || 0;
                                             return ((rate * (1 - d/100)) * tQtyFractional).toFixed(2);
@@ -702,13 +703,13 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                                                         <div className="text-sm font-bold text-slate-700">₹{product.mrp.toFixed(2)}</div>
                                                         <div className={cn("text-xs font-bold mt-0.5", product.totalStock > 0 ? "text-emerald-600" : "text-red-500")}>
                                                             {(() => {
-                                                                const isStrip = product.packType?.toLowerCase() === 'strip' || product.packType?.toLowerCase() === 'blister';
                                                                 const totalQty = product.totalStock || 0;
-                                                                if (!isStrip) return `${totalQty} in stock`;
+                                                                if (!allowsLoose(product)) return `${totalQty} in stock`;
+                                                                const word = wholePackWord(product.packType);
                                                                 const strips = Math.floor(totalQty);
                                                                 const loose = Math.round((totalQty - strips) * (product.packSize || 1));
-                                                                if (strips > 0 && loose > 0) return `${strips} strips + ${loose} loose in stock`;
-                                                                if (strips > 0) return `${strips} strips in stock`;
+                                                                if (strips > 0 && loose > 0) return `${strips} ${word}s + ${loose} loose in stock`;
+                                                                if (strips > 0) return `${strips} ${word}s in stock`;
                                                                 if (loose > 0) return `${loose} loose in stock`;
                                                                 return `0 in stock`;
                                                             })()}
@@ -925,7 +926,7 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                                                 <div className="text-[11px] font-bold text-blue-700">
                                                     <>
                                                         {item.qtyStrips > 0 ? `${item.qtyStrips}${item.packType?.toLowerCase() === 'strip' || item.packType?.toLowerCase() === 'blister' ? 'S' : ' ' + (item.packType || 'Unit')} ` : ''}
-                                                        {item.qtyLoose > 0 && (item.packType?.toLowerCase() === 'strip' || item.packType?.toLowerCase() === 'blister') ? `${item.qtyLoose}L` : ''}
+                                                        {item.qtyLoose > 0 ? `${item.qtyLoose}L` : ''}
                                                     </>
                                                 </div>
                                                 {canViewMargins && (

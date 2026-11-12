@@ -1,6 +1,7 @@
 import { create } from 'zustand';
+import type { ValuationMode } from '@/lib/inventory';
 
-export type ValuationMode = 'PURCHASE' | 'LANDING' | 'MRP';
+export type { ValuationMode };
 
 interface InventoryState {
     valuationMode: ValuationMode;

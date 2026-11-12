@@ -213,6 +213,18 @@ export const useSettingsStore = create<SettingsState>()(
                     : null
             ),
             skipHydration: true,
+            // `selectedOutletId` is the *active outlet of this tab*, not a per-outlet setting. It used
+            // to be saved inside the per-outlet bucket, so switching A -> B wrote "B" into A's bucket
+            // and coming back to A loaded "B" again: the header, billing and every `?outletId=` call
+            // then pointed at the wrong outlet. It now lives in memory only and is set from the
+            // server's answer (login, switch-outlet, /auth/me): see lib/outletContext.ts.
+            partialize: ({ selectedOutletId: _active, ...persisted }) => persisted,
+            // Buckets written by older builds still contain `selectedOutletId`: never load it.
+            merge: (persisted, current) => ({
+                ...current,
+                ...(persisted as Partial<SettingsState>),
+                selectedOutletId: current.selectedOutletId,
+            }),
             version: 3,
             migrate: (state: any, v: number) => {
                 if (v < 2) {
@@ -238,11 +250,22 @@ export const useSettingsStore = create<SettingsState>()(
     )
 );
 
-// ── Helper: reload the store with the correct outlet key after a switch ──────
-// Call this right after switching outlets so the store re-hydrates from the
-// new outlet's localStorage bucket instead of the old one.
+// ── Helper: point the store at the new outlet's localStorage bucket after a switch ──────
+// Settings are saved per outlet. Zustand's `rehydrate()` only overwrites what the bucket holds, and
+// when the bucket does not exist yet (first visit to that outlet) it keeps the CURRENT in-memory
+// values and then saves them into the new bucket: outlet A's name, address, GSTIN and printer
+// setup ended up as outlet B's. So an outlet with nothing saved starts from the defaults instead.
 export function rehydrateSettingsForOutlet(outletId: string) {
-    useSettingsStore.persist.setOptions({ name: getStorageKey(outletId) });
-    useSettingsStore.persist.rehydrate();
+    const name = getStorageKey(outletId);
+    useSettingsStore.persist.setOptions({ name });
+    let hasSavedSettings = false;
+    try {
+        hasSavedSettings = typeof window !== 'undefined' && window.localStorage.getItem(name) !== null;
+    } catch { /* storage blocked: behave like a first visit */ }
+    if (hasSavedSettings) {
+        useSettingsStore.persist.rehydrate();
+    } else {
+        useSettingsStore.getState().resetToDefaults();
+    }
     useSettingsStore.getState().setHasHydrated(true);
 }

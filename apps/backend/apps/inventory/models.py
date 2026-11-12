@@ -1,4 +1,5 @@
 from django.db import models
+from apps.inventory.pack_rules import PACK_TYPE_LABELS
 from django.core.exceptions import ValidationError
 import uuid
 from django.conf import settings
@@ -39,16 +40,7 @@ class MasterProduct(models.Model):
         ('Veterinary', 'Veterinary'),
     ]
 
-    PACK_TYPE_CHOICES = [
-        ('strip', 'Strip'),
-        ('bottle', 'Bottle'),
-        ('vial', 'Vial'),
-        ('box', 'Box'),
-        ('blister', 'Blister'),
-        ('tube', 'Tube'),
-        ('packet', 'Packet'),
-        ('other', 'Other'),
-    ]
+    PACK_TYPE_CHOICES = list(PACK_TYPE_LABELS)  # one list: see pack_rules.py
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)

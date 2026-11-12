@@ -271,6 +271,10 @@ export interface MasterProduct {
     packSize?: number;
     packUnit?: string;
     packType?: string;
+    /** Sent by the server: may this pack be sold loose? (see lib/packRules.ts) */
+    allowsLoose?: boolean;
+    /** Only on the response to a product edit: how many batches got the new pack details. */
+    batchesUpdated?: number;
     barcode?: string;
     isFridge: boolean;
     isDiscontinued: boolean;
@@ -315,6 +319,8 @@ export interface Batch {
     packSize: number;
     packUnit: string;
     packType: string;
+    /** Sent by the server: may this batch be sold loose? (see lib/packRules.ts) */
+    allowsLoose?: boolean;
     rackLocation?: string;
     isActive: boolean;
     createdAt: string;
@@ -1087,21 +1093,38 @@ export interface MonthlyAttendanceFilter {
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
-export interface DashboardKPI {
-    date: string;
+export interface DashboardTotals {
     totalSales: number;
     totalBills: number;
-    salesReturnAmount?: number;
-    salesReturnCount?: number;
+    netSales: number;
+    salesReturnAmount: number;
     cashCollected: number;
     upiCollected: number;
     cardCollected: number;
     creditGiven: number;
+}
+
+export interface DashboardKPI extends DashboardTotals {
+    date: string;
+    startDate?: string;
+    endDate?: string;
+    salesReturnCount?: number;
     totalDiscount: number;
     totalGst: number;
+    /** What customers owe in total right now (not just credit given in this period). */
+    outstandingCredit?: number;
+    /** Null unless the user may see purchase rates (or there was nothing to measure). */
+    grossProfit?: number | null;
+    grossMarginPct?: number | null;
+    /** The same totals for the period right before this one, of the same length: for trends. */
+    previous?: Partial<DashboardTotals>;
+    previousStartDate?: string;
+    previousEndDate?: string;
     topSellingItems: {
+        productId?: string;
         name: string;
         qty: number;
+        qtyLoose?: number;
         revenue: number;
     }[];
     staffLeaderboard: {
@@ -1124,16 +1147,22 @@ export interface DashboardKPI {
         card: number;
         credit: number;
     };
+    alerts?: DashboardAlerts;
 }
 
 export interface DashboardAlerts {
+    /** A short list (the worst first) and, in `counts`, how many there really are. */
     lowStock: {
-        batch: { productName: string; batchNumber: string; expiryDate: string };
+        productId?: string;
+        productName?: string;
+        batch?: { productName: string; batchNumber: string; expiryDate: string };
         currentStock: number;
         reorderLevel: number;
     }[];
     expiringSoon: {
+        productId?: string;
         batch: { productName: string; batchNumber: string; expiryDate: string };
+        /** Negative when the batch has already expired. */
         daysUntilExpiry: number;
     }[];
     overdueAccounts: {
@@ -1142,6 +1171,12 @@ export interface DashboardAlerts {
         outstandingAmount: number;
         daysOverdue: number;
     }[];
+    counts?: {
+        lowStock: number;
+        expiringSoon: number;
+        overdueAccounts: number;
+        overdueAmount: number;
+    };
 }
 
 // ─── Stock ────────────────────────────────────────────────────────────────────

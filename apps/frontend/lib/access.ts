@@ -32,6 +32,8 @@ export type Permission =
     | 'edit_vouchers'
     | 'view_accounts'
     | 'override_credit'
+    | 'adjust_stock'
+    | 'edit_inventory'
     | 'manage_products'
     | 'manage_staff'
     | 'manage_settings'
@@ -93,6 +95,8 @@ export function fallbackPermissions(user: UserLike | null | undefined): Permissi
     if (manager) {
         out.add('view_accounts');
         out.add('override_credit');
+        out.add('adjust_stock');
+        out.add('edit_inventory');
     }
     if (manager || flag(user.canCreatePurchases) || flag(user.canEditPurchases)) out.add('manage_products');
     if (admin) {

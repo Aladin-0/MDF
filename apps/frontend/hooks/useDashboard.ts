@@ -1,42 +1,28 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { format } from 'date-fns';
 import { dashboardApi } from '@/lib/apiClient';
 import { useOutletId } from '@/hooks/useOutletId';
-import { format } from 'date-fns';
 import { DateRangeFilter } from '@/types';
 
+/**
+ * The home dashboard: KPIs, charts, tables and stock alerts all come from ONE request (the alerts used to have a
+ * second hook on the same key). While a new period loads, the previous one stays on screen (`isPlaceholderData`) so
+ * the page keeps its shape instead of blinking back to skeletons.
+ */
 export function useDashboardKPI(dateRange?: DateRangeFilter) {
-  const outletId = useOutletId();
-  
-  const today = format(new Date(), 'yyyy-MM-dd');
-  const startDate = dateRange?.from;
-  const endDate = dateRange?.to;
+    const outletId = useOutletId();
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const startDate = dateRange?.from || today;
+    const endDate = dateRange?.to || today;
 
-  return useQuery({
-    queryKey: ['dashboard', 'kpi', outletId, startDate || today, endDate || today],
-    queryFn: () => dashboardApi.getDailySummary(outletId, today, startDate, endDate),
-    enabled: !!outletId,
-    staleTime: 1000 * 60 * 2,   // refresh every 2 min
-    refetchInterval: 1000 * 60 * 2,
-  });
-}
-
-export function useDashboardAlerts(dateRange?: DateRangeFilter) {
-  const outletId = useOutletId();
-  
-  const today = format(new Date(), 'yyyy-MM-dd');
-  const startDate = dateRange?.from;
-  const endDate = dateRange?.to;
-
-  // Share the same queryKey as useDashboardKPI so React Query returns
-  // the cached result — no second network request is made.
-  return useQuery({
-    queryKey: ['dashboard', 'kpi', outletId, startDate || today, endDate || today],
-    queryFn: () => dashboardApi.getDailySummary(outletId, today, startDate, endDate),
-    enabled: !!outletId,
-    staleTime: 1000 * 60 * 2,
-    refetchInterval: 1000 * 60 * 2,
-    select: (data: any) => data?.alerts || {},
-  });
+    return useQuery({
+        queryKey: ['dashboard', 'kpi', outletId, startDate, endDate],
+        queryFn: () => dashboardApi.getDailySummary(outletId, today, startDate, endDate),
+        enabled: !!outletId,
+        placeholderData: keepPreviousData,
+        staleTime: 1000 * 60 * 2,
+        refetchInterval: 1000 * 60 * 2,      // pauses while the tab is hidden (React Query's default)
+    });
 }

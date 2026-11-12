@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { authApi } from '@/lib/apiClient';
-import { PERMISSIONS_STALE_EVENT } from '@/lib/sessionEvents';
+import { PERMISSIONS_STALE_EVENT, getSessionEpoch } from '@/lib/sessionEvents';
+import { applyOutletContext } from '@/lib/outletContext';
 
 const POLL_MS = 3 * 60 * 1000;      // refresh while the app stays open
 const MIN_GAP_MS = 20 * 1000;       // never hammer /auth/me
@@ -32,13 +33,25 @@ export function SessionSync() {
         if (inFlight.current || (!force && now - lastRun.current < MIN_GAP_MS)) return;
         inFlight.current = true;
         lastRun.current = now;
+        const epochBefore = getSessionEpoch();
         try {
             const fresh = await authApi.me();
             if (!fresh?.id) return;
+            // The outlet was switched while this request was in flight: its answer describes the
+            // outlet we just left. Applying it would put the old outlet back into the stored user.
+            if (getSessionEpoch() !== epochBefore) return;
             const { user, setUser, setOutlet } = useAuthStore.getState();
             if (JSON.stringify(user) !== JSON.stringify(fresh)) {
+                const outletChanged = !!user?.outletId && !!fresh.outletId && user.outletId !== fresh.outletId;
                 setUser(fresh);
                 if (fresh.outlet) setOutlet(fresh.outlet);
+                if (outletChanged) {
+                    // The server's active outlet is no longer the one this tab was built for (the
+                    // account switched outlet in another tab or on another device). Follow it, and
+                    // reload so nothing on screen still shows the old outlet's data.
+                    applyOutletContext(fresh.outletId);
+                    window.location.reload();
+                }
             }
         } catch {
             // offline or a transient error: keep what we have (a 401 is handled inside the API client)

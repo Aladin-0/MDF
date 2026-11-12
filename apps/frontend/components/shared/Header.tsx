@@ -5,12 +5,13 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { Breadcrumb } from './Breadcrumb';
 import { PermissionGate } from './PermissionGate';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useSettingsStore } from '@/store/settingsStore';
+import { useOutletId } from '@/hooks/useOutletId';
 import { useAuthStore } from '@/store/authStore';
-import { useBillingStore } from '@/store/billingStore';
+import { switchOutlet } from '@/lib/outletContext';
+import { toast } from 'sonner';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { authApi, chainApi } from '@/lib/apiClient';
+import { chainApi } from '@/lib/apiClient';
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
@@ -21,12 +22,12 @@ interface HeaderProps {
 
 export function Header({ onMobileMenuToggle }: HeaderProps) {
     const title = usePageTitle();
-    const { selectedOutletId } = useSettingsStore();
     const { user, logout } = useAuthStore();
     const [isOnline, setIsOnline] = useState(true);
     const [isSwitching, setIsSwitching] = useState(false);
 
-    const currentOutletId = (user?.role === 'super_admin' ? selectedOutletId : null) || user?.outlet?.id || '';
+    // The same rule every API call uses, so the selector can never show one outlet while the data is another's.
+    const currentOutletId = useOutletId();
 
     // Fetch all outlets in the organization for super admins
     const { data: orgOutlets } = useQuery({
@@ -58,21 +59,11 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
         if (newOutletId === currentOutletId || isSwitching) return;
         setIsSwitching(true);
         try {
-            const data = await authApi.switchOutlet(newOutletId);
-
-            // Sync all stores
-            useAuthStore.setState({ user: data.user, isAuthenticated: true });
-            useAuthStore.getState().setOutlet(data.user.outlet);
-            useSettingsStore.getState().setOutletId(data.user.outletId);
-            useBillingStore.getState().resetBilling();
-
-            // Save new JWT token
-            document.cookie = `access_token=${data.access}; path=/;`;
-
-            // Hard refresh to clear all cached data
+            await switchOutlet(newOutletId);
+            // Full reload: nothing from the old outlet (query cache, in-flight requests, stores) survives.
             window.location.reload();
         } catch (err: any) {
-            alert(err?.detail || 'Failed to switch outlet');
+            toast.error(err?.detail || 'Failed to switch outlet');
             setIsSwitching(false);
         }
     };

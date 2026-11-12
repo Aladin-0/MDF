@@ -12,9 +12,11 @@
    "canExportGst": false
   },
   "permissions": [
+   "adjust_stock",
    "cancel_purchase_orders",
    "create_bills",
    "create_purchases",
+   "edit_inventory",
    "edit_purchases",
    "edit_sales",
    "edit_vouchers",
@@ -49,9 +51,11 @@
    "canExportGst": false
   },
   "permissions": [
+   "adjust_stock",
    "cancel_purchase_orders",
    "create_bills",
    "create_purchases",
+   "edit_inventory",
    "edit_purchases",
    "edit_sales",
    "edit_vouchers",
@@ -86,9 +90,11 @@
    "canExportGst": false
   },
   "permissions": [
+   "adjust_stock",
    "cancel_purchase_orders",
    "create_bills",
    "create_purchases",
+   "edit_inventory",
    "edit_purchases",
    "edit_sales",
    "edit_vouchers",
@@ -123,9 +129,11 @@
    "canExportGst": false
   },
   "permissions": [
+   "adjust_stock",
    "cancel_purchase_orders",
    "create_bills",
    "create_purchases",
+   "edit_inventory",
    "edit_purchases",
    "edit_sales",
    "edit_vouchers",
@@ -160,9 +168,11 @@
    "canExportGst": false
   },
   "permissions": [
+   "adjust_stock",
    "cancel_purchase_orders",
    "create_bills",
    "create_purchases",
+   "edit_inventory",
    "edit_purchases",
    "edit_sales",
    "edit_vouchers",
@@ -197,9 +207,11 @@
    "canExportGst": false
   },
   "permissions": [
+   "adjust_stock",
    "cancel_purchase_orders",
    "create_bills",
    "create_purchases",
+   "edit_inventory",
    "edit_purchases",
    "edit_sales",
    "edit_vouchers",
@@ -234,9 +246,11 @@
    "canExportGst": false
   },
   "permissions": [
+   "adjust_stock",
    "cancel_purchase_orders",
    "create_bills",
    "create_purchases",
+   "edit_inventory",
    "edit_purchases",
    "edit_sales",
    "edit_vouchers",
@@ -271,9 +285,11 @@
    "canExportGst": false
   },
   "permissions": [
+   "adjust_stock",
    "cancel_purchase_orders",
    "create_bills",
    "create_purchases",
+   "edit_inventory",
    "edit_purchases",
    "edit_sales",
    "edit_vouchers",
@@ -308,9 +324,11 @@
    "canExportGst": true
   },
   "permissions": [
+   "adjust_stock",
    "cancel_purchase_orders",
    "create_bills",
    "create_purchases",
+   "edit_inventory",
    "edit_purchases",
    "edit_sales",
    "edit_vouchers",
@@ -345,9 +363,11 @@
    "canExportGst": true
   },
   "permissions": [
+   "adjust_stock",
    "cancel_purchase_orders",
    "create_bills",
    "create_purchases",
+   "edit_inventory",
    "edit_purchases",
    "edit_sales",
    "edit_vouchers",
@@ -382,9 +402,11 @@
    "canExportGst": false
   },
   "permissions": [
+   "adjust_stock",
    "cancel_purchase_orders",
    "create_bills",
    "create_purchases",
+   "edit_inventory",
    "edit_purchases",
    "edit_sales",
    "edit_vouchers",
@@ -417,9 +439,11 @@
    "canExportGst": false
   },
   "permissions": [
+   "adjust_stock",
    "cancel_purchase_orders",
    "create_bills",
    "create_purchases",
+   "edit_inventory",
    "edit_purchases",
    "edit_sales",
    "edit_vouchers",
@@ -452,9 +476,11 @@
    "canExportGst": false
   },
   "permissions": [
+   "adjust_stock",
    "cancel_purchase_orders",
    "create_bills",
    "create_purchases",
+   "edit_inventory",
    "edit_purchases",
    "edit_sales",
    "edit_vouchers",
@@ -487,9 +513,11 @@
    "canExportGst": false
   },
   "permissions": [
+   "adjust_stock",
    "cancel_purchase_orders",
    "create_bills",
    "create_purchases",
+   "edit_inventory",
    "edit_purchases",
    "edit_sales",
    "edit_vouchers",
@@ -522,9 +550,11 @@
    "canExportGst": false
   },
   "permissions": [
+   "adjust_stock",
    "cancel_purchase_orders",
    "create_bills",
    "create_purchases",
+   "edit_inventory",
    "edit_purchases",
    "edit_sales",
    "edit_vouchers",
@@ -557,9 +587,11 @@
    "canExportGst": false
   },
   "permissions": [
+   "adjust_stock",
    "cancel_purchase_orders",
    "create_bills",
    "create_purchases",
+   "edit_inventory",
    "edit_purchases",
    "edit_sales",
    "edit_vouchers",
@@ -592,9 +624,11 @@
    "canExportGst": false
   },
   "permissions": [
+   "adjust_stock",
    "cancel_purchase_orders",
    "create_bills",
    "create_purchases",
+   "edit_inventory",
    "edit_purchases",
    "edit_sales",
    "edit_vouchers",
@@ -627,9 +661,11 @@
    "canExportGst": false
   },
   "permissions": [
+   "adjust_stock",
    "cancel_purchase_orders",
    "create_bills",
    "create_purchases",
+   "edit_inventory",
    "edit_purchases",
    "edit_sales",
    "edit_vouchers",
@@ -662,9 +698,11 @@
    "canExportGst": true
   },
   "permissions": [
+   "adjust_stock",
    "cancel_purchase_orders",
    "create_bills",
    "create_purchases",
+   "edit_inventory",
    "edit_purchases",
    "edit_sales",
    "edit_vouchers",
@@ -697,9 +735,11 @@
    "canExportGst": true
   },
   "permissions": [
+   "adjust_stock",
    "cancel_purchase_orders",
    "create_bills",
    "create_purchases",
+   "edit_inventory",
    "edit_purchases",
    "edit_sales",
    "edit_vouchers",
@@ -732,7 +772,9 @@
    "canExportGst": false
   },
   "permissions": [
+   "adjust_stock",
    "create_bills",
+   "edit_inventory",
    "manage_products",
    "override_credit",
    "view_accounts",
@@ -753,8 +795,10 @@
    "canExportGst": false
   },
   "permissions": [
+   "adjust_stock",
    "create_bills",
    "create_purchases",
+   "edit_inventory",
    "manage_products",
    "override_credit",
    "send_purchase_orders",
@@ -776,8 +820,10 @@
    "canExportGst": false
   },
   "permissions": [
+   "adjust_stock",
    "cancel_purchase_orders",
    "create_bills",
+   "edit_inventory",
    "edit_purchases",
    "manage_products",
    "override_credit",
@@ -799,7 +845,9 @@
    "canExportGst": false
   },
   "permissions": [
+   "adjust_stock",
    "create_bills",
+   "edit_inventory",
    "edit_sales",
    "manage_products",
    "override_credit",
@@ -821,7 +869,9 @@
    "canExportGst": false
   },
   "permissions": [
+   "adjust_stock",
    "create_bills",
+   "edit_inventory",
    "manage_products",
    "override_credit",
    "view_accounts",
@@ -843,7 +893,9 @@
    "canExportGst": false
   },
   "permissions": [
+   "adjust_stock",
    "create_bills",
+   "edit_inventory",
    "manage_products",
    "override_credit",
    "view_accounts",
@@ -865,7 +917,9 @@
    "canExportGst": false
   },
   "permissions": [
+   "adjust_stock",
    "create_bills",
+   "edit_inventory",
    "manage_products",
    "override_credit",
    "view_accounts",
@@ -887,7 +941,9 @@
    "canExportGst": false
   },
   "permissions": [
+   "adjust_stock",
    "create_bills",
+   "edit_inventory",
    "manage_partners",
    "manage_products",
    "override_credit",
@@ -909,7 +965,9 @@
    "canExportGst": true
   },
   "permissions": [
+   "adjust_stock",
    "create_bills",
+   "edit_inventory",
    "export_reports",
    "manage_products",
    "override_credit",
@@ -931,9 +989,11 @@
    "canExportGst": true
   },
   "permissions": [
+   "adjust_stock",
    "cancel_purchase_orders",
    "create_bills",
    "create_purchases",
+   "edit_inventory",
    "edit_purchases",
    "edit_sales",
    "export_reports",

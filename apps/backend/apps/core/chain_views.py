@@ -2,10 +2,12 @@ import logging
 from datetime import date
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from apps.core.permissions import IsAuthenticated
 from rest_framework import status
 from django.db.models import Sum, Count, Q
+from django.http import Http404
 from django.shortcuts import get_object_or_404
+from django.utils.dateparse import parse_date
 
 from apps.core.models import Organization, Outlet
 from apps.billing.models import SaleInvoice
@@ -13,6 +15,21 @@ from apps.purchases.models import PurchaseInvoice
 from apps.accounts.models import Customer
 
 logger = logging.getLogger(__name__)
+
+
+def own_organization_or_404(user, org_id):
+    """
+    A super admin manages exactly one organization: the one their current outlet belongs to.
+
+    The org id in the URL / query string comes from the browser, so it is only ever checked
+    against that, never trusted. Before, any super admin could read another chain's numbers or
+    add outlets to another chain by putting its id in the request. A foreign (or malformed) id
+    answers 404, the same as an unknown one, so ids cannot be probed.
+    """
+    own_org_id = getattr(getattr(user, 'outlet', None), 'organization_id', None)
+    if own_org_id is None or str(own_org_id) != str(org_id):
+        raise Http404('Organization not found')
+    return get_object_or_404(Organization, id=own_org_id, is_active=True)
 
 
 class AllOutletsView(APIView):
@@ -100,7 +117,7 @@ class OrganizationDetailView(APIView):
         if request.user.role != 'super_admin':
             return Response({'success': False, 'error': 'Super admin only'}, status=status.HTTP_403_FORBIDDEN)
 
-        org = get_object_or_404(Organization, id=pk, is_active=True)
+        org = own_organization_or_404(request.user, pk)
         outlets = Outlet.objects.filter(organization=org, is_active=True).values(
             'id', 'name', 'city', 'state', 'gstin', 'phone'
         )
@@ -141,7 +158,7 @@ class OrganizationOutletListView(APIView):
         if request.user.role != 'super_admin':
             return Response({'success': False, 'error': 'Super admin only'}, status=status.HTTP_403_FORBIDDEN)
             
-        org = get_object_or_404(Organization, id=org_id, is_active=True)
+        org = own_organization_or_404(request.user, org_id)
         outlets = Outlet.objects.filter(organization=org, is_active=True).values(
             'id', 'name', 'city', 'state', 'gstin', 'phone'
         )
@@ -163,7 +180,7 @@ class OrganizationOutletListView(APIView):
         if request.user.role != 'super_admin':
             return Response({'success': False, 'error': 'Super admin only'}, status=status.HTTP_403_FORBIDDEN)
             
-        org = get_object_or_404(Organization, id=org_id, is_active=True)
+        org = own_organization_or_404(request.user, org_id)
         
         # Check uniqueness manually to provide clean error messages
         gstin = request.data.get('gstin', '')
@@ -203,7 +220,11 @@ class ChainDashboardView(APIView):
     """
     GET /api/v1/organizations/dashboard/?orgId=<uuid>&from=YYYY-MM-DD&to=YYYY-MM-DD
 
-    Chain-wide aggregated KPIs for a super_admin across ALL outlets in the org.
+    Chain-wide aggregated KPIs for a super_admin across ALL active outlets of their own org.
+
+    Counted the same way as the rest of the reports: sales exclude returns and cancelled
+    invoices; purchases and payables count only POSTED GRNs (a SAVED one is an unreviewed OCR
+    scan that has not touched stock or the ledger yet).
     """
 
     permission_classes = [IsAuthenticated]
@@ -216,85 +237,70 @@ class ChainDashboardView(APIView):
         if not org_id:
             return Response({'success': False, 'error': 'orgId is required'}, status=status.HTTP_400_BAD_REQUEST)
 
-        from_date = request.GET.get('from', str(date.today().replace(day=1)))
-        to_date = request.GET.get('to', str(date.today()))
-
+        today = date.today()
         try:
-            org = Organization.objects.get(id=org_id, is_active=True)
-        except Organization.DoesNotExist:
-            return Response({'success': False, 'error': 'Organization not found'}, status=status.HTTP_404_NOT_FOUND)
+            from_date = parse_date(request.GET.get('from') or str(today.replace(day=1)))
+            to_date = parse_date(request.GET.get('to') or str(today))
+        except ValueError:  # well-formed but impossible, e.g. 2025-02-31
+            from_date = to_date = None
+        # parse_date returns None for text that is not a date at all. Both used to be an
+        # unhandled 500.
+        if not from_date or not to_date:
+            return Response({'success': False, 'error': 'from and to must be valid YYYY-MM-DD dates'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if from_date > to_date:
+            return Response({'success': False, 'error': '"from" date cannot be after "to" date'},
+                            status=status.HTTP_400_BAD_REQUEST)
 
-        outlet_ids = list(Outlet.objects.filter(organization=org, is_active=True).values_list('id', flat=True))
+        org = own_organization_or_404(request.user, org_id)
+        outlets = list(Outlet.objects.filter(organization=org, is_active=True).order_by('name'))
+        outlet_ids = [o.id for o in outlets]
 
-        # ── Total sales across all outlets ──────────────────────────────────────
-        sales_agg = SaleInvoice.objects.filter(
-            outlet_id__in=outlet_ids,
-            invoice_date__date__gte=from_date,
-            invoice_date__date__lte=to_date,
-            is_return=False,
-        ).aggregate(
-            total=Sum('grand_total'),
-            invoices=Count('id'),
-        )
+        live_sales = SaleInvoice.objects.filter(outlet_id__in=outlet_ids, is_return=False, is_cancelled=False)
+        period_sales = live_sales.filter(invoice_date__date__gte=from_date, invoice_date__date__lte=to_date)
+        today_sales = live_sales.filter(invoice_date__date=today)
 
-        # ── Today's sales ────────────────────────────────────────────────────────
-        today_agg = SaleInvoice.objects.filter(
-            outlet_id__in=outlet_ids,
-            invoice_date__date=date.today(),
-            is_return=False,
+        sales_agg = period_sales.aggregate(total=Sum('grand_total'), invoices=Count('id'))
+        today_agg = today_sales.aggregate(total=Sum('grand_total'), invoices=Count('id'))
+
+        posted_purchases = PurchaseInvoice.objects.filter(outlet_id__in=outlet_ids, status='POSTED')
+        purchases_agg = posted_purchases.filter(
+            invoice_date__gte=from_date, invoice_date__lte=to_date,
         ).aggregate(total=Sum('grand_total'), invoices=Count('id'))
+        payables_agg = posted_purchases.filter(outstanding__gt=0).aggregate(total=Sum('outstanding'))
 
-        # ── Total purchases across all outlets ───────────────────────────────────
-        purchases_agg = PurchaseInvoice.objects.filter(
-            outlet_id__in=outlet_ids,
-            invoice_date__gte=from_date,
-            invoice_date__lte=to_date,
-        ).aggregate(total=Sum('grand_total'), invoices=Count('id'))
-
-        # ── Total outstanding (distributor payables) ─────────────────────────────
-        payables_agg = PurchaseInvoice.objects.filter(
-            outlet_id__in=outlet_ids,
-            outstanding__gt=0,
-        ).aggregate(total=Sum('outstanding'))
-
-        # ── Customer receivables ─────────────────────────────────────────────────
         receivables_agg = Customer.objects.filter(
-            outlet_id__in=outlet_ids,
-            outstanding__gt=0,
+            outlet_id__in=outlet_ids, outstanding__gt=0,
         ).aggregate(total=Sum('outstanding'))
 
-        # ── Per-outlet breakdown ─────────────────────────────────────────────────
-        outlets = Outlet.objects.filter(id__in=outlet_ids)
+        # One grouped query per figure instead of two queries per outlet.
+        per_outlet_period = {
+            row['outlet_id']: row
+            for row in period_sales.values('outlet_id').annotate(total=Sum('grand_total'), invoices=Count('id'))
+        }
+        per_outlet_today = {
+            row['outlet_id']: row['total']
+            for row in today_sales.values('outlet_id').annotate(total=Sum('grand_total'))
+        }
+
         outlet_data = []
         for outlet in outlets:
-            o_sales = SaleInvoice.objects.filter(
-                outlet=outlet,
-                invoice_date__date__gte=from_date,
-                invoice_date__date__lte=to_date,
-                is_return=False,
-            ).aggregate(total=Sum('grand_total'), invoices=Count('id'))
-
-            o_today = SaleInvoice.objects.filter(
-                outlet=outlet,
-                invoice_date__date=date.today(),
-                is_return=False,
-            ).aggregate(total=Sum('grand_total'))
-
+            period_row = per_outlet_period.get(outlet.id, {})
             outlet_data.append({
                 'id': str(outlet.id),
                 'name': outlet.name,
                 'city': outlet.city,
                 'state': outlet.state,
-                'periodSales': float(o_sales['total'] or 0),
-                'periodInvoices': o_sales['invoices'] or 0,
-                'todaySales': float(o_today['total'] or 0),
+                'periodSales': float(period_row.get('total') or 0),
+                'periodInvoices': period_row.get('invoices') or 0,
+                'todaySales': float(per_outlet_today.get(outlet.id) or 0),
             })
 
         return Response({
             'success': True,
             'data': {
                 'organization': {'id': str(org.id), 'name': org.name},
-                'period': {'from': from_date, 'to': to_date},
+                'period': {'from': str(from_date), 'to': str(to_date)},
                 'totalSales': {
                     'total': float(sales_agg['total'] or 0),
                     'invoices': sales_agg['invoices'] or 0,

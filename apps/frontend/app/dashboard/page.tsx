@@ -1,118 +1,103 @@
 'use client';
 
 import { useState } from 'react';
-import { DateRangeFilter } from '@/types';
+import dynamic from 'next/dynamic';
 import { format } from 'date-fns';
-import { useDashboardKPI, useDashboardAlerts } from '@/hooks/useDashboard';
+import { AlertTriangle } from 'lucide-react';
+import { DateRangeFilter } from '@/types';
+import { useDashboardKPI } from '@/hooks/useDashboard';
+import { apiErrorMessage } from '@/lib/apiError';
+import { periodTitle } from '@/lib/dashboard';
+import { cn } from '@/lib/utils';
 import DashboardHeader from '@/components/dashboard/DashboardHeader';
 import StatCardsRow from '@/components/dashboard/StatCardsRow';
-import PaymentPieChart from '@/components/dashboard/PaymentPieChart';
+import AlertsRow from '@/components/dashboard/AlertsRow';
+import PaymentMixCard from '@/components/dashboard/PaymentMixCard';
 import TopSellingTable from '@/components/dashboard/TopSellingTable';
 import StaffLeaderboard from '@/components/dashboard/StaffLeaderboard';
-import AlertsRow from '@/components/dashboard/AlertsRow';
-import ProfitAnalysisCard from '@/components/dashboard/ProfitAnalysisCard';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import dynamic from 'next/dynamic';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 
-const HOURLY_HEIGHTS = ['45%', '65%', '55%', '70%', '50%', '60%', '52%', '68%', '48%', '72%'];
-
+// recharts is large and only this page uses it: load it after the first paint
 const HourlySalesChart = dynamic(() => import('@/components/dashboard/HourlySalesChart'), {
-  ssr: false,
-  loading: () => (
-    <div className="flex gap-2 items-end h-60 w-full pt-4 animate-pulse">
-      {[...Array(10)].map((_, i) => (
-        <div key={i} className="flex-1 bg-slate-100 rounded-t-sm" style={{ height: HOURLY_HEIGHTS[i % HOURLY_HEIGHTS.length] }} />
-      ))}
-    </div>
-  )
+    ssr: false,
+    loading: () => <Skeleton className="h-56 w-full" role="status" aria-label="Loading chart" />,
 });
 
 export default function DashboardPage() {
-  const [dateRange, setDateRange] = useState<DateRangeFilter>({
-    from: format(new Date(), 'yyyy-MM-dd'),
-    to: format(new Date(), 'yyyy-MM-dd'),
-    period: 'today'
-  });
+    const [dateRange, setDateRange] = useState<DateRangeFilter>(() => {
+        const today = format(new Date(), 'yyyy-MM-dd');
+        return { from: today, to: today, period: 'today' };
+    });
 
-  const { data: kpi, isLoading: kpiLoading, isFetching, refetch } = useDashboardKPI(dateRange);
-  const { data: alerts, isLoading: alertsLoading } = useDashboardAlerts(dateRange);
+    const { data: kpi, isLoading, isFetching, isError, error, isPlaceholderData, dataUpdatedAt, refetch } = useDashboardKPI(dateRange);
+    const period = periodTitle(dateRange.from, dateRange.to);
+    const multiDay = dateRange.from !== dateRange.to;
 
-  return (
-    <div className="space-y-6 max-w-[1400px]">
+    return (
+        <div className="max-w-[1400px] space-y-4">
+            <DashboardHeader
+                isFetching={isFetching}
+                onRefresh={() => refetch()}
+                updatedAt={dataUpdatedAt || undefined}
+                dateRange={dateRange}
+                onDateRangeChange={setDateRange}
+            />
 
-      {/* Greeting + date + refresh */}
-      <DashboardHeader 
-        isFetching={isFetching} 
-        onRefresh={refetch} 
-        dateRange={dateRange}
-        onDateRangeChange={setDateRange}
-      />
+            {/* a failed load says so and offers a retry; numbers already on screen stay (they are the last good ones) */}
+            {isError && (
+                <Alert variant="destructive">
+                    <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+                    <AlertTitle>{kpi ? 'Couldn’t refresh the dashboard' : 'Couldn’t load the dashboard'}</AlertTitle>
+                    <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+                        <span>{apiErrorMessage(error, 'Something went wrong.')}{kpi ? ' These are the last numbers we had.' : ''}</span>
+                        <Button type="button" size="sm" variant="outline" onClick={() => refetch()}>Try again</Button>
+                    </AlertDescription>
+                </Alert>
+            )}
 
-      {/* KPI Cards */}
-      <StatCardsRow kpi={kpi} isLoading={kpiLoading} />
+            {/* dimmed only while the previous period stands in for the one just chosen */}
+            <div className={cn('space-y-4 transition-opacity', isPlaceholderData && 'opacity-60')} aria-busy={isFetching}>
+                <StatCardsRow kpi={kpi} isLoading={isLoading} />
 
-      {/* Charts row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 min-h-0 min-w-0">
-        <div className="lg:col-span-2 min-h-0 min-w-0">
-          <Card className="h-full min-h-0 min-w-0">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Hourly Sales</CardTitle>
-              <CardDescription>Billing activity for selected period</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <HourlySalesChart
-                data={kpi?.hourlySales ?? []}
-                isLoading={kpiLoading}
-              />
-            </CardContent>
-          </Card>
+                <AlertsRow alerts={kpi?.alerts} isLoading={isLoading} />
+
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                    <Card className="min-w-0 lg:col-span-2">
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-base">Sales by hour</CardTitle>
+                            <CardDescription>{period}{multiDay ? ' · all days added together' : ''}</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <HourlySalesChart data={kpi?.hourlySales ?? []} isLoading={isLoading} />
+                        </CardContent>
+                    </Card>
+                    <div className="min-w-0">
+                        <PaymentMixCard kpi={kpi} isLoading={isLoading} periodLabel={period} />
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                    <div className="min-w-0 lg:col-span-2">
+                        <TopSellingTable items={kpi?.topSellingItems ?? []} totalSales={kpi?.totalSales ?? 0} isLoading={isLoading} periodLabel={period} />
+                    </div>
+                    <div className="min-w-0">
+                        <StaffLeaderboard
+                            leaderboard={(kpi?.staffLeaderboard ?? []).map((s) => ({
+                                id: s.id ?? s.staffId ?? '',
+                                name: s.name,
+                                role: s.role ?? 'billing_staff',
+                                totalSales: s.totalSales,
+                                billsCount: s.billsCount,
+                            }))}
+                            isLoading={isLoading}
+                            periodLabel={period}
+                        />
+                    </div>
+                </div>
+            </div>
         </div>
-        
-        <div className="lg:col-span-1 min-h-0 min-w-0">
-          <Card className="h-full min-h-0 min-w-0">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Payment Breakdown</CardTitle>
-              <CardDescription>Collection for selected period</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <PaymentPieChart kpi={kpi} isLoading={kpiLoading} />
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-
-      {/* Profit Analysis */}
-      <ProfitAnalysisCard kpi={kpi} isLoading={kpiLoading} />
-
-      {/* Table + Leaderboard row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2">
-          <TopSellingTable
-            items={kpi?.topSellingItems ?? []}
-            totalSales={kpi?.totalSales ?? 0}
-            isLoading={kpiLoading}
-          />
-        </div>
-        <div className="lg:col-span-1">
-          <StaffLeaderboard
-            leaderboard={(kpi?.staffLeaderboard ?? []).map(staff => ({
-              id: staff.id ?? staff.staffId ?? '',
-              name: staff.name,
-              role: staff.role ?? 'billing_staff',
-              totalSales: staff.totalSales,
-              billsCount: staff.billsCount
-            }))}
-            isLoading={kpiLoading}
-          />
-        </div>
-      </div>
-
-      {/* Alerts row */}
-      <AlertsRow
-        alerts={alerts}
-        isLoading={alertsLoading}
-      />
-
-    </div>
-  );
+    );
 }

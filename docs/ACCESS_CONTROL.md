@@ -47,6 +47,8 @@ those classes, so the list cannot disagree with enforcement.
 | `manage_partners` | admin, or `can_manage_partners` | `CanManagePartners` (partners, fixed expenses) |
 | `edit_vouchers` | admin, or flag `can_edit_vouchers` | `CanEditVouchers` (create/change vouchers; the Daily Report's "Deposit to bank") |
 | `view_accounts`, `override_credit` | manager+ | `IsManagerOrAbove` |
+| `edit_inventory` | manager+ | `IsManagerOrAbove` (`PUT /batches/<id>/` and `PUT /products/<id>/`: edit a batch's dates/prices/rack, edit a product; NOT `manage_products`, which also lets purchase-flag staff create products) |
+| `adjust_stock` | manager+ | `IsManagerOrAbove` (`InventoryAdjustView`: damage, theft, correction, patient return; needs a staff PIN) |
 | `manage_products` | manager+, or purchase flags | `CanManageProducts` (create catalogue products) |
 | `manage_staff`, `manage_settings` | admin, super_admin | `IsAdminStaff` |
 | `send_purchase_orders` | admin, or flag `can_create_purchases` | `CanSendPurchaseOrders` |
@@ -156,3 +158,19 @@ DJANGO_SETTINGS_MODULE=mediflow.settings.test_sqlite pytest apps/accounts/tests/
   only if that is not how your counters work.
 - The 4-digit staff PIN doubles as a login password (rate-limited, but still a small space). Consider requiring the real
   password for login and keeping the PIN for the counter only.
+
+## Switching outlets (super admin)
+
+The server owns "which outlet am I in": `switch-outlet` saves it on the staff record (only to an **active**
+outlet of the caller's own organization) and login, `/auth/me` and switch-outlet all report it. The browser
+must never keep its own, separately saved copy.
+
+* Switch only through `switchOutlet()` in `apps/frontend/lib/outletContext.ts`; never hand-copy the store updates
+  (the header and the chain dashboard each did, in a different order, and each missed something). Callers then do
+  a full page load.
+* `settingsStore.selectedOutletId` is in memory only. It used to be saved inside the per-outlet settings bucket,
+  so A -> B -> A loaded "B" while the server said "A" and every `?outletId=` call hit the wrong outlet. Do not
+  add it back to the persisted state.
+* Org ids sent by the browser (`orgId`) are checked against the caller's own organization with
+  `own_organization_or_404` (`core/chain_views.py`); never `get_object_or_404(Organization, id=<from request>)`.
+* A malformed `outletId` is answered 403 by `check_outlet_access`, not 500.

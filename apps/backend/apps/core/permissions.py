@@ -1,5 +1,6 @@
 from rest_framework.permissions import BasePermission
 from rest_framework.exceptions import PermissionDenied
+from django.core.exceptions import ValidationError as DjangoValidationError
 
 # Role hierarchy (highest to lowest):
 #   super_admin → admin → manager → billing_staff → view_only
@@ -73,7 +74,12 @@ def _same_organization(user, outlet_id):
     if org_id is None:
         return True
     from apps.core.models import Outlet
-    return Outlet.objects.filter(id=outlet_id, organization_id=org_id).exists()
+    try:
+        return Outlet.objects.filter(id=outlet_id, organization_id=org_id).exists()
+    except (DjangoValidationError, ValueError):
+        # `outletId` comes straight from the query string / body: text that is not a UUID is simply
+        # "not one of your outlets" (403), not a crash (500) on every outlet-scoped endpoint.
+        return False
 
 
 def user_can_access_outlet(user, outlet_id):
@@ -587,7 +593,7 @@ def effective_permissions(user):
     if flag('can_edit_vouchers'):
         perms.add('edit_vouchers')                                 # CanEditVouchers (create / change vouchers, e.g. a bank deposit)
     if manager:
-        perms.update({'view_accounts', 'override_credit'})         # IsManagerOrAbove
+        perms.update({'view_accounts', 'override_credit', 'adjust_stock', 'edit_inventory'})   # IsManagerOrAbove (InventoryAdjustView; batch + product PUT)
     if manager or flag('can_create_purchases') or flag('can_edit_purchases'):
         perms.add('manage_products')                               # CanManageProducts
     if admin:

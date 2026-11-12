@@ -228,6 +228,7 @@ const realProductsApi = {
             packSize: item.packSize,
             packUnit: item.packUnit,
             packType: item.packType,
+            allowsLoose: item.allowsLoose,
 
             barcode: item.barcode,
             isFridge: item.isFridge,
@@ -283,6 +284,7 @@ const realProductsApi = {
             packSize: item.packSize,
             packUnit: item.packUnit,
             packType: item.packType ?? 'strip',
+            allowsLoose: item.allowsLoose,
             isFridge: item.isFridge ?? false,
             isDiscontinued: item.isDiscontinued ?? false,
             mrp: item.mrp ?? 0,
@@ -328,6 +330,8 @@ const realProductsApi = {
             packSize: item.packSize ?? 1,
             packUnit: item.packUnit ?? '',
             packType: item.packType ?? 'strip',
+            allowsLoose: item.allowsLoose,
+            batchesUpdated: item.batchesUpdated,
 
             barcode: item.barcode,
             isFridge: item.isFridge ?? false,
@@ -357,7 +361,10 @@ const realInventoryApi = {
         if (filters?.lowStock) url += `&lowStock=true`;
         if (filters?.expiringSoon) url += `&expiringSoon=true`;
         if (filters?.sortBy) url += `&sortBy=${filters.sortBy}`;
-        if (filters?.order) url += `&order=${filters.order}`;
+        // the server reads `sortOrder`; this sent `order` (and the caller passes `sortOrder`), so a
+        // descending sort was never asked for and the list always came back ascending
+        const direction = filters?.sortOrder ?? filters?.order;
+        if (direction) url += `&sortOrder=${direction}`;
         if (filters?.page) url += `&page=${filters.page}`;
         if (filters?.pageSize) url += `&pageSize=${filters.pageSize}`;
 
@@ -404,14 +411,18 @@ const realInventoryApi = {
         await assertOk(response);
         return response.json();
     },
-    adjustStock: async (payload: any) => {
-        const response = await fetch(`${API_URL}/inventory/adjust/`, {
+    adjustStock: async (payload: {
+        batchId: string; type: string; qty: number; reason?: string; pin: string; outletId: string; adjustUnit?: 'strips' | 'loose';
+    }) => {
+        // The endpoint reads the outlet from the QUERY STRING (it was only in the body, so it was never found).
+        const response = await fetch(`${API_URL}/inventory/adjust/?outletId=${encodeURIComponent(payload.outletId)}`, {
             method: 'POST',
             headers: getHeaders(),
             body: JSON.stringify({
                 batchId: payload.batchId,
                 type: payload.type,
                 qty: payload.qty,
+                adjustUnit: payload.adjustUnit ?? 'strips',
                 reason: payload.reason,
                 pin: payload.pin,
                 outletId: payload.outletId,
@@ -723,25 +734,17 @@ const realDashboardApi = {
         );
         await assertOk(response);
         const data = await response.json();
-        // Backend sends totalQty/totalRevenue; type expects qty/revenue
+        // Backend sends totalQty/totalLoose/totalRevenue; the page uses qty/qtyLoose/revenue
         if (Array.isArray(data.topSellingItems)) {
             data.topSellingItems = data.topSellingItems.map((item: any) => ({
                 ...item,
-                qty:     item.qty     ?? item.totalQty     ?? 0,
-                revenue: item.revenue ?? item.totalRevenue ?? 0,
+                qty:      item.qty      ?? item.totalQty      ?? 0,
+                qtyLoose: item.qtyLoose ?? item.totalLoose    ?? 0,
+                revenue:  item.revenue  ?? item.totalRevenue  ?? 0,
             }));
         }
         return data;
     },
-    getAlerts: async (outletId: string): Promise<DashboardAlerts> => {
-        const response = await fetch(
-            `${API_URL}/dashboard/daily/?outletId=${outletId}&date=${new Date().toISOString().split('T')[0]}`,
-            { headers: getHeaders() }
-        );
-        await assertOk(response);
-        const data = await response.json();
-        return data.alerts || {};
-    }
 };
 
 const realStaffApi = {
@@ -1262,8 +1265,9 @@ const realReportsApi = {
         await assertOk(response);
         return response.json();
     },
-    getStockValuation: async (outletId: string) => {
-        const response = await fetch(`${API_URL}/reports/inventory/valuation/?outletId=${outletId}`, {
+    /** `summary: true` returns only the totals and the batch count (a few hundred bytes) instead of every product and batch (~580 KB). */
+    getStockValuation: async (outletId: string, opts: { summary?: boolean } = {}) => {
+        const response = await fetch(`${API_URL}/reports/inventory/valuation/?outletId=${outletId}${opts.summary ? '&summary=true' : ''}`, {
             headers: getHeaders(),
         });
         await assertOk(response);

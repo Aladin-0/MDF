@@ -79,18 +79,39 @@ def test_discount_application(default_outlet, walkin_customer, batch_a):
     assert invoice.grand_total == Decimal('90.00')
     assert invoice.discount_amount == Decimal('10.00')
 
-def test_non_strip_product_qty_loose_rejected(default_outlet, walkin_customer, batch_a):
+def test_pack_that_cannot_be_split_rejects_loose(default_outlet, walkin_customer, batch_a):
     """
     Module: test_sales_core.py
-    Assertion target: A product with pack_type='box' rejects any payload where qtyLoose > 0.
+    Assertion target: a batch of a pack type that holds a volume/weight (bottle) rejects qtyLoose > 0,
+    whatever the product record says: the batch is what is sold, so the batch is what is judged.
     """
     staff = make_test_staff(default_outlet)
-    batch_a.product.pack_type = 'box'
+    batch_a.pack_type = 'bottle'
+    batch_a.pack_size = 100
+    batch_a.save()
+    batch_a.product.pack_type = 'strip'  # the product copy being "fine" must not rescue the sale
     batch_a.product.save()
     request_data = {'grandTotal': 100.0, 'cashPaid': 100.0, 'paymentMode': 'cash'}
     items_data = [{'productId': str(batch_a.product_id), 'batchId': str(batch_a.id), 'qtyStrips': 1, 'qtyLoose': 5, 'rate': 100, 'totalAmount': 100}]
     with pytest.raises(UnitIntegrityError, match='Loose quantities not permitted for'):
         atomic_sale_save(request_data=request_data, outlet=default_outlet, customer=walkin_customer, billed_by=staff, items_data=items_data, schedule_h_data={}, hospital_name='', doctor_id='')
+
+def test_box_of_countable_units_allows_loose(default_outlet, walkin_customer, batch_a):
+    """
+    Module: test_sales_core.py
+    Assertion target: a box of 10 (two-unit pack) can be sold loose; this was refused by the server
+    even though the billing screen offered the Loose field.
+    """
+    call_command('seed_ledgers', outlet_id=str(default_outlet.id))
+    staff = make_test_staff(default_outlet)
+    batch_a.pack_type = 'box'
+    batch_a.pack_unit = 'piece'
+    batch_a.save()
+    request_data = {'grandTotal': 100.0, 'cashPaid': 100.0, 'paymentMode': 'cash'}
+    items_data = [{'productId': str(batch_a.product_id), 'batchId': str(batch_a.id), 'qtyStrips': 0, 'qtyLoose': 5, 'rate': 100, 'totalAmount': 50}]
+    atomic_sale_save(request_data=request_data, outlet=default_outlet, customer=walkin_customer, billed_by=staff, items_data=items_data, schedule_h_data={}, hospital_name='', doctor_id='')
+    batch_a.refresh_from_db()
+    assert (batch_a.qty_strips, batch_a.qty_loose) == (99, 5)
 
 def test_non_strip_product_valid_deduction(default_outlet, walkin_customer, batch_a):
     """

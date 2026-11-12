@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { useDistributorList } from '@/hooks/usePurchases';
 import { PACK_TYPE_OPTIONS, DISPENSING_UNIT_OPTIONS } from '@/constants/productBehavior';
+import { LOOSE_PACK_TYPES, allowsLoose } from '@/lib/packRules';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { inferPackUnit } from '@/utils/productUtils';
 import { Pencil } from 'lucide-react';
@@ -117,28 +118,35 @@ export function EditProductModal({
         defaultValues: { batches: [] }
     });
 
-    const { fields: batchFields, append: appendBatch, remove: removeBatch } = useFieldArray({
+    const { fields: batchFields, remove: removeBatch } = useFieldArray({
         control,
         name: 'batches'
     });
 
     const watchPackType = watch('packType');
     const watchPackUnit = watch('packUnit');
+    const watchPackSize = watch('packSize');
+    // The stored unit may be one the list does not offer (Capsule, a lowercase "tablet"...): show it
+    // instead of an empty box, which looked like the field had been cleared.
+    const unitOptions = (watchPackUnit && !DISPENSING_UNIT_OPTIONS.some(o => o.value.toLowerCase() === watchPackUnit.toLowerCase()))
+        ? [...DISPENSING_UNIT_OPTIONS, { value: watchPackUnit, label: watchPackUnit }]
+        : DISPENSING_UNIT_OPTIONS;
     const watchName = watch('name');
 
-    // Smart Packaging Logic: Enforce Two-Unit rules
-    useEffect(() => {
-        if (watchPackType) {
-            if (watchPackType === 'strip') {
-                setValue('packUnit', 'Tablet', { shouldValidate: true, shouldDirty: true });
-            } else if (watchPackType !== 'box') {
-                // For Bottle, Tube, Jar, etc.
-                setValue('packSize', 1, { shouldValidate: true, shouldDirty: true });
-                setValue('packUnit', 'Piece', { shouldValidate: true, shouldDirty: true });
-            }
-            // If it is 'box', we do nothing automatically so the user can manually enter "12 Strips" or "1 Piece".
+    // Smart packaging defaults, applied ONLY when the user picks a different pack type.
+    // This used to be an effect on `packType`, which also ran when the form loaded: just opening
+    // a bottle (size 100 ml) set it to size 1 / "Piece", and any strip got unit "Tablet", all
+    // marked as edits, so the next Save silently rewrote the product's (and its batches') pack.
+    const applyPackTypeDefaults = (packType: string) => {
+        if (packType === 'strip' || packType === 'blister') {
+            setValue('packUnit', 'Tablet', { shouldValidate: true, shouldDirty: true });
+        } else if (!LOOSE_PACK_TYPES.has(packType)) {
+            // Bottle, Tube, Jar, Piece... : one whole item, nothing to split
+            setValue('packSize', 1, { shouldValidate: true, shouldDirty: true });
+            setValue('packUnit', 'Piece', { shouldValidate: true, shouldDirty: true });
         }
-    }, [watchPackType, setValue]);
+        // Box / Packet / Other: the user enters "12 Strips" or "10 Pieces" themselves.
+    };
 
     // Watch batches for margin calc
     const watchedBatches = watch('batches');
@@ -218,18 +226,29 @@ export function EditProductModal({
             queryClient.invalidateQueries({ queryKey: ['inventory'] });
             queryClient.invalidateQueries({ queryKey: ['stock-list'] });
             queryClient.invalidateQueries({ queryKey: ['products'] });
-            toast({ title: 'Product updated', description: `${updated.name} saved successfully.` });
+            toast({
+                title: 'Product updated',
+                description: updated.batchesUpdated
+                    ? `${updated.name} saved. Pack details also updated on ${updated.batchesUpdated} batch${updated.batchesUpdated === 1 ? '' : 'es'}.`
+                    : `${updated.name} saved successfully.`,
+            });
             onSaved?.(updated);
             onOpenChange(false);
         } catch (err: any) {
-            const body = await err?.response?.json?.().catch(() => null) ?? null;
+            // the API client throws the response body itself ({ errors: {...} }), not a Response
+            const body = err?.errors ? err : (await err?.response?.json?.().catch(() => null) ?? null);
             if (body?.errors) {
                 setApiErrors(body.errors);
+                toast({
+                    variant: 'destructive',
+                    title: 'Not saved',
+                    description: Object.values(body.errors as Record<string, string>).join(' · '),
+                });
             } else {
                 toast({
                     variant: 'destructive',
                     title: 'Update failed',
-                    description: err?.message ?? 'Unknown error',
+                    description: err?.detail ?? err?.message ?? 'Unknown error',
                 });
             }
         } finally {
@@ -314,7 +333,7 @@ export function EditProductModal({
                                                     name="packType"
                                                     control={control}
                                                     render={({ field }) => (
-                                                        <Select value={field.value} onValueChange={field.onChange}>
+                                                        <Select value={field.value} onValueChange={(v) => { field.onChange(v); applyPackTypeDefaults(v); }}>
                                                             <SelectTrigger><SelectValue placeholder="e.g. Strip" /></SelectTrigger>
                                                             <SelectContent>
                                                                 {PACK_TYPE_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
@@ -334,13 +353,17 @@ export function EditProductModal({
                                                         <Select value={field.value} onValueChange={field.onChange}>
                                                             <SelectTrigger><SelectValue placeholder="Select Unit" /></SelectTrigger>
                                                             <SelectContent>
-                                                                {DISPENSING_UNIT_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                                                                {unitOptions.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                                                             </SelectContent>
                                                         </Select>
                                                     )}
                                                 />
                                             </Field>
                                         </div>
+                                        <p className="mt-2 text-xs text-slate-500">
+                                            Saving applies these pack details to every batch of this product, so billing and stock agree.
+                                            {watchPackType && ` Loose units ${allowsLoose({ packSize: Number(watchPackSize), packType: watchPackType }) ? 'can' : 'cannot'} be sold for this pack.`}
+                                        </p>
                                     </Section>
                                     <Separator />
                                     {/* ── Section: Stock Management ── */}
@@ -414,14 +437,11 @@ export function EditProductModal({
                                 <TabsContent value="batches" className="space-y-6 outline-none">
                                     <div className="flex justify-between items-center mb-4">
                                         <h3 className="text-sm font-semibold text-slate-700">Active Batches</h3>
-                                        <Button type="button" size="sm" variant="outline" onClick={() => appendBatch({ batchNo: '', expiryDate: '', qtyStrips: 0, qtyLoose: 0, mrp: 0, margin: 20, landingRate: 0 })}>
-                                            + Add Batch
-                                        </Button>
                                     </div>
-                                    
+
                                     {batchFields.length === 0 ? (
                                         <div className="text-center py-8 text-slate-500 border border-dashed rounded-lg bg-slate-50">
-                                            No batches added yet. Click "+ Add Batch" to create one.
+                                            Batches are added by receiving a purchase and edited on the product&apos;s own page. They cannot be added here.
                                         </div>
                                     ) : (
                                         <div className="space-y-4">

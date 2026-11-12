@@ -1,134 +1,138 @@
 'use client';
 
-import { Package, IndianRupee, AlertTriangle, PackageX } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
-import { useQuery } from '@tanstack/react-query';
-import { reportsApi, inventoryApi } from '@/lib/apiClient';
-import { formatCurrency } from '@/lib/gst';
+import { AlertTriangle, IndianRupee, Package, PackageX } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useOutletId } from '@/hooks/useOutletId';
+import { cn } from '@/lib/utils';
+import { formatCurrency } from '@/lib/gst';
+import { useInventorySummary } from '@/hooks/useInventorySummary';
 import { useInventoryStore } from '@/store/inventoryStore';
+import { VALUATION_LABELS } from '@/lib/inventory';
+import { ValuationToggle } from '@/components/inventory/ValuationToggle';
+import type { InventoryTab } from '@/lib/inventoryParams';
 
-export function InventoryStatCards({ onTabChange }: { onTabChange?: (tab: string) => void }) {
-    const outletId = useOutletId();
-    const { valuationMode } = useInventoryStore();
+const count = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
 
-    // Total products count (paginated, just need totalRecords)
-    const { data: stockData, isLoading: stockLoading } = useQuery({
-        queryKey: ['inventory', 'stock-summary', outletId],
-        queryFn: () => inventoryApi.getStock(outletId, { pageSize: 1 }),  // minimal — only need totalRecords
-        staleTime: 1000 * 60 * 3,
-        enabled: !!outletId,
-    });
+interface CardProps {
+    title: string;
+    icon: React.ReactNode;
+    tone: string;
+    loading: boolean;
+    error: boolean;
+    onRetry: () => void;
+    value: string;
+    subtitle: React.ReactNode;
+    footer?: React.ReactNode;
+    /** Makes the whole card a real button (keyboard and screen-reader friendly), not a clickable div. */
+    onSelect?: () => void;
+    selectLabel?: string;
+}
 
-    // Real stock value across ALL batches (not paginated)
-    const { data: valuationData, isLoading: valuationLoading } = useQuery({
-        queryKey: ['inventory', 'valuation', outletId],
-        queryFn: () => reportsApi.getStockValuation(outletId),
-        staleTime: 1000 * 60 * 5,
-        enabled: !!outletId,
-    });
-
-    // Expiring soon count (all pages)
-    const { data: expiringData, isLoading: expiringLoading } = useQuery({
-        queryKey: ['inventory', 'expiring-summary', outletId],
-        queryFn: () => inventoryApi.getStock(outletId, { expiringSoon: true, pageSize: 1 }),
-        staleTime: 1000 * 60 * 5,
-        enabled: !!outletId,
-    });
-
-    // Low stock count (all pages)
-    const { data: lowStockData, isLoading: lowStockLoading } = useQuery({
-        queryKey: ['inventory', 'lowstock-summary', outletId],
-        queryFn: () => inventoryApi.getStock(outletId, { lowStock: true, pageSize: 1 }),
-        staleTime: 1000 * 60 * 3,
-        enabled: !!outletId,
-    });
-
-    const isLoading = stockLoading || valuationLoading || expiringLoading || lowStockLoading;
-
-    if (isLoading) {
-        return (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {[...Array(4)].map((_, i) => (
-                    <Skeleton key={i} className="h-28 w-full rounded-xl" />
-                ))}
+function StatCard({ title, icon, tone, loading, error, onRetry, value, subtitle, footer, onSelect, selectLabel }: CardProps) {
+    const body = (
+        <div className="flex items-start gap-4">
+            <span className={cn('flex h-11 w-11 shrink-0 items-center justify-center rounded-full', tone)} aria-hidden="true">{icon}</span>
+            <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-muted-foreground">{title}</p>
+                {loading ? (
+                    <div className="mt-2 space-y-2" role="status" aria-label={`Loading ${title}`}>
+                        <Skeleton className="h-7 w-28" />
+                        <Skeleton className="h-4 w-36" />
+                    </div>
+                ) : error ? (
+                    // a failed load must never look like a real zero
+                    <p className="mt-1 text-sm text-destructive">Couldn&apos;t load this figure.</p>
+                ) : (
+                    <>
+                        <p className="mt-1 truncate text-2xl font-semibold tabular-nums">{value}</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>
+                    </>
+                )}
             </div>
-        );
-    }
+        </div>
+    );
 
-    const totalProducts   = stockData?.pagination?.totalRecords ?? stockData?.data?.length ?? 0;
-    
-    let stockValue = 0;
-    if (valuationData?.data) {
-        if (valuationMode === 'PURCHASE') stockValue = valuationData.data.total_value_purchase ?? valuationData.data.totalValuation ?? 0;
-        else if (valuationMode === 'LANDING') stockValue = valuationData.data.total_value_landing ?? 0;
-        else if (valuationMode === 'MRP') stockValue = valuationData.data.total_value_mrp ?? 0;
-    }
-
-    const activeBatches   = valuationData?.data?.products?.reduce((sum: number, p: any) => sum + (p.batches?.length ?? 0), 0) ?? 0;
-    const expiringCount   = expiringData?.pagination?.totalRecords ?? 0;
-    const lowStockCount   = lowStockData?.pagination?.totalRecords ?? 0;
-
-    const subtitleMap = {
-        'PURCHASE': 'At Purchase Price',
-        'LANDING': 'At Landing Price',
-        'MRP': 'At MRP Price'
-    };
-
+    const shell = 'rounded-xl border bg-card text-card-foreground shadow-sm';
     return (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard
-                icon={<Package className="text-indigo-600 w-5 h-5" />}
-                bg="bg-indigo-50"
-                title="Total Products"
-                value={`${totalProducts} products`}
-                subtitle={`${activeBatches} active batches`}
-            />
-            <StatCard
-                icon={<IndianRupee className="text-emerald-600 w-5 h-5" />}
-                bg="bg-emerald-50"
-                title="Stock Value"
-                value={formatCurrency(stockValue)}
-                subtitle={subtitleMap[valuationMode]}
-            />
-            <StatCard
-                icon={<AlertTriangle className="text-amber-600 w-5 h-5" />}
-                bg="bg-amber-50"
-                title="Expiring Soon"
-                value={`${expiringCount} batches`}
-                subtitle="Within 90 days"
-                onClick={() => onTabChange?.('expiring')}
-                cursor="cursor-pointer hover:bg-slate-50 transition-colors"
-            />
-            <StatCard
-                icon={<PackageX className="text-red-600 w-5 h-5" />}
-                bg="bg-red-50"
-                title="Low Stock"
-                value={`${lowStockCount} items`}
-                subtitle="Below reorder level"
-                onClick={() => onTabChange?.('low_stock')}
-                cursor="cursor-pointer hover:bg-slate-50 transition-colors"
-            />
+        <div className={cn(shell, 'flex flex-col')}>
+            {onSelect && !error ? (
+                <button
+                    type="button"
+                    onClick={onSelect}
+                    aria-label={selectLabel}
+                    className="w-full flex-1 rounded-xl p-5 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                    {body}
+                </button>
+            ) : (
+                <div className="flex-1 p-5">{body}</div>
+            )}
+            {error && (
+                <div className="px-5 pb-4"><Button type="button" size="sm" variant="outline" onClick={onRetry}>Try Again</Button></div>
+            )}
+            {footer && <div className="border-t px-5 py-3">{footer}</div>}
         </div>
     );
 }
 
-function StatCard({ icon, bg, title, value, subtitle, onClick, cursor }: any) {
+export function InventoryStatCards({ onTabChange }: { onTabChange?: (tab: InventoryTab) => void }) {
+    const { total, expiring, lowStock, valuation, counts } = useInventorySummary();
+    const { valuationMode, setValuationMode } = useInventoryStore();
+
+    const data = valuation.data?.data;
+    const stockValue =
+        valuationMode === 'PURCHASE' ? data?.total_value_purchase ?? data?.totalValuation ?? 0
+        : valuationMode === 'LANDING' ? data?.total_value_landing ?? 0
+        : data?.total_value_mrp ?? 0;
+    const activeBatches: number | undefined = data?.activeBatches;
+
     return (
-        <Card className={`shadow-sm border-slate-200 rounded-xl ${cursor || ''}`} onClick={onClick}>
-            <CardContent className="p-6">
-                <div className="flex items-center gap-4">
-                    <div className={`p-3 rounded-full flex items-center justify-center h-12 w-12 ${bg}`}>
-                        {icon}
-                    </div>
-                    <div>
-                        <p className="text-sm text-slate-500 font-medium">{title}</p>
-                        <h3 className="text-3xl font-bold text-slate-900 mt-1">{value}</h3>
-                        <p className="text-sm text-slate-500 mt-1">{subtitle}</p>
-                    </div>
-                </div>
-            </CardContent>
-        </Card>
+        <section aria-label="Inventory summary" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <StatCard
+                title="Products in Stock"
+                icon={<Package className="h-5 w-5" />}
+                tone="bg-primary/10 text-primary"
+                loading={total.isLoading}
+                error={total.isError}
+                onRetry={() => total.refetch()}
+                value={count.format(counts.total)}
+                subtitle={activeBatches !== undefined ? `${count.format(activeBatches)} active batches` : 'Across all batches'}
+            />
+            <StatCard
+                title="Stock Value"
+                icon={<IndianRupee className="h-5 w-5" />}
+                tone="bg-emerald-100 text-emerald-700"
+                loading={valuation.isLoading}
+                error={valuation.isError}
+                onRetry={() => valuation.refetch()}
+                value={formatCurrency(stockValue)}
+                subtitle={`At ${VALUATION_LABELS[valuationMode]} ${valuationMode === 'MRP' ? '' : 'price'}`.trim()}
+                footer={<ValuationToggle value={valuationMode} onChange={setValuationMode} />}
+            />
+            <StatCard
+                title="Expiring Soon"
+                icon={<AlertTriangle className="h-5 w-5" />}
+                tone="bg-amber-100 text-amber-700"
+                loading={expiring.isLoading}
+                error={expiring.isError}
+                onRetry={() => expiring.refetch()}
+                value={`${count.format(counts.expiring)} ${counts.expiring === 1 ? 'product' : 'products'}`}
+                subtitle="Within 90 days, including expired"
+                onSelect={() => onTabChange?.('expiring')}
+                selectLabel={`Expiring soon: ${counts.expiring} products. Open the list.`}
+            />
+            <StatCard
+                title="Low Stock"
+                icon={<PackageX className="h-5 w-5" />}
+                tone="bg-red-100 text-red-700"
+                loading={lowStock.isLoading}
+                error={lowStock.isError}
+                onRetry={() => lowStock.refetch()}
+                value={`${count.format(counts.lowStock)} ${counts.lowStock === 1 ? 'product' : 'products'}`}
+                subtitle="Below the reorder level"
+                onSelect={() => onTabChange?.('low_stock')}
+                selectLabel={`Low stock: ${counts.lowStock} products. Open the list.`}
+            />
+        </section>
     );
 }

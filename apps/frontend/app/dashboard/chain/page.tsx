@@ -1,14 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
+import { useQuery, useMutation, keepPreviousData } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { format, startOfMonth } from 'date-fns';
 import { Building2, TrendingUp, ShoppingCart, CreditCard, ArrowDownCircle, RefreshCw, AlertTriangle, ArrowRight, Loader2 } from 'lucide-react';
-import { chainApi, authApi } from '@/lib/apiClient';
+import { chainApi } from '@/lib/apiClient';
 import { useAuthStore } from '@/store/authStore';
-import { useSettingsStore, rehydrateSettingsForOutlet } from '@/store/settingsStore';
-import { useBillingStore } from '@/store/billingStore';
+import { useOutletId } from '@/hooks/useOutletId';
+import { switchOutlet } from '@/lib/outletContext';
 import { ChainDashboard, ChainOutletRow } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -44,47 +44,40 @@ function KPICard({
 
 export default function ChainDashboardPage() {
     const user = useAuthStore((s) => s.user);
-    const queryClient = useQueryClient();
-    const router = useRouter();
+    // The outlet every API call uses: "Current" must mean the same thing here as in the header.
+    const activeOutletId = useOutletId();
     const [from, setFrom] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
     const [to, setTo] = useState(format(new Date(), 'yyyy-MM-dd'));
 
     const orgId = user?.organizationId;
+    // A cleared date box gives '' and a reversed range is meaningless: do not ask the server (it
+    // would have silently fallen back to its own default period and mislabelled the numbers).
+    const rangeError = !from || !to
+        ? 'Pick both a From and a To date.'
+        : from > to ? '"From" date cannot be after "To" date.' : null;
 
-    const { data, isLoading, isError, refetch } = useQuery<ChainDashboard>({
+    const { data, isLoading, isFetching, isError, error, refetch } = useQuery<ChainDashboard>({
         queryKey: ['chain-dashboard', orgId, from, to],
         queryFn: () => chainApi.getChainDashboard(orgId!, from, to),
-        enabled: !!orgId && user?.role === 'super_admin',
+        enabled: !!orgId && user?.role === 'super_admin' && !rangeError,
         staleTime: 1000 * 60 * 2,
+        // Changing a date keeps the last figures on screen (dimmed) instead of flashing every KPI to ₹0.
+        placeholderData: keepPreviousData,
     });
 
     const switchMutation = useMutation({
-        mutationFn: (targetOutletId: string) => authApi.switchOutlet(targetOutletId),
-        onSuccess: (data) => {
-            // 1. Update auth store with new user and outlet
-            useAuthStore.setState({ user: data.user, isAuthenticated: true });
-            useAuthStore.getState().setOutlet(data.user.outlet);
-
-            // 2. Update selectedOutletId so useOutletId() picks up the new outlet from auth store
-            useSettingsStore.getState().setOutletId(data.user.outletId);
-
-            // 2b. Re-key the settings store to the new outlet's localStorage bucket
-            rehydrateSettingsForOutlet(data.user.outletId);
-
-            // 3. Reset billing store to prevent cross-outlet cart leakage
-            useBillingStore.getState().resetBilling();
-
-            // 4. Save new JWT token
-            document.cookie = `access_token=${data.access}; path=/;`;
-
-            // 5. Clear react-query cache and navigate without full page reload
-            queryClient.clear();
-            router.push('/dashboard');
+        mutationFn: (targetOutletId: string) => switchOutlet(targetOutletId),
+        onSuccess: () => {
+            // Full page load, like the header's switcher: the query cache, in-flight requests and the
+            // other in-memory stores all still describe the old outlet.
+            window.location.assign('/dashboard');
         },
         onError: (err: any) => {
-            alert(err?.detail || 'Failed to switch outlet');
-        }
+            toast.error(err?.detail || 'Failed to switch outlet');
+        },
     });
+    // After success the page is about to be replaced: keep every Enter button locked until it is.
+    const switching = switchMutation.isPending || switchMutation.isSuccess;
 
     if (user?.role !== 'super_admin') {
         return (
@@ -120,8 +113,8 @@ export default function ChainDashboardPage() {
                     )}
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isLoading}>
-                        <RefreshCw className={cn('mr-2 h-4 w-4', isLoading && 'animate-spin')} />
+                    <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching || !!rangeError}>
+                        <RefreshCw className={cn('mr-2 h-4 w-4', isFetching && 'animate-spin')} />
                         Refresh
                     </Button>
                     <AddOutletModal orgId={orgId} />
@@ -143,14 +136,20 @@ export default function ChainDashboardPage() {
                 </Badge>
             </div>
 
-            {isError && (
+            {rangeError && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                    {rangeError}
+                </div>
+            )}
+
+            {isError && !rangeError && (
                 <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-                    Failed to load chain data. Check that your account has super_admin access.
+                    {(error as any)?.error || (error as any)?.detail || 'Failed to load chain data.'}
                 </div>
             )}
 
             {/* KPI cards */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className={cn('grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 transition-opacity', isFetching && !isLoading && 'opacity-60')}>
                 <KPICard
                     title="Period Sales"
                     value={fmt(data?.totalSales.total ?? 0)}
@@ -241,15 +240,15 @@ export default function ChainDashboardPage() {
                                             </td>
                                             <td className="px-5 py-3 text-center">
                                                 <Button
-                                                    variant={outlet.id === user?.outletId ? "secondary" : "outline"}
+                                                    variant={outlet.id === activeOutletId ? "secondary" : "outline"}
                                                     size="sm"
-                                                    disabled={outlet.id === user?.outletId || switchMutation.isPending}
+                                                    disabled={outlet.id === activeOutletId || switching}
                                                     onClick={() => switchMutation.mutate(outlet.id)}
                                                     className="w-full text-xs h-8"
                                                 >
-                                                    {switchMutation.variables === outlet.id && switchMutation.isPending ? (
+                                                    {switchMutation.variables === outlet.id && switching ? (
                                                         <Loader2 className="h-3 w-3 animate-spin mx-auto" />
-                                                    ) : outlet.id === user?.outletId ? (
+                                                    ) : outlet.id === activeOutletId ? (
                                                         <span className="text-slate-500">Current</span>
                                                     ) : (
                                                         <>

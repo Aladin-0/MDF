@@ -12,11 +12,19 @@ from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 
 from apps.inventory.models import MasterProduct, Batch
+from apps.inventory.cache_utils import bump_inventory_cache, inventory_cache_version
+from apps.inventory.pack_rules import (
+    allows_loose, batch_allows_loose, normalize_pack_type, pack_errors, sync_batch_to_pack, fold_loose_into_packs,
+)
 from apps.core.models import Outlet, TaxSlab
 from apps.accounts.models import Staff
 from apps.audit.services import log_activity
 
 logger = logging.getLogger(__name__)
+
+# Inventory rules shared by the list filter, the row flags and the alerts
+DEFAULT_MIN_QTY = 10          # packs: below this a product counts as low stock unless the outlet set its own minimum
+EXPIRING_SOON_DAYS = 90
 
 from apps.purchases.models import PurchaseItem
 from apps.billing.utils.pricing import get_landing_cost_for_batch
@@ -49,104 +57,187 @@ class BatchLandingCostView(APIView):
             'freight_per_unit': str(freight_per_unit)
         }, status=status.HTTP_200_OK)
 
+# What can be edited on a batch, as (request field, model field, label). One table drives the
+# validation messages, the change log and the "what changed" summary.
+BATCH_EDIT_FIELDS = (
+    ('batchNo', 'batch_no', 'Batch no'),
+    ('expiryDate', 'expiry_date', 'Expiry'),
+    ('mfgDate', 'mfg_date', 'Mfg date'),
+    ('mrp', 'mrp', 'MRP'),
+    ('purchaseRate', 'purchase_rate', 'Purchase rate'),
+    ('landingRate', 'landing_rate', 'Landing rate'),
+    ('packSize', 'pack_size', 'Pack size'),
+    ('packUnit', 'pack_unit', 'Pack unit'),
+    ('packType', 'pack_type', 'Pack type'),
+    ('rackLocation', 'rack_location', 'Rack'),
+)
+_MONEY_MAX = Decimal('99999999.99')  # the column is DECIMAL(10, 2)
+
+
+def _money(value, label, *, allow_zero=True):
+    """A price as Decimal(2dp), or raise ValueError with a message for the user."""
+    try:
+        amount = Decimal(str(value)).quantize(Decimal('0.01'))
+    except (InvalidOperation, TypeError, ValueError):
+        raise ValueError(f'{label} must be a number')
+    if amount < 0 or (amount == 0 and not allow_zero):
+        raise ValueError(f'{label} must be greater than 0' if not allow_zero else f'{label} cannot be negative')
+    if amount > _MONEY_MAX:
+        raise ValueError(f'{label} is too large')
+    return amount
+
+
+def _day(value, label, *, required):
+    """'YYYY-MM-DD' -> date. Empty is an error for a required date and None for an optional one."""
+    if value in (None, ''):
+        if required:
+            raise ValueError(f'{label} is required')
+        return None
+    try:
+        return datetime.strptime(str(value), '%Y-%m-%d').date()
+    except ValueError:
+        raise ValueError(f'{label} must be a date (YYYY-MM-DD)')
+
+
+def _plain(value):
+    """JSON-safe value for the change log."""
+    if value is None or isinstance(value, (int, float, str, bool)):
+        return value
+    return str(value)
+
+
 class BatchDetailUpdateView(APIView):
-    """PUT /api/v1/inventory/batches/{batch_id}/ - Update batch properties directly"""
+    """
+    PUT /api/v1/inventory/batches/{batch_id}/ - edit a batch's details (batch no, dates, prices, rack, pack).
+
+    Stock quantities are NOT edited here (that is the audited adjustment with a PIN); only a pack size
+    change re-counts loose stock, which it must, to keep `qty_loose < pack_size`.
+    """
     permission_classes = [IsManagerOrAbove]
 
     def put(self, request, batch_id, *args, **kwargs):
-        try:
-            batch = Batch.objects.get(id=batch_id)
-        except Batch.DoesNotExist:
-            return Response({'detail': 'Batch not found'}, status=status.HTTP_404_NOT_FOUND)
-        assert_outlet_access(request.user, batch.outlet_id)
-
-        data = request.data
-        errors = {}
-
-        if 'batchNo' in data:
-            bn = (data['batchNo'] or '').strip()
-            if not bn:
-                errors['batchNo'] = 'Batch number is required'
-            else:
-                batch.batch_no = bn
-                
-        if 'expiryDate' in data:
+        # Lock the row and write ONLY the fields that changed. This used to read the batch, then
+        # `save()` the whole row: a sale that committed in between had its stock deduction overwritten
+        # by the stale quantity read here, so editing a rack or a price could quietly put sold stock
+        # back on the shelf.
+        with transaction.atomic():
             try:
-                batch.expiry_date = datetime.strptime(data['expiryDate'], '%Y-%m-%d').date()
-            except ValueError:
-                errors['expiryDate'] = 'Invalid expiry date format (YYYY-MM-DD)'
-                
-        if 'mfgDate' in data:
-            if not data['mfgDate']:
-                batch.mfg_date = None
-            else:
+                batch = Batch.objects.select_for_update(of=('self',)).select_related('product', 'outlet').get(id=batch_id)  # lock only the batch row: Postgres refuses FOR UPDATE on the nullable product join
+            except Batch.DoesNotExist:
+                return Response({'detail': 'Batch not found'}, status=status.HTTP_404_NOT_FOUND)
+            assert_outlet_access(request.user, batch.outlet_id)
+
+            data = request.data
+            before = {model: getattr(batch, model) for _, model, _ in BATCH_EDIT_FIELDS}
+            before['qty_strips'], before['qty_loose'] = batch.qty_strips, batch.qty_loose
+            errors = {}
+
+            def apply(field, convert):
+                if field not in data:
+                    return
                 try:
-                    batch.mfg_date = datetime.strptime(data['mfgDate'], '%Y-%m-%d').date()
-                except ValueError:
-                    errors['mfgDate'] = 'Invalid mfg date format (YYYY-MM-DD)'
+                    setattr(batch, dict((r, m) for r, m, _ in BATCH_EDIT_FIELDS)[field], convert(data[field]))
+                except ValueError as exc:
+                    errors[field] = str(exc)
 
-        if 'mrp' in data:
-            try:
-                mrp = Decimal(str(data['mrp']))
-                if mrp < 0:
-                    errors['mrp'] = 'MRP cannot be negative'
-                else:
-                    batch.mrp = mrp
-            except (InvalidOperation, TypeError):
-                errors['mrp'] = 'Invalid MRP'
+            def batch_no(v):
+                v = (v or '').strip()
+                if not v:
+                    raise ValueError('Batch number is required')
+                clash = Batch.objects.filter(
+                    outlet_id=batch.outlet_id, product_id=batch.product_id, is_active=True, batch_no__iexact=v,
+                ).exclude(pk=batch.pk).exists()
+                if clash:
+                    raise ValueError(f"Batch {v} already exists for this product. To move stock between batches, adjust the stock instead of renaming.")
+                return v
 
-        if 'purchaseRate' in data:
-            try:
-                pr = Decimal(str(data['purchaseRate']))
-                if pr < 0:
-                    errors['purchaseRate'] = 'Purchase rate cannot be negative'
-                else:
-                    batch.purchase_rate = pr
-            except (InvalidOperation, TypeError):
-                errors['purchaseRate'] = 'Invalid purchase rate'
-
-        if 'landingRate' in data or 'landing_rate' in data:
-            val = data.get('landingRate') if 'landingRate' in data else data.get('landing_rate')
-            if val is None or val == '':
-                batch.landing_rate = None
-            else:
+            def whole(v):
                 try:
-                    lr = Decimal(str(val))
-                    if lr < 0:
-                        errors['landingRate'] = 'Landing rate cannot be negative'
-                    else:
-                        batch.landing_rate = lr
-                except (InvalidOperation, TypeError):
-                    errors['landingRate'] = 'Invalid landing rate'
+                    n = int(v)
+                except (TypeError, ValueError):
+                    raise ValueError('Pack size must be a whole number')
+                if n < 1:
+                    raise ValueError('Pack size must be at least 1')
+                return n
 
-        if 'packSize' in data:
-            try:
-                ps = int(data['packSize'])
-                if ps < 1:
-                    errors['packSize'] = 'Pack size must be ≥ 1'
+            def unit(v):
+                v = (v or '').strip()
+                if not v:
+                    raise ValueError('Pack unit is required')
+                return v
+
+            apply('batchNo', batch_no)
+            apply('expiryDate', lambda v: _day(v, 'Expiry date', required=True))
+            apply('mfgDate', lambda v: _day(v, 'Mfg date', required=False))
+            apply('mrp', lambda v: _money(v, 'MRP', allow_zero=False))
+            apply('purchaseRate', lambda v: _money(v, 'Purchase rate'))
+            if 'landingRate' in data or 'landing_rate' in data:
+                raw = data.get('landingRate') if 'landingRate' in data else data.get('landing_rate')
+                if raw in (None, ''):
+                    batch.landing_rate = None
                 else:
-                    batch.pack_size = ps
-            except (ValueError, TypeError):
-                errors['packSize'] = 'Invalid pack size'
+                    try:
+                        batch.landing_rate = _money(raw, 'Landing rate')
+                    except ValueError as exc:
+                        errors['landingRate'] = str(exc)
+            apply('packSize', whole)
+            apply('packUnit', unit)
+            if 'packType' in data and data['packType']:
+                batch.pack_type = normalize_pack_type(data['packType'])
+            if 'rackLocation' in data:
+                batch.rack_location = (data['rackLocation'] or '').strip()
 
-        if 'packUnit' in data:
-            pu = (data['packUnit'] or '').strip()
-            if not pu:
-                errors['packUnit'] = 'Pack unit is required'
-            else:
-                batch.pack_unit = pu
+            if not errors and batch.mfg_date and batch.expiry_date and batch.mfg_date > batch.expiry_date:
+                errors['mfgDate'] = 'Manufacturing date must be before the expiry date'
 
-        if 'packType' in data and data['packType']:
-            batch.pack_type = data['packType']
+            pack_touched = any(k in data for k in ('packSize', 'packUnit', 'packType'))
+            if pack_touched and not errors:
+                # judge the pack as it WILL be, so fixing one field of a bad pack is accepted when the
+                # result is sound, and an unrelated edit (rack, MRP) never trips over an old bad pack
+                errors.update(pack_errors(batch.pack_size, batch.pack_unit, batch.pack_type))
+            if pack_touched and 'packSize' in data and not errors:
+                batch.qty_strips, batch.qty_loose = fold_loose_into_packs(batch.qty_strips, batch.qty_loose, batch.pack_size)
 
-        if 'rackLocation' in data:
-            batch.rack_location = (data['rackLocation'] or '').strip()
+            if errors:
+                return Response({'errors': errors}, status=status.HTTP_400_BAD_REQUEST)
 
-        if errors:
-            return Response({'errors': errors}, status=status.HTTP_400_BAD_REQUEST)
+            after = {model: getattr(batch, model) for _, model, _ in BATCH_EDIT_FIELDS}
+            after['qty_strips'], after['qty_loose'] = batch.qty_strips, batch.qty_loose
+            # an unset text field (None) and an empty one ('') are the same: re-saving an empty box is not a change
+            def same(a, b):
+                return (a or '') == (b or '') if isinstance(a, (str, type(None))) and isinstance(b, (str, type(None))) else a == b
+            changed = [name for name in after if not same(after[name], before[name])]
 
-        batch.save()
-        return Response(serialize_batch(batch), status=status.HTTP_200_OK)
+            if changed:
+                batch.save(update_fields=changed)
+                labels = {model: label for _, model, label in BATCH_EDIT_FIELDS}
+                summary = ', '.join(f"{labels.get(n, n)} {before[n] if before[n] not in (None, '') else '—'} → {after[n] if after[n] not in (None, '') else '—'}" for n in changed)
+                product_name = batch.product.name if batch.product else 'Custom product'
+                log_activity(
+                    action='UPDATE',
+                    module='inventory',
+                    entity_type='Batch',
+                    entity_id=batch.id,
+                    entity_label=f'{product_name} / {batch.batch_no}',
+                    description=f'Edited batch {batch.batch_no} of {product_name}: {summary}',
+                    changes={n: {'old': _plain(before[n]), 'new': _plain(after[n])} for n in changed},
+                    user=request.user,
+                    request=request,
+                    outlet=batch.outlet,
+                )
+
+        if changed:
+            # lists, counts and the billing screen's product search must show the new price / date / rack at once
+            bump_inventory_cache(batch.outlet_id)
+
+        payload = serialize_batch(batch)
+        payload['changed'] = changed
+        cost = batch.landing_rate or batch.purchase_rate
+        payload['warnings'] = (
+            [f"MRP ₹{batch.mrp} is below the cost ₹{cost}: this batch will sell at a loss."]
+            if cost and batch.mrp < cost else []
+        )
+        return Response(payload, status=status.HTTP_200_OK)
 
 
 def serialize_product(product, total_stock=0, nearest_expiry="2099-12-31", is_low_stock=False, batches=None):
@@ -163,6 +254,7 @@ def serialize_product(product, total_stock=0, nearest_expiry="2099-12-31", is_lo
         'packSize': product.pack_size,
         'packUnit': product.pack_unit,
         'packType': product.pack_type,
+        'allowsLoose': allows_loose(product.pack_size, product.pack_type),
         'barcode': product.barcode,
         'isFridge': product.is_fridge,
         'isDiscontinued': product.is_discontinued,
@@ -175,14 +267,6 @@ def serialize_product(product, total_stock=0, nearest_expiry="2099-12-31", is_lo
         'isLowStock': is_low_stock,
         'batches': batches or [],
     }
-
-def _canonical_pack_type(pack_type, pack_unit):
-    pt = (pack_type or '').strip().lower()
-    pu = (pack_unit or '').strip().lower()
-    if pt == 'strip' and pu in ['box', 'piece', 'bottle', 'vial', 'tube', 'packet']:
-        return pu
-    return pack_type
-
 
 def serialize_batch(batch):
     return {
@@ -202,7 +286,8 @@ def serialize_batch(batch):
         'qtyLoose': batch.qty_loose,
         'packSize': batch.pack_size,
         'packUnit': batch.pack_unit,
-        'packType': _canonical_pack_type(batch.pack_type, batch.pack_unit),
+        'packType': batch.pack_type,
+        'allowsLoose': batch_allows_loose(batch),
         'rackLocation': batch.rack_location,
         'isActive': batch.is_active,
         'createdAt': batch.created_at.isoformat(),
@@ -226,7 +311,7 @@ class ProductListView(APIView):
         name = (data.get('name') or '').strip()
         hsn_code = (data.get('hsnCode') or '').strip()
         pack_unit = (data.get('packUnit') or '').strip()
-        pack_type = (data.get('packType') or 'strip').strip()
+        pack_type = normalize_pack_type(data.get('packType') or 'strip')
         schedule_type = (data.get('scheduleType') or 'OTC').strip()
 
         errors = {}
@@ -261,6 +346,9 @@ class ProductListView(APIView):
         except (InvalidOperation, TypeError):
             errors['mrp'] = 'Invalid MRP'
             mrp = Decimal('0')
+
+        if not errors:
+            errors.update(pack_errors(pack_size, pack_unit, pack_type))
 
         if errors:
             return Response({'errors': errors}, status=status.HTTP_400_BAD_REQUEST)
@@ -302,6 +390,33 @@ class ProductListView(APIView):
         return Response(serialize_product(product), status=status.HTTP_201_CREATED)
 
 
+def _sync_batches_to_product(product, size_changed):
+    """
+    A product's pack definition is copied onto each of its batches, and billing sells from the
+    BATCH. Editing only the product used to leave every batch with the old (wrong) pack, so the
+    bill kept showing the old units and the old loose rules: the edit looked saved but fixed nothing.
+
+    Unit and type are descriptions of the product, so every batch always takes them from it (saving
+    the product therefore also repairs batches that drifted earlier). Pack SIZE is a per-batch
+    fact that a purchase may legitimately change, so it follows the product only when the size
+    itself was just changed. Returns how many batches were touched.
+    """
+    touched = 0
+    for batch in Batch.objects.select_for_update().filter(product=product):
+        size = product.pack_size if size_changed else batch.pack_size
+        changed = sync_batch_to_pack(batch, size, product.pack_unit, product.pack_type)
+        if changed:
+            batch.save(update_fields=changed)
+            touched += 1
+    return touched
+
+
+PRODUCT_AUDITED_FIELDS = (
+    'name', 'composition', 'manufacturer', 'hsn_code', 'gst_rate', 'pack_size', 'pack_unit', 'pack_type',
+    'schedule_type', 'drug_type', 'mrp', 'barcode', 'is_fridge', 'is_discontinued',
+)
+
+
 class ProductDetailView(APIView):
 
     def get_permissions(self):
@@ -324,6 +439,8 @@ class ProductDetailView(APIView):
 
         data = request.data
         errors = {}
+        old_pack_size = product.pack_size
+        before = {f: getattr(product, f) for f in PRODUCT_AUDITED_FIELDS}
 
         # --- Validate & apply fields ---
         SCHEDULE_TO_DRUG = {
@@ -382,7 +499,11 @@ class ProductDetailView(APIView):
                 product.pack_unit = pu
 
         if 'packType' in data and data['packType']:
-            product.pack_type = data['packType']
+            product.pack_type = normalize_pack_type(data['packType'])
+
+        pack_touched = any(k in data for k in ('packSize', 'packUnit', 'packType'))
+        if pack_touched and not errors:
+            errors.update(pack_errors(product.pack_size, product.pack_unit, product.pack_type))
 
         if 'scheduleType' in data:
             st = (data['scheduleType'] or 'OTC').strip()
@@ -435,7 +556,12 @@ class ProductDetailView(APIView):
             return Response({'errors': errors}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            product.save()
+            with transaction.atomic():
+                product.save()
+                batches_updated = (
+                    _sync_batches_to_product(product, size_changed=old_pack_size != product.pack_size)
+                    if pack_touched else 0
+                )
             from django.core.cache import cache
             cache.clear()
         except IntegrityError:
@@ -444,8 +570,26 @@ class ProductDetailView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        logger.info(f"MasterProduct {product.id} updated by {request.user}")
-        return Response(serialize_product(product), status=status.HTTP_200_OK)
+        after = {f: getattr(product, f) for f in PRODUCT_AUDITED_FIELDS}
+        changed = [f for f in PRODUCT_AUDITED_FIELDS if after[f] != before[f]]
+        if changed:
+            # product details are shared by every outlet, so who changed what must be on record
+            log_activity(
+                action='UPDATE',
+                module='inventory',
+                entity_type='Product',
+                entity_id=product.id,
+                entity_label=product.name,
+                description=f"Edited product {product.name}: " + ', '.join(f"{f} {before[f]} → {after[f]}" for f in changed),
+                changes={f: {'old': _plain(before[f]), 'new': _plain(after[f])} for f in changed},
+                user=request.user,
+                request=request,
+                outlet=getattr(request.user, 'outlet', None),
+            )
+        logger.info(f"MasterProduct {product.id} updated by {request.user} ({batches_updated} batches re-synced)")
+        payload = serialize_product(product)
+        payload['batchesUpdated'] = batches_updated
+        return Response(payload, status=status.HTTP_200_OK)
 
 
 class ProductBatchesView(APIView):
@@ -616,7 +760,7 @@ class ProductSearchView(APIView):
 
         # ── 1. Fast Cache Check (60s TTL) ──────────────────────────────
         from django.core.cache import cache
-        cache_key = f"prod_search:v2:{outlet_id}:{context}:{query_lower}"
+        cache_key = f"prod_search:v2:{outlet_id}:i{inventory_cache_version(outlet_id)}:{context}:{query_lower}"
         cached_result = cache.get(cache_key)
         if cached_result is not None:
             return Response({'data': cached_result}, status=status.HTTP_200_OK)
@@ -728,7 +872,8 @@ class ProductSearchView(APIView):
                 'gstRate': float(product.gst_rate),
                 'packSize': product.pack_size,
                 'packUnit': product.pack_unit,
-                'packType': _canonical_pack_type(product.pack_type, product.pack_unit),
+                'packType': product.pack_type,
+                'allowsLoose': allows_loose(product.pack_size, product.pack_type),
                 'barcode': product.barcode,
                 'isFridge': product.is_fridge,
                 'isDiscontinued': product.is_discontinued,
@@ -846,6 +991,7 @@ class MasterCatalogSearchView(APIView):
                 'packSize': p.pack_size,
                 'packUnit': p.pack_unit,
                 'packType': p.pack_type,
+                'allowsLoose': allows_loose(p.pack_size, p.pack_type),
                 'minQty': float(configs.get(p.id, 0.0)),
                 'currentStock': effective_stock,
                 'mrp': float(p.mrp),
@@ -874,7 +1020,7 @@ class InventoryListView(APIView):
         import hashlib
         import json as _json
         from collections import defaultdict
-        from django.db.models import Sum, OuterRef, Subquery, IntegerField, F, FloatField, ExpressionWrapper
+        from django.db.models import Sum, OuterRef, Subquery, IntegerField, F, FloatField, ExpressionWrapper, Case, When, Value, Exists
         from django.db.models.functions import Coalesce, Cast, NullIf
         from datetime import timedelta
 
@@ -890,7 +1036,7 @@ class InventoryListView(APIView):
 
         cache_params = {k: v for k, v in request.query_params.items() if k != 'outletId'}
         param_h = hashlib.md5(_json.dumps(cache_params, sort_keys=True).encode()).hexdigest()[:12]
-        cache_key = f"inventory:list:{outlet_id}:{param_h}"
+        cache_key = f"inventory:list:{outlet_id}:v{inventory_cache_version(outlet_id)}:{param_h}"
 
         if use_cache:
             cached = cache.get(cache_key)
@@ -942,13 +1088,10 @@ class InventoryListView(APIView):
             is_active=True,
             product_id=OuterRef('pk'),
         )
-        # But nearest_expiry should still favour non-expired batches first.
-        non_expired_sq = Batch.objects.filter(
-            outlet_id=outlet_id,
-            is_active=True,
-            expiry_date__gt=today,
-            product_id=OuterRef('pk'),
-        )
+        # Batches that still hold stock. "Nearest expiry" is the earliest of THESE, expired or not:
+        # it used to skip expired batches, so a product whose stock had all expired showed no expiry
+        # at all (and never appeared under "Expiring Soon") although that is the stock to write off.
+        stocked_sq = all_active_sq.filter(Q(qty_strips__gt=0) | Q(qty_loose__gt=0))
 
         from apps.inventory.models import OutletProductConfig
         config_sq = OutletProductConfig.objects.filter(
@@ -974,27 +1117,33 @@ class InventoryListView(APIView):
                 0
             ),
             nearest_expiry=Subquery(
-                non_expired_sq.order_by('expiry_date').values('expiry_date')[:1]
+                stocked_sq.order_by('expiry_date').values('expiry_date')[:1]
             ),
             outlet_min_qty=Coalesce(Subquery(config_sq.values('min_qty')[:1], output_field=FloatField()), 0.0),
             outlet_reorder_qty=Coalesce(Subquery(config_sq.values('reorder_qty')[:1], output_field=FloatField()), 0.0)
         )
 
-        # Push low-stock and expiring-soon filters to DB
+        # Push low-stock and expiring-soon filters to DB.
+        # A product with no minimum configured for this outlet uses DEFAULT_MIN_QTY, the same rule the
+        # row flag (`isLowStock`) and the dashboard alerts use. The filter used to compare against the
+        # unconfigured 0 and so matched nothing for most products, while the row flag said "low".
         if low_stock:
             products = products.annotate(
                 effective_strips=ExpressionWrapper(
                     F('total_strips') + (Cast(F('total_loose'), FloatField()) / Cast(Coalesce(NullIf(F('pack_size'), 0), 1), FloatField())),
                     output_field=FloatField()
-                )
-            ).filter(effective_strips__lt=F('outlet_min_qty'))
+                ),
+                min_qty_effective=Case(
+                    When(outlet_min_qty__gt=0, then=F('outlet_min_qty')),
+                    default=Value(float(DEFAULT_MIN_QTY)),
+                    output_field=FloatField(),
+                ),
+            ).filter(effective_strips__lt=F('min_qty_effective'))
 
         if expiring_soon:
-            cutoff = today + timedelta(days=90)
-            products = products.filter(
-                nearest_expiry__isnull=False,
-                nearest_expiry__lte=cutoff,
-            )
+            # any batch that still has stock and expires within 90 days, INCLUDING ones already expired
+            cutoff = today + timedelta(days=EXPIRING_SOON_DAYS)
+            products = products.filter(Exists(stocked_sq.filter(expiry_date__lte=cutoff)))
 
         # Sorting at DB level — no Python sort
         sort_map = {'name': 'name', 'stock': 'total_strips', 'expiry': 'nearest_expiry'}
@@ -1093,7 +1242,7 @@ class InventoryListView(APIView):
             tot_loose = product.total_loose
             total_stock_fractional = tot_stock + (tot_loose / (product.pack_size or 1))
             near_exp  = product.nearest_expiry.isoformat() if product.nearest_expiry else "2099-12-31"
-            is_low    = total_stock_fractional < (product.outlet_min_qty or 10)
+            is_low    = total_stock_fractional < (product.outlet_min_qty or DEFAULT_MIN_QTY)
 
             results.append({
                 'id':              str(product.id),
@@ -1108,6 +1257,7 @@ class InventoryListView(APIView):
                 'packSize':        product.pack_size,
                 'packUnit':        product.pack_unit,
                 'packType':        product.pack_type,
+                'allowsLoose':     allows_loose(product.pack_size, product.pack_type),
                 'minQty':          product.outlet_min_qty,
                 'reorderQty':      product.outlet_reorder_qty,
                 'barcode':         product.barcode,
@@ -1444,12 +1594,9 @@ class InventoryAdjustView(APIView):
             'message': f'Stock adjusted successfully. New stock: {batch.qty_strips}',
         }
 
-        # Invalidate inventory cache for this outlet so the list shows fresh data
-        try:
-            from django.core.cache import cache
-            cache.delete_pattern(f"mediflow:inventory:list:{outlet_id}:*")
-        except Exception:
-            pass  # cache.delete_pattern needs django-redis; fallback silently
+        # The list is cached for 2 minutes: make the cached pages of this outlet stale right now
+        # (see inventory/cache_utils.py: `delete_pattern` does not exist on this cache backend).
+        bump_inventory_cache(outlet_id)
 
         return Response(result, status=status.HTTP_200_OK)
 

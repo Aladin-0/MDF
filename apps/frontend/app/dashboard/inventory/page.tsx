@@ -1,298 +1,152 @@
 'use client'
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useInventoryFilters } from '@/hooks/useInventoryFilters';
-import { Button } from '@/components/ui/button';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { AlertTriangle, ChevronDown, Download, Loader2, PackageX, Plus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { Download, Plus, AlertTriangle, PackageX } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PermissionGate } from '@/components/shared/PermissionGate';
-import { InventoryStatCards } from '@/components/inventory/InventoryStatCards';
-import { StockTable } from '@/components/inventory/StockTable';
+import { EditProductModal } from '@/components/inventory/EditProductModal';
 import { ExpiryTable } from '@/components/inventory/ExpiryTable';
+import { InventoryStatCards } from '@/components/inventory/InventoryStatCards';
 import { LowStockTable } from '@/components/inventory/LowStockTable';
 import { StockAdjustmentModal } from '@/components/inventory/StockAdjustmentModal';
-import { Batch, MasterProduct, ProductSearchResult } from '@/types';
-import { useStockList, useExpiryReport, useLowStockReport } from '@/hooks/useInventory';
-import { inventoryApi, getStoredToken } from '@/lib/apiClient';
-import { exportToCSV } from '@/lib/export';
+import { StockTable } from '@/components/inventory/StockTable';
+import { useInventoryFilters } from '@/hooks/useInventoryFilters';
+import { useInventorySummary } from '@/hooks/useInventorySummary';
+import { useOutletId } from '@/hooks/useOutletId';
 import { useToast } from '@/hooks/use-toast';
-import { EditProductModal } from '@/components/inventory/EditProductModal';
-import { useAuthStore } from '@/store/authStore';
-import { useInventoryStore, ValuationMode } from '@/store/inventoryStore';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import { apiErrorMessage } from '@/lib/apiError';
+import { downloadBatchDetail, downloadProductSummary } from '@/lib/inventoryApi';
+import { TABS, type InventoryTab } from '@/lib/inventoryParams';
+import type { Batch, MasterProduct, ProductSearchResult } from '@/types';
 
-export default function InventoryPage() {
+const count = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
+
+interface AdjustTarget { batch: Batch; product: ProductSearchResult }
+
+function InventoryView() {
     const router = useRouter();
+    const outletId = useOutletId();
     const { toast } = useToast();
-    const { filters, setFilter, clearFilters } = useInventoryFilters();
-    const { outlet } = useAuthStore();
-    const { valuationMode, setValuationMode } = useInventoryStore();
+    const { params, update } = useInventoryFilters();
+    const { counts } = useInventorySummary();
 
-    const [activeTab, setActiveTab] = useState<string>('all');
-    const [showAdjustmentModal, setShowAdjustmentModal] = useState(false);
-    const [adjustmentBatch, setAdjustmentBatch] = useState<Batch | null>(null);
-
-    // Edit product
+    const [adjust, setAdjust] = useState<AdjustTarget | null>(null);
     const [editProduct, setEditProduct] = useState<MasterProduct | null>(null);
-    const [showEditModal, setShowEditModal] = useState(false);
+    const [exporting, setExporting] = useState<'summary' | 'batches' | null>(null);
 
-    // Queries to just get sizes for the badges (simple single fetch — no infinite query needed here)
-    const { data: stockData } = useStockList({ pageSize: 1 } as any);
-    const { data: expiringData } = useExpiryReport(90);
-    const { data: lowStockData } = useLowStockReport();
-
-    const totalProducts = stockData?.pagination?.totalRecords ?? 0;
-    const expiringCount = expiringData?.pagination?.totalRecords ?? expiringData?.data?.length ?? 0;
-    const lowStockCount = lowStockData?.pagination?.totalRecords ?? lowStockData?.data?.length ?? 0;
-
-    const handleAdjustStock = async (payload: any) => {
+    const runExport = async (kind: 'summary' | 'batches') => {
+        if (!outletId) return;
+        setExporting(kind);
         try {
-            await inventoryApi.adjustStock(payload);
-            // Invalidate queries will be handled inside the modal component
-        } catch (e: any) {
-            throw e;
-        }
-    };
-
-    const handleExport = async () => {
-        if (!outlet) return;
-        if (activeTab === 'all') {
-            try {
-                const token = getStoredToken();
-                const queryParams = new URLSearchParams({ 
-                    outletId: outlet.id,
-                    export_format: 'excel',
-                    ...(filters.search ? { search: filters.search } : {}),
-                    ...(filters.scheduleType && filters.scheduleType !== 'all' ? { scheduleType: filters.scheduleType } : {}),
-                    ...(filters.lowStock ? { lowStock: 'true' } : {}),
-                    ...(filters.expiringSoon ? { expiringSoon: 'true' } : {}),
-                    ...(filters.sortBy ? { sortBy: filters.sortBy } : {}),
-                    ...(filters.sortOrder ? { sortOrder: filters.sortOrder } : {})
-                });
-                
-                const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/inventory/?${queryParams}`, {
-                    headers: {
-                        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-                    }
-                });
-                
-                if (!response.ok) throw new Error('Export failed');
-                
-                const blob = await response.blob();
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `Product-Summary-Report-${new Date().toISOString().split('T')[0]}.xlsx`;
-                a.click();
-                URL.revokeObjectURL(url);
-            } catch (error) {
-                console.error("Export error", error);
-                toast({
-                    title: "Export Failed",
-                    description: "Failed to download product summary.",
-                    variant: "destructive",
-                });
+            if (kind === 'summary') {
+                await downloadProductSummary(outletId, { search: params.q, scheduleType: params.schedule, sortBy: params.sort, sortOrder: params.order });
+            } else {
+                await downloadBatchDetail(outletId, params.q);
             }
-        } else if (activeTab === 'expiring' && expiringData) {
-             const rows = expiringData.map((e: any) => ({
-                  name: e.product.name,
-                  batchNo: e.batch.batchNo,
-                  expiry: e.batch.expiryDate,
-                  qtyStrips: e.batch.qtyStrips,
-                  daysRemaining: e.daysRemaining
-             }));
-             exportToCSV(rows, 'expiry-report', [
-                  { key: 'name', label: 'Product Name' },
-                  { key: 'batchNo', label: 'Batch No' },
-                  { key: 'expiry', label: 'Expiry Date' },
-                  { key: 'qtyStrips', label: 'Strips' },
-                  { key: 'daysRemaining', label: 'Days Remaining' },
-             ]);
-        } else if (activeTab === 'low_stock' && lowStockData) {
-             const rows = lowStockData.map((p: any) => ({
-                  name: p.name,
-                  qtyStrips: p.totalStock,
-                  reorderLevel: 10,
-                  shortage: Math.max(0, 10 - p.totalStock)
-             }));
-             exportToCSV(rows, 'low-stock-report', [
-                  { key: 'name', label: 'Product Name' },
-                  { key: 'qtyStrips', label: 'Current Stock' },
-                  { key: 'reorderLevel', label: 'Reorder Level' },
-                  { key: 'shortage', label: 'Shortage' },
-             ]);
+            toast({ title: 'Export ready', description: 'The Excel file has been downloaded.' });
+        } catch (e) {
+            toast({ variant: 'destructive', title: 'Export failed', description: `${apiErrorMessage(e, 'The file could not be created.')} Try again in a moment.` });
+        } finally {
+            setExporting(null);
         }
     };
-
-    const handleBatchDetailExport = async () => {
-        if (!outlet) return;
-        try {
-            const token = getStoredToken();
-            const queryParams = new URLSearchParams({ 
-                outletId: outlet.id,
-                export_format: 'xlsx',
-                report_type: 'current_stock',
-                ...(filters.search ? { search: filters.search } : {})
-            });
-            
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/reports/batch-wise/export/?${queryParams}`, {
-                headers: {
-                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-                }
-            });
-            
-            if (!response.ok) throw new Error('Export failed');
-            
-            const blob = await response.blob();
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `Batch-Detail-Report-${new Date().toISOString().split('T')[0]}.xlsx`;
-            a.click();
-            URL.revokeObjectURL(url);
-        } catch (error) {
-            console.error("Export error", error);
-            toast({
-                title: "Export Failed",
-                description: "Failed to download batch details.",
-                variant: "destructive",
-            });
-        }
-    };
-
-
 
     return (
-        <div className="space-y-6 bg-slate-50 min-h-[calc(100vh-4rem)] p-6 rounded-xl">
-             <div className="flex items-center justify-between">
-                 <div>
-                     <h1 className="text-2xl font-bold tracking-tight">Inventory</h1>
-                     <p className="text-muted-foreground">Stock levels, batches, and expiry tracking</p>
-                 </div>
-                 <div className="flex gap-2">
-                     <DropdownMenu>
-                         <DropdownMenuTrigger asChild>
-                             <Button variant="outline">
-                                 <Download className="w-4 h-4 mr-2" />
-                                 Export
-                             </Button>
-                         </DropdownMenuTrigger>
-                         <DropdownMenuContent align="end">
-                             <DropdownMenuItem onClick={handleExport}>
-                                 Export Product Summary (Excel)
-                             </DropdownMenuItem>
-                             <DropdownMenuItem onClick={handleBatchDetailExport}>
-                                 Export Batch Detail (Excel)
-                             </DropdownMenuItem>
-                         </DropdownMenuContent>
-                     </DropdownMenu>
-                     <PermissionGate permission="create_purchases">
-                         <Button onClick={() => router.push('/dashboard/purchases')}>
-                             <Plus className="w-4 h-4 mr-2" />
-                             Add Stock (GRN)
-                         </Button>
-                     </PermissionGate>
-                 </div>
-             </div>
+        <div className="space-y-6">
+            <header className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                    <h1 className="text-2xl font-semibold tracking-tight [text-wrap:balance]">Inventory</h1>
+                    <p className="mt-1 text-sm text-muted-foreground">Stock levels, batches and expiry dates</p>
+                </div>
+                <div className="flex items-center gap-2">
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button type="button" variant="outline" disabled={!!exporting}>
+                                {exporting ? <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Download aria-hidden="true" />}
+                                {exporting ? 'Exporting…' : 'Export'}
+                                <ChevronDown className="opacity-60" aria-hidden="true" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuItem onSelect={() => runExport('summary')}>Product Summary (Excel)</DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => runExport('batches')}>Batch Detail (Excel)</DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                    <PermissionGate permission="create_purchases">
+                        <Button type="button" onClick={() => router.push('/dashboard/purchases')}>
+                            <Plus aria-hidden="true" /> Add Stock (GRN)
+                        </Button>
+                    </PermissionGate>
+                </div>
+            </header>
 
-             <div className="flex justify-end">
-                 <div className="flex items-center bg-slate-200/60 p-1 rounded-lg">
-                     {(['PURCHASE', 'LANDING', 'MRP'] as ValuationMode[]).map((mode) => (
-                         <button
-                             key={mode}
-                             onClick={() => setValuationMode(mode)}
-                             className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
-                                 valuationMode === mode 
-                                     ? 'bg-white text-indigo-600 shadow-sm' 
-                                     : 'text-slate-500 hover:text-slate-700'
-                             }`}
-                         >
-                             {mode.charAt(0) + mode.slice(1).toLowerCase()}
-                         </button>
-                     ))}
-                 </div>
-             </div>
+            <InventoryStatCards onTabChange={(tab) => update({ tab })} />
 
-             <InventoryStatCards onTabChange={setActiveTab} />
+            <Tabs value={params.tab} onValueChange={(v) => TABS.includes(v as InventoryTab) && update({ tab: v as InventoryTab })}>
+                <TabsList className="h-auto flex-wrap">
+                    <TabsTrigger value="all" className="gap-2">
+                        All Stock
+                        <Badge variant="secondary" className="tabular-nums">{count.format(counts.total)}</Badge>
+                    </TabsTrigger>
+                    <TabsTrigger value="expiring" className="gap-2">
+                        <AlertTriangle className="h-3.5 w-3.5 text-amber-600" aria-hidden="true" />
+                        Expiring Soon
+                        <Badge variant="outline" className="border-amber-300 bg-amber-50 tabular-nums text-amber-800">{count.format(counts.expiring)}</Badge>
+                    </TabsTrigger>
+                    <TabsTrigger value="low_stock" className="gap-2">
+                        <PackageX className="h-3.5 w-3.5 text-red-600" aria-hidden="true" />
+                        Low Stock
+                        <Badge variant="outline" className="border-red-300 bg-red-50 tabular-nums text-red-800">{count.format(counts.lowStock)}</Badge>
+                    </TabsTrigger>
+                </TabsList>
 
-             <Tabs value={activeTab} onValueChange={setActiveTab}>
-                 <TabsList>
-                     <TabsTrigger value="all">
-                         All Stock
-                         <Badge className="ml-2 bg-slate-200 text-slate-800 hover:bg-slate-300">{totalProducts}</Badge>
-                     </TabsTrigger>
-                     <TabsTrigger value="expiring">
-                         <AlertTriangle className="w-3 h-3 mr-1 text-amber-500" />
-                         Expiring Soon
-                         <Badge variant="destructive" className="ml-2 bg-amber-500 hover:bg-amber-600">{expiringCount}</Badge>
-                     </TabsTrigger>
-                     <TabsTrigger value="low_stock">
-                         <PackageX className="w-3 h-3 mr-1 text-red-500" />
-                         Low Stock
-                         <Badge variant="destructive" className="ml-2">{lowStockCount}</Badge>
-                     </TabsTrigger>
-                 </TabsList>
+                <div className="mt-4">
+                    <TabsContent value="all" className="mt-0">
+                        <StockTable
+                            onAdjustClick={(batch, product) => setAdjust({ batch, product })}
+                            onEditClick={(product) => setEditProduct(product)}
+                        />
+                    </TabsContent>
+                    <TabsContent value="expiring" className="mt-0">
+                        <ExpiryTable onAdjustClick={(batch, product) => setAdjust({ batch, product })} />
+                    </TabsContent>
+                    <TabsContent value="low_stock" className="mt-0">
+                        {/* opens the Purchase Orders tab with the New PO popup ready */}
+                        <LowStockTable onReorderClick={() => router.push('/dashboard/purchases?tab=purchase_orders&newPo=1')} />
+                    </TabsContent>
+                </div>
+            </Tabs>
 
-                 <div className="mt-6">
-                     <TabsContent value="all" className="mt-0 outline-none">
-                         <StockTable
-                             onProductClick={(p: ProductSearchResult) => router.push(`/dashboard/inventory/${p.id}`)}
-                             onAdjustClick={(batch: Batch) => {
-                                 setAdjustmentBatch(batch);
-                                 setShowAdjustmentModal(true);
-                             }}
-                             onEditClick={(product: MasterProduct) => {
-                                 setEditProduct(product);
-                                 setShowEditModal(true);
-                             }}
-                         />
-                     </TabsContent>
+            <StockAdjustmentModal
+                isOpen={!!adjust}
+                batch={adjust?.batch ?? null}
+                batches={adjust?.product.batches}
+                productName={adjust?.product.name}
+                onClose={() => setAdjust(null)}
+            />
 
-                     <TabsContent value="expiring" className="mt-0 outline-none">
-                         <ExpiryTable
-                             onAdjustClick={(batch: Batch) => {
-                                 setAdjustmentBatch(batch);
-                                 setShowAdjustmentModal(true);
-                             }}
-                         />
-                     </TabsContent>
-
-                     <TabsContent value="low_stock" className="mt-0 outline-none">
-                         <LowStockTable
-                             // opens the Purchase Orders tab with the New PO popup ready (this used to go to a page that does not exist)
-                             onReorderClick={() => router.push('/dashboard/purchases?tab=purchase_orders&newPo=1')}
-                         />
-                     </TabsContent>
-                 </div>
-             </Tabs>
-
-
-
-             <StockAdjustmentModal
-                 isOpen={showAdjustmentModal}
-                 batch={adjustmentBatch}
-                 onClose={() => {
-                     setShowAdjustmentModal(false);
-                     setAdjustmentBatch(null);
-                 }}
-                 onSubmit={handleAdjustStock}
-             />
-
-             <EditProductModal
-                 product={editProduct}
-                 open={showEditModal}
-                 onOpenChange={(o) => {
-                     setShowEditModal(o);
-                     if (!o) setEditProduct(null);
-                 }}
-             />
+            {/* mounted only while open: it used to load the distributor list on every visit, for a form nobody had opened */}
+            {editProduct && (
+                <EditProductModal
+                    product={editProduct}
+                    open
+                    onOpenChange={(open) => { if (!open) setEditProduct(null); }}
+                />
+            )}
         </div>
+    );
+}
+
+// useSearchParams() needs a Suspense boundary in the App Router.
+export default function InventoryPage() {
+    return (
+        <Suspense fallback={<div className="space-y-6"><Skeleton className="h-9 w-48" /><Skeleton className="h-28 w-full" /><Skeleton className="h-96 w-full" /></div>}>
+            <InventoryView />
+        </Suspense>
     );
 }

@@ -1,118 +1,99 @@
 'use client';
 
-import { useState } from 'react';
-import { ChevronDown, ChevronUp, LucideIcon } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import Link from 'next/link';
+import { ArrowRight, CheckCircle2, LucideIcon } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useRouter } from 'next/navigation';
+import { cn } from '@/lib/utils';
 
 export interface AlertItem {
-  label: string;
-  sublabel: string;
-  badge: React.ReactNode;
+    key: string;
+    label: string;
+    sublabel: string;
+    /** A short status the row ends with ("Expired 10d ago"). It is words, never a colour alone. */
+    status: string;
+    tone: 'danger' | 'warning';
+    href?: string;
 }
 
 export interface AlertCardProps {
-  title: string;
-  count: number;
-  description: string;
-  borderColor: string;
-  icon: LucideIcon;
-  iconColor: string;
-  items?: AlertItem[];
-  ctaLabel: string;
-  ctaHref: string;
-  isEmpty: boolean;
-  emptyMessage: string;
-  isLoading?: boolean;
+    title: string;
+    /** The true total, which may be more than the rows shown. */
+    count: number;
+    /** One line under the title when something needs attention. */
+    summary: string;
+    icon: LucideIcon;
+    items: AlertItem[];
+    allClear: string;
+    viewAllLabel: string;
+    viewAllHref: string;
 }
 
-export function AlertCard({
-  title,
-  count,
-  description,
-  borderColor,
-  icon: Icon,
-  iconColor,
-  items = [],
-  ctaLabel,
-  ctaHref,
-  isEmpty,
-  emptyMessage,
-  isLoading,
-}: AlertCardProps) {
-  const router = useRouter();
-  const [isExpanded, setIsExpanded] = useState(false);
+const TONE = {
+    danger: 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300',
+    warning: 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300',
+};
 
-  if (isLoading) {
+export function AlertCardSkeleton() {
     return (
-      <div className={cn('bg-white rounded-xl border-l-[4px] border p-4 shadow-sm', borderColor)}>
-        <div className="flex items-start gap-3">
-          <Skeleton className="w-10 h-10 rounded-full shrink-0" />
-          <div className="flex-1">
-            <Skeleton className="w-24 h-5 mb-2" />
-            <Skeleton className="w-48 h-4" />
-          </div>
+        <div className="rounded-xl border bg-card p-4" role="status" aria-label="Loading alerts">
+            <Skeleton className="h-5 w-32" />
+            <Skeleton className="mt-3 h-4 w-full" />
+            <Skeleton className="mt-2 h-4 w-3/4" />
         </div>
-      </div>
     );
-  }
+}
 
-  return (
-    <div className={cn('bg-white rounded-xl border border-l-[4px] p-4 shadow-sm transition-all', borderColor)}>
-      <div 
-        className={cn('flex items-start gap-3', !isEmpty && 'cursor-pointer select-none')} 
-        onClick={() => !isEmpty && setIsExpanded(!isExpanded)}
-      >
-        <div className={cn('w-10 h-10 rounded-full flex items-center justify-center bg-slate-50 shrink-0')}>
-          <Icon className={cn('w-5 h-5', iconColor)} />
-        </div>
-        
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-slate-900 text-base">{title}</h3>
-            {!isEmpty && (
-              <button className="text-slate-400 hover:text-slate-600 transition-colors p-1 rounded-md hover:bg-slate-50">
-                {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-              </button>
-            )}
-          </div>
-          
-          <p className={cn('mt-0.5 text-sm', isEmpty ? 'text-green-600 font-medium' : 'text-slate-600 font-medium')}>
-            {isEmpty ? emptyMessage : description.replace('{count}', count.toString())}
-          </p>
-        </div>
-      </div>
-
-      {/* Expanded List Items */}
-      <div
-        className={cn(
-          'overflow-hidden transition-all duration-300 ease-in-out',
-          isExpanded && !isEmpty ? 'max-h-[400px] mt-4 opacity-100' : 'max-h-0 opacity-0'
-        )}
-      >
-        <div className="pt-2 border-t border-slate-100 flex flex-col gap-2">
-          {items.map((item, idx) => (
-            <div key={idx} className="flex items-center justify-between text-sm py-1.5 border-b border-slate-50 last:border-0 hover:bg-slate-50 rounded px-2 -mx-2">
-              <div className="min-w-0 flex-1 pr-3">
-                <p className="font-medium text-slate-900 truncate">{item.label}</p>
-                <p className="text-xs text-muted-foreground truncate leading-snug">{item.sublabel}</p>
-              </div>
-              <div className="shrink-0">{item.badge}</div>
+export function AlertCard({ title, count, summary, icon: Icon, items, allClear, viewAllLabel, viewAllHref }: AlertCardProps) {
+    if (count === 0) {
+        return (
+            <div className="flex items-center gap-3 rounded-xl border bg-card p-4">
+                <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" aria-hidden="true" />
+                <div className="min-w-0">
+                    <h3 className="text-sm font-semibold">{title}</h3>
+                    <p className="text-sm text-muted-foreground">{allClear}</p>
+                </div>
             </div>
-          ))}
-          
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              router.push(ctaHref);
-            }}
-            className="text-sm font-medium text-primary hover:text-blue-700 hover:underline transition-all mt-2 self-start flex gap-1 items-center"
-          >
-            {ctaLabel} &rarr;
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+        );
+    }
+
+    return (
+        <section className="rounded-xl border bg-card p-4" aria-label={title}>
+            <div className="flex items-center justify-between gap-2">
+                <h3 className="flex items-center gap-2 text-sm font-semibold">
+                    <Icon className="h-4 w-4 text-amber-600" aria-hidden="true" />
+                    {title}
+                </h3>
+                <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold tabular-nums">{count}</span>
+            </div>
+
+            <p className="mt-0.5 text-xs text-muted-foreground">{summary}</p>
+
+            <ul className="mt-2 divide-y">
+                {items.slice(0, 3).map((item) => {
+                    const row = (
+                        <>
+                            <span className="min-w-0 flex-1">
+                                <span className="block truncate text-sm font-medium">{item.label}</span>
+                                <span className="block truncate text-xs text-muted-foreground">{item.sublabel}</span>
+                            </span>
+                            <span className={cn('shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium', TONE[item.tone])}>{item.status}</span>
+                        </>
+                    );
+                    return (
+                        <li key={item.key}>
+                            {item.href ? (
+                                <Link href={item.href} className="-mx-2 flex items-center gap-3 rounded-md px-2 py-2 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{row}</Link>
+                            ) : (
+                                <div className="-mx-2 flex items-center gap-3 px-2 py-2">{row}</div>
+                            )}
+                        </li>
+                    );
+                })}
+            </ul>
+
+            <Link href={viewAllHref} className="mt-2 inline-flex items-center gap-1 rounded text-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                {viewAllLabel} <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+            </Link>
+        </section>
+    );
 }

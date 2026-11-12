@@ -128,3 +128,17 @@ select:focus-visible {
   }
 }
 
+/* Chart colors (the validated categorical palette: blue, orange, aqua, yellow). The dark values are stepped for the
+   dark surface, not an automatic flip. Always show the value beside a color: aqua and yellow are light on white. */
+:root {
+  --viz-1: #2a78d6;
+  --viz-2: #eb6834;
+  --viz-3: #1baf7a;
+  --viz-4: #eda100;
+}
+.dark {
+  --viz-1: #3987e5;
+  --viz-2: #d95926;
+  --viz-3: #199e70;
+  --viz-4: #c98500;
+}

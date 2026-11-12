@@ -22,7 +22,9 @@ function stockQueryKey(outletId: string, filters: Partial<StockFilters>, page: n
 }
 
 /**
- * Fetch a single page of stock. 
+ * One page of stock. Sorting and paging happen on the server (it clamps pageSize to 100). The counts
+ * for the cards and tab badges live in hooks/useInventorySummary.ts; the Expiring and Low Stock lists
+ * load every page through lib/inventoryApi.ts `fetchAllStock`.
  */
 export function useStockPage(filters: Partial<StockFilters>, page: number, pageSize: number = 50) {
     const outletId = useOutletId();
@@ -32,19 +34,6 @@ export function useStockPage(filters: Partial<StockFilters>, page: number, pageS
         staleTime: 1000 * 60 * 3,
         enabled: !!outletId,
         placeholderData: (prev: any) => prev, // Keep previous data visible while fetching
-    });
-}
-
-/**
- * Simple count-only fetch (pageSize=1) just to get totalRecords for badge.
- */
-export function useStockList(filters: Partial<StockFilters> = {}) {
-    const outletId = useOutletId();
-    return useQuery({
-        queryKey: stockQueryKey(outletId, filters, 0),
-        queryFn: () => inventoryApi.getStock(outletId, { ...filters, page: 1, pageSize: 1 } as StockFilters),
-        staleTime: 1000 * 60 * 5,
-        enabled: !!outletId,
     });
 }
 
@@ -63,25 +52,5 @@ export function useStockLedger(batchId: string | null) {
         queryKey: ['inventory', 'stockledger', outletId, batchId],
         queryFn: () => inventoryApi.getStockLedger(outletId, batchId!),
         enabled: !!batchId,
-    });
-}
-
-export function useExpiryReport(daysAhead: number = 90) {
-    const outletId = useOutletId();
-    return useQuery({
-        queryKey: ['inventory', 'expiry', outletId, daysAhead],
-        queryFn: () => inventoryApi.getExpiryReport(outletId),
-        staleTime: 1000 * 60 * 10,
-        enabled: !!outletId,
-    });
-}
-
-export function useLowStockReport() {
-    const outletId = useOutletId();
-    return useQuery({
-        queryKey: ['inventory', 'lowstock', outletId],
-        queryFn: () => inventoryApi.getLowStock(outletId),
-        staleTime: 1000 * 60 * 5,
-        enabled: !!outletId,
     });
 }

@@ -1,186 +1,331 @@
 'use client';
 
-import { useState } from 'react';
-import { 
-    Dialog, DialogContent, DialogHeader, DialogTitle
-} from '@/components/ui/dialog';
+import { useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { AlertTriangle, RefreshCw, RotateCcw, ShieldX, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
-import { SlidersHorizontal, Trash2, ShieldX, RefreshCw, RotateCcw } from 'lucide-react';
-import { useForm, Controller } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { adjustmentSchema, AdjustmentFormValues } from '@/lib/validations/inventory';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { ModalSection, ModalShell } from '@/components/shared/ModalShell';
 import { useToast } from '@/hooks/use-toast';
-import { useQueryClient } from '@tanstack/react-query';
+import { useOutletId } from '@/hooks/useOutletId';
+import { apiErrorMessage } from '@/lib/apiError';
+import { inventoryApi } from '@/lib/apiClient';
+import { formatMonth } from '@/lib/dates';
+import { adjustmentSchema } from '@/lib/validations/inventory';
+import {
+    buildAdjustPayload, canAdjustLoose, directionFor, pluralize, previewAdjustment,
+    type AdjustmentDirection, type AdjustmentReason, type AdjustmentUnit,
+} from '@/lib/inventory';
+import { cn } from '@/lib/utils';
 
-export function StockAdjustmentModal({ isOpen, batch, onClose, onSubmit }: any) {
+interface BatchLike {
+    id: string;
+    batchNo: string;
+    expiryDate?: string;
+    qtyStrips: number;
+    qtyLoose: number;
+    packSize?: number;
+    packType?: string;
+    packUnit?: string;
+    allowsLoose?: boolean;
+    rackLocation?: string;
+}
+
+interface StockAdjustmentModalProps {
+    isOpen: boolean;
+    /** The batch to adjust (or the one pre-selected when `batches` is given). */
+    batch: BatchLike | null;
+    /** All batches of the product: shows a picker so the right one can be chosen. */
+    batches?: BatchLike[];
+    productName?: string;
+    onClose: () => void;
+    /** Receives the exact request body for POST /inventory/adjust/. Defaults to calling it. */
+    onSubmit?: (payload: ReturnType<typeof buildAdjustPayload>) => Promise<unknown>;
+}
+
+const REASONS: { value: AdjustmentReason; label: string; hint: string; icon: React.ReactNode; tone: string }[] = [
+    { value: 'damage', label: 'Damage / Expiry', hint: 'Remove damaged or expired stock', icon: <Trash2 className="h-4 w-4" aria-hidden="true" />, tone: 'text-red-600' },
+    { value: 'theft', label: 'Theft / Loss', hint: 'Remove stolen or missing stock', icon: <ShieldX className="h-4 w-4" aria-hidden="true" />, tone: 'text-orange-600' },
+    { value: 'correction', label: 'Stock Correction', hint: 'Fix a wrong count (add or remove)', icon: <RefreshCw className="h-4 w-4" aria-hidden="true" />, tone: 'text-blue-600' },
+    { value: 'return_from_patient', label: 'Patient Return', hint: 'Add back unused medicine', icon: <RotateCcw className="h-4 w-4" aria-hidden="true" />, tone: 'text-emerald-600' },
+];
+
+function describe(strips: number, loose: number, b: BatchLike) {
+    const pack = b.packType || 'strip';
+    const unit = b.packUnit || 'unit';
+    const parts = [`${strips} ${pluralize(pack, strips)}`];
+    if (loose > 0 || !canAdjustLoose(b)) {
+        if (loose > 0) parts.push(`${loose} ${pluralize(unit, loose)}`);
+    }
+    return parts.join(' + ');
+}
+
+function AdjustDialog({ batch: initial, batches, productName, onClose, onSubmit }: Omit<StockAdjustmentModalProps, 'isOpen' | 'batch'> & { batch: BatchLike }) {
+    const outletId = useOutletId();
     const { toast } = useToast();
     const queryClient = useQueryClient();
-    const [isLoading, setIsLoading] = useState(false);
 
-    const { control, handleSubmit, watch, formState: { errors } } = useForm<AdjustmentFormValues>({
-        resolver: zodResolver(adjustmentSchema) as any,
-        defaultValues: {
-            adjustmentType: 'correction',
-            qtyStrips: 0,
-            qtyLoose: 0,
-            reason: ''
-        }
-    });
+    const choices = batches && batches.length > 1 ? batches : null;
+    const [batchId, setBatchId] = useState(initial.id);
+    const batch = choices?.find((b) => b.id === batchId) ?? initial;
 
-    const adjustmentType = watch('adjustmentType');
-    const inputStrips = watch('qtyStrips') || 0;
-    
-    // Calculate preview
-    const isReducing = adjustmentType === 'damage' || adjustmentType === 'theft';
-    const currentStrips = batch?.qtyStrips || 0;
-    const finalStrips = isReducing ? currentStrips - inputStrips : currentStrips + Number(inputStrips);
+    const [reasonType, setReasonType] = useState<AdjustmentReason>('damage');
+    const [chosenDirection, setChosenDirection] = useState<AdjustmentDirection>('add');
+    const [unit, setUnit] = useState<AdjustmentUnit>('packs');
+    const [quantity, setQuantity] = useState('');
+    const [note, setNote] = useState('');
+    const [pin, setPin] = useState('');
+    const [errors, setErrors] = useState<Record<string, string>>({});
+    const [serverError, setServerError] = useState<string | null>(null);
+    const [busy, setBusy] = useState(false);
 
-    const submitHandler = async (data: AdjustmentFormValues) => {
-        if (finalStrips < 0) {
-            toast({ variant: "destructive", title: "Cannot reduce below 0" });
+    const looseOk = canAdjustLoose(batch);
+    const effectiveUnit: AdjustmentUnit = looseOk ? unit : 'packs';
+    const direction = directionFor(reasonType, chosenDirection);
+    const packWord = pluralize(batch.packType || 'strip');
+    const unitWord = pluralize(batch.packUnit || 'unit');
+
+    const preview = useMemo(
+        () => previewAdjustment(batch, effectiveUnit, direction, Number(quantity)),
+        [batch, effectiveUnit, direction, quantity],
+    );
+    const qtyNumber = Math.floor(Number(quantity) || 0);
+
+    const submit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setServerError(null);
+        const parsed = adjustmentSchema.safeParse({ adjustmentType: reasonType, direction, unit: effectiveUnit, quantity, reason: note, pin });
+        if (!parsed.success) {
+            const next: Record<string, string> = {};
+            for (const issue of parsed.error.issues) next[String(issue.path[0])] ??= issue.message;
+            setErrors(next);
             return;
         }
-        setIsLoading(true);
+        if (!preview) {
+            setErrors({ quantity: 'This would take the stock below zero.' });
+            return;
+        }
+        setErrors({});
+        setBusy(true);
         try {
-            await onSubmit({
-                 batchId: batch.id,
-                 ...data,
-                 qtyChange: isReducing ? -data.qtyStrips : data.qtyStrips
+            const payload = buildAdjustPayload(batch.id, outletId, parsed.data);
+            await (onSubmit ?? inventoryApi.adjustStock)(payload);
+            toast({
+                title: 'Stock adjusted',
+                description: `${productName ? `${productName} · ` : ''}Batch ${batch.batchNo}: ${direction === 'remove' ? 'removed' : 'added'} ${qtyNumber} ${effectiveUnit === 'loose' ? unitWord : packWord}.`,
             });
-            toast({ title: "Stock adjusted successfully", description: `${batch.batchNo} — ${data.qtyStrips} ${batch?.product?.packType ? batch.product.packType + 's' : 'strips'} ${isReducing ? 'removed' : 'added'}` });
-            queryClient.invalidateQueries({ queryKey: ['inventory'] });
+            // the list, the cards and the tabs all read ['inventory', ...]
+            await queryClient.invalidateQueries({ queryKey: ['inventory'] });
             onClose();
-        } catch (e: any) {
-            toast({ variant: "destructive", title: e.message || "Failed to adjust stock" });
+        } catch (err: any) {
+            const message = apiErrorMessage(err, 'The stock was not changed.');
+            if (err?.error?.code === 'INVALID_PIN') setErrors({ pin: 'That PIN was not recognised. Try again.' });
+            else setServerError(`${message} Nothing was changed.`);
         } finally {
-            setIsLoading(false);
+            setBusy(false);
         }
     };
 
-    if (!batch) return null;
+    const actionLabel = `${direction === 'remove' ? 'Remove' : 'Add'}${qtyNumber > 0 ? ` ${qtyNumber} ${effectiveUnit === 'loose' ? unitWord : packWord}` : ' Stock'}`;
+    const fieldError = (name: string) => errors[name] && <p id={`adj-${name}-error`} role="alert" className="mt-1 text-sm text-destructive">{errors[name]}</p>;
+
+    const removing = direction === 'remove';
 
     return (
-        <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="max-w-md max-h-screen overflow-y-auto">
-                <DialogHeader>
-                    <div className="flex items-center gap-3">
-                        <SlidersHorizontal className="w-5 h-5 text-primary" />
-                        <DialogTitle>Adjust Stock</DialogTitle>
+        <ModalShell
+            open
+            onClose={onClose}
+            title="Adjust Stock"
+            size="md"
+            footer={
+                <>
+                    <Button type="submit" form="stock-adjust-form" className="flex-1" disabled={busy} variant={removing ? 'destructive' : 'default'}>
+                        {busy ? 'Saving…' : actionLabel}
+                    </Button>
+                    <Button type="button" variant="outline" onClick={onClose} disabled={busy}>Cancel</Button>
+                </>
+            }
+        >
+        <form id="stock-adjust-form" onSubmit={submit} noValidate className="space-y-6">
+            <ModalSection title="Batch">
+                {choices ? (
+                    <div className="space-y-1.5">
+                        <Label htmlFor="adj-batch">Which batch?</Label>
+                        <Select value={batchId} onValueChange={(v) => { setBatchId(v); setErrors({}); }}>
+                            <SelectTrigger id="adj-batch"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                {choices.map((b) => (
+                                    <SelectItem key={b.id} value={b.id}>
+                                        {b.batchNo}{b.expiryDate ? ` · exp ${formatMonth(b.expiryDate)}` : ''} · {describe(b.qtyStrips, b.qtyLoose, b)}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
-                    <p className="text-sm text-slate-500">Batch {batch.batchNo}</p>
-                </DialogHeader>
+                ) : null}
+                <dl className={cn('grid grid-cols-2 gap-3 rounded-lg bg-muted/50 p-3 text-sm', choices && 'mt-3')}>
+                    <div>
+                        <dt className="text-muted-foreground">{productName ? productName : 'Batch'}</dt>
+                        <dd translate="no" className="font-medium">Batch {batch.batchNo}</dd>
+                    </div>
+                    <div className="text-right">
+                        <dt className="text-muted-foreground">In stock now</dt>
+                        <dd className="font-medium tabular-nums">{describe(batch.qtyStrips, batch.qtyLoose, batch)}</dd>
+                    </div>
+                </dl>
+            </ModalSection>
 
-                <div className="bg-slate-50 rounded-xl p-4 mb-4 text-sm flex justify-between">
-                     <div>
-                          <div className="text-muted-foreground">Current Stock</div>
-                          <div className="font-semibold">{batch.qtyStrips} {batch?.product?.packType ? batch.product.packType + 's' : 'strips'} + {batch.qtyLoose} {batch?.product?.packUnit ? batch.product.packUnit + 's' : 'loose'}</div>
-                     </div>
-                     <div className="text-right">
-                          <div className="text-muted-foreground">Rack Location</div>
-                          <div className="font-medium">{batch.rackLocation || '—'}</div>
-                     </div>
+            <ModalSection title="Why are you adjusting?">
+                <div role="radiogroup" aria-label="Reason for the adjustment" className="grid gap-2 sm:grid-cols-2">
+                    {REASONS.map((r) => (
+                        <label
+                            key={r.value}
+                            className={cn(
+                                'flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors focus-within:ring-2 focus-within:ring-ring hover:bg-muted/50',
+                                reasonType === r.value && 'border-primary bg-primary/5',
+                            )}
+                        >
+                            <input
+                                type="radio"
+                                name="adjustment-reason"
+                                value={r.value}
+                                checked={reasonType === r.value}
+                                onChange={() => setReasonType(r.value)}
+                                className="sr-only"
+                            />
+                            <span className={cn('mt-0.5', r.tone)}>{r.icon}</span>
+                            <span>
+                                <span className="block text-sm font-medium">{r.label}</span>
+                                <span className="block text-xs text-muted-foreground">{r.hint}</span>
+                            </span>
+                        </label>
+                    ))}
                 </div>
 
-                <form onSubmit={handleSubmit(submitHandler)} className="space-y-6">
-                     <div className="space-y-3">
-                          <Label>Adjustment Type</Label>
-                          <Controller
-                              name="adjustmentType"
-                              control={control}
-                              render={({ field }) => (
-                                  <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="grid grid-cols-1 gap-2">
-                                       <Label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer hover:bg-slate-50 ${field.value === 'damage' ? 'border-red-500 bg-red-50/50' : ''}`}>
-                                           <RadioGroupItem value="damage" className="mt-1" />
-                                           <div>
-                                               <div className="flex items-center gap-2 font-medium"><Trash2 className="w-4 h-4 text-red-500" /> Damage / Expiry</div>
-                                               <div className="text-xs text-muted-foreground mt-0.5">Remove damaged or expired stock</div>
-                                           </div>
-                                       </Label>
-                                       <Label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer hover:bg-slate-50 ${field.value === 'theft' ? 'border-orange-500 bg-orange-50/50' : ''}`}>
-                                           <RadioGroupItem value="theft" className="mt-1" />
-                                           <div>
-                                               <div className="flex items-center gap-2 font-medium"><ShieldX className="w-4 h-4 text-orange-500" /> Theft / Loss</div>
-                                               <div className="text-xs text-muted-foreground mt-0.5">Report stolen or missing stock</div>
-                                           </div>
-                                       </Label>
-                                       <Label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer hover:bg-slate-50 ${field.value === 'correction' ? 'border-blue-500 bg-blue-50/50' : ''}`}>
-                                           <RadioGroupItem value="correction" className="mt-1" />
-                                           <div>
-                                               <div className="flex items-center gap-2 font-medium"><RefreshCw className="w-4 h-4 text-blue-500" /> Stock Correction</div>
-                                               <div className="text-xs text-muted-foreground mt-0.5">Fix incorrect stock count</div>
-                                           </div>
-                                       </Label>
-                                       <Label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer hover:bg-slate-50 ${field.value === 'return_from_patient' ? 'border-green-500 bg-green-50/50' : ''}`}>
-                                           <RadioGroupItem value="return_from_patient" className="mt-1" />
-                                           <div>
-                                               <div className="flex items-center gap-2 font-medium"><RotateCcw className="w-4 h-4 text-green-500" /> Patient Return</div>
-                                               <div className="text-xs text-muted-foreground mt-0.5">Returned unused medicines</div>
-                                           </div>
-                                       </Label>
-                                  </RadioGroup>
-                              )}
-                          />
-                     </div>
+                {reasonType === 'correction' && (
+                    <div role="group" aria-label="Direction of the correction" className="mt-3 inline-flex rounded-md bg-muted p-0.5">
+                        {(['add', 'remove'] as const).map((d) => (
+                            <button
+                                key={d}
+                                type="button"
+                                aria-pressed={chosenDirection === d}
+                                onClick={() => setChosenDirection(d)}
+                                className={cn(
+                                    'rounded px-3 py-1.5 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                                    chosenDirection === d ? 'bg-background shadow-sm' : 'text-muted-foreground',
+                                )}
+                            >
+                                {d === 'add' ? 'Found extra (add)' : 'Count is short (remove)'}
+                            </button>
+                        ))}
+                    </div>
+                )}
+            </ModalSection>
 
-                     <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                               <Label>{batch?.product?.packType ? batch.product.packType.charAt(0).toUpperCase() + batch.product.packType.slice(1) + 's' : 'Strips'}</Label>
-                               <Controller
-                                   name="qtyStrips"
-                                   control={control}
-                                   render={({ field }) => <Input type="number" {...field} onChange={e => field.onChange(parseInt(e.target.value) || 0)} />}
-                               />
-                          </div>
-                          <div className="space-y-2">
-                               <Label>{batch?.product?.packUnit ? batch.product.packUnit.charAt(0).toUpperCase() + batch.product.packUnit.slice(1) + 's' : 'Loose units'}</Label>
-                               <Controller
-                                   name="qtyLoose"
-                                   control={control}
-                                   render={({ field }) => <Input type="number" {...field} onChange={e => field.onChange(parseInt(e.target.value) || 0)} />}
-                               />
-                          </div>
-                     </div>
+            <ModalSection title="How much?">
+                <div className="flex flex-wrap items-start gap-3">
+                    <div className="w-32">
+                        <Label htmlFor="adj-quantity">Quantity</Label>
+                        <Input
+                            id="adj-quantity"
+                            name="quantity"
+                            type="number"
+                            inputMode="numeric"
+                            min={1}
+                            step={1}
+                            autoComplete="off"
+                            value={quantity}
+                            onChange={(e) => setQuantity(e.target.value)}
+                            aria-invalid={!!errors.quantity || undefined}
+                            aria-describedby={errors.quantity ? 'adj-quantity-error' : undefined}
+                            className="mt-1.5 tabular-nums"
+                        />
+                    </div>
+                    {looseOk && (
+                        <div>
+                            <span className="text-sm font-medium leading-none">Unit</span>
+                            <div role="group" aria-label="Unit" className="mt-1.5 inline-flex rounded-md bg-muted p-0.5">
+                                {([['packs', packWord], ['loose', unitWord]] as const).map(([value, label]) => (
+                                    <button
+                                        key={value}
+                                        type="button"
+                                        aria-pressed={effectiveUnit === value}
+                                        onClick={() => setUnit(value)}
+                                        className={cn(
+                                            'h-9 rounded px-3 text-sm font-medium capitalize focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                                            effectiveUnit === value ? 'bg-background shadow-sm' : 'text-muted-foreground',
+                                        )}
+                                    >
+                                        {label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+                {fieldError('quantity')}
 
-                     <div className={`text-sm font-medium ${isReducing ? 'text-red-600' : 'text-green-600'} flex items-center gap-2`}>
-                          <span>{isReducing ? `Reducing stock by ${inputStrips}` : `Adding stock by ${inputStrips}`} {batch?.product?.packType ? batch.product.packType + 's' : 'strips'}</span>
-                     </div>
-                     <div className="text-sm font-medium">
-                          New stock will be: <span className={finalStrips < 0 ? 'text-red-500' : ''}>{finalStrips} {batch?.product?.packType ? batch.product.packType + 's' : 'strips'}</span>
-                     </div>
+                <p aria-live="polite" className={cn('mt-3 text-sm', preview ? 'text-muted-foreground' : 'font-medium text-destructive')}>
+                    {preview
+                        ? <>Stock after this: <span className="font-semibold text-foreground tabular-nums">{describe(preview.strips, preview.loose, batch)}</span></>
+                        : 'This would take the stock below zero. Lower the quantity.'}
+                </p>
+            </ModalSection>
 
-                     <div className="space-y-2">
-                          <Label>Reason</Label>
-                          <Controller
-                              name="reason"
-                              control={control}
-                              render={({ field }) => (
-                                  <Textarea 
-                                      placeholder="Provide a detailed reason..." 
-                                      {...field} 
-                                      className={errors.reason ? "border-red-500" : ""}
-                                  />
-                              )}
-                          />
-                          {errors.reason && <p className="text-xs text-red-500">{errors.reason.message}</p>}
-                     </div>
+            <ModalSection title="Confirm">
+                <div className="space-y-4">
+                    <div>
+                        <Label htmlFor="adj-reason">Reason</Label>
+                        <Textarea
+                            id="adj-reason"
+                            name="reason"
+                            value={note}
+                            onChange={(e) => setNote(e.target.value)}
+                            placeholder="What happened? e.g. Box crushed in delivery…"
+                            rows={2}
+                            aria-invalid={!!errors.reason || undefined}
+                            aria-describedby={errors.reason ? 'adj-reason-error' : undefined}
+                            className="mt-1.5"
+                        />
+                        {fieldError('reason')}
+                    </div>
+                    <div className="w-48">
+                        <Label htmlFor="adj-pin">Staff PIN</Label>
+                        <Input
+                            id="adj-pin"
+                            name="pin"
+                            type="password"
+                            inputMode="numeric"
+                            autoComplete="off"
+                            value={pin}
+                            onChange={(e) => setPin(e.target.value)}
+                            aria-invalid={!!errors.pin || undefined}
+                            aria-describedby={errors.pin ? 'adj-pin-error' : undefined}
+                            className="mt-1.5 tabular-nums"
+                        />
+                        {fieldError('pin')}
+                    </div>
+                    <p className="text-xs text-muted-foreground">This is recorded in the stock ledger with the PIN holder&apos;s name.</p>
+                </div>
+            </ModalSection>
 
-                     <div className="flex flex-col gap-3 pt-4 border-t">
-                          <div className="flex justify-end gap-2">
-                               <Button variant="ghost" type="button" onClick={onClose}>Cancel</Button>
-                               <Button type="submit" disabled={isLoading} variant={isReducing ? "destructive" : "default"}>
-                                    Submit Adjustment
-                               </Button>
-                          </div>
-                          <p className="text-xs text-muted-foreground text-center">
-                              This action will be logged with your name and timestamp
-                          </p>
-                     </div>
-                </form>
-            </DialogContent>
-        </Dialog>
+            {serverError && (
+                <div role="alert" className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                    <span>{serverError}</span>
+                </div>
+            )}
+
+        </form>
+        </ModalShell>
     );
+}
+
+export function StockAdjustmentModal({ isOpen, batch, batches, productName, onClose, onSubmit }: StockAdjustmentModalProps) {
+    // The dialog is mounted only while open, so every opening starts with a clean form.
+    if (!isOpen || !batch) return null;
+    return <AdjustDialog batch={batch} batches={batches} productName={productName} onClose={onClose} onSubmit={onSubmit} />;
 }

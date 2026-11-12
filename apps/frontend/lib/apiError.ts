@@ -14,6 +14,13 @@ export function apiErrorMessage(err: unknown, fallback = 'Something went wrong. 
     if (typeof e.detail === 'string' && e.detail) return e.detail;
     if (typeof e.error === 'string' && e.error) return e.error;
     if (typeof e.error?.message === 'string') return e.error.message;
+    // Inventory / product validation: {errors: {packUnit: "A strip is counted in tablets..."}}
+    if (e.errors && typeof e.errors === 'object') {
+        const messages = Object.values(e.errors as Record<string, unknown>)
+            .map((v) => (Array.isArray(v) ? v[0] : v))
+            .filter((v): v is string => typeof v === 'string' && !!v);
+        if (messages.length) return messages.join(' · ');
+    }
     // DRF field errors: {phone: ["already exists"], ...}
     for (const value of Object.values(e)) {
         if (Array.isArray(value) && typeof value[0] === 'string') return value[0];

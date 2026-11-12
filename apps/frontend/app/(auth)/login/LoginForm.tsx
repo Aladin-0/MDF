@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { loginSchema, type LoginFormValues } from '@/lib/validations/auth'
 import { authApi } from '@/lib/apiClient'
 import { useAuthStore } from '@/store/authStore'
-import { useSettingsStore } from '@/store/settingsStore'
+import { useSettingsStore, rehydrateSettingsForOutlet } from '@/store/settingsStore'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Eye, EyeOff, Loader2, Phone, Lock, AlertCircle } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -45,6 +45,9 @@ export default function LoginForm() {
 
             // Sync selectedOutletId to the logged-in user's outlet
             // This clears any stale selectedOutletId from a previous session/user
+            // Open this user's outlet bucket first: the settings store was keyed at page load, i.e. to
+            // whoever used this browser before (or to 'default'), and would save this outlet's settings there.
+            rehydrateSettingsForOutlet(response.user.outletId)
             useSettingsStore.getState().setOutletId(response.user.outletId)
 
             // Set JWT access token as a cookie so middleware can detect authentication

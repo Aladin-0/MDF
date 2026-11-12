@@ -30,6 +30,8 @@ export function AddOutletModal({ orgId }: { orgId: string }) {
         mutationFn: (data: typeof form) => chainApi.createOutlet(orgId, data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['chain-dashboard', orgId] });
+            // the header's outlet switcher reads the same list (cached for 10 minutes)
+            queryClient.invalidateQueries({ queryKey: ['org-outlets', orgId] });
             setOpen(false);
             setForm({
                 name: '',

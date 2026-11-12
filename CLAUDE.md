@@ -12,6 +12,14 @@ Before changing anything about login, roles, staff, permissions, outlet isolatio
 
 Before changing customer / ledger / credit / billing-customer logic, read `docs/FAMILY_ACCOUNTS.md`. A family shares one account (ledger + balance + credit limit); bills go to the account and name the person in `SaleInvoice.patient`. Do not re-key money onto individual family members.
 
+## Pack size, unit and type
+
+Before changing pack size / unit / type, loose selling (`qty_loose`), or the product / batch edit screens, read `docs/PACK_DEFINITIONS.md`. One rule lives in `apps/inventory/pack_rules.py` and the API sends it as `allowsLoose`; billing sells from the **batch's** copy of the pack, and editing a product must keep its batches in step. Do not add another `packType === 'strip'` / `packSize > 1` check or a "runtime correction" of bad data.
+
+## Inventory
+
+Before changing the Inventory page, `GET /inventory/` or stock adjustment, read `docs/INVENTORY.md`. Low stock, expiring and nearest-expiry each have one rule on the server; counts come from `useInventorySummary`; an adjustment needs `type`, signed `qty` and a PIN (`buildAdjustPayload`); never ask for more than 100 rows a page or use `cache.delete_pattern`.
+
 ## Purchase orders
 
 Before changing purchase orders, the Shortbook or receiving goods against a PO, read `docs/PURCHASE_ORDERS.md`. Status changes only through `transition()` in `apps/purchases/po_services.py`; received quantities are derived from linked invoices (`recompute_receipts`), never nudged by hand.

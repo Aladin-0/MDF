@@ -12,6 +12,7 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Check, X, Trash2, Loader2, AlertTriangle } from 'lucide-react';
 import { calculateRowTotals } from '@/lib/cartUtils';
+import { allowsLoose } from '@/lib/packRules';
 
 interface InlineRowEditorProps {
     item: CartItem;
@@ -94,8 +95,8 @@ export function InlineRowEditor({ item, saleType = 'RETAIL', onSave, onCancel, o
     }, [selectedBatchId, currentBatch.mrp, currentBatch.pts, currentBatch.ptr, item.batchId, saleType]);
     
     const canonicalPackType = currentBatch?.packType || productInfo?.packType || item.packType || '';
-    // FIX: Base loose calculations strictly on packSize, not string names
-    const hasLoose = currentBatch.packSize > 1;
+    // the server's answer (allowsLoose), not a local guess: a Loose entry it would refuse must not be offered
+    const hasLoose = allowsLoose(currentBatch);
     const effectiveQtyLoose = hasLoose ? qtyLoose : '0';
     const effectiveFreeLoose = hasLoose ? freeQtyLoose : '0';
 

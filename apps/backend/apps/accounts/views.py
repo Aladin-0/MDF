@@ -255,10 +255,12 @@ class SwitchOutletView(APIView):
             )
 
         try:
-            # Must belong to the exact same organization as the staff's current default
+            # Must belong to the exact same organization as the staff's current default, and be
+            # live: the chain dashboard lists only active outlets, so a deactivated one must not
+            # be enterable by sending its id directly.
             org_id = staff.outlet.organization_id
-            new_outlet = Outlet.objects.get(id=new_outlet_id, organization_id=org_id)
-        except Outlet.DoesNotExist:
+            new_outlet = Outlet.objects.get(id=new_outlet_id, organization_id=org_id, is_active=True)
+        except (Outlet.DoesNotExist, ValidationError, ValueError):
             return Response(
                 {'detail': 'Requested outlet not found within your organization'},
                 status=status.HTTP_404_NOT_FOUND

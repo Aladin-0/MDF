@@ -11,18 +11,11 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework import status
 
-def _canonical_pack_type(pack_type, pack_unit):
-    pt = (pack_type or '').strip().lower()
-    pu = (pack_unit or '').strip().lower()
-    if pt == 'strip' and pu in ['box', 'piece', 'bottle', 'vial', 'tube', 'packet']:
-        logger.warning(f"Runtime correction: bad pack_type 'strip' with unit '{pu}', falling back to '{pu}'")
-        return pu
-    return pack_type
-
 from apps.billing.models import SaleInvoice, SaleItem, ScheduleHRegister, LedgerEntry, CreditAccount, CreditTransaction
 from apps.accounts.models import Ledger
 from apps.inventory.models import Batch, MasterProduct
 from apps.inventory.services import post_stock_ledger_entry
+from apps.inventory.pack_rules import allows_loose, batch_allows_loose
 from apps.billing.services import generate_invoice_number, schedule_h_validate, fefo_batch_select, schedule_cart_from_catalogue
 from apps.billing.utils.pricing import validate_sale_price
 from apps.billing.services import InsufficientStockError, ScheduleHViolationError, UnitIntegrityError
@@ -133,14 +126,29 @@ def process_pending_ewaybill(invoice_id: str):
         logger.error(f"Unexpected error in process_pending_ewaybill: {str(e)}")
         SaleInvoice.objects.filter(id=invoice_id).update(eway_bill_status='FAILED')
 
-def validate_unit_integrity(product, qty_loose_needed):
+def validate_unit_integrity(pack_holder, qty_loose_needed):
     """
-    Ensures that non-strip products (like box/piece) cannot be sold using loose fractional units.
-    Raises UnitIntegrityError if rule is violated.
+    Refuse loose units for a pack that cannot be split (rule: inventory/pack_rules.py).
+
+    Pass the BATCH being sold: its pack size / type are what the billing screen showed and what
+    the stock maths below uses. This used to read the product's copy instead, which could say the
+    opposite, so a bill the screen allowed was refused here, and editing the product never helped.
+    A product (FEFO sale without a chosen batch) works too: both carry the same pack fields.
     """
-    pack_type = _canonical_pack_type(product.pack_type, product.pack_unit)
-    if pack_type not in ['strip', 'blister'] and qty_loose_needed > 0:
-        raise UnitIntegrityError(f"Loose quantities not permitted for {product.name} ({pack_type})")
+    if not qty_loose_needed or qty_loose_needed <= 0:
+        return
+    is_batch = hasattr(pack_holder, 'batch_no')
+    if (batch_allows_loose(pack_holder) if is_batch else allows_loose(pack_holder.pack_size, pack_holder.pack_type)):
+        return
+    product = getattr(pack_holder, 'product', None) or pack_holder
+    name = getattr(product, 'name', None) or 'This item'
+    batch_no = getattr(pack_holder, 'batch_no', None)
+    where = f" (batch {batch_no})" if batch_no else ''
+    raise UnitIntegrityError(
+        f"Loose quantities not permitted for {name}{where}: it is a {pack_holder.pack_type or 'pack'} of "
+        f"{pack_holder.pack_size} {pack_holder.pack_unit}, which can only be sold whole. "
+        f"If that is wrong, correct the pack details in Inventory."
+    )
 
 def atomic_sale_save(
     request_data: dict,
@@ -355,7 +363,7 @@ def atomic_sale_save(
                 
                 proposed_rate = pricing_result['unit_rate']
                 pricing_check = validate_sale_price(proposed_rate, batch, outlet.id)
-                validate_unit_integrity(product, loose_to_deduct)
+                validate_unit_integrity(batch, loose_to_deduct)
                 if pricing_check.get('block'):
                     transaction.set_rollback(True)
                     raise ValidationError(f"{pricing_check['message']}")

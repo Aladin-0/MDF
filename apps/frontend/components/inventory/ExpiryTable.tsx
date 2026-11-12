@@ -1,181 +1,203 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { inventoryApi } from '@/lib/apiClient';
-import { useOutletId } from '@/hooks/useOutletId';
-import { 
-    Table, TableBody, TableCell, TableHead, TableHeader, TableRow 
-} from '@/components/ui/table';
+import { AlertTriangle, CheckCircle2, Download, SlidersHorizontal } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, Download, ShoppingBag, SlidersHorizontal } from 'lucide-react';
-import { formatCurrency } from '@/lib/gst';
-import { formatQty } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { PermissionGate } from '@/components/shared/PermissionGate';
+import { TablePagination } from '@/components/shared/TablePagination';
+import { ListBanner } from '@/components/inventory/ListBanner';
+import { useOutletId } from '@/hooks/useOutletId';
+import { apiErrorMessage } from '@/lib/apiError';
+import { daysUntil, formatDay } from '@/lib/dates';
+import { exportToCSV } from '@/lib/export';
+import { formatCurrency } from '@/lib/gst';
+import { batchValue, expiryText } from '@/lib/inventory';
+import { fetchAllStock } from '@/lib/inventoryApi';
+import { cn, formatQty } from '@/lib/utils';
+import { useInventoryStore } from '@/store/inventoryStore';
+import type { Batch, ProductSearchResult } from '@/types';
 
-export function ExpiryTable({ onAdjustClick }: any) {
+type Span = 'expired' | 30 | 60 | 90;
+const WINDOWS: { value: Span; label: string }[] = [
+    { value: 'expired', label: 'Expired' },
+    { value: 30, label: '30 Days' },
+    { value: 60, label: '60 Days' },
+    { value: 90, label: '90 Days' },
+];
+
+interface Row { product: ProductSearchResult; batch: Batch; days: number; value: number }
+
+export function ExpiryTable({ onAdjustClick }: { onAdjustClick: (batch: Batch, product: ProductSearchResult) => void }) {
     const outletId = useOutletId();
-    const [daysFilter, setDaysFilter] = useState<number>(90);
+    const { valuationMode } = useInventoryStore();
+    const [span, setSpan] = useState<Span>(90);
+    const [page, setPage] = useState(1);
+    const [size, setSize] = useState(50);
 
-    // Fetch all expiring products with a large pageSize to avoid truncation
-    const { data: raw, isLoading } = useQuery({
-        queryKey: ['inventory', 'expiring', outletId, daysFilter],
-        queryFn: () => inventoryApi.getStock(outletId, { expiringSoon: true, pageSize: 500 }),
-        staleTime: 1000 * 60 * 5,
+    // Every product with stock expiring within 90 days (already expired included), all pages.
+    const { data, isLoading, isError, error, refetch } = useQuery({
+        queryKey: ['inventory', 'expiring', outletId],
+        queryFn: ({ signal }) => fetchAllStock(outletId, { expiringSoon: true, sortBy: 'expiry', sortOrder: 'asc' }, signal),
         enabled: !!outletId,
+        staleTime: 1000 * 60 * 2,
     });
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    // Flatten products → batches and compute daysRemaining for each batch
-    const products: any[] = Array.isArray(raw) ? raw : (raw?.data || []);
-    const allBatchRows: any[] = [];
-
-    products.forEach((product: any) => {
-        (product.batches || []).forEach((batch: any) => {
-            const expDate = new Date(batch.expiryDate);
-            expDate.setHours(0, 0, 0, 0);
-            const daysRemaining = Math.round((expDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-            const withinFilter = daysFilter === 9999 || daysRemaining <= daysFilter;
-            if (withinFilter && batch.qtyStrips > 0) {
-                allBatchRows.push({ product, batch, daysRemaining });
+    const allRows = useMemo<Row[]>(() => {
+        const out: Row[] = [];
+        for (const product of data?.products ?? []) {
+            for (const batch of product.batches ?? []) {
+                if (!batch.expiryDate || (batch.qtyStrips <= 0 && batch.qtyLoose <= 0)) continue; // only stock that is still there
+                const days = daysUntil(batch.expiryDate);
+                if (days > 90) continue;
+                out.push({ product, batch, days, value: batchValue(batch, valuationMode, product.packSize || 1) });
             }
-        });
-    });
+        }
+        return out.sort((a, b) => a.days - b.days);
+    }, [data, valuationMode]);
 
-    // Sort by soonest expiry first
-    allBatchRows.sort((a, b) => a.daysRemaining - b.daysRemaining);
+    const inWindow = (r: Row) => (span === 'expired' ? r.days < 0 : r.days <= span);
+    const counts = useMemo(() => Object.fromEntries(WINDOWS.map((w) => [String(w.value), allRows.filter((r) => (w.value === 'expired' ? r.days < 0 : r.days <= w.value)).length])), [allRows]);
+    const rows = allRows.filter(inWindow);
+    const valueAtRisk = rows.reduce((sum, r) => sum + r.value, 0);
 
-    const totalValue = allBatchRows.reduce(
-        (acc, item) => acc + (item.batch.qtyStrips * item.batch.purchaseRate), 0
-    );
+    const totalPages = Math.max(1, Math.ceil(rows.length / size));
+    const current = Math.min(page, totalPages);
+    const visible = rows.slice((current - 1) * size, current * size);
+
+    const pick = (w: Span) => { setSpan(w); setPage(1); };
+
+    const exportList = () =>
+        exportToCSV(
+            rows.map((r) => ({
+                product: r.product.name,
+                batch: r.batch.batchNo,
+                expiry: r.batch.expiryDate,
+                days: r.days,
+                stock: formatQty(r.batch.qtyStrips, r.batch.qtyLoose, r.batch.packSize, r.batch.packType, r.batch.packUnit),
+                rack: r.batch.rackLocation ?? '',
+                value: r.value.toFixed(2),
+            })),
+            'expiring-stock',
+            [
+                { key: 'product', label: 'Product' }, { key: 'batch', label: 'Batch' }, { key: 'expiry', label: 'Expiry Date' },
+                { key: 'days', label: 'Days Left' }, { key: 'stock', label: 'In Stock' }, { key: 'rack', label: 'Rack' }, { key: 'value', label: 'Value' },
+            ],
+        );
 
     return (
         <div className="space-y-4">
-            {/* Summary Badge */}
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex justify-between items-center flex-wrap gap-4">
-                <div className="flex items-center gap-3">
-                    <AlertTriangle className="w-5 h-5 text-amber-500" />
-                    <div>
-                        <p className="font-semibold text-slate-800">
-                            {allBatchRows.length} batches expiring{' '}
-                            {daysFilter === 9999 ? '(all time)' : `within ${daysFilter} days`}
-                        </p>
-                        <p className="text-sm text-amber-700">
-                            Total stock value at risk: {formatCurrency(totalValue)}
-                        </p>
-                    </div>
-                </div>
-                <div>
-                    <Button variant="outline" size="sm">
-                        <Download className="w-4 h-4 mr-2" />
-                        Export List
-                    </Button>
-                </div>
-            </div>
+            <ListBanner
+                tone="amber"
+                icon={<AlertTriangle className="h-5 w-5" />}
+                title={isLoading ? 'Checking expiry dates…' : `${rows.length} ${rows.length === 1 ? 'batch' : 'batches'} ${span === 'expired' ? 'already expired' : `expiring within ${span} days`}`}
+                description={isLoading ? undefined : `Stock value at risk: ${formatCurrency(valueAtRisk)} (at ${valuationMode.toLowerCase()} price)`}
+                actions={<Button type="button" variant="outline" size="sm" onClick={exportList} disabled={rows.length === 0}><Download aria-hidden="true" /> Export CSV</Button>}
+            />
 
-            {/* Filter Control */}
-            <div className="flex gap-2">
-                {[30, 60, 90, 9999].map(days => (
+            <div role="group" aria-label="Expiry window" className="flex flex-wrap gap-2">
+                {WINDOWS.map((w) => (
                     <Button
-                        key={days}
-                        variant={daysFilter === days ? 'default' : 'outline'}
+                        key={String(w.value)}
+                        type="button"
                         size="sm"
-                        onClick={() => setDaysFilter(days)}
+                        variant={span === w.value ? 'default' : 'outline'}
+                        aria-pressed={span === w.value}
+                        onClick={() => pick(w.value)}
                     >
-                        {days === 9999 ? 'All Expiring' : `${days} Days`}
+                        {w.label} <span className={cn('ml-1.5 tabular-nums', span === w.value ? 'opacity-90' : 'text-muted-foreground')}>{isLoading ? '' : counts[String(w.value)]}</span>
                     </Button>
                 ))}
             </div>
 
-            {/* Table */}
-            <div className="bg-white border rounded-xl overflow-hidden">
-                <Table>
-                    <TableHeader className="bg-slate-50 border-b">
-                        <TableRow>
-                            <TableHead>Product</TableHead>
-                            <TableHead>Batch No</TableHead>
-                            <TableHead>Expiry Date</TableHead>
-                            <TableHead className="text-right">Stock</TableHead>
-                            <TableHead>Location</TableHead>
-                            <TableHead className="text-right">Actions</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {isLoading ? (
-                            Array(5).fill(null).map((_, i) => (
-                                <TableRow key={i}>
-                                    <TableCell colSpan={6}>
-                                        <Skeleton className="h-8 w-full" />
+            {isError && (
+                <Alert variant="destructive">
+                    <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+                    <AlertTitle>Couldn&apos;t load expiring stock</AlertTitle>
+                    <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+                        <span>{apiErrorMessage(error, 'Something went wrong.')} Check your connection and try again.</span>
+                        <Button type="button" size="sm" variant="outline" onClick={() => refetch()}>Try Again</Button>
+                    </AlertDescription>
+                </Alert>
+            )}
+            {data?.truncated && (
+                <Alert><AlertDescription>This list is very long, so only the first {data.products.length.toLocaleString('en-IN')} products are shown.</AlertDescription></Alert>
+            )}
+
+            <div className="overflow-hidden rounded-xl border bg-card">
+                <div className="overflow-x-auto">
+                    <Table className="min-w-[48rem]">
+                        <caption className="sr-only">Batches that expire soon or have expired</caption>
+                        <TableHeader className="bg-muted/50">
+                            <TableRow className="hover:bg-transparent">
+                                <TableHead scope="col">Product</TableHead>
+                                <TableHead scope="col">Batch</TableHead>
+                                <TableHead scope="col">Expiry</TableHead>
+                                <TableHead scope="col" className="text-right">In Stock</TableHead>
+                                <TableHead scope="col">Rack</TableHead>
+                                <TableHead scope="col" className="text-right">Value</TableHead>
+                                <TableHead scope="col"><span className="sr-only">Actions</span></TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {isLoading ? (
+                                Array.from({ length: 5 }, (_, i) => <TableRow key={i} className="hover:bg-transparent"><TableCell colSpan={7}><Skeleton className="h-9 w-full" /></TableCell></TableRow>)
+                            ) : visible.length === 0 ? (
+                                <TableRow className="hover:bg-transparent">
+                                    <TableCell colSpan={7} className="py-16 text-center">
+                                        <CheckCircle2 className="mx-auto mb-3 h-10 w-10 text-emerald-500/60" aria-hidden="true" />
+                                        <p className="font-medium">{span === 'expired' ? 'No expired stock on the shelves' : `Nothing expires within ${span} days`}</p>
+                                        <p className="mt-1 text-sm text-muted-foreground">{span === 'expired' ? 'Everything in stock is within its date.' : 'Try a longer span to see what is coming up.'}</p>
                                     </TableCell>
                                 </TableRow>
-                            ))
-                        ) : allBatchRows.length > 0 ? (
-                            allBatchRows.map((item: any, idx: number) => {
-                                const { product, batch, daysRemaining } = item;
-                                let daysBadge = '';
-                                if (daysRemaining <= 0) daysBadge = 'bg-red-600 text-white font-bold';
-                                else if (daysRemaining <= 30) daysBadge = 'bg-red-100 text-red-700';
-                                else if (daysRemaining <= 60) daysBadge = 'bg-amber-100 text-amber-700';
-                                else daysBadge = 'bg-yellow-100 text-yellow-700';
-
-                                return (
-                                    <TableRow key={`${batch.id}-${idx}`} className="hover:bg-slate-50 transition-colors">
-                                        <TableCell>
-                                            <div className="font-semibold text-slate-900 text-sm">{product.name}</div>
-                                            <div className="text-xs text-muted-foreground truncate">{product.composition}</div>
-                                            <div className="text-xs text-slate-400">{product.manufacturer}</div>
-                                        </TableCell>
-                                        <TableCell>
-                                            <span className="font-mono bg-slate-100 px-2 py-1 rounded text-sm">{batch.batchNo}</span>
-                                        </TableCell>
-                                        <TableCell>
-                                            <div className="text-sm font-medium">
-                                                {new Date(batch.expiryDate).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}
-                                            </div>
-                                            <div className={`inline-block px-2 py-0.5 rounded text-xs mt-1 ${daysBadge}`}>
-                                                {daysRemaining <= 0 ? 'EXPIRED' : `${daysRemaining} days left`}
-                                            </div>
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                            <div className="text-sm font-semibold text-slate-700">
-                                                {formatQty(batch.qtyStrips, batch.qtyLoose, product.packSize, product.packType, product.packUnit)}
-                                            </div>
-                                            <div className="text-xs text-slate-500 mt-1">
-                                                {formatCurrency(batch.qtyStrips * batch.purchaseRate)}
-                                            </div>
-                                        </TableCell>
-                                        <TableCell>
-                                            <span className="text-sm text-slate-600">{batch.rackLocation || '—'}</span>
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                            <div className="flex gap-2 justify-end">
-                                                <Button variant="outline" size="sm" title="Mark for Return">
-                                                    <ShoppingBag className="w-3 h-3" />
-                                                </Button>
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    title="Adjust/Write Off"
-                                                    onClick={() => onAdjustClick(batch)}
-                                                >
-                                                    <SlidersHorizontal className="w-3 h-3" />
-                                                </Button>
-                                            </div>
-                                        </TableCell>
-                                    </TableRow>
-                                );
-                            })
-                        ) : (
-                            <TableRow>
-                                <TableCell colSpan={6} className="h-32 text-center text-slate-500">
-                                    {isLoading ? 'Loading...' : 'No expiring stock found in this timeframe.'}
-                                </TableCell>
-                            </TableRow>
-                        )}
-                    </TableBody>
-                </Table>
+                            ) : (
+                                visible.map(({ product, batch, days, value }) => {
+                                    const expired = days < 0;
+                                    return (
+                                        <TableRow key={batch.id}>
+                                            <TableCell className="max-w-[20rem]">
+                                                <div className="font-medium">{product.name}</div>
+                                                {product.composition && <div className="truncate text-xs text-muted-foreground" title={product.composition}>{product.composition}</div>}
+                                            </TableCell>
+                                            <TableCell><span translate="no" className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{batch.batchNo}</span></TableCell>
+                                            <TableCell className="whitespace-nowrap tabular-nums">
+                                                <div>{formatDay(batch.expiryDate)}</div>
+                                                <span className={cn(
+                                                    'mt-1 inline-block rounded px-2 py-0.5 text-xs font-medium',
+                                                    expired ? 'bg-red-600 text-white' : days <= 30 ? 'bg-red-100 text-red-800' : days <= 60 ? 'bg-amber-100 text-amber-800' : 'bg-yellow-100 text-yellow-800',
+                                                )}>
+                                                    {expiryText(days)}
+                                                </span>
+                                            </TableCell>
+                                            <TableCell className="whitespace-nowrap text-right tabular-nums">{formatQty(batch.qtyStrips, batch.qtyLoose, batch.packSize, batch.packType, batch.packUnit)}</TableCell>
+                                            <TableCell>{batch.rackLocation || '—'}</TableCell>
+                                            <TableCell className="whitespace-nowrap text-right tabular-nums">{formatCurrency(value)}</TableCell>
+                                            <TableCell className="text-right">
+                                                <PermissionGate permission="adjust_stock">
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant={expired ? 'destructive' : 'outline'}
+                                                        onClick={() => onAdjustClick(batch, product)}
+                                                        aria-label={`${expired ? 'Write off' : 'Adjust'} batch ${batch.batchNo} of ${product.name}`}
+                                                    >
+                                                        <SlidersHorizontal aria-hidden="true" /> {expired ? 'Write Off' : 'Adjust'}
+                                                    </Button>
+                                                </PermissionGate>
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+                                })
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
+                {!isLoading && rows.length > 0 && (
+                    <TablePagination page={current} totalPages={totalPages} totalRecords={rows.length} pageSize={size} noun="batches" onPage={setPage} onPageSize={(s) => { setSize(s); setPage(1); }} />
+                )}
             </div>
         </div>
     );

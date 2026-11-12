@@ -32,6 +32,8 @@ class BatchFactory(factory.django.DjangoModelFactory):
     mrp = 100.0
     purchase_rate = 80.0
     pack_size = 10
+    pack_unit = 'tablet'
+    pack_type = 'strip'
     qty_strips = 10
     qty_loose = 0
     is_active = True

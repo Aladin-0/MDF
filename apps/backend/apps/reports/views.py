@@ -622,11 +622,20 @@ class InventoryValuationView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
+        from django.db.models import Count, FloatField, Q, Sum
+        from django.db.models.functions import Cast, Coalesce, NullIf
+        from apps.inventory.cache_utils import inventory_cache_version
         from apps.inventory.models import Batch, MasterProduct
         outlet_id = request.query_params.get('outletId')
+        # ?summary=true: just the totals (a few hundred bytes). The Inventory page only needs those, and the
+        # full answer is every product with every batch (about 580 KB for one outlet), which made the
+        # Stock Value card arrive long after the other three.
+        summary_only = request.query_params.get('summary', '').lower() in ('1', 'true', 'yes')
 
-        # ── Redis Cache (10 min) ────────────────────────────────────────────
-        cache_key = make_cache_key('stock_val', outlet_id)
+        # ── Redis Cache ─────────────────────────────────────────────────────
+        # The key carries the inventory version, so an edit or an adjustment (which bump it) shows at once.
+        # It used to be one key for 10 minutes that nothing refreshed.
+        cache_key = make_cache_key('stock_val', outlet_id, 'summary' if summary_only else 'full', inventory_cache_version(outlet_id))
         cached = cache.get(cache_key)
         if cached is not None:
             return Response(cached, status=status.HTTP_200_OK)
@@ -637,11 +646,36 @@ class InventoryValuationView(APIView):
         except Outlet.DoesNotExist:
             return Response({'detail': 'Outlet not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        batches = Batch.objects.filter(
-            outlet=outlet,
-            qty_strips__gt=0,
-            is_active=True,
-        ).select_related('product').only(
+        # a batch holding only loose units is stock too (this used to skip it: `qty_strips > 0`)
+        in_stock = Batch.objects.filter(outlet=outlet, is_active=True).filter(Q(qty_strips__gt=0) | Q(qty_loose__gt=0))
+
+        if summary_only:
+            packs = Cast(F('qty_strips'), FloatField()) + Cast(F('qty_loose'), FloatField()) / Cast(Coalesce(NullIf(F('pack_size'), 0), 1), FloatField())
+            rate = lambda name: Cast(F(name), FloatField())
+            totals = in_stock.aggregate(
+                purchase=Sum(packs * rate('purchase_rate')),
+                landing=Sum(packs * Coalesce(rate('landing_rate'), rate('purchase_rate'))),
+                mrp=Sum(packs * rate('mrp')),
+                batches=Count('id'),
+                products=Count('product_id', distinct=True),
+            )
+            purchase, landing, mrp = (round(totals[k] or 0.0, 2) for k in ('purchase', 'landing', 'mrp'))
+            response_data = {
+                'success': True,
+                'data': {
+                    'totalValuation': purchase,
+                    'total_value_purchase': purchase,
+                    'total_value_landing': landing,
+                    'total_value_mrp': mrp,
+                    'activeBatches': totals['batches'] or 0,
+                    'totalProducts': totals['products'] or 0,
+                },
+                'meta': {'generatedAt': date.today().isoformat(), 'outletId': outlet_id, 'summary': True},
+            }
+            cache.set(cache_key, response_data, timeout=60)
+            return Response(response_data, status=status.HTTP_200_OK)
+
+        batches = in_stock.select_related('product').only(
             'id', 'batch_no', 'expiry_date', 'mrp', 'purchase_rate', 'landing_rate',
             'qty_strips', 'qty_loose', 'pack_size',
             'product__id', 'product__name', 'product__composition', 'product__manufacturer'
@@ -727,7 +761,7 @@ class InventoryValuationView(APIView):
                 'outletId': outlet_id,
             }
         }
-        cache.set(cache_key, response_data, timeout=600)  # 10 min
+        cache.set(cache_key, response_data, timeout=600)  # 10 min (refreshed sooner by an inventory edit)
         return Response(response_data, status=status.HTTP_200_OK)
 
 
