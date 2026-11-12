@@ -1651,9 +1651,12 @@ class SaleListView(APIView):
 
         # ── Profit aggregates for the filtered set (EXCLUDE return invoices) ───
         from django.db.models import Sum as dSum, Count as dCount
+        # Cancelled bills (the voided original of a cancel-and-reissue) stay in the list, flagged, so the invoice
+        # number is never missing from the serial; they are NOT money and are left out of every total below.
         agg = SaleInvoice.objects.filter(
             outlet=outlet,
             is_return=False,
+            is_cancelled=False,
             **({'invoice_date__date__gte': start_dt} if start_date_str else {}),
             **({'invoice_date__date__lte': end_dt}   if end_date_str   else {}),
             **sale_type_filter
@@ -1672,6 +1675,7 @@ class SaleListView(APIView):
         legacy_return_agg = SaleInvoice.objects.filter(
             outlet=outlet,
             is_return=True,
+            is_cancelled=False,
             **({'invoice_date__date__gte': start_dt} if start_date_str else {}),
             **({'invoice_date__date__lte': end_dt}   if end_date_str   else {}),
             **sale_type_filter
@@ -1700,6 +1704,7 @@ class SaleListView(APIView):
         cost_agg = SaleItemModel.objects.filter(
             invoice__outlet=outlet,
             invoice__is_return=False,
+            invoice__is_cancelled=False,
             **({'invoice__invoice_date__date__gte': start_dt} if start_date_str else {}),
             **({'invoice__invoice_date__date__lte': end_dt}   if end_date_str   else {}),
         ).aggregate(
@@ -1810,6 +1815,7 @@ class SaleListView(APIView):
                     for p in invoice.payments.all()
                 ],
                 'isReturn': invoice.is_return,
+                'isCancelled': invoice.is_cancelled,
                 'isModified': mod['isModified'],
                 'revisionCount': mod['revisionCount'],
                 'eway_bill_no': invoice.eway_bill_no,

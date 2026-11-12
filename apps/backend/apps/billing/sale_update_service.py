@@ -75,6 +75,23 @@ def parse_client_datetime(raw):
     return parsed
 
 
+def resolve_edited_invoice_date(raw, existing):
+    """
+    The date an edit should store. The edit form only carries minutes (no seconds), so a bill saved untouched
+    comes back as e.g. 21:55:00 for a bill made at 21:55:40. Stored as-is, that drops the bill below any other bill
+    made in the same minute and scrambles the serial order. When the form's date is the bill's own date to the
+    minute, keep the stored one (seconds included); a date the user really changed is taken as sent.
+    """
+    if not raw:
+        return existing
+    parsed = parse_client_datetime(raw)
+    if isinstance(existing, datetime) and isinstance(parsed, datetime):
+        same_tz = (existing.tzinfo is None) == (parsed.tzinfo is None)
+        if same_tz and existing.replace(second=0, microsecond=0) == parsed.replace(second=0, microsecond=0):
+            return existing
+    return parsed
+
+
 def normalize_billing_basis(raw, current):
     """'mrp' / 'PTR' / ... -> a valid stored choice; anything else keeps the bill's current basis."""
     candidate = str(raw).strip().upper() if raw else ''
@@ -509,11 +526,7 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
                     raise SaleServiceError(f"Doctor {doctor_id} not found")
 
             # Parse invoice_date if provided
-            raw_invoice_date = payload.get('invoiceDate')
-            if raw_invoice_date:
-                new_invoice_date = parse_client_datetime(raw_invoice_date)
-            else:
-                new_invoice_date = sale_invoice.invoice_date
+            new_invoice_date = resolve_edited_invoice_date(payload.get('invoiceDate'), sale_invoice.invoice_date)
 
             # Apply ONLY header field updates — no stock, no payments, no items
             sale_invoice.customer = new_customer
@@ -543,7 +556,7 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
         # Frontend may not send invoiceDate on edit; fall back to the existing invoice date
         raw_invoice_date = payload.get('invoiceDate')
         if raw_invoice_date:
-            invoice_date = parse_client_datetime(raw_invoice_date)
+            invoice_date = resolve_edited_invoice_date(raw_invoice_date, sale_invoice.invoice_date)
         else:
             existing_dt = sale_invoice.invoice_date
             invoice_date = existing_dt if isinstance(existing_dt, datetime) else datetime.combine(existing_dt, datetime.min.time())
