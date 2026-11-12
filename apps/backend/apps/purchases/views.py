@@ -9,6 +9,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.filters import OrderingFilter
 from django.db.models import Q
 from django.db import transaction
+from django.utils import timezone
 
 from apps.purchases.models import Distributor, PurchaseInvoice
 from apps.billing.models import LedgerEntry, PaymentEntry, PaymentAllocation
@@ -738,6 +739,10 @@ class PurchaseListView(APIView):
             }
         }
         """
+        # Opening the list also (hourly, in the background) clears old scan photos
+        # and unsaved scan drafts, so the clean-up runs on days without scans too.
+        from apps.purchases.scan_cleanup import maybe_cleanup_scan_photos
+        maybe_cleanup_scan_photos()
 
         try:
             from django.db.models import Q, Exists, OuterRef
@@ -1006,6 +1011,10 @@ class PurchaseListView(APIView):
         
         if purchase_invoice.status == 'SAVED' and hasattr(purchase_invoice, 'ocr_raw_data') and purchase_invoice.ocr_raw_data:
             data['ocrData'] = purchase_invoice.ocr_raw_data
+        if purchase_invoice.status == 'SAVED':
+            from apps.purchases.scan_cleanup import draft_auto_delete_at
+            when = draft_auto_delete_at(purchase_invoice.created_at)
+            data['autoDeleteAt'] = when.isoformat() if when else None
             
         return data
 
@@ -1327,7 +1336,13 @@ class PurchaseDetailView(APIView):
             return Response({'error': {'message': 'Only draft invoices can be deleted'}}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            invoice.delete()
+            from apps.purchases.scan_cleanup import delete_stored_file
+            with transaction.atomic():
+                # Remove the scan photos too — Django leaves files behind otherwise.
+                delete_stored_file(invoice.invoice_image)
+                for page in invoice.extra_pages.all():
+                    delete_stored_file(page.image)
+                invoice.delete()
             logger.info(f"Successfully deleted draft invoice {purchase_id}")
             return Response(status=status.HTTP_204_NO_CONTENT)
         except Exception as e:
@@ -1687,10 +1702,31 @@ class PurchaseOrderPdfExportView(APIView):
 OCR_FAILURE_MESSAGES = {
     'OCR_ENGINE_UNAVAILABLE': 'Invoice scanning is temporarily unavailable. Please contact support or retry later.',
     'OCR_NO_TEXT': 'No text could be read from this image. Please retake the photo in good light and try again.',
-    'OCR_IMAGE_MISSING': 'The uploaded invoice image is unavailable. Please scan the bill again.',
+    'OCR_IMAGE_MISSING': 'The scanned photo is no longer available (scan photos are deleted 24 hours after scanning). Please scan the bill again.',
     'OCR_QUEUE_UNAVAILABLE': 'Invoice scanning could not start. Please try again shortly.',
     'OCR_PROCESSING_FAILED': 'Invoice processing failed. Please retry the scan or enter the bill manually.',
+    'OCR_IMAGE_UNREADABLE': 'This photo format could not be read. Please take the photo again with the Camera button (or pick a JPG/PNG photo).',
+    'OCR_QUOTA_EXHAUSTED': 'The scanning service is busy (usage limit reached). Please retry in a minute, or enter the bill manually.',
 }
+
+MAX_SCAN_PAGES = 6
+
+
+def _dedupe_uploads(files) -> tuple:
+    """Drop byte-identical photos (the same page added twice). Returns (files, skipped_count)."""
+    import hashlib
+    seen, kept = set(), []
+    for f in files:
+        h = hashlib.sha256()
+        for chunk in f.chunks():
+            h.update(chunk)
+        f.seek(0)
+        digest = h.hexdigest()
+        if digest not in seen:
+            seen.add(digest)
+            kept.append(f)
+    return kept, len(files) - len(kept)
+
 
 class InvoiceScanUploadView(APIView):
     """
@@ -1702,7 +1738,9 @@ class InvoiceScanUploadView(APIView):
 
     Form data:
         - outletId: UUID (required)
-        - image: file (required) — JPG/PNG of the invoice
+        - image: file (required) — JPG/PNG of the invoice. Send the field
+          several times (in page order) for a multi-page bill: all images
+          become pages of ONE draft and are read together. Max MAX_SCAN_PAGES.
 
     Response 202:
     {
@@ -1723,11 +1761,13 @@ class InvoiceScanUploadView(APIView):
             or request.query_params.get('outletId')
             or request.query_params.get('outlet_id')
         )
-        image_file = (
-            request.FILES.get('image')
-            or request.FILES.get('file')
-            or request.FILES.get('invoice_image')
+        image_files = (
+            request.FILES.getlist('image')
+            or request.FILES.getlist('file')
+            or request.FILES.getlist('invoice_image')
         )
+        image_files, duplicates = _dedupe_uploads(image_files)
+        image_file = image_files[0] if image_files else None
 
         if not outlet_id:
             logger.warning(f"Scan upload missing outletId. Keys: data={list(request.data.keys())}, query={dict(request.query_params)}")
@@ -1742,6 +1782,13 @@ class InvoiceScanUploadView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        if len(image_files) > MAX_SCAN_PAGES:
+            return Response(
+                {'error': {'code': 'TOO_MANY_PAGES',
+                           'message': f'A bill can have at most {MAX_SCAN_PAGES} pages per scan.'}},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         try:
             outlet = Outlet.objects.get(id=outlet_id)
         except Outlet.DoesNotExist:
@@ -1751,30 +1798,39 @@ class InvoiceScanUploadView(APIView):
             )
 
         # Create a minimal SAVED invoice (no distributor yet, no amounts)
-        # OCR task will populate all fields asynchronously
-        draft = PurchaseInvoice.objects.create(
-            outlet=outlet,
-            status='SAVED',
-            invoice_image=image_file,
-            created_by=request.user,
-            # Placeholder values — will be overwritten by OCR
-            invoice_no='',
-            grand_total=0,
-            subtotal=0,
-            discount_amount=0,
-            taxable_amount=0,
-            gst_amount=0,
-            cess_amount=0,
-            freight=0,
-            round_off=0,
-            amount_paid=0,
-            outstanding=0,
-        )
+        # OCR task will populate all fields asynchronously. Draft + all pages
+        # are stored together or not at all (no half-saved multi-page drafts).
+        from apps.purchases.models import PurchaseInvoicePage
+        from apps.purchases.tasks import mark_ocr_queued
+        with transaction.atomic():
+            draft = PurchaseInvoice.objects.create(
+                outlet=outlet,
+                status='SAVED',
+                invoice_image=image_file,
+                scan_uploaded_at=timezone.now(),
+                created_by=request.user,
+                # Placeholder values — will be overwritten by OCR
+                invoice_no='',
+                grand_total=0,
+                subtotal=0,
+                discount_amount=0,
+                taxable_amount=0,
+                gst_amount=0,
+                cess_amount=0,
+                freight=0,
+                round_off=0,
+                amount_paid=0,
+                outstanding=0,
+            )
+            for page_no, extra in enumerate(image_files[1:], start=2):
+                PurchaseInvoicePage.objects.create(invoice=draft, page_no=page_no, image=extra)
 
-        logger.info(f"Created SAVED invoice {draft.id} for outlet {outlet.name}, dispatching OCR task")
+        logger.info(f"Created SAVED invoice {draft.id} ({len(image_files)} page(s)) for outlet {outlet.name}, "
+                    f"dispatching OCR task")
 
         # Fire background OCR task — non-blocking
         try:
+            mark_ocr_queued(draft.id)
             process_invoice_ocr.delay(str(draft.id))
         except Exception:
             logger.exception("Could not queue OCR for invoice %s", draft.id)
@@ -1789,6 +1845,8 @@ class InvoiceScanUploadView(APIView):
             {
                 'draftId': str(draft.id),
                 'status': 'processing',
+                'pages': len(image_files),
+                'duplicatePagesSkipped': duplicates,
                 'message': 'Invoice uploaded successfully. OCR analysis is running in the background.',
             },
             status=status.HTTP_202_ACCEPTED
@@ -1819,12 +1877,24 @@ class InvoiceOCRRetryView(APIView):
         if invoice.ocr_raw_data is not None:
             return Response({'status': 'ready'}, status=status.HTTP_200_OK)
         if invoice.ocr_processing_error is None:
-            return Response({'status': 'processing'}, status=status.HTTP_202_ACCEPTED)
+            # Still "processing": only requeue when the job is evidently lost
+            # (worker restart / dropped message). Re-running is cheap — the
+            # Gemini result for the same image is cached.
+            from apps.purchases.tasks import ocr_in_flight
+            running = ocr_in_flight(invoice.id)
+            if running is None:     # cache unavailable: fall back to the draft's age
+                from datetime import timedelta
+                running = bool(invoice.created_at and timezone.now() - invoice.created_at < timedelta(minutes=10))
+            if running:
+                return Response({'status': 'processing'}, status=status.HTTP_202_ACCEPTED)
+            logger.warning('OCR job for %s looks lost; requeueing', invoice.id)
 
         invoice.ocr_processing_error = None
         invoice.ocr_confidence = None
         invoice.save(update_fields=['ocr_processing_error', 'ocr_confidence'])
         try:
+            from apps.purchases.tasks import mark_ocr_queued
+            mark_ocr_queued(invoice.id)
             process_invoice_ocr.delay(str(invoice.id))
         except Exception:
             logger.exception("Could not requeue OCR for invoice %s", invoice.id)
@@ -1962,22 +2032,39 @@ class InvoiceOCRStatusView(APIView):
                 'amount': item.get('amount', ''),
                 'hsnCode': item.get('hsn_code', '') or (med_match.get('hsn_code') or ''),
                 'packSize': item.get('pack_size', ''),
+                'ocrOriginalName': item.get('name', ''),
+                'manufacturer': item.get('manufacturer', ''),
                 'medicineMatch': {
                     'matched': med_match.get('matched', False),
                     'productId': med_match.get('product_id'),
                     'productName': med_match.get('product_name', item.get('name', '')),
                     'confidence': round(med_match.get('confidence', 0), 2),
+                    'matchedBy': med_match.get('matched_by'),
                     'hsnCode': med_match.get('hsn_code'),
                     'gstRate': med_match.get('gst_rate'),
                     'packSize': med_match.get('pack_size'),
                     'packUnit': med_match.get('pack_unit'),
+                    'suggestions': [
+                        {
+                            'id': s.get('product_id'),
+                            'name': s.get('product_name'),
+                            'packSize': s.get('pack_size'),
+                            'packUnit': s.get('pack_unit'),
+                            'hsnCode': s.get('hsn_code'),
+                            'gstRate': s.get('gst_rate'),
+                            'mrp': s.get('mrp'),
+                        }
+                        for s in (med_match.get('suggestions') or [])
+                    ],
                 },
                 'validationOk': item.get('_validation_ok', True),
+                'validationNote': item.get('_validation_note'),
                 # Unknown columns flagged for review
                 'unknownColumns': {k: v for k, v in item.items() if k.startswith('_col_')},
             })
 
         image_url = invoice.invoice_image.url if invoice.invoice_image else None
+        page_urls = ([image_url] if image_url else []) + [p.image.url for p in invoice.extra_pages.all() if p.image]
 
         # Resolve the party ledger linked to this distributor
         from apps.accounts.models import Ledger as AccountsLedger
@@ -1987,13 +2074,31 @@ class InvoiceOCRStatusView(APIView):
                 outlet_id=outlet_id,
                 linked_distributor=invoice.distributor
             ).first()
+        if party_ledger is None and header.get('gstin_valid') and header.get('gstin'):
+            # Party ledgers created in Accounts may not be linked to a
+            # Distributor yet — a checksum-valid GSTIN identifies them. Only a
+            # supplier (liability-group) ledger, never the pharmacy's own GSTIN,
+            # and only when exactly one ledger fits — otherwise staff choose.
+            own_gstin = (invoice.outlet.gstin or '').upper()
+            if header['gstin'].upper() != own_gstin:
+                candidates = list(AccountsLedger.objects.filter(
+                    outlet_id=outlet_id, gstin__iexact=header['gstin'], group__nature='liability',
+                ).select_related('group')[:2])
+                if len(candidates) == 1:
+                    party_ledger = candidates[0]
 
         return Response({
             'status': 'ready',
             'draftId': str(invoice.id),
             'invoiceImageUrl': image_url,
+            'invoiceImageUrls': page_urls,
+            # Photo already removed by the retention clean-up (24 h after scanning).
+            'scanPhotoRemoved': bool(invoice.scan_uploaded_at and not invoice.invoice_image),
             'confidence': invoice.ocr_confidence,
             'warnings': ocr.get('warnings', []),
+            # True when the automatic checks could not confirm the reading
+            # (problems left, or the stronger model was out of quota).
+            'needsReview': bool(ocr.get('needs_review')),
             'header': {
                 'distributorName': invoice.ocr_distributor_name or header.get('distributor_name', ''),
                 'distributorId': str(invoice.distributor_id) if invoice.distributor_id else None,
@@ -2091,10 +2196,30 @@ class InvoiceDraftConfirmView(APIView):
             # Call the same atomic purchase save as manual purchase
             purchase_invoice = atomic_purchase_save(payload, outlet_id, request.user.id)
 
+            # OCR learning: the distributor the user confirmed is the truth for
+            # the name / GSTIN printed on this bill — remember it for next time.
+            try:
+                from apps.purchases.ocr_engine import learn_distributor_alias
+                ocr_header = (draft.ocr_raw_data or {}).get('header', {})
+                learn_distributor_alias(
+                    purchase_invoice.distributor,
+                    ocr_name=draft.ocr_distributor_name or ocr_header.get('distributor_name'),
+                    ocr_gstin=draft.ocr_distributor_gstin or ocr_header.get('gstin'),
+                    buyer_name=ocr_header.get('buyer_name'),
+                    buyer_gstin=ocr_header.get('buyer_gstin'),
+                )
+            except Exception:
+                logger.warning('Could not learn distributor alias for %s', purchase_id, exc_info=True)
+
             # Transfer the invoice image from draft to the new posted invoice
-            if draft.invoice_image:
-                purchase_invoice.invoice_image = draft.invoice_image
-                purchase_invoice.save(update_fields=['invoice_image'])
+            if draft.invoice_image or draft.scan_uploaded_at:
+                purchase_invoice.invoice_image = draft.invoice_image or None
+                purchase_invoice.scan_uploaded_at = draft.scan_uploaded_at
+                purchase_invoice.save(update_fields=['invoice_image', 'scan_uploaded_at'])
+
+            # Extra pages of a multi-page scan move with page 1 (else the
+            # draft's delete would cascade them away).
+            draft.extra_pages.update(invoice=purchase_invoice)
 
             # Delete the draft now that it's confirmed
             draft_image = draft.invoice_image.name if draft.invoice_image else None

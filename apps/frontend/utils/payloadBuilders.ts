@@ -267,6 +267,8 @@ export function buildPurchasePayload(
                 masterProductId:   it.isCustom ? null : it.productId,
                 customProductName: it.isCustom ? it.productName : null,
                 isCustomProduct:   it.isCustom ?? false,
+                // Lets the backend learn "bill name -> catalogue product" for the next scan.
+                ocrOriginalName:   it.ocrOriginalName || undefined,
                 hsnCode:         it.hsnCode,
                 batchNo:         it.batchNo,
                 expiryDate:      normalizeExpiryDate(it.expiryDate) || it.expiryDate,

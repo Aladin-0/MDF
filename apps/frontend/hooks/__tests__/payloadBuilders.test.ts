@@ -162,6 +162,20 @@ describe('payloadBuilders', () => {
             expect(item.qty).toBe(10);
             expect(item.actualQty).toBe(12); // (10 + 2) * pkg(1)
         });
+
+        it('sends the bill name of scanned rows so the backend can learn the match', () => {
+            const formState = { partyLedgerId: 'pl1', purchaseType: 'credit', invoiceNo: 'INV2', invoiceDate: '2026-09-28' };
+            const base = { qty: 1, freeQty: 0, pkg: 1, purchaseRate: 10, discountPct: 0, cashDiscountPct: 0,
+                gstRate: 5, cess: 0, mrp: 12, ptr: 0, pts: 0, isCustom: false };
+            const items = [
+                { ...base, productId: 'dolo650', ocrOriginalName: 'DOLO-650' },  // scanned row
+                { ...base, productId: 'pan40' },                                  // typed by hand
+            ];
+            const result = buildPurchasePayload(formState, items, 'o1', 20, 0, 0, 20, 1, 0, 0, 0, '', 21);
+            expect(result.items[0].ocrOriginalName).toBe('DOLO-650');
+            expect(result.items[0].masterProductId).toBe('dolo650');
+            expect(result.items[1].ocrOriginalName).toBeUndefined();
+        });
     });
 
     describe('buildReturnPayload', () => {

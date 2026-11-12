@@ -848,6 +848,24 @@ export interface PurchaseItemFormData {
     ptr: number;
     pts: number;
     saleRate: number;
+
+    // Invoice-scan (OCR) context — present only on rows filled from a scanned bill.
+    /** Product name exactly as printed on the bill; sent on save so the match is learned. */
+    ocrOriginalName?: string;
+    /** 0..1 confidence of the automatic catalogue match (1 = learned from an earlier correction). */
+    ocrMatchConfidence?: number;
+    /** Catalogue candidates offered when the scan could not decide on its own. */
+    ocrSuggestions?: OcrProductSuggestion[];
+}
+
+export interface OcrProductSuggestion {
+    id: string;
+    name: string;
+    packSize?: number | null;
+    packUnit?: string | null;
+    hsnCode?: string | null;
+    gstRate?: number | null;
+    mrp?: number | null;
 }
 
 // ─── Purchase Item ────────────────────────────────────────────────────────────
@@ -951,6 +969,8 @@ export interface PurchaseInvoiceFull extends PurchaseInvoice {
     godown: GodownLocation | string; // string fallback for custom godowns
     notes?: string;
     ocrData?: any;
+    /** Scan drafts only: when the draft (and its photos) is removed if nobody saves it. */
+    autoDeleteAt?: string | null;
     // Party ledger — resolved from distributor link on read
     partyLedgerId?: string | null;
     partyLedger?: {

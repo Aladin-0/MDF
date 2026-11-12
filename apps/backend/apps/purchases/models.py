@@ -52,6 +52,10 @@ class Distributor(models.Model):
     # OCR learning: store distributor-specific column header mappings
     ocr_column_map = models.JSONField(default=dict, blank=True,
                                       help_text='Learned column header synonyms for this distributor')
+    # OCR learning: how this distributor's name / GSTIN appeared on scans the
+    # user confirmed — {"names": [alias_key, ...], "gstins": [GSTIN, ...]}
+    ocr_aliases = models.JSONField(default=dict, blank=True,
+                                   help_text='Names / GSTINs learned from confirmed invoice scans')
 
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -245,6 +249,10 @@ class PurchaseInvoice(models.Model):
                               help_text='SAVED = OCR scan pending review; POSTED = confirmed & stock updated')
     invoice_image = models.ImageField(upload_to='purchase_invoices/%Y/%m/', null=True, blank=True,
                                       help_text='Scanned invoice photo')
+    # When the bill was scanned. Scan photos are deleted OCR_SCAN_PHOTO_TTL_HOURS
+    # (default 24) after this; the purchase data itself is kept.
+    scan_uploaded_at = models.DateTimeField(null=True, blank=True, db_index=True,
+                                            help_text='When the scan photo was uploaded (photo auto-deleted later)')
     # Raw OCR extraction stored as JSON for the review screen
     ocr_raw_data = models.JSONField(null=True, blank=True,
                                     help_text='OCR extracted data: header, items, totals')
@@ -337,6 +345,32 @@ class PurchaseInvoice(models.Model):
     @property
     def is_posted(self):
         return self.status == 'POSTED'
+
+    def scan_image_paths(self) -> list:
+        """All scanned pages in order: invoice_image is page 1, extra_pages follow."""
+        paths = [self.invoice_image.path] if self.invoice_image else []
+        paths += [p.image.path for p in self.extra_pages.all() if p.image]
+        return paths
+
+
+class PurchaseInvoicePage(models.Model):
+    """
+    Page 2..N of a scanned multi-page bill. Page 1 stays in
+    PurchaseInvoice.invoice_image so single-page code paths are unchanged.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    invoice = models.ForeignKey(PurchaseInvoice, on_delete=models.CASCADE, related_name='extra_pages')
+    page_no = models.PositiveSmallIntegerField(help_text='2 for the second page, 3 for the third, ...')
+    image = models.ImageField(upload_to='purchase_invoices/%Y/%m/')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'purchases_purchaseinvoicepage'
+        ordering = ['page_no']
+        unique_together = [('invoice', 'page_no')]
+
+    def __str__(self):
+        return f'{self.invoice_id} page {self.page_no}'
 
 
 class PurchaseItem(models.Model):

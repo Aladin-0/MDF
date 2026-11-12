@@ -5,7 +5,7 @@ Handles end-to-end invoice image processing:
   1. Image preprocessing  (OpenCV: deskew, binarize, denoise)
   2. OCR text extraction  (RapidOCR)
   3. Zone-based parsing   (header / item-table / footer)
-  4. 3-tier distributor matching (name → GSTIN → phone/DL)
+  4. Distributor matching (GSTIN → learned alias → phone/DL → distinctive name)
   5. Dynamic column-header detection & line-item extraction
 
 Usage (called from Celery task):
@@ -884,275 +884,343 @@ def parse_footer(footer_blocks: list[dict]) -> dict:
     return totals
 
 
+
 # ---------------------------------------------------------------------------
-# 8. 3-TIER DISTRIBUTOR MATCHER
+# 8. DISTRIBUTOR MATCHING  (rules live in ocr_matching; this loads the data)
 # ---------------------------------------------------------------------------
+def _distributor_records(outlet_id) -> list:
+    from apps.purchases.models import Distributor
+    from apps.purchases.ocr_matching import DistributorRecord, dl_numbers, phone_set
+
+    records = []
+    rows = Distributor.objects.filter(outlet_id=outlet_id, is_active=True).only(
+        'id', 'name', 'gstin', 'phone', 'mobile', 'dl_no_20b', 'dl_no_21b',
+        'drug_license_no', 'ocr_aliases')
+    for d in rows:
+        learned = d.ocr_aliases if isinstance(d.ocr_aliases, dict) else {}
+        records.append(DistributorRecord(
+            id=str(d.id),
+            name=d.name or '',
+            gstin=(d.gstin or '').upper().strip(),
+            phones=phone_set(d.phone, d.mobile),
+            dl_numbers=dl_numbers(d.dl_no_20b, d.dl_no_21b, d.drug_license_no),
+            learned_names=list(learned.get('names') or []),
+            learned_gstins=list(learned.get('gstins') or []),
+        ))
+    return records
+
+
 def match_distributor(outlet_id, header: dict) -> dict:
     """
-    Attempt to match the scanned invoice's distributor against existing DB suppliers.
-    Returns {distributor_id, match_tier, confidence, is_new}
+    Returns {distributor_id, match_tier, confidence, is_new, matched_by}.
+    GSTIN first, then names learned from earlier confirmed scans, then
+    phone / DL, and a distinctive-name fuzzy match only when unambiguous.
     """
-    # Lazy import to avoid circular imports at module load time
-    from apps.purchases.models import Distributor
+    from apps.purchases.ocr_matching import match_distributor_records
 
-    distributors = list(Distributor.objects.filter(outlet_id=outlet_id, is_active=True))
-    if not distributors:
-        return {'distributor_id': None, 'match_tier': None, 'confidence': 0, 'is_new': True}
-
-    ocr_name = (header.get('distributor_name') or '').upper().strip()
-    ocr_gstin = (header.get('gstin') or '').upper().strip()
-    ocr_phone = (header.get('mobile') or header.get('phone') or '').strip()
-    ocr_dl_20b = (header.get('dl_20b') or '').strip()
-    ocr_dl_21b = (header.get('dl_21b') or '').strip()
-
-    # --- TIER 1: Fuzzy Name Match ---
-    if ocr_name:
-        best_match = None
-        best_ratio = 0
-        for dist in distributors:
-            ratio = _fuzzy_ratio(ocr_name, dist.name.upper())
-            if ratio > best_ratio:
-                best_ratio = ratio
-                best_match = dist
-        if best_ratio >= 0.82 and best_match:
-            return {
-                'distributor_id': str(best_match.id),
-                'match_tier': 1,
-                'confidence': best_ratio,
-                'is_new': False,
-                'distributor': best_match,
-            }
-
-    # --- TIER 2: GSTIN Match ---
-    if ocr_gstin:
-        for dist in distributors:
-            if dist.gstin and dist.gstin.upper() == ocr_gstin:
-                return {
-                    'distributor_id': str(dist.id),
-                    'match_tier': 2,
-                    'confidence': 1.0,
-                    'is_new': False,
-                    'distributor': dist,
-                }
-
-    # --- TIER 3: Phone / DL Number Match ---
-    for dist in distributors:
-        db_phones = set(filter(None, [dist.phone, dist.mobile]))
-        db_dl20 = dist.dl_no_20b or ''
-        db_dl21 = dist.dl_no_21b or ''
-
-        if ocr_phone and ocr_phone in db_phones:
-            return {
-                'distributor_id': str(dist.id),
-                'match_tier': 3,
-                'confidence': 0.9,
-                'is_new': False,
-                'distributor': dist,
-            }
-        if ocr_dl_20b and ocr_dl_20b and ocr_dl_20b in db_dl20:
-            return {
-                'distributor_id': str(dist.id),
-                'match_tier': 3,
-                'confidence': 0.85,
-                'is_new': False,
-                'distributor': dist,
-            }
-        if ocr_dl_21b and ocr_dl_21b and ocr_dl_21b in db_dl21:
-            return {
-                'distributor_id': str(dist.id),
-                'match_tier': 3,
-                'confidence': 0.85,
-                'is_new': False,
-                'distributor': dist,
-            }
-
-    # No match found
-    return {'distributor_id': None, 'match_tier': None, 'confidence': 0, 'is_new': True}
+    result = match_distributor_records(header or {}, _distributor_records(outlet_id))
+    result.pop('record', None)
+    return result
 
 
-def _fuzzy_ratio(a: str, b: str) -> float:
-    """Fuzzy ratio between two strings using RapidFuzz."""
-    from rapidfuzz import fuzz
-    a = re.sub(r'[^A-Z0-9 ]', '', a)
-    b = re.sub(r'[^A-Z0-9 ]', '', b)
-    # Return 0.0 to 1.0 to match previous SequenceMatcher API
-    return fuzz.token_sort_ratio(a, b) / 100.0
+def learn_distributor_alias(distributor, ocr_name: str = None, ocr_gstin: str = None,
+                            buyer_name: str = None, buyer_gstin: str = None):
+    """
+    Remember how this distributor's name / GSTIN appeared on a confirmed scan.
+    Never learns the pharmacy's own identity (outlet / buyer block): if the
+    reader mixed up seller and buyer, learning it would send every later bill
+    to this distributor.
+    """
+    from apps.purchases.ocr_matching import alias_key, distributor_name_similarity, normalize_gstin
+
+    if distributor is None:
+        return
+    outlet = getattr(distributor, 'outlet', None)
+    own_gstins = {g for g in ((getattr(outlet, 'gstin', '') or '').upper(), (buyer_gstin or '').upper()) if g}
+    own_names = [n for n in (getattr(outlet, 'name', ''), buyer_name) if n]
+
+    def is_own_name(name):
+        return any(distributor_name_similarity(name, own) >= 0.85 for own in own_names)
+
+    data = distributor.ocr_aliases if isinstance(distributor.ocr_aliases, dict) else {}
+    names = list(data.get('names') or [])
+    gstins = list(data.get('gstins') or [])
+    changed = False
+
+    key = alias_key(ocr_name or '')
+    if key and key != alias_key(distributor.name) and key not in names and not is_own_name(ocr_name):
+        names = ([key] + names)[:20]
+        changed = True
+    gstin, valid = normalize_gstin(ocr_gstin)
+    if valid and gstin != (distributor.gstin or '').upper() and gstin not in gstins and gstin not in own_gstins:
+        gstins = ([gstin] + gstins)[:5]
+        changed = True
+    if changed:
+        distributor.ocr_aliases = {'names': names, 'gstins': gstins}
+        distributor.save(update_fields=['ocr_aliases'])
 
 
 # ---------------------------------------------------------------------------
-# 9. MEDICINE MATCHER
+# 9. MEDICINE MATCHING
 # ---------------------------------------------------------------------------
-def match_medicine(product_name: str, outlet_id) -> dict:
+_CATALOG_CACHE = {'sig': None, 'index': None, 'at': 0.0}
+_CATALOG_TTL = 600  # seconds; also invalidated when products are added
+
+
+def _catalog_index():
+    """Tokenised MasterProduct catalogue, cached per worker process."""
+    import time
+    from django.db.models import Count, Max
+    from apps.inventory.models import MasterProduct
+    from apps.purchases.ocr_matching import CatalogProduct, ProductIndex, tokenize_product
+
+    now = time.monotonic()
+    # Re-check the catalogue for changes at most once a minute, not on every scan.
+    if _CATALOG_CACHE['index'] is not None and now - _CATALOG_CACHE.get('checked', 0.0) < 60:
+        return _CATALOG_CACHE['index']
+    sig = tuple(MasterProduct.objects.aggregate(n=Count('id'), last=Max('created_at')).values())
+    if _CATALOG_CACHE['index'] is not None and _CATALOG_CACHE['sig'] == sig \
+            and now - _CATALOG_CACHE['at'] < _CATALOG_TTL:
+        _CATALOG_CACHE['checked'] = now
+        return _CATALOG_CACHE['index']
+
+    rows = MasterProduct.objects.values_list(
+        'id', 'name', 'manufacturer', 'hsn_code', 'gst_rate', 'pack_size', 'pack_unit',
+        'mrp', 'is_discontinued')
+    index = ProductIndex(
+        CatalogProduct(
+            id=str(pid), name=name or '', tokens=tokenize_product(name or ''),
+            manufacturer=mfr or '', hsn_code=hsn,
+            gst_rate=float(gst) if gst is not None else None,
+            pack_size=pack, pack_unit=unit,
+            mrp=float(mrp) if mrp else None, discontinued=bool(disc),
+        )
+        for pid, name, mfr, hsn, gst, pack, unit, mrp, disc in rows.iterator(chunk_size=5000)
+    )
+    _CATALOG_CACHE.update(sig=sig, index=index, at=now, checked=now)
+    return index
+
+
+def _product_context(outlet_id, distributor_id=None, batch_numbers=()):
     """
-    Match extracted product name against MasterProduct inventory.
-    1. Exact match on MasterProductAlias (per-outlet learned aliases)
-    2. Fuzzy match using RapidFuzz against global MasterProduct catalogue
-    Returns {product_id, product_name, hsn_code, gst_rate, pack_size, matched, confidence}
+    Outlet / distributor history for tie-breaking. Kept small on purpose:
+    one latest-MRP row per stocked product, and batch rows only for the batch
+    numbers printed on this bill.
     """
-    from apps.inventory.models import MasterProduct, MasterProductAlias
-    from rapidfuzz import fuzz
+    from django.db.models import Q
+    from apps.inventory.models import Batch
+    from apps.purchases.models import PurchaseItem
+    from apps.purchases.ocr_matching import ProductContext, alias_key
 
-    clean_name = product_name.upper().strip()
+    ctx = ProductContext()
+    stocked = Batch.objects.filter(outlet_id=outlet_id, product_id__isnull=False)
+    # Postgres DISTINCT ON: newest batch per product -> last MRP at this outlet.
+    for pid, mrp in stocked.order_by('product_id', '-created_at').distinct('product_id') \
+            .values_list('product_id', 'mrp').iterator(chunk_size=5000):
+        pid = str(pid)
+        ctx.outlet_product_ids.add(pid)
+        if mrp:
+            ctx.last_mrp[pid] = float(mrp)
 
-    # --- TIER 1: Check Aliases (Memory) — MasterProductAlias is per-outlet via FK ---
-    alias = MasterProductAlias.objects.filter(outlet_id=outlet_id, alias_name__iexact=clean_name).first()
-    if alias:
-        best_match = alias.product
-        return {
-            'matched': True,
-            'confidence': 1.0,
-            'product_id': str(best_match.id),
-            'product_name': best_match.name,
-            'hsn_code': best_match.hsn_code,
-            'gst_rate': float(best_match.gst_rate),
-            'pack_size': best_match.pack_size,
-            'pack_unit': best_match.pack_unit,
+    wanted = {b.strip() for b in batch_numbers if b and b.strip()}
+    if wanted:
+        q = Q()
+        for b in list(wanted)[:60]:
+            q |= Q(batch_no__iexact=b)
+        for pid, batch_no in stocked.filter(q).values_list('product_id', 'batch_no'):
+            ctx.batch_index.setdefault(alias_key(batch_no).replace(' ', ''), set()).add(str(pid))
+    if distributor_id:
+        ctx.distributor_product_ids = {
+            str(pid) for pid in PurchaseItem.objects.filter(
+                invoice__outlet_id=outlet_id, invoice__distributor_id=distributor_id,
+                master_product_id__isnull=False,
+            ).values_list('master_product_id', flat=True).distinct()
         }
+    return ctx
 
-    # --- TIER 2: Smart Fuzzy Match against global MasterProduct catalogue ---
-    # MasterProduct has no outlet_id — it is a shared global product catalogue
-    products = list(MasterProduct.objects.values(
-        'id', 'name', 'hsn_code', 'gst_rate', 'pack_size', 'pack_unit'
-    ))
 
-    candidates = []
-    normalized_name = re.sub(r'[^A-Z0-9 ]', ' ', clean_name)
-    if re.search(r'[A-Z]{3}', normalized_name):
-        for product in products:
-            catalog_name = re.sub(r'[^A-Z0-9 ]', ' ', product['name'].upper())
-            set_ratio = fuzz.token_set_ratio(normalized_name, catalog_name) / 100.0
-            sort_ratio = fuzz.token_sort_ratio(normalized_name, catalog_name) / 100.0
-            score = 0.4 * set_ratio + 0.6 * sort_ratio
-            candidates.append((score, set_ratio, sort_ratio, product))
-
-    candidates.sort(key=lambda candidate: candidate[0], reverse=True)
-    best_ratio = candidates[0][0] if candidates else 0
-    next_ratio = candidates[1][0] if len(candidates) > 1 else 0
-    # A generic subset such as "SHAVING CREAM" must not resolve a branded item.
-    if (candidates and candidates[0][1] >= 0.85 and candidates[0][2] >= 0.78
-            and best_ratio - next_ratio >= 0.05):
-        best_match = candidates[0][3]
-        return {
-            'matched': True,
-            'confidence': best_ratio,
-            'product_id': str(best_match['id']),
-            'product_name': best_match['name'],
-            'hsn_code': best_match['hsn_code'],
-            'gst_rate': float(best_match['gst_rate']),
-            'pack_size': best_match['pack_size'],
-            'pack_unit': best_match['pack_unit'],
-        }
-
+def _product_payload(p, matched: bool, confidence: float, matched_by: str, suggestions=()) -> dict:
     return {
-        'matched': False,
-        'confidence': best_ratio,
-        'product_id': None,
-        'product_name': clean_name,
-        'hsn_code': None,
-        'gst_rate': None,
-        'pack_size': None,
-        'pack_unit': None,
+        'matched': matched,
+        'confidence': round(float(confidence), 3),
+        'matched_by': matched_by,
+        'product_id': p.id if p else None,
+        'product_name': p.name if p else None,
+        'hsn_code': p.hsn_code if p else None,
+        'gst_rate': p.gst_rate if p else None,
+        'pack_size': p.pack_size if p else None,
+        'pack_unit': p.pack_unit if p else None,
+        'suggestions': [
+            {'product_id': s.id, 'product_name': s.name, 'pack_size': s.pack_size,
+             'pack_unit': s.pack_unit, 'hsn_code': s.hsn_code, 'gst_rate': s.gst_rate, 'mrp': s.mrp}
+            for s in suggestions
+        ],
     }
+
+
+def build_product_matcher(outlet_id, distributor_id=None, batch_numbers=()):
+    """
+    Load catalogue, learned aliases and outlet history ONCE per invoice and
+    return ``match(item_dict) -> match payload``.
+    """
+    from apps.inventory.models import MasterProductAlias
+    from apps.purchases.ocr_matching import alias_key, decide_product, rank_products
+
+    index = _catalog_index()
+    ctx = _product_context(outlet_id, distributor_id, batch_numbers)
+    aliases = {}
+    for name, pid in MasterProductAlias.objects.filter(outlet_id=outlet_id) \
+            .order_by('created_at').values_list('alias_name', 'product_id'):
+        aliases[alias_key(name)] = str(pid)
+
+    def match(item: dict) -> dict:
+        name = item.get('name') or ''
+        pid = aliases.get(alias_key(name))
+        if pid and pid in index.by_id:
+            return _product_payload(index.by_id[pid], True, 1.0, 'learned_alias')
+        ranking = rank_products(name, index, ctx, batch_no=item.get('batch_no') or '',
+                                mrp=item.get('mrp'), mfr=item.get('manufacturer') or '')
+        pick, conf, suggestions = decide_product(ranking)
+        if pick:
+            return _product_payload(pick, True, conf, 'fuzzy', [s for s in suggestions if s.id != pick.id])
+        out = _product_payload(None, False, conf, 'none', suggestions)
+        out['product_name'] = name.upper().strip()
+        return out
+
+    return match
 
 
 # ---------------------------------------------------------------------------
 # 10. MAIN ENTRY POINT
 # ---------------------------------------------------------------------------
-def process_invoice_image(image_path: str, outlet_id: str) -> dict:
-    """
-    Full pipeline: image → OCR → parse → match → structured result.
-    Called by the Celery task.
+class OCRProviderError(Exception):
+    def __init__(self, code):
+        super().__init__(code)
+        self.code = code
 
-    Returns a dict with:
-    {
-        header: {...},
-        items: [{...}, ...],
-        totals: {...},
-        distributor_match: {...},
-        confidence: float,
-        warnings: [...]
-    }
-    """
-    warnings = []
 
+def _outlet_identity(outlet_id):
+    from apps.core.models import Outlet
     try:
-        # Check if Gemini is enabled via API key
-        import os
-        gemini_api_key = os.environ.get('GEMINI_API_KEY')
-        if gemini_api_key:
-            from apps.purchases.gemini_ocr import process_with_gemini
-            logger.info("GEMINI_API_KEY detected. Routing image to Gemini 1.5 Flash...")
-            return process_with_gemini(
-                image_path=image_path,
-                outlet_id=outlet_id,
-                api_key=gemini_api_key,
-                match_distributor_fn=match_distributor,
-                match_medicine_fn=match_medicine,
-                calc_confidence_fn=_calculate_confidence
-            )
+        o = Outlet.objects.only('name', 'gstin').get(id=outlet_id)
+        return o.name, (o.gstin or '').upper() or None
+    except Exception:
+        return None, None
 
-        # Fallback to traditional OCR pipeline
-        logger.info(f"Starting traditional OCR for image: {image_path}")
-        blocks = extract_text_blocks(image_path)
 
-        if not blocks:
-            return {
-                'error': 'OCR_NO_TEXT',
-                'header': {}, 'items': [], 'totals': {}, 'distributor_match': {},
-                'confidence': 0, 'warnings': ['OCR returned no results']
-            }
+# Problems with the photo itself: the local OCR fallback can't help either.
+IMAGE_ERRORS = ('OCR_IMAGE_MISSING', 'OCR_IMAGE_UNREADABLE')
 
-        logger.info(f"OCR extracted {len(blocks)} text blocks")
 
-        # Step 2: Zone split
-        header_blocks, table_blocks, footer_blocks = split_zones(blocks)
-        logger.info(f"Zones: {len(header_blocks)} header, {len(table_blocks)} table, {len(footer_blocks)} footer blocks")
+def _run_gemini(image_path, outlet_name, outlet_gstin, api_key):
+    from PIL import UnidentifiedImageError
+    from apps.purchases.gemini_ocr import extract_invoice
+    try:
+        return extract_invoice(image_path, api_key, outlet_name=outlet_name, outlet_gstin=outlet_gstin)
+    except FileNotFoundError:
+        raise OCRProviderError('OCR_IMAGE_MISSING')
+    except UnidentifiedImageError:
+        # e.g. a HEIC photo the phone did not convert to JPEG
+        raise OCRProviderError('OCR_IMAGE_UNREADABLE')
+    except Exception as exc:
+        code = getattr(exc, 'code', None)
+        logger.exception('Gemini extraction failed for %s', image_path)
+        raise OCRProviderError('OCR_QUOTA_EXHAUSTED' if code == 429 else 'OCR_PROCESSING_FAILED')
 
-        # Step 3: Parse header
-        from apps.core.models import Outlet
-        outlet_gstin = None
-        try:
-            outlet = Outlet.objects.get(id=outlet_id)
-            outlet_gstin = outlet.gstin
-        except Exception:
-            pass
 
-        header = parse_header(header_blocks, all_blocks=blocks, outlet_gstin=outlet_gstin)
-        logger.info(f"Header parsed: {header}")
+def _run_local(image_path, outlet_gstin, outlet_id):
+    blocks = extract_text_blocks(image_path)
+    if not blocks:
+        return None
+    header_blocks, table_blocks, footer_blocks = split_zones(blocks)
+    header = parse_header(header_blocks, all_blocks=blocks, outlet_gstin=outlet_gstin)
+    dist_match = match_distributor(outlet_id, header)
+    learned_col_map = {}
+    if dist_match.get('distributor_id'):
+        from apps.purchases.models import Distributor
+        learned_col_map = Distributor.objects.filter(id=dist_match['distributor_id']) \
+            .values_list('ocr_column_map', flat=True).first() or {}
+    col_map_result = detect_column_map(blocks, learned_col_map)
+    warnings = []
+    if not col_map_result.get('col_map'):
+        warnings.append('Could not detect table columns — manual entry required for line items')
+    return {
+        'header': header,
+        'items': extract_line_items(blocks, col_map_result),
+        'totals': parse_footer(footer_blocks),
+        'warnings': warnings,
+        'column_map': col_map_result.get('col_map', {}),
+        'distributor_match': dist_match,
+        'meta': {'engine': 'local'},
+    }
 
-        # Step 4: 3-tier distributor match
-        dist_match = match_distributor(outlet_id, header)
-        logger.info(f"Distributor match: tier={dist_match.get('match_tier')}, new={dist_match.get('is_new')}")
 
-        # Get learned column map for this distributor (if known)
-        learned_col_map = {}
-        if dist_match.get('distributor'):
-            learned_col_map = dist_match['distributor'].ocr_column_map or {}
+def process_invoice_image(image_path, outlet_id: str) -> dict:
+    """
+    ``image_path`` is one path, or a list of paths (pages of ONE bill, in order).
 
-        # Step 5: Detect column layout
-        col_map_result = detect_column_map(blocks, learned_col_map)
-        if not col_map_result.get('col_map'):
-            warnings.append("Could not detect table columns — manual entry required for line items")
+    Full pipeline: image -> extraction (Gemini, or local RapidOCR when no key)
+    -> distributor + medicine matching -> confidence.
+    Called by the Celery task. Returns {header, items, totals,
+    distributor_match, column_map, confidence, warnings, meta} or {error, ...}.
+    """
+    def fail(code, warnings=()):
+        return {'error': code, 'header': {}, 'items': [], 'totals': {}, 'distributor_match': {},
+                'confidence': 0, 'warnings': list(warnings)}
 
-        # Step 6: Extract line items
-        items = extract_line_items(blocks, col_map_result)
-        logger.info(f"Extracted {len(items)} line items")
+    outlet_name, outlet_gstin = _outlet_identity(outlet_id)
+    api_key = os.environ.get('GEMINI_API_KEY')
+    try:
+        extracted = None
+        if api_key:
+            try:
+                extracted = _run_gemini(image_path, outlet_name, outlet_gstin, api_key)
+            except OCRProviderError as exc:
+                if exc.code in IMAGE_ERRORS or \
+                        os.environ.get('OCR_LOCAL_FALLBACK', '').lower() not in ('1', 'true', 'yes'):
+                    return fail(exc.code)
+                logger.warning('Falling back to local OCR after %s', exc.code)
+        if extracted is None:
+            pages = image_path if isinstance(image_path, (list, tuple)) else [image_path]
+            extracted = _run_local(pages[0], outlet_gstin, outlet_id)
+            if extracted is not None and len(pages) > 1:
+                extracted['warnings'].append(f'Only page 1 of {len(pages)} could be read automatically — '
+                                             f'enter the rows from the other pages by hand.')
+                extracted['missing_pages'] = len(pages) - 1
+            if extracted is None:
+                return fail('OCR_NO_TEXT', ['OCR returned no results'])
 
-        # Step 7: Match each item against medicine inventory
+        header = extracted['header']
+        items = extracted['items']
+        totals = extracted['totals']
+        warnings = list(extracted.get('warnings') or [])
+
+        dist_match = extracted.get('distributor_match') or match_distributor(outlet_id, header)
+        matcher = build_product_matcher(outlet_id, dist_match.get('distributor_id'),
+                                        batch_numbers=[i.get('batch_no') or '' for i in items])
         for item in items:
             if item.get('name'):
-                med_match = match_medicine(item['name'], outlet_id)
-                item['_medicine_match'] = med_match
-                if not med_match['matched']:
-                    warnings.append(f"Medicine not found in inventory: {item['name']}")
+                item['_medicine_match'] = matcher(item)
 
-        # Step 8: Parse footer totals
-        totals = parse_footer(footer_blocks)
-        logger.info(f"Footer totals: {totals}")
+        bad_math = sum(1 for i in items if i.get('_validation_ok') is False)
+        if bad_math:
+            warnings.append(f'Check qty / rate / amount on {bad_math} line{"s" if bad_math > 1 else ""} '
+                            f'(they do not add up on the bill as read).')
 
-        # Step 9: Calculate overall confidence
-        confidence = _calculate_confidence(header, items, totals, dist_match)
-
+        meta = extracted.get('meta') or {}
+        # Every problem the checks still see must reach the staff, not just the log.
+        for issue in meta.get('unresolved_issues') or []:
+            if not any(issue[:40] in w or w[:40] in issue for w in warnings):
+                warnings.append(issue)
+        if meta.get('strong_check_unavailable'):
+            warnings.insert(0, "This bill looked doubtful and today's limit for the stronger checking model was "
+                               "reached, so it was only re-checked by the basic model. Please compare every line "
+                               "with the paper bill before saving.")
+        needs_review = bool(meta.get('unresolved_issues') or meta.get('strong_check_unavailable') or bad_math
+                            or extracted.get('missing_pages') or extracted.get('duplicate_rows'))
+        logger.info('OCR done: engine=%s model=%s items=%d dist=%s tokens=%s ms=%s cached=%s',
+                    meta.get('engine'), meta.get('model'), len(items), dist_match.get('matched_by'),
+                    (meta.get('usage') or {}).get('total_tokens'), meta.get('total_ms'), meta.get('cached'))
         return {
             'header': header,
             'items': items,
@@ -1162,54 +1230,44 @@ def process_invoice_image(image_path: str, outlet_id: str) -> dict:
                 'match_tier': dist_match.get('match_tier'),
                 'confidence': dist_match.get('confidence'),
                 'is_new': dist_match.get('is_new'),
+                'matched_by': dist_match.get('matched_by'),
             },
-            'column_map': col_map_result.get('col_map', {}),
-            'confidence': confidence,
+            'column_map': extracted.get('column_map', {}),
+            'confidence': _calculate_confidence(header, items, totals, dist_match),
             'warnings': warnings,
+            'needs_review': needs_review,
+            'meta': meta,
         }
 
     except (ImportError, OSError):
-        logger.exception("OCR engine is unavailable for %s", image_path)
-        return {
-            'error': 'OCR_ENGINE_UNAVAILABLE',
-            'header': {}, 'items': [], 'totals': {}, 'distributor_match': {},
-            'confidence': 0, 'warnings': []
-        }
+        logger.exception('OCR engine is unavailable for %s', image_path)
+        return fail('OCR_ENGINE_UNAVAILABLE')
     except Exception:
-        logger.exception("OCR processing failed for %s", image_path)
-        return {
-            'error': 'OCR_PROCESSING_FAILED',
-            'header': {}, 'items': [], 'totals': {}, 'distributor_match': {},
-            'confidence': 0, 'warnings': []
-        }
+        logger.exception('OCR processing failed for %s', image_path)
+        return fail('OCR_PROCESSING_FAILED')
 
 
 def _calculate_confidence(header, items, totals, dist_match) -> float:
-    """Compute an overall OCR confidence score between 0 and 1."""
-    score = 0
-    weight = 0
+    """Overall 0..1 confidence: header fields, distributor, line maths, product matches, totals."""
+    score = 0.0
+    weight = 0.0
 
-    # Header fields
-    if header.get('distributor_name'): score += 1
-    if header.get('invoice_no'): score += 1
-    if header.get('invoice_date'): score += 1
-    if header.get('gstin'): score += 0.5
-    weight += 3.5
+    for key, w in (('distributor_name', 1), ('invoice_no', 1), ('invoice_date', 1), ('gstin', 0.5)):
+        weight += w
+        if header.get(key):
+            score += w
 
-    # Distributor match
-    if dist_match.get('match_tier') == 1: score += 1.5
-    elif dist_match.get('match_tier') == 2: score += 1.2
-    elif dist_match.get('match_tier') == 3: score += 1.0
     weight += 1.5
+    score += 1.5 * float(dist_match.get('confidence') or 0) if dist_match.get('distributor_id') else 0
 
-    # Items
+    weight += 3
     if items:
-        valid_items = sum(1 for i in items if i.get('_validation_ok'))
-        score += (valid_items / len(items)) * 2
-    weight += 2
+        valid = sum(1 for i in items if i.get('_validation_ok', True))
+        matched = sum(1 for i in items if (i.get('_medicine_match') or {}).get('matched'))
+        score += 1.5 * valid / len(items) + 1.5 * matched / len(items)
 
-    # Totals
-    if totals.get('grand_total'): score += 0.5
     weight += 0.5
+    if totals.get('grand_total'):
+        score += 0.5
 
-    return round(score / weight, 3) if weight > 0 else 0
+    return round(score / weight, 3) if weight else 0
