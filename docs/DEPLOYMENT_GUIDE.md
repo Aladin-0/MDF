@@ -1,7 +1,7 @@
 # MediFlow (MDF) — Production Deployment Guide
 
-Read this fully before deploying. Last verified deploy: **2026-11-03**, server moved `763de0d9` → `ca2d047`
-(backup: `/mediflow/backups/deploy_20261103_142602/`).
+Read this fully before deploying. Last verified deploy: **2026-11-12**, server moved `d065f12` → `d83c0e4`
+(backup: `/mediflow/backups/deploy_20261112_195318/`).
 
 > **Never put the SSH password in this file or in git.** Ask the user for it each time.
 
@@ -89,23 +89,23 @@ Other server-only files (untracked / gitignored — leave them): `.env`, `apps/b
 
 ## 3. How to connect (no `sshpass` on the dev machine)
 
-Use OpenSSH's askpass with the password in an env var (not written to disk). Create two throw-away scripts in the session
-scratchpad, and **delete them when finished**:
+Use OpenSSH's askpass with the password in an env var. **No file may contain the password** (an auto-mode safety check
+also blocks scripts that do): the two helper scripts hold no secret, and the password is passed as `MDF_PW=...` on each
+command, never written to disk or git. Create the scripts in the session scratchpad and **delete them when finished**:
 
 ```bash
 cat > $S/askpass.sh <<'EOF'
 #!/bin/sh
 echo "$MDF_PW"
 EOF
-cat > $S/rs.sh <<'EOF'
+cat > $S/rs.sh <<EOF
 #!/bin/bash
-export MDF_PW='<password from user>'
 export SSH_ASKPASS=$S/askpass.sh SSH_ASKPASS_REQUIRE=force DISPLAY=:0
 exec ssh -o StrictHostKeyChecking=accept-new -o PreferredAuthentications=password,keyboard-interactive \
-  -o PubkeyAuthentication=no root@72.61.246.159 "$@"
+  -o PubkeyAuthentication=no -o ConnectTimeout=20 root@72.61.246.159 "\$@"
 EOF
 chmod 700 $S/askpass.sh $S/rs.sh
-$S/rs.sh 'hostname; docker ps --format "{{.Names}} {{.Status}}" | grep mediflow'
+MDF_PW='<password from user>' $S/rs.sh 'hostname; docker ps --format "{{.Names}} {{.Status}}" | grep mediflow'
 ```
 (Better long-term: have the user add an SSH key and switch to key auth.)
 
@@ -288,6 +288,7 @@ docker start mediflow_backend mediflow_celery
 
 | Date | From → To | Backup dir | Notes |
 |---|---|---|---|
+| 2026-11-12 | `d065f12` → `d83c0e4` | `/mediflow/backups/deploy_20261112_195318/` | Family accounts, PO lifecycle, server-side access control, OCR overhaul, mobile-responsive frontend, bill-edit date fix. backend/celery/frontend rebuilt + nginx restart; 14 migrations applied on boot (accounts 0028-0030, billing 0028-0030, core 0016, inventory 0029, purchases 0016-0021), none destructive. Pre-deploy staff check clean (11 active staff, no unknown roles, no unusable passwords). Server config files untouched. DB dump 28 MB, media tar 650 MB. |
 | 2026-11-03 (2nd) | `ca2d047` → `d065f12` | `/mediflow/backups/deploy_20261103_173854/` | Frontend-only: purchase product-search dropdown (4 visible + scroll) and arrow-key duplicate-row fix. Only `frontend` rebuilt/recreated (1m12s build, ~45s start) + nginx restart; backend/celery untouched, media tarball skipped (not affected). |
 | 2026-11-03 | `763de0d9` → `ca2d047` | `/mediflow/backups/deploy_20261103_142602/` | ERP reports, purchases/OCR, billing integrity, tax-slab migration `core.0015`; OpenCV pinned `5.0.0.93`. Build 3m45s. All checks passed; saudapakka unaffected. |
 | 2026-10-25 and earlier | → `763de0d9` | `/mediflow/backups/pre_deploy_*.dump`, `docker-compose.yml.*.bak` | Earlier manual deploys (dump + compose `.bak` per deploy). |
