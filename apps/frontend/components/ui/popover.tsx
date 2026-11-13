@@ -9,6 +9,9 @@ const Popover = PopoverPrimitive.Root
 
 const PopoverTrigger = PopoverPrimitive.Trigger
 
+/** The element the popover is positioned against when the trigger is not a button (e.g. a text box with suggestions) */
+const PopoverAnchor = PopoverPrimitive.Anchor
+
 const PopoverContent = React.forwardRef<
   React.ElementRef<typeof PopoverPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>
@@ -29,4 +32,4 @@ const PopoverContent = React.forwardRef<
 ))
 PopoverContent.displayName = PopoverPrimitive.Content.displayName
 
-export { Popover, PopoverTrigger, PopoverContent }
+export { Popover, PopoverTrigger, PopoverAnchor, PopoverContent }

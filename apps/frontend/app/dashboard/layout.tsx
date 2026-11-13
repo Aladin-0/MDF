@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { OfflineBanner } from '@/components/shared/OfflineBanner';
 import { DashboardSkeleton } from '@/components/shared/DashboardSkeleton';
@@ -19,6 +19,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     // login redirect (one shared implementation); keeping the user fresh is <SessionSync/>'s job
     const ready = useAuthGate();
 
+    // The pinned top bar (navigation + check-in banner) changes height when the banner goes away. Publish the height as --app-header-h so a
+    // page can pin something just below it (e.g. the New Purchase column header: `sticky top-[var(--app-header-h,0px)]`).
+    const headerRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        const el = headerRef.current;
+        if (!el) return;
+        const set = () => document.documentElement.style.setProperty('--app-header-h', `${Math.round(el.getBoundingClientRect().height)}px`);
+        set();
+        if (typeof ResizeObserver === 'undefined') return;
+        const ro = new ResizeObserver(set);
+        ro.observe(el);
+        return () => { ro.disconnect(); document.documentElement.style.removeProperty('--app-header-h'); };
+    }, [ready]);
+
     if (!ready) {
         return <DashboardSkeleton />;
     }
@@ -28,13 +42,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <OfflineBanner />
 
             {/* Global Top Navigation */}
-            <div className="sticky top-0 z-50 w-full flex flex-col">
+            <div ref={headerRef} className="sticky top-0 z-50 w-full flex flex-col">
                 <GlobalNavigation />
                 <SmartCheckInBanner />
             </div>
 
             {/* Main content area */}
-            <div className="flex-1 w-full max-w-[1800px] mx-auto overflow-x-hidden flex flex-col">
+            <div className="flex-1 w-full max-w-[1800px] mx-auto overflow-x-clip flex flex-col">
                 <main className="flex-1 p-3 sm:p-6 print:p-0">
                     <RouteGuard>{children}</RouteGuard>
                 </main>

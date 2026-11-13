@@ -98,14 +98,9 @@ export function runShortcutCommand(command: string, ctx: ShortcutCommandContext)
             store.setIsPinVerified(false);
             return;
         case 'billing.counterBill':
-        case 'billing.nonValuedCustomer':
-            // wholesale sells to one named party (a person or a business): no counter bill, no name-only customer
+            // wholesale sells to one named party (a person or a business): no counter bill
             if (store.activeDraftId && store.drafts[store.activeDraftId]?.saleType === 'WHOLESALE') {
-                ctx.notify('Counter bills and name-only customers are for retail bills. A wholesale bill needs a customer.');
-                return;
-            }
-            if (name === 'billing.nonValuedCustomer') {
-                window.dispatchEvent(new CustomEvent('billing:open-non-valued'));
+                ctx.notify('Counter bills are for retail bills. A wholesale bill needs a customer.');
                 return;
             }
             // a generic cash sale: no customer, no patient, no walk-in name; carry on with the medicines

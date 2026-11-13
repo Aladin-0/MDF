@@ -1,3 +1,4 @@
+import { pkgOrZero } from '@/lib/purchasePack';
 import { bankersRound } from './mathUtils';
 import { distributeSmartDiscounts } from '../lib/billingMarginUtils';
 import { useBillingStore } from '../store/billingStore';
@@ -72,7 +73,11 @@ export function buildSalePayload(draft: any, scheduleHData: any, totals: any, ac
     }
 
     const landingCostIncludeGst = useBillingStore.getState().landingCostIncludeGst;
-    const smartAllocations = distributeSmartDiscounts(cart, extraDiscountPct, draft.saleType || 'RETAIL', landingCostIncludeGst);
+    // Same rule as the store's getDraftTotals: lines are only re-allocated when there is a bill-level discount. Without one a line is
+    // simply net rate x quantity, so the lines sent can never disagree with the grand total sent (the server refuses a mismatch).
+    const smartAllocations = extraDiscountPct > 0
+        ? distributeSmartDiscounts(cart, extraDiscountPct, draft.saleType || 'RETAIL', landingCostIncludeGst)
+        : new Map<string, any>();
 
     return {
         outletId: resolvedOutletId,
@@ -92,8 +97,9 @@ export function buildSalePayload(draft: any, scheduleHData: any, totals: any, ac
         transMode: Number(draft.transMode) || 1,
         vehicleType: draft.vehicleType || "R",
         items: cart.map((item: any, idx: number) => {
-            const rawTotal = item.rate * item.totalQty;
             const gstRate = item.gstPct ?? item.gstRate ?? 0;
+            // net rate x quantity; wholesale rates are tax-exclusive, so GST is added on top (exactly as getDraftTotals does)
+            const rawTotal = item.rate * item.totalQty * (draft.saleType === 'WHOLESALE' ? 1 + gstRate / 100 : 1);
             const discountFactor = extraDiscountPct > 0 ? 1 - extraDiscountPct / 100 : 1;
             const key = item.batchId || `item-${idx}`;
             const alloc = smartAllocations.get(key);
@@ -249,7 +255,8 @@ export function buildPurchasePayload(
         ledgerNote:       ledgerNote || undefined,
         grandTotal:       parseFloat(netPayable.toFixed(2)),
         items: items.map((it) => {
-            const effPkg     = typeof it.pkg === 'number' && it.pkg > 0 ? it.pkg : 1;
+            // a blank / invalid PKG is sent as 0 and REFUSED by the server (and by the form before that): it must never turn into a pack of 1
+            const effPkg     = pkgOrZero(it.pkg);
             const effQty     = it.qty * effPkg;
             const base       = it.qty * it.purchaseRate * (1 - it.discountPct / 100) * (1 - it.cashDiscountPct / 100);
             

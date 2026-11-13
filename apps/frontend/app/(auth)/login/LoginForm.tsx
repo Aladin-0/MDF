@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { loginSchema, type LoginFormValues } from '@/lib/validations/auth'
@@ -22,6 +22,10 @@ export default function LoginForm() {
     const [serverError, setServerError] = useState<string | null>(null)
     const [showPassword, setShowPassword] = useState(false)
     const [isShaking, setIsShaking] = useState(false)
+    // The server draws this form before its JavaScript has loaded (slow phone, big dev bundles). Until the page is alive the button stays off, and the
+    // form posts (method below): a form with no method falls back to GET and would put the phone number AND PASSWORD in the address.
+    const [ready, setReady] = useState(false)
+    useEffect(() => { setReady(true) }, [])
 
     const {
         register,
@@ -71,7 +75,7 @@ export default function LoginForm() {
                 <CardDescription>Sign in to manage your pharmacy</CardDescription>
             </CardHeader>
             <CardContent>
-                <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
+                <form onSubmit={handleSubmit(onSubmit)} method="post" noValidate className="space-y-4">
 
                     {serverError && (
                         <div className="bg-red-50 border border-red-200 rounded-md p-3 text-sm text-red-700 flex gap-2 items-start animate-in fade-in">
@@ -132,7 +136,7 @@ export default function LoginForm() {
                         )}
                     </div>
 
-                    <Button type="submit" className="w-full mt-2" size="lg" disabled={isLoading}>
+                    <Button type="submit" className="w-full mt-2" size="lg" disabled={isLoading || !ready}>
                         {isLoading ? (
                             <>
                                 <Loader2 className="animate-spin mr-2 h-4 w-4" />

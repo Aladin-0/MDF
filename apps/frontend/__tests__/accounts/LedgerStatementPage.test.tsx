@@ -66,7 +66,7 @@ describe('Ledger statement page', () => {
         fireEvent.click(screen.getByRole('button', { name: 'First' }));
         expect(await screen.findByText('V-1')).toBeInTheDocument();
         expect(calls().map((c) => c.page)).toEqual([1, 2, 8, 1]);
-    });
+    }, 30000);   // four renders of a 200-row page: over the default 5 s when the whole suite runs at once (the test itself is fine alone)
 
     it('changing page keeps the table on screen instead of flashing a loading screen', async () => {
         let release!: (v: unknown) => void;

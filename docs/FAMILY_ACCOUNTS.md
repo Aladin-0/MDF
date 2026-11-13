@@ -16,7 +16,7 @@ Real families share one mobile number and one credit account, but each person ne
 - Mobile numbers were already allowed to repeat (no unique constraint; only the exact same name + number is blocked).
 
 ## Retail only
-Family features are for **retail** bills. A **wholesale** bill sells to one party (a person or a business), so the Billing For field, the "Family" hint in the customer search, **Counter Bill** and **Non-Valued Customer** (and their Alt+C / Alt+J shortcuts) are hidden in wholesale. The server enforces it too: a wholesale bill is posted to the account owner as a single party and never records a family patient, even if one is sent. Switching a bill from retail to wholesale clears the person picked.
+Family features are for **retail** bills. A **wholesale** bill sells to one party (a person or a business), so the Billing For field, the "Family" hint in the customer search, **Counter Bill** (and its Alt+C shortcut) are hidden in wholesale. The server enforces it too: a wholesale bill is posted to the account owner as a single party and never records a family patient, even if one is sent. Switching a bill from retail to wholesale clears the person picked.
 
 ## Rules (enforced by the server, `apps/accounts/family_accounts.py`)
 - Billing a purely shared record **requires a patient** from its members (HTTP 400, `code: FAMILY_ACCOUNT`). Billing an owner directly
@@ -41,14 +41,12 @@ Family features are for **retail** bills. A **wholesale** bill sells to one part
 | Sale create / edit | Accept `patientId`; responses carry `patientId` and `patientMemberName`. |
 
 ## Screens
-- **Billing header, four ways to put a customer on a bill**:
+- **Billing header, ways to put a customer on a bill** (there is no name-only "Non-Valued Customer" option any more: a bill is a customer bill or a Counter Bill; old bills keep their `walk_in_name`):
   1. *Search by mobile or name* in the customer box (a family is also found by any member's name or mobile and that person is preselected).
      No match -> a prompt **Add New Customer** opens the popup (First/Last name, Mobile (pre-filled from what was typed), Email, Address,
      City, Pincode, Default Discount %). A customer with a mobile number unlocks history, WhatsApp invoices and reminders.
-  2. **Non-Valued Customer** (⋮ menu or **Alt+J**): name only, no mobile, no profile. The name is kept on the bill (`SaleInvoice.walk_in_name`,
-     API key `walkInName`) and printed; it cannot be used for credit.
-  3. **Counter Bill** (button, ⋮ menu or **Alt+C**): clears customer, person and name: a generic cash sale.
-  4. A customer already on the bill can have family added, below.
+  2. **Counter Bill** (button, ⋮ menu or **Alt+C**): clears customer, person and name: a generic cash sale.
+  3. A customer already on the bill can have family added, below.
 - **Billing for** (directly under the customer; indigo-bordered so it is hard to miss): defaults to **Self**. The dropdown lists the owner
   (relation "Self") then each family member with mobile, age and relation on the right, and **+ Add New Family Member** at the bottom.
   Also shows the family size and the shared **Due** / **Limit**. A purely shared record has no "Self": it turns amber and the cashier must choose.

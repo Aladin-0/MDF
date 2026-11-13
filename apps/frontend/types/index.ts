@@ -287,6 +287,20 @@ export interface MasterProduct {
     currentStock?: number;
 }
 
+/** The product boxes that offer options from the catalogue */
+export type SuggestField = 'manufacturer' | 'composition';
+
+/** One option for the Manufacturer / Composition boxes. A composition also carries what its products usually have (the form fills empty boxes with it). */
+export interface ProductSuggestion {
+    value: string;
+    /** How many catalogue products use it */
+    count: number;
+    hsnCode?: string;
+    gstRate?: number | null;
+    /** Only ever a real schedule (H, H1, X ...), never OTC */
+    scheduleType?: string;
+}
+
 export interface CreateProductPayload {
     name: string;
     composition?: string;
@@ -338,6 +352,10 @@ export interface ProductSearchResult extends MasterProduct {
     totalQtyLoose: number;
     totalMeasured?: number;
     availableBatches?: Batch[];
+    /** Only on a substitutes lookup: does this brand match the original's strength / dosage form? (null = the name does not say) */
+    substitute?: { sameStrength: boolean | null; sameForm: boolean | null };
+    /** Only on a price search (L+175): the batch price the typed number matched (can differ from the catalogue MRP) */
+    matchedMrp?: number | null;
 }
 
 // ─── Customer & Doctor ────────────────────────────────────────────────────────
@@ -834,7 +852,10 @@ export interface PurchaseItemFormData {
     hsnCode: string;
     batchNo: string;
     expiryDate: string;
+    /** Units in one pack of what the supplier delivered (PKG). '' until it is known: never silently 1. */
     pkg: number;
+    /** The catalogue's pack size for this product when the line was filled (the line may legitimately differ; the screen says when it does) */
+    catalogPkg?: number;
     packUnitLabel?: string;
     qty: number;
     freeQty: number;

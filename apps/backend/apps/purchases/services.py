@@ -17,8 +17,69 @@ logger = logging.getLogger(__name__)
 
 
 class PurchaseServiceError(Exception):
-    """Custom exception raised when purchase save validation fails."""
-    pass
+    """Custom exception raised when purchase save validation fails.
+
+    `code` and `item_index` (0-based line of the purchase) let the screen put the cursor on the line that is wrong
+    (PKG errors use INVALID_PKG / PACK_SIZE_CONFLICT)."""
+
+    def __init__(self, message='', code='PURCHASE_ERROR', item_index=None):
+        super().__init__(message)
+        self.code = code
+        self.item_index = item_index
+
+
+def _line_label(idx, item_payload, master_product):
+    name = (master_product.name if master_product else None) or item_payload.get('customProductName') or 'medicine'
+    return f"Item {idx + 1} ({name})"
+
+
+def _line_pkg(item_payload, master_product, idx):
+    """
+    This line's PKG as a whole number 1..MAX_PURCHASE_PKG. Not given at all -> the product's own pack size. Anything given that is not a
+    sensible whole number is REFUSED (never turned into 1 or cut to an integer): a wrong pack size silently creates or loses stock.
+    """
+    from apps.inventory.pack_rules import parse_purchase_pkg, MAX_PURCHASE_PKG
+    raw = item_payload.get('pkg')
+    if raw is None:
+        size = master_product.pack_size if master_product and master_product.pack_size else 1
+        return max(int(size), 1)
+    try:
+        return parse_purchase_pkg(raw)
+    except ValueError as e:
+        raise PurchaseServiceError(
+            f"{_line_label(idx, item_payload, master_product)}: PKG (units per pack) {e}. Enter how many units are in one pack, 1 to {MAX_PURCHASE_PKG}.",
+            code='INVALID_PKG', item_index=idx,
+        )
+
+
+def _same_batch_same_pack(batch, new_pkg, idx, label):
+    """A second line of the SAME batch in one invoice must use the same pack size: one batch has one pack."""
+    if new_pkg != batch.pack_size:
+        raise PurchaseServiceError(
+            f"{label}: this batch appears twice on the invoice with different PKG ({batch.pack_size} and {new_pkg}). "
+            f"One batch has one pack size: use the same PKG, or a different batch number.",
+            code='PACK_SIZE_CONFLICT', item_index=idx,
+        )
+
+
+def _adopt_pack_size(batch, new_pkg, idx, label, own_strips=0):
+    """
+    Give an EXISTING batch the pack size of this line.
+
+    The batch stores its stock as a number of packs, so changing the pack size of a batch that holds stock re-labels every pack on the
+    shelf (100 strips of 10 = 1,000 units would become 100 strips of 15 = 1,500 units that do not exist). So it is only allowed when the
+    batch holds nothing but what THIS purchase put in (`own_strips`): nothing from earlier purchases, nothing sold, no loose units.
+    """
+    if new_pkg == batch.pack_size:
+        return
+    if batch.qty_strips != own_strips or batch.qty_loose:
+        raise PurchaseServiceError(
+            f"{label}: batch {batch.batch_no} is already in stock as packs of {batch.pack_size}, but this line says PKG {new_pkg}. "
+            f"A batch has one pack size, and changing it would change the stock already on the shelf. "
+            f"Enter {batch.pack_size}, use a different batch number, or correct the batch's pack size in Inventory first.",
+            code='PACK_SIZE_CONFLICT', item_index=idx,
+        )
+    batch.pack_size = new_pkg
 
 
 class OverpaymentError(Exception):
@@ -240,6 +301,8 @@ def atomic_purchase_save(payload: Dict[str, Any], outlet_id: str, created_by_id:
 
             # Calculate total strips purchased including free goods
             total_strips = int(item_payload['qty']) + int(item_payload.get('freeQty', 0))
+            label = _line_label(idx, item_payload, master_product)
+            new_pkg = _line_pkg(item_payload, master_product, idx)
 
             # Check if batch already exists in this transaction (batch_cache)
             if batch_key in batch_cache:
@@ -249,10 +312,8 @@ def atomic_purchase_save(payload: Dict[str, Any], outlet_id: str, created_by_id:
                 batch.ptr = Decimal(str(item_payload.get('ptr', 0)))
                 batch.pts = Decimal(str(item_payload.get('pts', 0)))
                 batch.purchase_rate = Decimal(str(item_payload.get('baseLandingRate', item_payload['purchaseRate'])))
-                new_pkg = int(item_payload.get('pkg') or 1)
-                if new_pkg and new_pkg != batch.pack_size:
-                    batch.pack_size = new_pkg
-                batch.save(update_fields=['qty_strips', 'mrp', 'ptr', 'pts', 'purchase_rate', 'pack_size'])
+                _same_batch_same_pack(batch, new_pkg, idx, label)
+                batch.save(update_fields=['qty_strips', 'mrp', 'ptr', 'pts', 'purchase_rate'])
                 logger.info(f"Merged batch {batch_no}, updated rates/qty, total={batch.qty_strips}")
             else:
                 # Check if batch exists in inventory for this outlet
@@ -263,14 +324,12 @@ def atomic_purchase_save(payload: Dict[str, Any], outlet_id: str, created_by_id:
                         expiry_date=expiry_date,
                         product=master_product
                     )
+                    _adopt_pack_size(batch, new_pkg, idx, label)          # BEFORE the packs are added: it counts what is already on the shelf
                     batch.qty_strips += total_strips
                     batch.mrp = Decimal(str(item_payload['mrp']))
                     batch.ptr = Decimal(str(item_payload.get('ptr', 0)))
                     batch.pts = Decimal(str(item_payload.get('pts', 0)))
                     batch.purchase_rate = Decimal(str(item_payload.get('baseLandingRate', item_payload['purchaseRate'])))
-                    new_pkg = int(item_payload.get('pkg') or 1)
-                    if new_pkg and new_pkg != batch.pack_size:
-                        batch.pack_size = new_pkg
                     batch.save(update_fields=['qty_strips', 'mrp', 'ptr', 'pts', 'purchase_rate', 'pack_size'])
                     logger.info(f"Merged batch {batch_no}, updated rates/qty, total={batch.qty_strips}")
                 except Batch.DoesNotExist:
@@ -284,7 +343,7 @@ def atomic_purchase_save(payload: Dict[str, Any], outlet_id: str, created_by_id:
                         ptr=Decimal(str(item_payload.get('ptr', 0))),
                         pts=Decimal(str(item_payload.get('pts', 0))),
                         purchase_rate=Decimal(str(item_payload.get('baseLandingRate', item_payload['purchaseRate']))),
-                        pack_size=int(item_payload.get('pkg') or (master_product.pack_size if master_product else 1)),
+                        pack_size=new_pkg,
                         pack_unit=master_product.pack_unit if master_product else 'tablet',
                         pack_type=(master_product.pack_type if (master_product and master_product.pack_type) else 'strip'),
                         qty_strips=total_strips,
@@ -297,7 +356,7 @@ def atomic_purchase_save(payload: Dict[str, Any], outlet_id: str, created_by_id:
                 batch_cache[batch_key] = batch
 
             qty_val = int(item_payload['qty'])
-            actual_qty_val = int(item_payload['actualQty'])
+            actual_qty_val = (qty_val + int(item_payload.get('freeQty', 0))) * batch.pack_size      # (qty + free) x PKG: never the browser's figure
             gst_amount_val = Decimal(str(item_payload['gstAmount']))
             purchase_rate_val = Decimal(str(item_payload['purchaseRate']))
             
@@ -897,11 +956,13 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
                 txn_type='PURCHASE_IN'
             ).delete()
         old_batch_pk_map: Dict[tuple, int] = {}
+        old_strips_by_batch: Dict[Any, int] = {}      # packs each batch got from THIS invoice before the edit
         old_pk_by_no_expiry: Dict[tuple, set] = {}
         for old_item in old_items:
             batch = old_item.batch
             if batch:
                 total_strips = old_item.qty + old_item.free_qty
+                old_strips_by_batch[batch.pk] = old_strips_by_batch.get(batch.pk, 0) + total_strips
                 bkey = (str(batch.product_id) if batch.product_id is not None else None, batch.batch_no, batch.expiry_date)
                 old_batch_pk_map[bkey] = batch.pk
                 old_pk_by_no_expiry.setdefault((batch.batch_no, batch.expiry_date), set()).add(batch.pk)
@@ -998,6 +1059,8 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
             # product-aware key: two products may share a batch number on one invoice
             batch_key = (str(master_product.id) if master_product else None, batch_no, expiry_date)
             total_strips = int(item_payload['qty']) + int(item_payload.get('freeQty', 0))
+            label = _line_label(idx, item_payload, master_product)
+            new_pkg = _line_pkg(item_payload, master_product, idx)
 
             if batch_key in batch_cache:
                 batch = batch_cache[batch_key]
@@ -1007,10 +1070,8 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
                 batch.pts = Decimal(str(item_payload.get('pts', 0)))
                 batch.purchase_rate = Decimal(str(item_payload.get('baseLandingRate', item_payload['purchaseRate'])))
                 # (a second line for the same batch used to overwrite the MRP just set above with the SALE rate)
-                new_pkg = int(item_payload.get('pkg') or 1)
-                if new_pkg and new_pkg != batch.pack_size:
-                    batch.pack_size = new_pkg
-                batch.save(update_fields=['qty_strips', 'mrp', 'ptr', 'pts', 'purchase_rate', 'pack_size'])
+                _same_batch_same_pack(batch, new_pkg, idx, label)
+                batch.save(update_fields=['qty_strips', 'mrp', 'ptr', 'pts', 'purchase_rate'])
             else:
                 # Prefer to look up batch by its original PK (saved from old_items) to avoid
                 # master_product=None mismatch when product lookup fails.
@@ -1048,9 +1109,8 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
                     batch.ptr = Decimal(str(item_payload.get('ptr', 0)))
                     batch.pts = Decimal(str(item_payload.get('pts', 0)))
                     batch.purchase_rate = Decimal(str(item_payload.get('baseLandingRate', item_payload['purchaseRate'])))
-                    new_pkg = int(item_payload.get('pkg') or 1)
-                    if new_pkg and new_pkg != batch.pack_size:
-                        batch.pack_size = new_pkg
+                    # only the packs THIS invoice put in may be re-sized: anything else on the shelf (earlier purchases, sales, loose) would be re-labelled
+                    _adopt_pack_size(batch, new_pkg, idx, label, own_strips=old_strips_by_batch.get(batch.pk, 0))
                     update_fields = ['mrp', 'ptr', 'pts', 'purchase_rate', 'pack_size']
                     if master_product and batch.product_id != master_product.id:
                         batch.product = master_product
@@ -1072,7 +1132,7 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
                         ptr=Decimal(str(item_payload.get('ptr', 0))),
                         pts=Decimal(str(item_payload.get('pts', 0))),
                         purchase_rate=Decimal(str(item_payload.get('baseLandingRate', item_payload['purchaseRate']))),
-                        pack_size=int(item_payload.get('pkg') or (master_product.pack_size if master_product else 1)),
+                        pack_size=new_pkg,
                         pack_unit=master_product.pack_unit if master_product else 'tablet',
                         pack_type=(master_product.pack_type if (master_product and master_product.pack_type) else 'strip'),
                         qty_strips=total_strips,
@@ -1084,7 +1144,7 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
                 batch_cache[batch_key] = batch
 
             qty_val = int(item_payload['qty'])
-            actual_qty_val = int(item_payload['actualQty'])
+            actual_qty_val = (qty_val + int(item_payload.get('freeQty', 0))) * batch.pack_size      # (qty + free) x PKG: never the browser's figure
             gst_amount_val = Decimal(str(item_payload['gstAmount']))
             purchase_rate_val = Decimal(str(item_payload['purchaseRate']))
             

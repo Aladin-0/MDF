@@ -14,6 +14,9 @@ import { InvoicePreviewModal } from '@/components/billing/InvoicePreviewModal';
 import { useState, useEffect, Suspense, useRef } from 'react';
 import { EditSaleHydrator } from '@/components/billing/EditSaleHydrator';
 import { useEnterNavigation } from '@/hooks/useEnterNavigation';
+import { useIsPhone } from '@/hooks/useIsPhone';
+import { MobileBilling } from '@/components/billing/mobile/MobileBilling';
+import { SuccessView } from '@/components/billing/mobile/SuccessView';
 
 export default function FullScreenBillingPage() {
     const { isPinVerified, activeDraftId, lastInvoice, setLastInvoice, drafts } = useBillingStore();
@@ -22,6 +25,9 @@ export default function FullScreenBillingPage() {
     const draftsLoaded = useLoadDrafts();
     const [showInvoicePreview, setShowInvoicePreview] = useState(false);
     const toggleMarginInfo = useBillingStore(s => s.toggleMarginInfo);
+    // Phones (< 768px) get their own layout (components/billing/mobile); tablet and desktop keep the screen below, unchanged.
+    // null until the browser has been asked: shown as the same "Loading" state, so nobody sees the wrong layout flash.
+    const isPhone = useIsPhone();
 
     // Ensure billing store finishes rehydration on mount
     useEffect(() => {
@@ -86,7 +92,7 @@ export default function FullScreenBillingPage() {
         return () => window.removeEventListener('keydown', handleGlobalKeyDown);
     }, [toggleMarginInfo]);
 
-    if (!hasHydrated || !draftsLoaded) {
+    if (!hasHydrated || !draftsLoaded || isPhone === null) {
         return (
             <div className="flex h-full w-full items-center justify-center bg-slate-100 text-slate-500 font-medium">
                 Loading drafts...
@@ -102,7 +108,23 @@ export default function FullScreenBillingPage() {
         );
     }
 
-    if (lastInvoice && !showInvoicePreview) {
+    // /billing?edit=<id> (Modify on a bill): go straight to the editor. The previous bill's "Bill saved" screen must not come first:
+    // while it shows, the editor (and the loader that fills it with the bill) is not on the page at all. The loader clears it itself.
+    // Safe to read here: the page only gets this far after the client-side "Loading drafts" state, so there is no server markup to differ from.
+    const isEditLink = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('edit');
+
+    if (isPhone && lastInvoice && !showInvoicePreview && !isEditLink) {
+        return (
+            <SuccessView
+                invoice={lastInvoice}
+                onNewBill={() => setLastInvoice(null)}
+                onPrint={() => setShowInvoicePreview(true)}
+                onViewInvoice={() => setShowInvoicePreview(true)}
+            />
+        );
+    }
+
+    if (lastInvoice && !showInvoicePreview && !isEditLink) {
         return (
             <div className="flex h-screen w-screen items-center justify-center bg-slate-50">
                 <BillSuccessScreen
@@ -116,6 +138,23 @@ export default function FullScreenBillingPage() {
                     }}
                 />
             </div>
+        );
+    }
+
+    if (isPhone) {
+        return (
+            <>
+                <Suspense fallback={null}>
+                    <EditSaleHydrator />
+                </Suspense>
+                <MobileBilling key={`mobile-${(activeDraftId && drafts[activeDraftId]?.localSessionId) || activeDraftId}`} />
+                <InvoicePreviewModal
+                    isOpen={showInvoicePreview}
+                    onClose={() => setShowInvoicePreview(false)}
+                    invoice={lastInvoice as any}
+                    onNewBill={() => setLastInvoice(null)}
+                />
+            </>
         );
     }
 

@@ -13,6 +13,8 @@ from decimal import Decimal, InvalidOperation
 
 from apps.inventory.models import MasterProduct, Batch
 from apps.inventory.cache_utils import bump_inventory_cache, inventory_cache_version
+from apps.inventory.search_query import MIN_CHARS, ParsedQuery, parse_query, salt_set, strengths, dosage_form
+from apps.inventory.suggestions import FIELDS as SUGGEST_FIELDS, suggest_values
 from apps.inventory.pack_rules import (
     allows_loose, batch_allows_loose, normalize_pack_type, pack_errors, sync_batch_to_pack, fold_loose_into_packs,
 )
@@ -674,235 +676,359 @@ class InventoryExportExcelView(APIView):
         return response
 
 
+def _price_q(prefix, low, high):
+    """Q for `<prefix>mrp` inside [low, high]; high None means no upper limit."""
+    q = Q(**{f'{prefix}mrp__gte': low})
+    if high is not None:
+        q &= Q(**{f'{prefix}mrp__lte': high})
+    return q
+
+
+def _stock_exists(outlet, today, is_purchase_context, price=None):
+    """EXISTS(a batch of this outlet with stock): the same batches the result list shows, so 'in stock' means one thing."""
+    from django.db.models import Exists, OuterRef
+    batches = Batch.objects.filter(product_id=OuterRef('pk'), outlet=outlet, is_active=True).filter(Q(qty_strips__gt=0) | Q(qty_loose__gt=0))
+    if not is_purchase_context:
+        batches = batches.filter(expiry_date__gt=today)
+    if price is not None:
+        batches = batches.filter(_price_q('', *price))
+    return Exists(batches)
+
+
+SEARCH_CANDIDATES = 100     # products looked at per search (in-stock ones first)
+SEARCH_IN_STOCK = 30        # shown: matches that are in stock ...
+SEARCH_ZERO_STOCK = 10      # ... then matches that are not
+
+
+def _find_search_candidates(parsed, outlet, today, is_purchase_context):
+    """
+    Products matching a parsed search box (see apps/inventory/search_query.py), best first: in stock, then by how well they match.
+    Returns (products, price) where price is (low, high, target) for a price search, else None.
+    """
+    from django.db.models import Case, When, Value, IntegerField, FloatField
+    from django.db.models.functions import Greatest
+    from django.contrib.postgres.search import TrigramWordSimilarity
+
+    active = MasterProduct.objects.filter(is_discontinued=False)
+    in_stock = _stock_exists(outlet, today, is_purchase_context)
+    tokens = parsed.tokens
+
+    if parsed.kind == 'barcode':
+        exact = list(active.filter(barcode=parsed.raw)[:1])
+        if exact:
+            return exact, None
+        parsed = ParsedQuery('text', parsed.raw, [parsed.raw])   # not a known barcode: search it as text
+        tokens = parsed.tokens
+
+    if parsed.kind == 'salt':
+        in_comp = Q()
+        for tok in tokens:
+            in_comp &= Q(composition__icontains=tok)
+        qs = active.filter(in_comp).annotate(
+            in_stock=in_stock,
+            match_priority=Case(When(composition__istartswith=tokens[0], then=Value(2)), default=Value(1), output_field=IntegerField()),
+        ).order_by('-in_stock', '-match_priority', 'name')
+        return list(qs[:SEARCH_CANDIDATES]), None
+
+    if parsed.kind == 'price':
+        from django.db.models import Subquery, OuterRef, F
+        from django.db.models.functions import Abs, Coalesce
+        price = (parsed.price_low, parsed.price_high)
+        in_name = Q(name__istartswith=tokens[0])
+        for tok in tokens[1:]:
+            in_name &= Q(name__icontains=tok)
+        qs = active.filter(in_name).filter(
+            _price_q('', *price) | _stock_exists(outlet, today, is_purchase_context, price=price)
+        ).annotate(in_stock=in_stock)
+        if parsed.price_target is not None:
+            # "about N": closest price first. A batch in the window counts as the product's price when there is one
+            target = parsed.price_target
+            batch_gap = Batch.objects.filter(product_id=OuterRef('pk'), outlet=outlet, is_active=True).filter(Q(qty_strips__gt=0) | Q(qty_loose__gt=0)).filter(_price_q('', *price))
+            if not is_purchase_context:
+                batch_gap = batch_gap.filter(expiry_date__gt=today)
+            batch_gap = batch_gap.annotate(g=Abs(F('mrp') - target)).order_by('g').values('g')[:1]
+            # the price shown for a product is its closest in-window batch (what billing sells); only without one is the catalogue MRP used
+            qs = qs.annotate(price_gap=Coalesce(Subquery(batch_gap), Abs(F('mrp') - target))).order_by('-in_stock', 'price_gap', 'name')
+        else:
+            qs = qs.order_by('-in_stock', 'name')
+        return list(qs[:SEARCH_CANDIDATES]), (parsed.price_low, parsed.price_high, parsed.price_target)
+
+    # plain text
+    query = parsed.raw
+    any_field = Q()
+    name_all = Q()
+    for tok in tokens:
+        any_field &= (Q(name__icontains=tok) | Q(composition__icontains=tok) | Q(manufacturer__icontains=tok))
+        name_all &= Q(name__icontains=tok)
+    qs = active.filter(any_field).annotate(
+        in_stock=in_stock,
+        match_priority=Case(
+            When(name__istartswith=query, then=Value(4)),
+            When(name_all & Q(name__istartswith=tokens[0]), then=Value(3)),   # "dolo 650": the name starts with the first word you typed
+            When(name_all, then=Value(2)),
+            When(composition__icontains=query, then=Value(1)),
+            default=Value(0),
+            output_field=IntegerField(),
+        ),
+    ).order_by('-in_stock', '-match_priority', 'name')
+    found = list(qs[:SEARCH_CANDIDATES])
+    if found:
+        return found, None
+
+    # Nothing contains every word: tolerate typos ("amoxcilin") by trigram word-similarity.
+    FUZZY_MIN_SIMILARITY = 0.4
+    fuzzy = active.annotate(
+        similarity=Greatest(
+            TrigramWordSimilarity(query, 'name'),
+            TrigramWordSimilarity(query, 'composition'),
+            output_field=FloatField(),
+        )
+    ).filter(similarity__gte=FUZZY_MIN_SIMILARITY).order_by('-similarity', 'name')
+    return list(fuzzy[:SEARCH_CANDIDATES]), None
+
+
+def _assemble_search_results(products, outlet, today, is_purchase_context, price=None, extras=None):
+    """
+    The product + stock + batches payload of a search, for products already chosen and ordered.
+    In-stock products come first (keeping their order), then out-of-stock ones; `price` = (low, high, target) of a price search narrows each
+    product's batches to that window when it has any (closest to the target first) and reports `matchedMrp`;
+    `extras` ({product id: dict}) is merged into the matching result.
+    """
+    from apps.inventory.models import OutletProductConfig
+    if not products:
+        return []
+    candidate_ids = [p.id for p in products]
+
+    batch_filter = Q(outlet=outlet, is_active=True, product_id__in=candidate_ids)
+    if not is_purchase_context:
+        batch_filter &= Q(expiry_date__gt=today)
+    batches_by_product = {}
+    for b in Batch.objects.filter(batch_filter).order_by('expiry_date'):
+        batches_by_product.setdefault(b.product_id, []).append(b)
+
+    configs_by_product = {
+        cfg.product_id: cfg
+        for cfg in OutletProductConfig.objects.filter(outlet=outlet, product_id__in=candidate_ids)
+    }
+
+    in_stock = []
+    zero_stock = []
+    for product in products:
+        batches = batches_by_product.get(product.id, [])
+        cfg = configs_by_product.get(product.id)
+        outlet_min_qty = float(cfg.min_qty) if cfg else 0.0
+        outlet_reorder_qty = float(cfg.reorder_qty) if cfg else 0.0
+
+        non_expired = [b for b in batches if b.expiry_date > today]
+        nearest_expiry = (
+            non_expired[0].expiry_date.isoformat()
+            if non_expired
+            else (batches[0].expiry_date.isoformat() if batches else "2099-12-31")
+        )
+
+        available_batches = [b for b in batches if (b.qty_strips > 0 or b.qty_loose > 0)]
+        matched_mrp = None
+        if price is not None:
+            low, high, target = price
+            at_price = [b for b in available_batches if b.mrp >= low and (high is None or b.mrp <= high)]
+            if target is not None:
+                at_price.sort(key=lambda b: abs(b.mrp - target))      # stable: equal gaps keep the first-expiry-first order
+            if at_price:
+                available_batches = at_price      # "L+175": only the batch(es) in the typed price window
+                matched_mrp = float(at_price[0].mrp)
+            elif product.mrp >= low and (high is None or product.mrp <= high):
+                matched_mrp = float(product.mrp)
+        total_stock_strips = sum(b.qty_strips for b in available_batches)
+        total_stock_loose = sum(b.qty_loose for b in available_batches)
+        has_stock = total_stock_strips > 0 or total_stock_loose > 0
+
+        pack_sz = product.pack_size or 1
+        total_stock_fractional = total_stock_strips + (total_stock_loose / pack_sz)
+        is_low_stock = total_stock_fractional < 10
+
+        batch_list = [serialize_batch(b) for b in available_batches]
+
+        result = {
+            'id': str(product.id),
+            'name': product.name,
+            'composition': product.composition,
+            'manufacturer': product.manufacturer,
+            'category': product.category,
+            'drugType': product.drug_type,
+            'scheduleType': product.schedule_type,
+            'hsnCode': product.hsn_code,
+            'gstRate': float(product.gst_rate),
+            'packSize': product.pack_size,
+            'packUnit': product.pack_unit,
+            'packType': product.pack_type,
+            'allowsLoose': allows_loose(product.pack_size, product.pack_type),
+            'barcode': product.barcode,
+            'isFridge': product.is_fridge,
+            'isDiscontinued': product.is_discontinued,
+            'imageUrl': product.image_url,
+            'mrp': float(product.mrp),
+            'saleRate': float(product.mrp),
+            'outletProductId': str(product.id),
+            'minQty': outlet_min_qty,
+            'reorderQty': outlet_reorder_qty,
+            'has_stock': has_stock,
+            'total_qty_strips': total_stock_strips,
+            'total_qty_loose': total_stock_loose,
+            'totalStock': total_stock_fractional,
+            'nearestExpiry': nearest_expiry,
+            'isLowStock': is_low_stock,
+            'batches': batch_list,
+            'available_batches': batch_list,
+        }
+        if price is not None:
+            result['matchedMrp'] = matched_mrp      # the price the typed number matched (a batch's MRP can differ from the catalogue MRP)
+        if extras and product.id in extras:
+            result.update(extras[product.id])
+
+        (in_stock if has_stock else zero_stock).append(result)
+
+    return in_stock[:SEARCH_IN_STOCK] + zero_stock[:SEARCH_ZERO_STOCK]
+
+
 class ProductSearchView(APIView):
     """
-    GET /api/v1/products/search/?q=paracetamol&outletId=xxx
+    GET /api/v1/products/search/?q=paracetamol&outletId=xxx[&context=purchase]
 
-    Search products by name, composition, or manufacturer.
-    Returns ProductSearchResult with aggregated stock and batch details.
+    The medicine search box. `q` can be (see apps/inventory/search_query.py):
+      dolo 650        every word in the name / salt / maker, any order (typos tolerated when nothing matches)
+      L+175           names starting with L priced about 175 (+/-10%), closest first; L+20-30 range, L+<50, L+>100, L+=23.50 exact
+      C,losartan      every brand whose composition contains losartan
+      8901234567890   a scanned barcode: exactly that product (when it is a known barcode)
+    In-stock products come first. Returns {"data": [ProductSearchResult, ...]}.
     """
 
     permission_classes = [IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
-        """
-        Search for products by query string.
-
-        Query parameters:
-        - q: Search query (minimum 2 characters)
-        - outletId: Outlet UUID to filter batches
-
-        Returns:
-        [
-            {
-                "id": "...",
-                "name": "Paracetamol",
-                "composition": "...",
-                "manufacturer": "...",
-                "category": "...",
-                "drugType": "...",
-                "scheduleType": "...",
-                "hsnCode": "...",
-                "gstRate": 0,
-                "packSize": 10,
-                "packUnit": "tablet",
-                "packType": "strip",
-                "isFridge": false,
-                "isDiscontinued": false,
-                "outletProductId": "...",
-                "totalStock": 150,
-                "nearestExpiry": "2026-12-31",
-                "isLowStock": false,
-                "batches": [
-                    {
-                        "id": "...",
-                        "outletId": "...",
-                        "outletProductId": "...",
-                        "batchNo": "BATCH123",
-                        "expiryDate": "2026-12-31",
-                        "mrp": 50.0,
-                        "purchaseRate": 25.0,
-                        "saleRate": 40.0,
-                        "qtyStrips": 10,
-                        "qtyLoose": 0,
-                        "isActive": true,
-                        "createdAt": "2026-03-17T..."
-                    }
-                ]
-            }
-        ]
-        """
+        import hashlib
+        from django.core.cache import cache
 
         query = request.query_params.get('q', '').strip()
         outlet_id = request.query_params.get('outletId')
-        # context=purchase → show all active batches regardless of expiry so
+        # context=purchase -> show all active batches regardless of expiry so
         # pharmacists can search medicines to buy even if current stock is expired.
         context = request.query_params.get('context', '').strip().lower()
         is_purchase_context = context == 'purchase'
 
-        # Validate query length
-        if len(query) < 2:
+        parsed = parse_query(query)
+        if len(query) < MIN_CHARS or not parsed.usable:
             logger.debug(f"Search query too short: {len(query)} chars")
             return Response({'data': []}, status=status.HTTP_200_OK)
 
-        # Validate outlet
         try:
             outlet = Outlet.objects.get(id=outlet_id)
         except Outlet.DoesNotExist:
-            return Response(
-                {'detail': f'Outlet {outlet_id} not found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({'detail': f'Outlet {outlet_id} not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        logger.info(f"Searching products for: '{query}' (outlet: {outlet.name}, context: {context or 'default'})")
+        logger.info(f"Searching products for: '{query}' [{parsed.kind}] (outlet: {outlet.name}, context: {context or 'default'})")
         today = datetime.now().date()
-        query_lower = query.lower()
 
-        # ── 1. Fast Cache Check (60s TTL) ──────────────────────────────
-        from django.core.cache import cache
-        cache_key = f"prod_search:v2:{outlet_id}:i{inventory_cache_version(outlet_id)}:{context}:{query_lower}"
+        # 60s cache; the query is hashed so spaces / '+' / ',' can never make an invalid cache key
+        qhash = hashlib.md5(query.lower().encode('utf-8')).hexdigest()
+        cache_key = f"prod_search:v3:{outlet_id}:i{inventory_cache_version(outlet_id)}:{context}:{qhash}"
         cached_result = cache.get(cache_key)
         if cached_result is not None:
             return Response({'data': cached_result}, status=status.HTTP_200_OK)
 
-        from django.db.models import Case, When, Value, IntegerField, Q
-
-        # ── 2. Matching ────────────────────────────────────────────────
-        # Pharmacists type fragments in any order ("650 dolo") and make typos ("amoxcilin").
-        #  a) Every word of the query must appear in name / composition / manufacturer, in any
-        #     order (served by the trigram GIN indexes on those columns).
-        #  b) Only when (a) finds nothing, fall back to pg_trgm word-similarity so a misspelt
-        #     name still surfaces. Matching the whole query as one substring (the old behaviour)
-        #     could do neither.
-        import re
-        from django.db.models import FloatField
-        from django.db.models.functions import Greatest
-        from django.contrib.postgres.search import TrigramWordSimilarity
-
-        tokens = [t for t in re.split(r'\s+', query.strip()) if t]
-        any_field = Q()
-        name_all = Q()
-        for tok in tokens:
-            any_field &= (Q(name__icontains=tok) | Q(composition__icontains=tok) | Q(manufacturer__icontains=tok))
-            name_all &= Q(name__icontains=tok)
-
-        active_products = MasterProduct.objects.filter(is_discontinued=False)
-        matched_qs = active_products.filter(any_field).annotate(
-            match_priority=Case(
-                When(name__istartswith=query, then=Value(3)),
-                When(name_all, then=Value(2)),
-                When(composition__icontains=query, then=Value(1)),
-                default=Value(0),
-                output_field=IntegerField()
-            )
-        ).order_by('-match_priority', 'name')
-
-        candidate_products = list(matched_qs[:40])
-        if not candidate_products:
-            FUZZY_MIN_SIMILARITY = 0.4
-            candidate_products = list(
-                active_products.annotate(
-                    similarity=Greatest(
-                        TrigramWordSimilarity(query, 'name'),
-                        TrigramWordSimilarity(query, 'composition'),
-                        output_field=FloatField(),
-                    )
-                ).filter(similarity__gte=FUZZY_MIN_SIMILARITY).order_by('-similarity', 'name')[:40]
-            )
-        if not candidate_products:
-            cache.set(cache_key, [], 60)
-            return Response({'data': []}, status=status.HTTP_200_OK)
-
-        candidate_ids = [p.id for p in candidate_products]
-
-        # ── 3. Single Batch Query (Eliminate N+1) ──────────────────────
-        batch_filter = Q(outlet=outlet, is_active=True, product_id__in=candidate_ids)
-        if not is_purchase_context:
-            batch_filter &= Q(expiry_date__gt=today)
-
-        batches_qs = Batch.objects.filter(batch_filter).order_by('expiry_date')
-        batches_by_product = {}
-        for b in batches_qs:
-            batches_by_product.setdefault(b.product_id, []).append(b)
-
-        # ── 4. Single Config Query ─────────────────────────────────────
-        from apps.inventory.models import OutletProductConfig
-        configs_by_product = {
-            cfg.product_id: cfg
-            for cfg in OutletProductConfig.objects.filter(outlet=outlet, product_id__in=candidate_ids)
-        }
-
-        # ── 5. Assemble and Sort In-Stock vs Zero-Stock ────────────────
-        in_stock = []
-        zero_stock = []
-
-        for product in candidate_products:
-            batches = batches_by_product.get(product.id, [])
-            cfg = configs_by_product.get(product.id)
-            outlet_min_qty = float(cfg.min_qty) if cfg else 0.0
-            outlet_reorder_qty = float(cfg.reorder_qty) if cfg else 0.0
-
-            non_expired = [b for b in batches if b.expiry_date > today]
-            nearest_expiry = (
-                non_expired[0].expiry_date.isoformat()
-                if non_expired
-                else (batches[0].expiry_date.isoformat() if batches else "2099-12-31")
-            )
-
-            available_batches = [b for b in batches if (b.qty_strips > 0 or b.qty_loose > 0)]
-            total_stock_strips = sum(b.qty_strips for b in available_batches)
-            total_stock_loose = sum(b.qty_loose for b in available_batches)
-            has_stock = total_stock_strips > 0 or total_stock_loose > 0
-
-            pack_sz = product.pack_size or 1
-            total_stock_fractional = total_stock_strips + (total_stock_loose / pack_sz)
-            is_low_stock = total_stock_fractional < 10
-
-            batch_list = [serialize_batch(b) for b in available_batches]
-
-            result = {
-                'id': str(product.id),
-                'name': product.name,
-                'composition': product.composition,
-                'manufacturer': product.manufacturer,
-                'category': product.category,
-                'drugType': product.drug_type,
-                'scheduleType': product.schedule_type,
-                'hsnCode': product.hsn_code,
-                'gstRate': float(product.gst_rate),
-                'packSize': product.pack_size,
-                'packUnit': product.pack_unit,
-                'packType': product.pack_type,
-                'allowsLoose': allows_loose(product.pack_size, product.pack_type),
-                'barcode': product.barcode,
-                'isFridge': product.is_fridge,
-                'isDiscontinued': product.is_discontinued,
-                'imageUrl': product.image_url,
-                'mrp': float(product.mrp),
-                'saleRate': float(product.mrp),
-                'outletProductId': str(product.id),
-                'minQty': outlet_min_qty,
-                'reorderQty': outlet_reorder_qty,
-                'has_stock': has_stock,
-                'total_qty_strips': total_stock_strips,
-                'total_qty_loose': total_stock_loose,
-                'totalStock': total_stock_fractional,
-                'nearestExpiry': nearest_expiry,
-                'isLowStock': is_low_stock,
-                'batches': batch_list,
-                'available_batches': batch_list,
-            }
-
-            if has_stock:
-                in_stock.append(result)
-            else:
-                zero_stock.append(result)
-
-        results = in_stock[:15] + zero_stock[:10]
+        products, price = _find_search_candidates(parsed, outlet, today, is_purchase_context)
+        results = _assemble_search_results(products, outlet, today, is_purchase_context, price=price)
         cache.set(cache_key, results, 60)
 
-        logger.info(f"Returning {len(results)} products for '{query}' (in_stock: {len(in_stock[:15])}, zero: {len(zero_stock[:10])})")
+        logger.info(f"Returning {len(results)} products for '{query}'")
         return Response({'data': results}, status=status.HTTP_200_OK)
+
+
+class ProductSubstitutesView(APIView):
+    """
+    GET /api/v1/products/<product_id>/substitutes/?outletId=xxx
+
+    Other brands with the same salt(s) as this product: the "press A on a medicine" lookup.
+    Same salts means the same set, in any order ('A & B' == 'B + A'); a product with no composition recorded has no substitutes.
+    The catalogue keeps strengths in the NAME, not the composition, so each result says whether its strength and dosage form match
+    (`substitute.sameStrength` / `sameForm`: true / false / null when a name does not say) and those come first.
+    In-stock brands come before out-of-stock ones.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, product_id, *args, **kwargs):
+        outlet_id = request.query_params.get('outletId')
+        try:
+            outlet = Outlet.objects.get(id=outlet_id)
+        except Outlet.DoesNotExist:
+            return Response({'detail': f'Outlet {outlet_id} not found'}, status=status.HTTP_404_NOT_FOUND)
+        base = MasterProduct.objects.filter(id=product_id).first()
+        if base is None:
+            return Response({'detail': 'Product not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        context = request.query_params.get('context', '').strip().lower()
+        is_purchase_context = context == 'purchase'
+        today = datetime.now().date()
+        header = {'id': str(base.id), 'name': base.name, 'composition': base.composition}
+
+        salts = salt_set(base.composition)
+        if not salts:
+            return Response({'data': [], 'product': header, 'reason': 'no_composition'}, status=status.HTTP_200_OK)
+
+        # DB narrows by the first word of the longest salt; Python then compares the exact salt sets
+        longest = max(salts, key=len)
+        word = max(longest.split(), key=len)
+        pool = MasterProduct.objects.filter(is_discontinued=False, composition__icontains=word).exclude(id=base.id).order_by('name')[:1500]
+        base_strengths, base_form = strengths(base.name), dosage_form(base.name)
+
+        ranked, extras = [], {}
+        for p in pool:
+            if salt_set(p.composition) != salts:
+                continue
+            p_strengths, p_form = strengths(p.name), dosage_form(p.name)
+            same_strength = (p_strengths == base_strengths) if (p_strengths and base_strengths) else None
+            same_form = (p_form == base_form) if (p_form and base_form) else None
+            extras[p.id] = {'substitute': {'sameStrength': same_strength, 'sameForm': same_form}}
+            rank = (0 if same_strength is True else 1 if same_strength is None else 2,
+                    0 if same_form is True else 1 if same_form is None else 2,
+                    p.name)
+            ranked.append((rank, p))
+        ranked.sort(key=lambda item: item[0])
+
+        # _assemble_search_results puts in-stock brands first and keeps this strength / form order inside each group
+        products = [p for _, p in ranked[:300]]
+        results = _assemble_search_results(products, outlet, today, is_purchase_context, extras=extras)
+        return Response({'data': results, 'product': header}, status=status.HTTP_200_OK)
+
+
+class ProductSuggestionsView(APIView):
+    """
+    GET /api/v1/products/suggestions/?field=manufacturer|composition&q=cip&limit=8
+
+    Options for the Manufacturer and Composition boxes of the product forms, from the catalogue itself (see apps/inventory/suggestions.py:
+    filler dropped, spellings merged, ranked). q may be empty: the most used values. A composition also carries the commonest hsnCode,
+    gstRate and scheduleType of its products so the form can fill the empty ones.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        field = request.query_params.get('field', '')
+        if field not in SUGGEST_FIELDS:
+            return Response({'detail': f"field must be one of: {', '.join(sorted(SUGGEST_FIELDS))}"}, status=status.HTTP_400_BAD_REQUEST)
+        query = request.query_params.get('q', '').strip()[:80]
+        try:
+            limit = int(request.query_params.get('limit', 8))
+        except (TypeError, ValueError):
+            limit = 8
+
+        import hashlib
+        from django.core.cache import cache
+        cache_key = f"prod_suggest:v1:{field}:{limit}:{hashlib.md5(query.lower().encode('utf-8')).hexdigest()}"
+        data = cache.get(cache_key)
+        if data is None:
+            data = suggest_values(field, query, limit)
+            cache.set(cache_key, data, 120)
+        return Response({'data': data}, status=status.HTTP_200_OK)
 
 
 class MasterCatalogSearchView(APIView):
@@ -919,7 +1045,8 @@ class MasterCatalogSearchView(APIView):
         query = request.query_params.get('q', '').strip()
         outlet_id = request.query_params.get('outletId')
 
-        if len(query) < 2:
+        parsed = parse_query(query)
+        if len(query) < MIN_CHARS or not parsed.usable:
             return Response({'data': []}, status=status.HTTP_200_OK)
 
         try:
@@ -929,27 +1056,45 @@ class MasterCatalogSearchView(APIView):
 
         query_lower = query.lower()
 
-        # Fast cache check (60s TTL)
+        # Fast cache check (60s TTL); the query is hashed so it can never make an invalid cache key
+        import hashlib
         from django.core.cache import cache
-        cache_key = f"prod_catalog_search:v2:{outlet_id}:{query_lower}"
+        cache_key = f"prod_catalog_search:v3:{outlet_id}:{hashlib.md5(query_lower.encode('utf-8')).hexdigest()}"
         cached_result = cache.get(cache_key)
         if cached_result is not None:
             return Response({'data': cached_result}, status=status.HTTP_200_OK)
 
         from django.db.models import Case, When, Value, IntegerField, Q
 
-        matched_qs = MasterProduct.objects.filter(is_discontinued=False).filter(
-            Q(name__icontains=query) |
-            Q(composition__icontains=query) |
-            Q(manufacturer__icontains=query)
-        ).annotate(
-            match_priority=Case(
+        # same search syntax as billing (L+23.50 / C,losartan / a barcode), over the whole catalogue
+        tokens = parsed.tokens
+        if parsed.kind == 'salt':
+            match = Q()
+            for tok in tokens:
+                match &= Q(composition__icontains=tok)
+            priority = Case(When(composition__istartswith=tokens[0], then=Value(2)), default=Value(1), output_field=IntegerField())
+        elif parsed.kind == 'price':
+            match = Q(name__istartswith=tokens[0]) & _price_q('', parsed.price_low, parsed.price_high)
+            for tok in tokens[1:]:
+                match &= Q(name__icontains=tok)
+            priority = Value(1, output_field=IntegerField())
+        else:
+            match = Q()
+            name_all = Q()
+            for tok in tokens:
+                match &= (Q(name__icontains=tok) | Q(composition__icontains=tok) | Q(manufacturer__icontains=tok))
+                name_all &= Q(name__icontains=tok)
+            if parsed.kind == 'barcode':
+                match = Q(barcode=parsed.raw) | match
+            priority = Case(
                 When(name__istartswith=query, then=Value(3)),
-                When(name__icontains=query, then=Value(2)),
+                When(name_all, then=Value(2)),
                 When(composition__icontains=query, then=Value(1)),
                 default=Value(0),
                 output_field=IntegerField()
             )
+        matched_qs = MasterProduct.objects.filter(is_discontinued=False).filter(match).annotate(
+            match_priority=priority
         ).order_by('-match_priority', 'name')
 
         products = list(matched_qs[:30])

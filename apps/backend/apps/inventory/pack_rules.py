@@ -19,6 +19,8 @@ A pack can be split only if it holds a COUNTABLE number of smaller units:
 mean a volume or weight (100 ml), not 100 sellable items, so they are whole-pack only.
 To change the policy, change LOOSE_PACK_TYPES: nothing else needs touching.
 """
+from decimal import Decimal, InvalidOperation
+
 from django.core.exceptions import ValidationError
 
 # value, label. The frontend list (constants/productBehavior.ts) must offer exactly these.
@@ -138,3 +140,31 @@ def raise_if_invalid(pack_size, pack_unit, pack_type):
     errors = pack_errors(pack_size, pack_unit, pack_type)
     if errors:
         raise ValidationError(errors)
+
+
+# ── PKG on a purchase line ───────────────────────────────────────────────────────────────────────────
+# "PKG" is how many units are in one pack of what the supplier delivered (10 tablets per strip). It sets how much stock a line adds
+# ((qty + free) x PKG units) and the pack size of the batch billing sells from, so a wrong number silently creates or loses stock.
+# The catalogue's largest pack is 120; the limit leaves headroom for boxes of loose items without allowing typing mistakes (15000).
+MAX_PURCHASE_PKG = 1000
+
+
+def parse_purchase_pkg(raw):
+    """
+    The PKG of a purchase line as a whole number from 1 to MAX_PURCHASE_PKG.
+    Raises ValueError('...') with the reason ("is missing", "must be a whole number", "must be between 1 and 1000"): never guesses.
+    (It used to be `int(pkg or 1)`: 0 and "" became 1, 7.5 was cut to 7 and -5 was stored as the batch's pack size.)
+    """
+    if raw is None or isinstance(raw, bool) or (isinstance(raw, str) and not raw.strip()):
+        raise ValueError('is missing')
+    try:
+        value = Decimal(str(raw).strip())
+    except (InvalidOperation, ValueError):
+        raise ValueError('must be a whole number')
+    if not value.is_finite() or value != value.to_integral_value():
+        raise ValueError('must be a whole number')
+    number = int(value)
+    if number < 1 or number > MAX_PURCHASE_PKG:
+        raise ValueError(f'must be between 1 and {MAX_PURCHASE_PKG}')
+    return number
+

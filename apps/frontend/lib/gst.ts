@@ -1,4 +1,5 @@
 import { CartItem, BillTotals } from '../types';
+import { isControlledSchedule } from './scheduleRules';
 
 export function calculateItemTotals(
     mrp: number,
@@ -88,8 +89,8 @@ export function calculateBillTotals(items: CartItem[], extraDiscPct: number = 0)
         amountDue: Number(grandTotal.toFixed(2)),
         itemCount: items.length,
         totalQty: items.reduce((acc, item) => acc + item.totalQty, 0),
-        hasScheduleH: items.some(item => ['G', 'H', 'H1', 'X', 'C', 'Narcotic'].includes(item.scheduleType)),
-        requiresDoctorDetails: items.some(item => ['G', 'H', 'H1', 'X', 'C', 'Narcotic'].includes(item.scheduleType))
+        hasScheduleH: items.some(item => isControlledSchedule(item.scheduleType)),
+        requiresDoctorDetails: items.some(item => isControlledSchedule(item.scheduleType))
     };
 }
 

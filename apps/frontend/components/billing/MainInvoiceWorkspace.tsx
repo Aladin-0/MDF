@@ -2,18 +2,20 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useBillingStore } from '@/store/billingStore';
-import { Search, Package, AlertTriangle, X, Loader2, FileText, Repeat } from 'lucide-react';
+import { Search, Package, AlertTriangle, X, Loader2, FileText, Repeat, ArrowLeftRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { useOutletId } from '@/hooks/useOutletId';
 import { usePermissions } from '@/hooks/usePermissions';
 import { poApi } from '@/lib/poApi';
+import { looksLikeBarcode, SEARCH_TIPS } from '@/lib/searchSyntax';
 import { getExpiryStatus } from '@/utils/expiry';
 import { calculateLineMargin, calculateTotalMargin } from '@/lib/billingMarginUtils';
 import { canViewBillingMargins } from '@/lib/access';
 import { allowsLoose, wholePackWord } from '@/lib/packRules';
-import { useProductSearch } from '@/hooks/useProductSearch';
+import { quickAddLine } from '@/lib/cartLine';
+import { useMedicineSearch } from '@/hooks/useMedicineSearch';
 import { useOutletSettings } from '@/hooks/useOutletSettings';
 import { Batch, ProductSearchResult, BillTotals } from '@/types';
 import { format } from 'date-fns';
@@ -47,6 +49,8 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
     const [searchQuery, setSearchQuery] = useState('');
     const [isSearchFocused, setIsSearchFocused] = useState(false);
     const [selectedIndex, setSelectedIndex] = useState(-1);
+    // Substitutes view (state + loading live in useMedicineSearch): open with A after moving the highlight, or Alt+A
+    const navigatedRef = useRef(false);          // an arrow key moved the highlight since the last character typed
     
     // Quick Add State
     const [quickAddProduct, setQuickAddProduct] = useState<ProductSearchResult | null>(null);
@@ -64,8 +68,15 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
     const [noStockProduct, setNoStockProduct] = useState<{ id: string; name: string } | null>(null);
     const [shortbookNoted, setShortbookNoted] = useState<string | null>(null);
     
-    const { data: searchResults = [], isFetching } = useProductSearch(searchQuery, 'billing');
-    
+    const showSearchError = (message: string) => {
+        setErrorMsg(message);
+        setTimeout(() => setErrorMsg(''), 8000);
+    };
+    const {
+        results: visibleResults, isFetching, substituteFor, substituteReason,
+        openSubstitutes, closeSubstitutes: closeSubstituteView, scanBarcode,
+    } = useMedicineSearch({ query: searchQuery, onBarcodeHit: (p) => handleSelectProduct(p), onError: showSearchError });
+
     const searchContainerRef = useRef<HTMLDivElement>(null);
     const searchInputRef = useRef<HTMLInputElement>(null);
     const qtyInputRef = useRef<HTMLInputElement>(null);
@@ -80,7 +91,7 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
     // Reset selected index when search changes
     useEffect(() => {
         setSelectedIndex(0);
-    }, [searchResults]);
+    }, [visibleResults]);
 
     // Smart Dropdown Placement: Flip upward if close to viewport bottom on tablet
     useEffect(() => {
@@ -95,7 +106,7 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                 setDropdownPlacement('bottom');
             }
         }
-    }, [isSearchFocused, searchQuery, searchResults]);
+    }, [isSearchFocused, searchQuery, visibleResults]);
 
     // Close search dropdown when clicking/tapping outside
     useEffect(() => {
@@ -172,20 +183,44 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
 
     // --- Search Handlers ---
 
+    // closing the substitutes view also resets the highlight
+    const closeSubstitutes = () => {
+        closeSubstituteView();
+        setSelectedIndex(0);
+    };
+
     const handleSearchKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === 'ArrowDown') {
             e.preventDefault();
-            setSelectedIndex(prev => Math.min(prev + 1, searchResults.length - 1));
+            navigatedRef.current = true;
+            setSelectedIndex(prev => Math.min(prev + 1, visibleResults.length - 1));
         } else if (e.key === 'ArrowUp') {
             e.preventDefault();
+            navigatedRef.current = true;
             setSelectedIndex(prev => Math.max(prev - 1, -1));
+        } else if (!substituteFor && !e.ctrlKey && !e.metaKey && e.code === 'KeyA' && (e.altKey || navigatedRef.current)) {
+            // "Press A on a highlighted medicine": plain A only after the highlight was moved with the arrows (before that it is just a letter you type); Alt+A always
+            const product = visibleResults[selectedIndex];
+            if (product) {
+                e.preventDefault();
+                void openSubstitutes(product);
+            }
         } else if (e.key === 'Enter') {
             e.preventDefault();
-            if (selectedIndex >= 0 && selectedIndex < searchResults.length) {
-                handleSelectProduct(searchResults[selectedIndex]);
+            const typed = searchQuery.trim();
+            if (!substituteFor && looksLikeBarcode(typed)) {
+                void scanBarcode(typed);
+                return;
+            }
+            if (selectedIndex >= 0 && selectedIndex < visibleResults.length) {
+                handleSelectProduct(visibleResults[selectedIndex]);
             }
         } else if (e.key === 'Escape') {
             e.preventDefault();
+            if (substituteFor) {
+                closeSubstitutes();      // first Esc goes back to the search results
+                return;
+            }
             setIsSearchFocused(false);
             // Return focus to input (already there, just prevent blur)
             searchInputRef.current?.focus();
@@ -221,6 +256,7 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
             return;
         }
 
+        closeSubstitutes();
         setQuickAddProduct(product);
         setSearchQuery('');
         setIsSearchFocused(false);
@@ -257,67 +293,18 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
     const commitAdd = () => {
         if (!quickAddProduct || !quickAddBatch) return;
 
-        const s = parseInt(qtyStrips) || 0;
-        const l = parseInt(qtyLoose) || 0;
-        if (s === 0 && l === 0) {
-            qtyInputRef.current?.focus();
-            return; // Needs qty
+        // The line's maths (rate, loose rule, GST split, stock block) is shared with the phone Add sheet: lib/cartLine.ts
+        const built = quickAddLine({ product: quickAddProduct, batch: quickAddBatch, qtyStrips, qtyLoose, discountPct, saleType });
+        if (!built.ok) {
+            if (built.reason === 'no_qty') {
+                qtyInputRef.current?.focus();
+                return; // Needs qty
+            }
+            alert(built.message);
+            return;
         }
 
-        // Same answer the server gives (it sends allowsLoose): this used to be "packSize > 1" here
-        // while the server said "strip/blister only", so the Loose box appeared and the sale was refused.
-        const hasLoose = allowsLoose(quickAddBatch);
-        const effectiveLoose = hasLoose ? l : 0;
-
-        const totalQtyLoose = (s * quickAddBatch.packSize) + effectiveLoose;
-        const totalQtyFractional = s + (effectiveLoose / quickAddBatch.packSize);
-        
-        // FIX: Hard block negative inventory
-        if (totalQtyLoose > (quickAddBatch.qtyStrips * quickAddBatch.packSize + quickAddBatch.qtyLoose)) {
-            // Assuming useToast is imported, otherwise fallback to alert
-            alert('BLOCKED: Added quantity exceeds available stock.');
-            return; // <--- This forces the function to stop.
-        }
-
-        const dPct = parseFloat(discountPct) || 0;
-        const defaultRate = saleType === 'WHOLESALE' ? (quickAddBatch.pts || quickAddBatch.ptr || quickAddBatch.mrp) : quickAddBatch.mrp;
-        const discountedRate = defaultRate * (1 - (dPct / 100));
-        
-        const taxableAmount = (discountedRate * totalQtyFractional) / (1 + quickAddProduct.gstRate / 100);
-        const gstAmount = (discountedRate * totalQtyFractional) - taxableAmount;
-
-        addToCart(activeDraftId, {
-            batchId: quickAddBatch.id,
-            productId: quickAddProduct.id,
-            name: quickAddProduct.name,
-            composition: quickAddProduct.composition,
-            manufacturer: quickAddProduct.manufacturer,
-            packSize: quickAddBatch.packSize,
-            packUnit: quickAddBatch.packUnit || quickAddProduct.packUnit || 'units',
-            packType: quickAddBatch.packType || quickAddProduct.packType || '',
-            requiresPrescription: ['H', 'H1', 'X', 'Narcotic'].includes(quickAddProduct.scheduleType),
-            batchNo: quickAddBatch.batchNo,
-            expiryDate: quickAddBatch.expiryDate,
-            scheduleType: quickAddProduct.scheduleType as any,
-            hsn: quickAddProduct.hsnCode || '',
-            mrp: quickAddBatch.mrp,
-            ptr: quickAddBatch.ptr || 0,
-            pts: quickAddBatch.pts || 0,
-            saleRate: defaultRate,
-            rate: defaultRate, // CRITICAL FIX: rate must be pre-discount PTS/PTR/MRP
-            qtyStrips: s,
-            qtyLoose: effectiveLoose,
-
-            totalQty: totalQtyFractional,
-            saleMode: 'strip',
-            discountPct: dPct,
-            gstRate: quickAddProduct.gstRate,
-            taxableAmount,
-            gstAmount,
-            totalAmount: discountedRate * totalQtyFractional,
-            purchaseRate: quickAddBatch.purchaseRate,
-            landingRate: quickAddBatch.landingRate ?? quickAddBatch.purchaseRate,
-        });
+        addToCart(activeDraftId, built.item);
 
         // Reset
         setQuickAddProduct(null);
@@ -585,6 +572,8 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                                 data-shortcut-target="medicine-search"
                                 value={searchQuery}
                                 onChange={(e) => {
+                                    navigatedRef.current = false;
+                                    if (substituteFor) closeSubstitutes();
                                     setSearchQuery(e.target.value);
                                     if (e.target.value.length >= 2) {
                                         setIsSearchFocused(true);
@@ -665,13 +654,35 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                                 dropdownPlacement === 'top' ? "lg:bottom-full lg:top-auto lg:mb-1" : "lg:top-full lg:mt-1"
                             )}
                         >
-                            {isFetching && searchResults.length === 0 ? (
-                                <div className="p-4 text-center text-slate-500 text-sm font-medium">Searching...</div>
-                            ) : searchResults.length === 0 ? (
-                                <div className="p-4 text-center text-slate-500 text-sm font-medium">No medicines found for "{searchQuery}"</div>
+                            {substituteFor && (
+                                <div className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-amber-200 bg-amber-50 px-3 py-1.5">
+                                    <div className="min-w-0 truncate text-[11px] font-semibold text-amber-900">
+                                        Substitutes for <span className="font-extrabold">{substituteFor.name}</span> · same salt: {substituteFor.composition || '—'}
+                                    </div>
+                                    <button
+                                        type="button"
+                                        data-testid="close-substitutes"
+                                        className="shrink-0 rounded border border-amber-300 bg-white px-2 py-0.5 text-[11px] font-bold text-amber-800 hover:bg-amber-100"
+                                        onPointerDown={(e) => e.preventDefault()}
+                                        onClick={() => { closeSubstitutes(); searchInputRef.current?.focus(); }}
+                                    >
+                                        Back · Esc
+                                    </button>
+                                </div>
+                            )}
+                            {isFetching && visibleResults.length === 0 ? (
+                                <div className="p-4 text-center text-slate-500 text-sm font-medium">{substituteFor ? 'Finding substitutes...' : 'Searching...'}</div>
+                            ) : visibleResults.length === 0 ? (
+                                <div className="p-4 text-center text-slate-500 text-sm font-medium">
+                                    {substituteFor
+                                        ? (substituteReason === 'no_composition'
+                                            ? `No salt is recorded for ${substituteFor.name}, so no substitutes can be suggested.`
+                                            : `No other brand with the same salt as ${substituteFor.name}.`)
+                                        : `No medicines found for "${searchQuery}"`}
+                                </div>
                             ) : (
                                 <div className="flex flex-col py-1">
-                                    {searchResults.map((product, idx) => {
+                                    {visibleResults.map((product, idx) => {
                                         const isSelected = idx === selectedIndex;
                                         return (
                                             <div 
@@ -694,13 +705,16 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                                                         <div className="font-bold text-slate-800 text-sm flex items-center gap-2">
                                                             {product.name}
                                                             {product.isLowStock && <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />}
+                                                            {product.substitute?.sameStrength === true && <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">Same strength</span>}
+                                                            {product.substitute?.sameStrength === false && <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">Different strength</span>}
+                                                            {product.substitute?.sameForm === false && <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">Different form</span>}
                                                         </div>
                                                         <div className="text-[11px] text-slate-500 font-medium mt-0.5">
                                                             {product.composition} • {product.packSize} {product.packUnit}
                                                         </div>
                                                     </div>
                                                     <div className="text-right">
-                                                        <div className="text-sm font-bold text-slate-700">₹{product.mrp.toFixed(2)}</div>
+                                                        <div className="text-sm font-bold text-slate-700">₹{(product.matchedMrp ?? product.mrp).toFixed(2)}</div>
                                                         <div className={cn("text-xs font-bold mt-0.5", product.totalStock > 0 ? "text-emerald-600" : "text-red-500")}>
                                                             {(() => {
                                                                 const totalQty = product.totalStock || 0;
@@ -714,11 +728,24 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                                                                 return `0 in stock`;
                                                             })()}
                                                         </div>
+                                                        {!substituteFor && (
+                                                            <button
+                                                                type="button"
+                                                                data-testid="show-substitutes"
+                                                                title="Same salt, other brands (A / Alt+A)"
+                                                                className="mt-1 inline-flex items-center gap-1 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-bold text-slate-500 hover:border-blue-300 hover:text-blue-600"
+                                                                onPointerDown={(e) => e.preventDefault()}
+                                                                onClick={(e) => { e.stopPropagation(); void openSubstitutes(product); }}
+                                                            >
+                                                                <ArrowLeftRight className="h-3 w-3" /> Substitutes
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
                                         );
                                     })}
+                                    <div className="hidden border-t bg-slate-50 px-3 py-1.5 text-[10px] font-medium text-slate-400 lg:block">{SEARCH_TIPS}</div>
                                 </div>
                             )}
                         </div>
@@ -827,6 +854,7 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                                             onSave={handleSaveEdit}
                                             onCancel={handleCancelEdit}
                                             onRemove={() => handleRemoveItem(item.batchId)}
+                                            showMargin={!isCashier}
                                         />
                                     );
                                 }

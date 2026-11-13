@@ -352,9 +352,12 @@ export function distributeSmartDiscounts(
 
         let baseAmount = Number(item.totalAmount);
         if (isNaN(baseAmount) || baseAmount <= 0) {
-            const baseRate = Number(item.rate || item.saleRate || item.mrp || 0);
+            // `rate` is already the NET price (after the line discount): discounting it again was the 305 -> 269.64 double discount.
+            // Only the pre-discount prices (saleRate / mrp) still need the line discount applied.
+            const netRate = Number(item.rate || 0);
+            const preDiscountRate = Number(item.saleRate || item.mrp || 0);
             const discPct = Number(item.discountPct || 0);
-            const baseRateDiscounted = baseRate * (1 - discPct / 100);
+            const baseRateDiscounted = netRate > 0 ? netRate : preDiscountRate * (1 - discPct / 100);
             baseAmount = (saleType === 'WHOLESALE')
                 ? baseRateDiscounted * effectiveQty * taxMultiplier
                 : baseRateDiscounted * effectiveQty;

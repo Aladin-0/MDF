@@ -20,9 +20,11 @@ interface InlineRowEditorProps {
     onSave: (oldBatchId: string, newItem: CartItem) => void;
     onCancel: () => void;
     onRemove: () => void;
+    /** Show the Est. Cost / Margin footer. Only for roles that may see margins (canViewBillingMargins); hidden by default so it can never leak. */
+    showMargin?: boolean;
 }
 
-export function InlineRowEditor({ item, saleType = 'RETAIL', onSave, onCancel, onRemove }: InlineRowEditorProps) {
+export function InlineRowEditor({ item, saleType = 'RETAIL', onSave, onCancel, onRemove, showMargin = false }: InlineRowEditorProps) {
     const outletId = useOutletId();
 
     const [qtyStrips, setQtyStrips] = useState(item.qtyStrips.toString());
@@ -409,19 +411,21 @@ export function InlineRowEditor({ item, saleType = 'RETAIL', onSave, onCancel, o
 
                             {/* Profitability Footer */}
                             <div className="mt-auto bg-white p-3 rounded border border-slate-200 flex justify-between items-center shadow-sm">
-                                <div className="flex gap-6">
-                                    <div>
-                                        <div className="text-[9px] font-bold text-slate-400 uppercase">Est. Cost</div>
-                                        <div className="text-sm font-semibold text-slate-600">₹{totalCost.toFixed(2)}</div>
-                                    </div>
-                                    <div>
-                                        <div className="text-[9px] font-bold text-slate-400 uppercase">Margin</div>
-                                        <div className={cn("text-sm font-bold", isLowMargin ? "text-amber-600" : "text-emerald-600")}>
-                                            ₹{marginAmount.toFixed(2)} ({marginPct.toFixed(1)}%)
+                                {showMargin && (
+                                    <div className="flex gap-6">
+                                        <div>
+                                            <div className="text-[9px] font-bold text-slate-400 uppercase">Est. Cost</div>
+                                            <div className="text-sm font-semibold text-slate-600">₹{totalCost.toFixed(2)}</div>
+                                        </div>
+                                        <div>
+                                            <div className="text-[9px] font-bold text-slate-400 uppercase">Margin</div>
+                                            <div className={cn("text-sm font-bold", isLowMargin ? "text-amber-600" : "text-emerald-600")}>
+                                                ₹{marginAmount.toFixed(2)} ({marginPct.toFixed(1)}%)
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                                <div className="text-right">
+                                )}
+                                <div className="text-right ml-auto">
                                     <div className="text-[10px] font-bold text-slate-400 uppercase">Sell Amount</div>
                                     <div className="text-2xl font-black text-slate-800">
                                         ₹{sellAmount.toFixed(2)}

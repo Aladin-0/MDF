@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
 import { calculateRowTotals } from '../lib/cartUtils';
+import { isControlledSchedule } from '../lib/scheduleRules';
 import { distributeSmartDiscounts } from '../lib/billingMarginUtils';
 import {
     CartItem,
@@ -604,7 +605,7 @@ export const useBillingStore = create<BillingState>()(
             // Track MRP for item-level discount display
             totalMrp += (totalQty * (item.mrp || 0));
 
-            if (['G', 'H', 'H1', 'X', 'C', 'Narcotic'].includes(item.scheduleType)) {
+            if (isControlledSchedule(item.scheduleType)) {
                 hasScheduleH = true;
                 requiresDoctorDetails = true;
             }
@@ -652,9 +653,7 @@ export const useBillingStore = create<BillingState>()(
         const state = get();
         const draft = state.drafts[id];
         if (!draft) return false;
-        return draft.cart.some(
-            item => ['H1', 'X', 'C', 'Narcotic'].includes(item.scheduleType)
-        );
+        return draft.cart.some(item => isControlledSchedule(item.scheduleType));
     },
 
     cartCount: (id) => {

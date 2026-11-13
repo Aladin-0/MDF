@@ -297,7 +297,6 @@ const BILLING_SHORTCUTS: ShortcutDef[] = [
     bill('lock', 'Alt+L', 'Lock Terminal / Switch Cashier', 'billing.lock'),
     // customer on the bill
     bill('counter', 'Alt+C', 'Counter Bill (no customer, cash sale)', 'billing.counterBill'),
-    bill('nonValued', 'Alt+J', 'Add a Non-Valued Customer (name only)', 'billing.nonValuedCustomer'),
     // handled by the billing screen itself
     local('billing.checkout', ['Ctrl+Enter'], 'Collect Payment / Save Bill', 'Billing', 'billing',
         'components/billing/RightBillingRail.tsx (useMagicSubmit)'),

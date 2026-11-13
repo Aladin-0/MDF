@@ -96,3 +96,28 @@ batch that **still has stock** due within 90 days **or already expired** (`daysU
 worst 8 and `alerts.counts` is the true total: show the count, never `list.length`. The rules live in
 `apps/billing/dashboard_services.py::stock_alerts`; change them there and here together.
 
+## Medicine search (billing, purchase, returns, PO)
+
+One endpoint, `GET /products/search/`, serves every medicine search box; `apps/inventory/search_query.py` decides what the text means (the PO catalogue search, `/products/catalog/search/`, shares the same parser).
+
+| Type | Means |
+|---|---|
+| `dolo 650` | every word must be in the name, salt or maker, any order; typos tolerated only when nothing matches |
+| `L+175` | names starting with `L` priced **about** 175 (+/-10%, at least +/-1 rupee), **closest price first**; nobody remembers 178.31. Only the batches in that window are returned, the closest first, and each result carries `matchedMrp` (the batch price it matched) |
+| `L+20-30` / `L+<50` / `L+>100` | a price range / up to 50 / from 100 |
+| `L+=23.50` | exactly that MRP |
+| `C,losartan` | every brand whose composition contains the salt (several: `C,losartan,amlodipine`) |
+| `8901234567890` | a scanned barcode: exactly that product. Only works for products whose `barcode` is filled in (Inventory > Edit product) |
+| `A` / `Alt+A` in billing | substitutes of the highlighted medicine: `GET /products/{id}/substitutes/`. Plain `A` only after the arrow keys moved the highlight (otherwise it is a letter you type) |
+
+Rules to keep: a price search ranks by the price of the product's closest in-stock batch in the window (what billing sells and what the row shows), falling back to the catalogue MRP only when no batch is in the window; in-stock products are listed **before** out-of-stock ones and the candidate cut happens after that ordering (a broad query used to hide in-stock items behind zero-stock ones); results are 30 in stock + 10 out of stock; the cache key hashes the query. Substitutes = the *identical set of salts* (`salt_set`: order and punctuation ignored, empty / `-BLANK-` never matches); the catalogue keeps strengths in the product **name**, so `strengths(name)` / `dosage_form(name)` rank same-strength, same-form brands first and the UI labels the rest. A bottle size (`60ML`) is not a strength. Do not add another place that parses `L+..` / `C,..`: use `parse_query`.
+
+## Product field suggestions (Manufacturer and Composition)
+The Manufacturer and Composition boxes of the product forms (`AddNewProductDrawer`, `EditProductModal`) offer the catalogue's own values while you type, from `GET /products/suggestions/?field=manufacturer|composition&q=&limit=` (`ProductSuggestionsView`, logic in `apps/inventory/suggestions.py`). The frontend piece is one component, `components/shared/SuggestInput.tsx` (an ARIA combobox on a Radix popover; hook `hooks/useCatalogSuggestions.ts`), used by both forms so desktop and phone behave the same.
+
+- **The catalogue data is dirty, so the server cleans it** (do not "simplify" this to a plain `icontains` list): old imports left filler in both fields (`SURGICAL` in ~1,600 compositions, `-BLANK-`, `.`, `GENERAL ITEMS`), the same company spelt several ways (`CIPLA` / `cipla`) and typos. `PLACEHOLDERS` in `suggestions.py` is the filler list; values are merged on `norm_key` (case and spacing ignored) and shown with their commonest spelling.
+- **Ranking:** the whole value, then a word of it starts with what was typed, then it is inside; within a tier the more products use it the higher. An empty text gives the most used values.
+- **A composition option carries what its products usually have** (`hsnCode`, `gstRate`, `scheduleType`). `AddNewProductDrawer` uses it to fill the boxes the clerk left EMPTY (never overwriting), only with values the form can hold, and shows "Filled HSN 3004, GST 5% from the 63 products with this composition. Check them before saving." **`scheduleType` is only ever a real schedule (H, H1, X ...), never `OTC`**: OTC is the default a product gets when nobody chose, so it proves nothing, and the clerk must choose it. The Edit modal offers the list only and never auto-fills (it would silently change an existing product's tax or schedule).
+- The box stays an ordinary text box: anything can be typed, nothing is asked of the server until the box is used, and if the server cannot be reached there is simply no list. Escape closes only the list (not the dialog), Enter takes the highlighted option only, options are 44px on touch and picking one does not close the phone keyboard.
+- Tests: `apps/inventory/tests/test_product_suggestions.py` (45), `components/shared/SuggestInput.test.tsx`, `components/purchases/__tests__/AddNewProductDrawer.test.tsx`.
+

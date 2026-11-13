@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useForm, Controller, useFieldArray } from 'react-hook-form';
+import { SuggestInput } from '@/components/shared/SuggestInput';
 import { useMagicSubmit } from '@/hooks/useMagicSubmit';
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -314,10 +315,14 @@ export function EditProductModal({
                                                 <Input {...register('name', { required: 'Name is required' })} placeholder="e.g. Paracetamol 500mg" />
                                             </Field>
                                             <Field label="Composition" error={fieldErr('composition')} className="sm:col-span-2">
-                                                <Input {...register('composition')} placeholder="e.g. Paracetamol IP 500mg" />
+                                                <Controller name="composition" control={control} render={({ field }) => (
+                                                    <SuggestInput field="composition" id="epm-composition" value={field.value ?? ''} onChange={field.onChange} placeholder="e.g. Paracetamol IP 500mg" />
+                                                )} />
                                             </Field>
                                             <Field label="Manufacturer" error={fieldErr('manufacturer')}>
-                                                <Input {...register('manufacturer')} placeholder="e.g. Sun Pharma" />
+                                                <Controller name="manufacturer" control={control} render={({ field }) => (
+                                                    <SuggestInput field="manufacturer" id="epm-manufacturer" value={field.value ?? ''} onChange={field.onChange} placeholder="e.g. Sun Pharma" />
+                                                )} />
                                             </Field>
                                             <Field label="Barcode" error={fieldErr('barcode')} hint="Leave blank to clear">
                                                 <Input {...register('barcode')} placeholder="Scan or enter barcode" />

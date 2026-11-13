@@ -204,6 +204,48 @@ const realSettingsApi = {
     }
 };
 
+/** One /products/search/ (or /products/<id>/substitutes/) row -> ProductSearchResult. */
+const mapProductSearchItem = (item: any) => ({
+    id: item.id,
+    name: item.name,
+    composition: item.composition,
+    manufacturer: item.manufacturer,
+    category: item.category,
+    drugType: item.drugType,
+    scheduleType: item.scheduleType,
+    hsnCode: item.hsnCode,
+    gstRate: item.gstRate,
+    packSize: item.packSize,
+    packUnit: item.packUnit,
+    packType: item.packType,
+    allowsLoose: item.allowsLoose,
+
+    barcode: item.barcode,
+    substitute: item.substitute,
+    matchedMrp: item.matchedMrp,
+    isFridge: item.isFridge,
+    isDiscontinued: item.isDiscontinued,
+    imageUrl: item.imageUrl,
+    mrp: item.mrp ?? 0,
+    saleRate: item.saleRate ?? 0,
+    outletProductId: item.outletProductId,
+    totalStock: item.totalStock,
+    stockDisplayText: item.stockDisplayText,
+    nearestExpiry: item.nearestExpiry,
+    isLowStock: item.isLowStock,
+    batches: (item.batches || []).map((b: any) => {
+        const mrp = Number(b.mrp ?? 0);
+        const rawPtr = Number(b.ptr ?? b.ptr_rate ?? 0);
+        const rawPts = Number(b.pts ?? b.pts_rate ?? 0);
+        return {
+            ...b,
+            mrp,
+            ptr: rawPtr > 0 ? rawPtr : (mrp > 0 ? mrp * 0.80 : 0),
+            pts: rawPts > 0 ? rawPts : (rawPtr > 0 ? rawPtr * 0.90 : (mrp > 0 ? mrp * 0.72 : 0)),
+        };
+    }),
+});
+
 const realProductsApi = {
     search: async (q: string, outletId: string, context: 'purchase' | 'billing' | '' = 'purchase', signal?: AbortSignal): Promise<ProductSearchResult[]> => {
         // context=purchase → backend shows all active batches regardless of expiry
@@ -215,44 +257,28 @@ const realProductsApi = {
         );
         await assertOk(response);
         const data = await response.json();
-        return (data.data || []).map((item: any) => ({
-            id: item.id,
-            name: item.name,
-            composition: item.composition,
-            manufacturer: item.manufacturer,
-            category: item.category,
-            drugType: item.drugType,
-            scheduleType: item.scheduleType,
-            hsnCode: item.hsnCode,
-            gstRate: item.gstRate,
-            packSize: item.packSize,
-            packUnit: item.packUnit,
-            packType: item.packType,
-            allowsLoose: item.allowsLoose,
-
-            barcode: item.barcode,
-            isFridge: item.isFridge,
-            isDiscontinued: item.isDiscontinued,
-            imageUrl: item.imageUrl,
-            mrp: item.mrp ?? 0,
-            saleRate: item.saleRate ?? 0,
-            outletProductId: item.outletProductId,
-            totalStock: item.totalStock,
-            stockDisplayText: item.stockDisplayText,
-            nearestExpiry: item.nearestExpiry,
-            isLowStock: item.isLowStock,
-            batches: (item.batches || []).map((b: any) => {
-                const mrp = Number(b.mrp ?? 0);
-                const rawPtr = Number(b.ptr ?? b.ptr_rate ?? 0);
-                const rawPts = Number(b.pts ?? b.pts_rate ?? 0);
-                return {
-                    ...b,
-                    mrp,
-                    ptr: rawPtr > 0 ? rawPtr : (mrp > 0 ? mrp * 0.80 : 0),
-                    pts: rawPts > 0 ? rawPts : (rawPtr > 0 ? rawPtr * 0.90 : (mrp > 0 ? mrp * 0.72 : 0)),
-                };
-            }),
-        }));
+        return (data.data || []).map(mapProductSearchItem);
+    },
+    /** Other brands with the same salt(s) as `productId` (same strength / form first, in stock first). `reason: 'no_composition'` when the product has no salt recorded. */
+    substitutes: async (productId: string, outletId: string, context: 'purchase' | 'billing' | '' = 'billing', signal?: AbortSignal): Promise<{ products: ProductSearchResult[]; reason?: string }> => {
+        const contextParam = context ? `&context=${context}` : '';
+        const response = await fetch(
+            `${API_URL}/products/${productId}/substitutes/?outletId=${outletId}${contextParam}`,
+            { headers: getHeaders(), signal }
+        );
+        await assertOk(response);
+        const data = await response.json();
+        return { products: (data.data || []).map(mapProductSearchItem), reason: data.reason };
+    },
+    /** Options for the Manufacturer / Composition boxes, from the catalogue (filler dropped, spellings merged, ranked). q may be empty: the most used. */
+    suggest: async (field: import('@/types').SuggestField, q: string, signal?: AbortSignal, limit = 8): Promise<import('@/types').ProductSuggestion[]> => {
+        const response = await fetch(
+            `${API_URL}/products/suggestions/?field=${field}&q=${encodeURIComponent(q)}&limit=${limit}`,
+            { headers: getHeaders(), signal }
+        );
+        await assertOk(response);
+        const data = await response.json();
+        return data.data || [];
     },
     catalogSearch: async (q: string, outletId: string, signal?: AbortSignal): Promise<ProductSearchResult[]> => {
         const response = await fetch(

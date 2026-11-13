@@ -18,7 +18,7 @@ Before changing pack size / unit / type, loose selling (`qty_loose`), or the pro
 
 ## Inventory
 
-Before changing the Inventory page, `GET /inventory/` or stock adjustment, read `docs/INVENTORY.md`. Low stock, expiring and nearest-expiry each have one rule on the server; counts come from `useInventorySummary`; an adjustment needs `type`, signed `qty` and a PIN (`buildAdjustPayload`); never ask for more than 100 rows a page or use `cache.delete_pattern`.
+Before changing the Inventory page, `GET /inventory/` or stock adjustment, read `docs/INVENTORY.md`. Low stock, expiring and nearest-expiry each have one rule on the server; counts come from `useInventorySummary`; an adjustment needs `type`, signed `qty` and a PIN (`buildAdjustPayload`); never ask for more than 100 rows a page or use `cache.delete_pattern`. The medicine search box (`L+23.50`, `C,salt`, barcode, substitutes) is parsed only by `apps/inventory/search_query.py`; see "Medicine search" in that doc before changing it.
 
 ## Purchase orders
 
@@ -30,7 +30,7 @@ New popups and forms reuse the project's own pieces: `components/shared/ModalShe
 
 ## Mobile layout
 
-Before adding or changing a page, table, popup or form, read `docs/MOBILE_LAYOUT.md`. Everything except billing and the New Purchase entry screen must work on a 360px phone: mobile-first Tailwind, daily lists become cards below `md`, wide report tables scroll inside their own wrapper, popups use `ModalShell` / `ui/dialog`. Do not add a fixed pixel width without a `w-full sm:` fallback.
+Before adding or changing a page, table, popup or form, read `docs/MOBILE_LAYOUT.md`. Everything must work on a 360px phone. Billing and the New Purchase entry screen each have a dedicated phone layout (`components/billing/mobile/`, `components/purchases/mobile/`); read `docs/MOBILE_BILLING_DESIGN.md` before touching billing and `docs/MOBILE_PURCHASE_DESIGN.md` before touching New Purchase, and put their rules in the shared store / hooks / `lib/` (`hooks/usePurchaseEntry.ts`, `lib/purchaseEntry.ts`, `lib/purchaseLine.ts`, `lib/purchaseChecks.ts`), never in one of the two layouts: mobile-first Tailwind, daily lists become cards below `md`, wide report tables scroll inside their own wrapper, popups use `ModalShell` / `ui/dialog`. Do not add a fixed pixel width without a `w-full sm:` fallback.
 
 ## Deploying to production
 

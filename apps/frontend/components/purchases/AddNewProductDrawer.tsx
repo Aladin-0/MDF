@@ -8,11 +8,12 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { productsApi } from '@/lib/apiClient';
-import { CreateProductPayload, ProductSearchResult } from '@/types';
+import { CreateProductPayload, ProductSearchResult, ProductSuggestion } from '@/types';
+import { SuggestInput } from '@/components/shared/SuggestInput';
 import { SCHEDULE_TYPE_OPTIONS } from '@/constants/scheduleTypes';
 import { PACK_TYPE_OPTIONS, DISPENSING_UNIT_OPTIONS } from '@/constants/productBehavior';
 import { inferPackUnit } from '@/utils/productUtils';
-import { Pencil } from 'lucide-react';
+import { Pencil, Sparkles } from 'lucide-react';
 
 interface Props {
     open: boolean;
@@ -66,20 +67,39 @@ export function AddNewProductDrawer({ open, onOpenChange, initialName, onSuccess
     const [errors, setErrors] = useState<FieldErrors>({});
     const [serverError, setServerError] = useState('');
     const [saving, setSaving] = useState(false);
+    // what picking a composition filled in (so the clerk can see it, and it goes away once they change one of those boxes)
+    const [filled, setFilled] = useState<{ hsnCode?: string; gstRate?: string; scheduleType?: string; from?: number } | null>(null);
 
     useEffect(() => {
         if (open) {
             setForm(emptyForm(initialName));
             setErrors({});
             setServerError('');
+            setFilled(null);
         }
     }, [open, initialName]);
 
     const set = (field: keyof FormState, value: string) => {
         setForm((prev) => ({ ...prev, [field]: value }));
+        if (filled && (field === 'hsnCode' || field === 'gstRate' || field === 'scheduleType') && filled[field]) setFilled((f) => (f ? { ...f, [field]: undefined } : f));
         if (errors[field as keyof FieldErrors]) {
             setErrors((prev) => ({ ...prev, [field]: undefined }));
         }
+    };
+
+    /**
+     * A composition was picked from the catalogue: fill the HSN, GST and schedule its products usually have, but ONLY the boxes still empty
+     * (never over what was typed or chosen), and only values this form can hold. The clerk is told what was filled.
+     */
+    const onPickComposition = (s: ProductSuggestion) => {
+        const next: { hsnCode?: string; gstRate?: string; scheduleType?: string } = {};
+        if (!form.hsnCode.trim() && s.hsnCode) next.hsnCode = s.hsnCode.slice(0, 8);
+        if (form.gstRate === '' && s.gstRate != null && GST_RATES.includes(String(s.gstRate))) next.gstRate = String(s.gstRate);
+        if (!form.scheduleType && s.scheduleType && SCHEDULE_TYPE_OPTIONS.some((o) => o.value === s.scheduleType)) next.scheduleType = s.scheduleType;
+        if (!Object.keys(next).length) { setFilled(null); return; }
+        setForm((prev) => ({ ...prev, ...next }));
+        setErrors((prev) => ({ ...prev, ...Object.fromEntries(Object.keys(next).map((k) => [k, undefined])) }));
+        setFilled({ ...next, from: s.count });
     };
 
     const validate = (): boolean => {
@@ -188,23 +208,40 @@ export function AddNewProductDrawer({ open, onOpenChange, initialName, onSuccess
                                     {errors.name && <p className="text-[11px] text-red-500">{errors.name}</p>}
                                 </div>
                                 <div className="space-y-1">
-                                    <Label className="text-xs font-medium">Composition</Label>
-                                    <Input
+                                    <Label htmlFor="anp-composition" className="text-xs font-medium">Composition</Label>
+                                    <SuggestInput
+                                        field="composition"
+                                        id="anp-composition"
+                                        data-testid="composition-input"
                                         className="h-9 text-sm"
                                         value={form.composition}
-                                        onChange={(e) => set('composition', e.target.value)}
+                                        onChange={(t) => set('composition', t)}
+                                        onPick={onPickComposition}
                                         placeholder="e.g. Paracetamol 650mg"
                                     />
+                                    <p className="text-[11px] text-muted-foreground">Pick from the list to fill the tax and schedule boxes below.</p>
                                 </div>
                                 <div className="space-y-1">
-                                    <Label className="text-xs font-medium">Manufacturer</Label>
-                                    <Input
+                                    <Label htmlFor="anp-manufacturer" className="text-xs font-medium">Manufacturer</Label>
+                                    <SuggestInput
+                                        field="manufacturer"
+                                        id="anp-manufacturer"
+                                        data-testid="manufacturer-input"
                                         className="h-9 text-sm"
                                         value={form.manufacturer}
-                                        onChange={(e) => set('manufacturer', e.target.value)}
+                                        onChange={(t) => set('manufacturer', t)}
                                         placeholder="e.g. Micro Labs Ltd"
                                     />
                                 </div>
+                                {filled && (filled.hsnCode || filled.gstRate || filled.scheduleType) && (
+                                    <p role="status" data-testid="autofill-note" className="md:col-span-2 flex items-start gap-2 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900">
+                                        <Sparkles aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                                        <span>
+                                            Filled {[filled.hsnCode && `HSN ${filled.hsnCode}`, filled.gstRate && `GST ${filled.gstRate}%`, filled.scheduleType && `Schedule ${filled.scheduleType}`].filter(Boolean).join(', ')}
+                                            {filled.from ? ` from the ${filled.from.toLocaleString('en-IN')} product${filled.from === 1 ? '' : 's'} with this composition` : ''}. Check {(filled.hsnCode ? 1 : 0) + (filled.gstRate ? 1 : 0) + (filled.scheduleType ? 1 : 0) > 1 ? 'them' : 'it'} before saving.
+                                        </span>
+                                    </p>
+                                )}
                             </div>
                         </section>
 
@@ -213,8 +250,9 @@ export function AddNewProductDrawer({ open, onOpenChange, initialName, onSuccess
                             <h3 className="text-sm font-semibold tracking-tight text-gray-500 uppercase">B. Tax & Compliance</h3>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div className="space-y-1">
-                                    <Label className="text-xs font-medium">HSN Code <span className="text-red-500">*</span></Label>
+                                    <Label htmlFor="anp-hsn" className="text-xs font-medium">HSN Code <span className="text-red-500">*</span></Label>
                                     <Input
+                                        id="anp-hsn"
                                         className={fieldCls(errors.hsnCode)}
                                         value={form.hsnCode}
                                         onChange={(e) => set('hsnCode', e.target.value.slice(0, 8))}
@@ -224,9 +262,9 @@ export function AddNewProductDrawer({ open, onOpenChange, initialName, onSuccess
                                     {errors.hsnCode && <p className="text-[11px] text-red-500">{errors.hsnCode}</p>}
                                 </div>
                                 <div className="space-y-1">
-                                    <Label className="text-xs font-medium">GST % <span className="text-red-500">*</span></Label>
+                                    <Label htmlFor="anp-gst" className="text-xs font-medium">GST % <span className="text-red-500">*</span></Label>
                                     <Select value={form.gstRate} onValueChange={(v) => set('gstRate', v)}>
-                                        <SelectTrigger className={`h-9 text-sm ${errors.gstRate ? 'border-red-400' : ''}`}>
+                                        <SelectTrigger id="anp-gst" className={`h-9 text-sm ${errors.gstRate ? 'border-red-400' : ''}`}>
                                             <SelectValue placeholder="Select GST" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -238,9 +276,9 @@ export function AddNewProductDrawer({ open, onOpenChange, initialName, onSuccess
                                     {errors.gstRate && <p className="text-[11px] text-red-500">{errors.gstRate}</p>}
                                 </div>
                                 <div className="space-y-1">
-                                    <Label className="text-xs font-medium">Schedule Type <span className="text-red-500">*</span></Label>
+                                    <Label htmlFor="anp-schedule" className="text-xs font-medium">Schedule Type <span className="text-red-500">*</span></Label>
                                     <Select value={form.scheduleType} onValueChange={(v) => set('scheduleType', v)}>
-                                        <SelectTrigger className={`h-9 text-sm ${errors.scheduleType ? 'border-red-400' : ''}`}>
+                                        <SelectTrigger id="anp-schedule" className={`h-9 text-sm ${errors.scheduleType ? 'border-red-400' : ''}`}>
                                             <SelectValue placeholder="Select Schedule" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -368,8 +406,9 @@ export function AddNewProductDrawer({ open, onOpenChange, initialName, onSuccess
                             <h3 className="text-sm font-semibold tracking-tight text-gray-500 uppercase">E. Pricing</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="space-y-1">
-                                    <Label className="text-xs font-medium">MRP (₹) <span className="text-red-500">*</span></Label>
+                                    <Label htmlFor="anp-mrp" className="text-xs font-medium">MRP (₹) <span className="text-red-500">*</span></Label>
                                     <Input
+                                        id="anp-mrp"
                                         type="number"
                                         min={0}
                                         step="0.01"
@@ -387,11 +426,12 @@ export function AddNewProductDrawer({ open, onOpenChange, initialName, onSuccess
                 </div>
 
                 {/* Footer */}
-                <DialogFooter className="border-t px-6 py-4 bg-gray-50 flex items-center justify-end gap-2 rounded-b-lg">
+                <DialogFooter className="border-t px-6 py-4 bg-gray-50 flex items-center justify-end gap-2 rounded-b-lg max-sm:flex-col-reverse max-sm:items-stretch">
                     <Button
                         type="button"
                         variant="outline"
                         size="sm"
+                        className="max-sm:h-11 max-sm:w-full"
                         onClick={() => onOpenChange(false)}
                         disabled={saving}
                     >
@@ -400,6 +440,7 @@ export function AddNewProductDrawer({ open, onOpenChange, initialName, onSuccess
                     <Button
                         type="button"
                         size="sm"
+                        className="max-sm:h-11 max-sm:w-full"
                         onClick={handleSave}
                         disabled={saving}
                     >

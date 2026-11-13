@@ -170,3 +170,9 @@ select:focus-visible {
     font-size: 16px !important;
   }
 }
+
+/* The New Purchase Save / Cancel bar is fixed to the bottom of the window from 1280px: a toast must sit above it, not cover the buttons */
+@media (min-width: 1280px) {
+    html[data-purchase-footer] [data-toast-viewport] { bottom: 4.25rem; }
+}
+

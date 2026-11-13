@@ -3,7 +3,7 @@ from apps.inventory.views import (
     ProductSearchView, InventoryListView, InventoryAlertsView, InventoryAdjustView,
     ProductListView, ProductDetailView, ProductBatchesView, InventoryExportExcelView,
     BatchLandingCostView, StockLedgerView, StockLedgerBatchesView, BatchAvailabilityCheckView,
-    BatchDetailUpdateView, OutletProductConfigView, MasterCatalogSearchView
+    BatchDetailUpdateView, OutletProductConfigView, MasterCatalogSearchView, ProductSubstitutesView, ProductSuggestionsView
 )
 
 urlpatterns = [
@@ -11,7 +11,9 @@ urlpatterns = [
     path('batches/<uuid:batch_id>/landing-cost/', BatchLandingCostView.as_view(), name='batch-landing-cost'),
     path('products/', ProductListView.as_view(), name='product-list'),
     path('products/search/', ProductSearchView.as_view(), name='product-search'),
+    path('products/suggestions/', ProductSuggestionsView.as_view(), name='product-suggestions'),
     path('products/catalog/search/', MasterCatalogSearchView.as_view(), name='product-catalog-search'),
+    path('products/<uuid:product_id>/substitutes/', ProductSubstitutesView.as_view(), name='product-substitutes'),
     path('products/<uuid:pk>/', ProductDetailView.as_view(), name='product-detail'),
     path('products/<uuid:pk>/batches/', ProductBatchesView.as_view(), name='product-batches'),
     path('inventory/', InventoryListView.as_view(), name='inventory-list'),

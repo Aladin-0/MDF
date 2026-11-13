@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from 'react';
 import { AddFamilyMemberDialog } from './AddFamilyMemberDialog';
 import { BillingFor } from './BillingFor';
 import { NewCustomerModal } from './NewCustomerModal';
-import { NonValuedCustomerDialog } from './NonValuedCustomerDialog';
 import type { FamilyMember } from '@/types';
 import { useAuthStore } from '@/store/authStore';
 import { useBillingStore } from '@/store/billingStore';
@@ -43,18 +42,11 @@ export function BillingHeaderStrip({ customerRef, doctorRef, medicineSearchRef }
     const [addPersonOpen, setAddPersonOpen] = useState(false);
     const [newCustomerOpen, setNewCustomerOpen] = useState(false);
     const [newCustomerQuery, setNewCustomerQuery] = useState('');
-    const [nonValuedOpen, setNonValuedOpen] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
     const outletIdForFamily = useAuthStore((s) => s.user?.outlet?.id);
     const { setWalkInName, startCounterBill } = useBillingStore();
 
-    // Alt+J (non-valued customer) is a registry shortcut; it reaches this component as an event
-    useEffect(() => {
-        const open = () => setNonValuedOpen(true);
-        window.addEventListener('billing:open-non-valued', open);
-        return () => window.removeEventListener('billing:open-non-valued', open);
-    }, []);
     useEffect(() => {
         const away = (e: MouseEvent) => { if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false); };
         document.addEventListener('mousedown', away);
@@ -181,11 +173,6 @@ export function BillingHeaderStrip({ customerRef, doctorRef, medicineSearchRef }
                                                 onClick={() => { setMenuOpen(false); setNewCustomerQuery(''); setNewCustomerOpen(true); }}>
                                                 <UserPlus className="h-4 w-4 text-blue-600" /> Add New Customer
                                             </button>
-                                            {saleType !== 'WHOLESALE' && <button role="menuitem" type="button" className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left hover:bg-slate-50"
-                                                onClick={() => { setMenuOpen(false); setNonValuedOpen(true); }}>
-                                                <span className="flex items-center gap-2"><UserX className="h-4 w-4 text-slate-600" /> Add a Non-Valued Customer</span>
-                                                <kbd className="rounded bg-slate-100 px-1 font-mono text-[10px] text-slate-500">Alt+J</kbd>
-                                            </button>}
                                             {saleType !== 'WHOLESALE' && <button role="menuitem" type="button" className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left hover:bg-slate-50"
                                                 onClick={() => { setMenuOpen(false); startCounterBill(); }}>
                                                 <span className="flex items-center gap-2"><Receipt className="h-4 w-4 text-emerald-600" /> Create as Counter Bill</span>
@@ -461,7 +448,6 @@ export function BillingHeaderStrip({ customerRef, doctorRef, medicineSearchRef }
                     onCreated={(ledger) => selectCustomer(ledger, null)}
                 />
             )}
-            <NonValuedCustomerDialog open={nonValuedOpen} onClose={() => setNonValuedOpen(false)} onSave={(name) => setWalkInName(name)} />
         </div>
     );
 }

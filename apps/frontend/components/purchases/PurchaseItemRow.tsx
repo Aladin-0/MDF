@@ -10,6 +10,9 @@ import { PurchaseItemFormData, ProductSearchResult } from '@/types';
 import { productsApi } from '@/lib/apiClient';
 import { useOutletSettings } from '@/hooks/useOutletSettings';
 import { calculateLandingRate } from '@/lib/purchase-calculations';
+import { formatExpiryForDisplay, getExpiryStatus, calcPTR, calcPTS, maskExpiryInput, finishExpiryInput } from '@/lib/purchaseLine';
+import { lineAmount } from '@/lib/purchaseEntry';
+import { MAX_PKG, pkgNote, pkgOrZero, sanitizePkgInput } from '@/lib/purchasePack';
 
 interface ItemFieldError { message?: string; }
 
@@ -29,49 +32,8 @@ interface Props {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-type ExpiryStatus = 'expired' | 'near' | 'ok';
+export { formatExpiryForDisplay };
 
-export const formatExpiryForDisplay = (exp?: string): string => {
-    if (!exp) return '';
-    const raw = exp.trim();
-    // YYYY-MM-DD or YYYY-MM
-    const mIso = raw.match(/^(\d{4})-(\d{1,2})/);
-    if (mIso) {
-        return `${mIso[2].padStart(2, '0')}/${mIso[1]}`;
-    }
-    return raw;
-};
-
-const getExpiryStatus = (exp: string): ExpiryStatus => {
-    if (!exp) return 'ok';
-    let d = new Date(exp);
-    if (isNaN(d.getTime())) {
-        const mShort = exp.trim().match(/^(\d{1,2})[/\-.](\d{2})$/);
-        const mLong = exp.trim().match(/^(\d{1,2})[/\-.](\d{4})$/);
-        if (mShort) {
-            d = new Date(2000 + parseInt(mShort[2], 10), parseInt(mShort[1], 10) - 1, 1);
-        } else if (mLong) {
-            d = new Date(parseInt(mLong[2], 10), parseInt(mLong[1], 10) - 1, 1);
-        }
-    }
-    if (isNaN(d.getTime())) return 'ok';
-    const diff = differenceInDays(d, new Date());
-    if (diff < 0)  return 'expired';
-    if (diff < 90) return 'near';
-    return 'ok';
-};
-
-const computeTotal = (v: PurchaseItemFormData): number => {
-    const afterTradeDisc = v.qty * v.purchaseRate * (1 - v.discountPct / 100);
-    const afterCashDisc  = afterTradeDisc * (1 - v.cashDiscountPct / 100);
-    return afterCashDisc * (1 + v.gstRate / 100 + v.cess / 100);
-};
-
-const calcPTR = (mrp: number, gstRate: number, retailMargin = 20) =>
-    mrp ? parseFloat(((mrp - mrp * retailMargin / 100) / (1 + gstRate / 100)).toFixed(2)) : 0;
-
-const calcPTS = (ptr: number, stockistMargin = 5) =>
-    ptr ? parseFloat((ptr * (1 - stockistMargin / 100)).toFixed(2)) : 0;
 
 // ─── Shared cell input — plain <input> for full table cell control ────────────
 // We intentionally do NOT use shadcn Input here because its internal padding
@@ -80,7 +42,7 @@ const calcPTS = (ptr: number, stockistMargin = 5) =>
 const cellInputCls = (err = false, align: 'left' | 'right' = 'left') =>
     cn(
         // The table cell supplies the grid line and focus outline.
-        'h-8 w-full min-w-0 rounded-none border-0 bg-transparent px-1.5 text-xs font-medium tabular-nums text-slate-900 outline-none placeholder:text-slate-500',
+        'h-8 w-full min-w-0 scroll-mb-24 scroll-mt-[calc(var(--app-header-h,0px)+3rem)] rounded-none border-0 bg-transparent px-1.5 text-xs font-medium tabular-nums text-slate-900 outline-none placeholder:text-slate-500',
         // spinner removal — works on plain <input>, not shadcn
         '[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none',
         align === 'right' && 'text-right',
@@ -111,6 +73,13 @@ export const PURCHASE_ITEM_COLS = [
     { key: 'expand',    width: 30  },
     { key: 'remove',    width: 30  },
 ];
+
+/** Stock for the product list: whole numbers stay whole, fractions (loose packs) are cut to one decimal, never 11.866666666666667 */
+export function formatStockQty(n: number | string | null | undefined): string {
+    const v = Number(n);
+    if (!Number.isFinite(v)) return '0';
+    return v.toLocaleString('en-IN', { maximumFractionDigits: 1 });
+}
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -158,13 +127,19 @@ export function PurchaseItemRow({
     const openDropdown = () => {
         if (inputRef.current) {
             const rect = inputRef.current.getBoundingClientRect();
-            setDropdownStyle({
-                top: rect.bottom + 2,
-                left: rect.left,
-            });
+            const top = rect.bottom + 2;
+            const left = rect.left;
+            // same place -> keep the old object, so re-checking on every render cannot loop
+            setDropdownStyle((prev) => (prev && prev.top === top && prev.left === left ? prev : { top, left }));
         }
         setDropdownOpen(true);
     };
+
+    // The page above the table can change height while the list is open (e.g. the "add a medicine" message disappears
+    // as soon as you type): follow the input instead of staying where the list first opened.
+    useEffect(() => {
+        if (dropdownOpen) openDropdown();
+    });
 
     // Close dropdown on outside click — must check both wrapper and portal
     useEffect(() => {
@@ -306,9 +281,14 @@ export function PurchaseItemRow({
         onChange(index, field, parseFloat(raw) || 0);
 
     const expStatus = getExpiryStatus(value.expiryDate);
-    const total     = computeTotal(value);
-    const rowBg     = index % 2 === 0 ? 'bg-white' : 'bg-slate-50/40';
-    const effPkg    = typeof value.pkg === 'number' && value.pkg > 0 ? value.pkg : 1;
+    const total     = lineAmount(value);
+    // opaque on purpose: the pinned columns (#, Product, Amount, expand, remove) sit on top of columns scrolling underneath them
+    const rowBg     = index % 2 === 0 ? 'bg-white' : 'bg-slate-50';
+    const effPkg    = pkgOrZero(value.pkg);
+    // under the PKG box: why it is flagged (differs from the catalogue / very large), else the unit it counts (Tablet)
+    const note      = pkgNote(value);
+    const pkgHint   = note ? { text: note.text, warn: true, title: note.kind === 'differs' ? 'The catalogue has a different pack size for this product. Stock is added as packs of the size entered here.' : 'More than 200 units in one pack is unusual: check it' }
+                           : value.packUnitLabel ? { text: value.packUnitLabel, warn: false, title: value.packUnitLabel } : null;
 
     const handleMrpChange = (raw: string) => {
         const mrp = parseFloat(raw) || 0;
@@ -320,7 +300,7 @@ export function PurchaseItemRow({
     };
 
     // One cell-level border system keeps the header and editable rows aligned.
-    const td = 'h-9 border-r border-b border-[#D8DEE8] px-0.5 py-0.5 align-middle hover:bg-slate-50 focus-within:bg-white focus-within:shadow-[inset_0_0_0_2px_#7c3aed]';
+    const td = 'h-9 border-r border-b border-[#D8DEE8] px-0.5 py-0.5 align-middle hover:bg-slate-50 focus-within:bg-white focus-within:shadow-[inset_0_0_0_2px_#2563eb]';
 
     return (
         <>
@@ -337,7 +317,7 @@ export function PurchaseItemRow({
                 >
                     {searching && (
                         <div className="flex items-center gap-1.5 px-3 py-2 text-xs text-slate-500">
-                            <Loader2 className="h-3 w-3 animate-spin" />
+                            <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
                             Searching…
                         </div>
                     )}
@@ -358,17 +338,17 @@ export function PurchaseItemRow({
                             data-result-index={pIdx}
                             className={cn(
                                 "flex min-h-[62px] w-full flex-col justify-center px-3 py-2 text-left transition-colors",
-                                highlightedIndex === pIdx ? "border-l-2 border-violet-600 bg-slate-100 text-slate-900" : "border-l-2 border-transparent hover:bg-slate-50"
+                                highlightedIndex === pIdx ? "border-l-2 border-primary bg-slate-100 text-slate-900" : "border-l-2 border-transparent hover:bg-slate-50"
                             )}
                             onMouseEnter={() => setHighlightedIndex(pIdx)}
                             onMouseDown={(e) => { e.preventDefault(); handleSelectResult(product); }}
                         >
-                            <span className="text-xs font-medium text-slate-800">{product.name}</span>
+                            <span className="text-sm font-semibold text-slate-900">{product.name}</span>
                             {product.composition && (
-                                <span className="text-[10px] text-slate-500 truncate">{product.composition}</span>
+                                <span className="truncate text-xs text-slate-600">{product.composition}</span>
                             )}
-                            <span className="text-[10px] text-slate-400">
-                                GST {product.gstRate}% · Stock {product.totalStock}
+                            <span className="text-xs tabular-nums text-slate-600">
+                                GST {product.gstRate}% · Stock {formatStockQty(product.totalStock)}
                             </span>
                         </button>
                     ))}
@@ -380,13 +360,13 @@ export function PurchaseItemRow({
                         data-result-index={results.length}
                         className={cn(
                             "flex w-full items-center gap-1.5 border-t border-dashed border-slate-200 px-3 py-2 text-left transition-colors",
-                            highlightedIndex === results.length ? "border-l-2 border-violet-600 bg-slate-100 text-slate-900" : "border-l-2 border-transparent hover:bg-slate-50"
+                            highlightedIndex === results.length ? "border-l-2 border-primary bg-slate-100 text-slate-900" : "border-l-2 border-transparent hover:bg-slate-50"
                         )}
                         onMouseEnter={() => setHighlightedIndex(results.length)}
                         onMouseDown={(e) => { e.preventDefault(); handleAddNew(); }}
                     >
-                        <Plus className="h-3 w-3 text-violet-700" />
-                        <span className="text-xs font-medium text-violet-700">
+                        <Plus className="h-3 w-3 text-primary" aria-hidden="true" />
+                        <span className="text-xs font-medium text-primary">
                             {query ? `Add "${query}" as new product` : 'Add new product'}
                         </span>
                     </button>
@@ -410,8 +390,10 @@ export function PurchaseItemRow({
                                 <span className="min-w-0 flex-1 truncate px-1.5 text-xs font-semibold text-slate-900" title={value.productName}>
                                     {value.productName}
                                 </span>
-                                <span
-                                    title="Clear — search again"
+                                <button
+                                    type="button"
+                                    title="Choose a different medicine"
+                                    aria-label={`Choose a different medicine for row ${index + 1}`}
                                     onClick={() => {
                                         onChange(index, 'productId', '' as unknown as number);
                                         onChange(index, 'productName', '');
@@ -420,20 +402,25 @@ export function PurchaseItemRow({
                                         setResults([]);
                                         setHighlightedIndex(-1);
                                     }}
-                                    className="cursor-pointer rounded bg-slate-100 px-1 py-0.5 text-[10px] font-medium text-slate-500 hover:bg-red-100 hover:text-red-600 whitespace-nowrap"
+                                    className="flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded bg-slate-100 text-sm font-bold leading-none text-slate-700 hover:bg-red-100 hover:text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                                 >
-                                    ×
-                                </span>
+                                    <span aria-hidden="true">×</span>
+                                </button>
                             </div>
                         ) : (
                             /* Search input */
                             <input
                                 ref={inputRef}
                                 data-field="product-search"
+                                aria-label={`Product, medicine ${index + 1}`}
+                                autoComplete="off"
+                                spellCheck={false}
+                                aria-invalid={!!errors?.productName || undefined}
+                                title={errors?.productName?.message}
                                 className={cn(cellInputCls(!!errors?.productName), 'w-full')}
                                 value={query || value.productName}
                                 data-dropdown-open={dropdownOpen ? 'true' : 'false'}
-                                placeholder="Search product..."
+                                placeholder="Search product…"
                                 onChange={(e) => handleQueryChange(e.target.value)}
                                 onFocus={() => {
                                     if (query.length >= 2 || results.length > 0) openDropdown();
@@ -494,7 +481,6 @@ export function PurchaseItemRow({
                                         }
                                     }
                                 }}
-                                autoComplete="off"
                             />
                         )}
 
@@ -541,7 +527,7 @@ export function PurchaseItemRow({
                                                         saleRate: 0,
                                                         batches: [],
                                                     } as unknown as ProductSearchResult)}
-                                                    className="max-w-[180px] truncate rounded border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 hover:bg-violet-100"
+                                                    className="max-w-[180px] truncate rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-primary hover:bg-blue-100"
                                                 >
                                                     {s.name}
                                                 </button>
@@ -558,6 +544,9 @@ export function PurchaseItemRow({
                 <td className={td}>
                     <input
                         data-field="hsn"
+                        aria-label={`HSN, medicine ${index + 1}`}
+                        autoComplete="off"
+                        spellCheck={false}
                         className={cellInputCls()}
                         value={value.hsnCode}
                         placeholder="300490"
@@ -569,6 +558,11 @@ export function PurchaseItemRow({
                 <td className={td}>
                     <input
                         data-field="batch"
+                        aria-label={`Batch, medicine ${index + 1}`}
+                        autoComplete="off"
+                        spellCheck={false}
+                        aria-invalid={!!errors?.batchNo || undefined}
+                        title={errors?.batchNo?.message}
                         className={cellInputCls(!!errors?.batchNo)}
                         value={value.batchNo}
                         placeholder="Batch No"
@@ -581,6 +575,12 @@ export function PurchaseItemRow({
                     <div className="flex items-center gap-0.5">
                         <input
                             data-field="expiry"
+                            aria-label={`Expiry (MM/YYYY), medicine ${index + 1}`}
+                            autoComplete="off"
+                            spellCheck={false}
+                            aria-invalid={!!errors?.expiryDate || undefined}
+                            title={errors?.expiryDate?.message}
+                            aria-describedby={expStatus !== 'ok' ? `expiry-note-${index}` : undefined}
                             className={cn(
                                 cellInputCls(!!errors?.expiryDate),
                                 expStatus === 'expired' && 'border-red-400 bg-red-50',
@@ -589,68 +589,61 @@ export function PurchaseItemRow({
                             placeholder="MM/YYYY"
                             maxLength={7}
                             value={formatExpiryForDisplay(value.expiryDate)}
-                            onChange={(e) => {
-                                let rawValue = e.target.value.replace(/\D/g, ''); // Strip non-digits
-                                let formattedValue = rawValue;
-                                if (rawValue.length > 2) {
-                                    // Insert slash after month. Limit year to 4 digits.
-                                    formattedValue = `${rawValue.slice(0, 2)}/${rawValue.slice(2, 6)}`;
-                                }
-                                onChange(index, 'expiryDate', formattedValue);
-                            }}
-                            onBlur={() => {
-                                if (value.expiryDate) {
-                                    const raw = value.expiryDate.trim();
-                                    const mShort = raw.match(/^(\d{1,2})\/(\d{2})$/);
-                                    const mLong  = raw.match(/^(\d{1,2})\/(\d{4})$/);
-                                    if (mShort) {
-                                        const m = parseInt(mShort[1], 10);
-                                        const y = parseInt(mShort[2], 10) + 2000;
-                                        if (m >= 1 && m <= 12) {
-                                            onChange(index, 'expiryDate', `${y}-${String(m).padStart(2, '0')}-01`);
-                                        }
-                                    } else if (mLong) {
-                                        const m = parseInt(mLong[1], 10);
-                                        const y = parseInt(mLong[2], 10);
-                                        if (m >= 1 && m <= 12) {
-                                            onChange(index, 'expiryDate', `${y}-${String(m).padStart(2, '0')}-01`);
-                                        }
-                                    }
-                                }
-                            }}
+                            onChange={(e) => onChange(index, 'expiryDate', maskExpiryInput(e.target.value))}
+                            onBlur={() => { if (value.expiryDate) onChange(index, 'expiryDate', finishExpiryInput(value.expiryDate)); }}
                         />
                         {expStatus !== 'ok' && (
-                            <span title={expStatus === 'expired' ? 'Expired!' : 'Expiring within 90 days'}>
-                                <AlertTriangle className={cn(
-                                    'h-3 w-3 shrink-0',
-                                    expStatus === 'expired' ? 'text-red-500' : 'text-orange-400',
-                                )} />
-                            </span>
+                            <AlertTriangle className={cn(
+                                'h-3 w-3 shrink-0',
+                                expStatus === 'expired' ? 'text-red-600' : 'text-orange-600',
+                            )} aria-hidden="true" />
                         )}
                     </div>
+                    {expStatus !== 'ok' && (
+                        <p id={`expiry-note-${index}`} data-testid="expiry-note" className={cn('px-1 text-[11px] font-bold leading-none', expStatus === 'expired' ? 'text-red-700' : 'text-orange-800')}>
+                            {expStatus === 'expired' ? 'Expired' : 'Under 90 days'}
+                        </p>
+                    )}
                 </td>
 
                 {/* Pkg */}
                 <td className={td}>
                     <input
                         data-field="pkg"
-                        type="number" min={1}
+                        aria-label={`Pkg (units per pack), medicine ${index + 1}`}
+                        autoComplete="off"
+                        aria-invalid={!!errors?.pkg || undefined}
+                        aria-describedby={pkgHint ? `pkg-note-${index}` : undefined}
+                        title={errors?.pkg?.message}
+                        // whole numbers only: a decimal, a minus sign or a paste of "1,5" never gets in; blank stays blank (it is never 1)
+                        inputMode="numeric"
+                        maxLength={String(MAX_PKG).length}
                         className={cellInputCls(!!errors?.pkg, 'right')}
-                        value={value.pkg || ''}
+                        value={value.pkg === undefined || value.pkg === null || (value.pkg as unknown) === '' ? '' : String(value.pkg)}
                         placeholder="Pkg"
-                        onChange={(e) => num('pkg', e.target.value)}
+                        onChange={(e) => {
+                            const clean = sanitizePkgInput(e.target.value);
+                            onChange(index, 'pkg', clean === '' ? ('' as unknown as number) : Number(clean));
+                        }}
                     />
-                    {value.packUnitLabel && (
-                        <p className="w-full truncate text-right text-[10px] leading-none text-slate-500" title={value.packUnitLabel}>
-                            {value.packUnitLabel}
+                    {errors?.pkg?.message ? (
+                        <p id={`pkg-note-${index}`} data-testid="pkg-error" className="w-full text-right text-[11px] font-bold leading-tight text-red-700">{errors.pkg.message}</p>
+                    ) : pkgHint ? (
+                        <p id={`pkg-note-${index}`} data-testid="pkg-note" title={pkgHint.title}
+                            className={cn('w-full truncate text-right text-[11px] leading-none', pkgHint.warn ? 'font-bold text-amber-800' : 'text-slate-600')}>
+                            {pkgHint.text}
                         </p>
-                    )}
+                    ) : null}
                 </td>
 
                 {/* Qty */}
                 <td className={td}>
                     <input
                         data-field="qty"
+                        aria-label={`Qty (packs), medicine ${index + 1}`}
+                        autoComplete="off"
+                        aria-invalid={!!errors?.qty || undefined}
+                        title={errors?.qty?.message}
                         type="number" min={0}
                         className={cellInputCls(!!errors?.qty, 'right')}
                         value={value.qty || ''}
@@ -658,7 +651,7 @@ export function PurchaseItemRow({
                         onChange={(e) => num('qty', e.target.value)}
                     />
                     {effPkg > 1 && value.qty > 0 && (
-                        <p className="text-right text-[10px] leading-none text-slate-500">
+                        <p className="text-right text-[11px] leading-none text-slate-600">
                             ={effPkg * value.qty}u
                         </p>
                     )}
@@ -668,6 +661,8 @@ export function PurchaseItemRow({
                 <td className={td}>
                     <input
                         data-field="free"
+                        aria-label={`Free (packs), medicine ${index + 1}`}
+                        autoComplete="off"
                         type="number" min={0}
                         className={cellInputCls(false, 'right')}
                         value={value.freeQty || ''}
@@ -680,6 +675,10 @@ export function PurchaseItemRow({
                 <td className={td}>
                     <input
                         data-field="mrp"
+                        aria-label={`MRP, medicine ${index + 1}`}
+                        autoComplete="off"
+                        aria-invalid={!!errors?.mrp || undefined}
+                        title={errors?.mrp?.message}
                         type="number" min={0} step="0.01"
                         className={cellInputCls(!!errors?.mrp, 'right')}
                         value={value.mrp || ''}
@@ -691,6 +690,10 @@ export function PurchaseItemRow({
                 <td className={td}>
                     <input
                         data-field="rate"
+                        aria-label={`Rate (purchase rate), medicine ${index + 1}`}
+                        autoComplete="off"
+                        aria-invalid={!!errors?.purchaseRate || undefined}
+                        title={errors?.purchaseRate?.message}
                         type="number" min={0} step="0.01"
                         className={cellInputCls(!!errors?.purchaseRate, 'right')}
                         value={value.purchaseRate || ''}
@@ -702,6 +705,8 @@ export function PurchaseItemRow({
                 <td className={td}>
                     <input
                         data-field="gst"
+                        aria-label={`GST%, medicine ${index + 1}`}
+                        autoComplete="off"
                         type="number" min={0}
                         className={cellInputCls(false, 'right')}
                         value={value.gstRate || ''}
@@ -713,6 +718,8 @@ export function PurchaseItemRow({
                 <td className={td}>
                     <input
                         data-field="ptr"
+                        aria-label={`PTR, medicine ${index + 1}`}
+                        autoComplete="off"
                         type="number" min={0} step="0.01"
                         className={cellInputCls(false, 'right')}
                         value={value.ptr || ''}
@@ -724,6 +731,8 @@ export function PurchaseItemRow({
                 <td className={td}>
                     <input
                         data-field="pts"
+                        aria-label={`PTS, medicine ${index + 1}`}
+                        autoComplete="off"
                         type="number" min={0} step="0.01"
                         className={cellInputCls(false, 'right')}
                         value={value.pts || ''}
@@ -735,6 +744,8 @@ export function PurchaseItemRow({
                 <td className={td}>
                     <input
                         data-field="disc"
+                        aria-label={`Disc% (discount), medicine ${index + 1}`}
+                        autoComplete="off"
                         type="number" min={0} max={100} step="0.01"
                         className={cellInputCls(false, 'right')}
                         value={value.discountPct || ''}
@@ -743,7 +754,7 @@ export function PurchaseItemRow({
                 </td>
 
                 {/* Amount */}
-                <td className={cn(td, 'bg-slate-100/70 px-1.5 text-right group-hover:bg-slate-100/70')}>
+                <td className={cn(td, 'bg-slate-100 px-1.5 text-right group-hover:bg-slate-100 sm:sticky sm:right-[60px] sm:z-10 sm:shadow-[-6px_0_6px_-6px_rgba(15,23,42,0.3)]')}>
                     <span className="whitespace-nowrap font-mono text-xs font-semibold tabular-nums text-slate-900">
                         {total.toLocaleString('en-IN', {
                             minimumFractionDigits: 2,
@@ -767,7 +778,7 @@ export function PurchaseItemRow({
                     >
                         {expanded
                             ? <ChevronUp  className="h-3 w-3" />
-                            : <ChevronDown className="h-3 w-3" />}
+                            : <ChevronDown className="h-3 w-3" aria-hidden="true" />}
                     </Button>
                 </td>
 
@@ -780,7 +791,7 @@ export function PurchaseItemRow({
                         title={`Remove item ${index + 1}`}
                         onClick={() => onRemove(index)}
                     >
-                        <X className="h-3 w-3" />
+                        <X className="h-3 w-3" aria-hidden="true" />
                     </Button>
                 </td>
             </tr>
@@ -790,7 +801,7 @@ export function PurchaseItemRow({
                 <tr className="bg-slate-100/70">
                     <td colSpan={17} className="border-x border-b-2 border-x-[#D8DEE8] border-b-slate-300 px-2 py-1.5">
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 pl-7">
-                            <span className="shrink-0 border-r border-slate-300 pr-3 text-[11px] font-semibold text-slate-700">
+                            <span className="shrink-0 border-r border-slate-300 pr-3 text-xs font-semibold text-slate-800">
                                 Pricing Details
                             </span>
 
@@ -800,7 +811,7 @@ export function PurchaseItemRow({
                                 { label: 'Other/Unit ₹',   field: 'otherCostPerUnit' as const, width: 'w-20' },
                             ].map(({ label, field, width }) => (
                                 <div key={field} className="flex items-center gap-1.5">
-                                    <label className="whitespace-nowrap text-[11px] text-slate-500">
+                                    <label className="whitespace-nowrap text-xs text-slate-700">
                                         {label}
                                     </label>
                                     <input
@@ -808,7 +819,7 @@ export function PurchaseItemRow({
                                         className={cn(
                                             cellInputCls(false, 'right'),
                                             width,
-                                            'h-7 border border-slate-300 bg-white focus:ring-2 focus:ring-inset focus:ring-violet-600',
+                                            'h-7 border border-slate-300 bg-white focus:ring-2 focus:ring-inset focus:ring-primary',
                                         )}
                                         value={(value[field] as number) || ''}
                                         onChange={(e) => num(field, e.target.value)}
@@ -817,7 +828,7 @@ export function PurchaseItemRow({
                             ))}
 
                             <div className="flex items-center gap-1.5 border-l border-slate-300 pl-4">
-                                <span className="text-[11px] text-slate-500 font-medium whitespace-nowrap">Landing Cost Floor:</span>
+                                <span className="text-xs text-slate-700 font-medium whitespace-nowrap">Landing Cost Floor:</span>
                                 <span className="text-xs font-bold text-slate-700 whitespace-nowrap">
                                     ₹{landingRate.toFixed(2)}
                                 </span>

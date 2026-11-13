@@ -444,6 +444,14 @@ class DistributorLedgerView(APIView):
         return Response(result, status=status.HTTP_200_OK)
 
 
+def _purchase_error_body(e):
+    """The error body for a refused purchase: the message, a code, and (when it is about one line) which line, so the screen can point at it."""
+    err = {'code': getattr(e, 'code', 'PURCHASE_ERROR'), 'message': str(e)}
+    if getattr(e, 'item_index', None) is not None:
+        err['itemIndex'] = e.item_index
+    return {'error': err}
+
+
 class PurchaseCreateView(APIView):
     """
     POST /api/v1/purchases/
@@ -566,10 +574,7 @@ class PurchaseCreateView(APIView):
 
         except PurchaseServiceError as e:
             logger.warning(f"Purchase service error: {str(e)}")
-            return Response(
-                {'error': {'code': 'PURCHASE_ERROR', 'message': str(e)}},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response(_purchase_error_body(e), status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             logger.error(f"Unexpected error creating purchase: {e}", exc_info=True)
             return Response(
@@ -645,6 +650,8 @@ class PurchaseCreateView(APIView):
             # Use item.pkg (frozen at purchase time) NOT master_product.pack_size
             # which changes when the master product template is edited later.
             'pkg': item.pkg or 1,
+            # the catalogue's size, only so the edit screen can say when this line differs from it
+            'productPackSize': item.master_product.pack_size if item.master_product else None,
             # Stored on the item and used for its landed cost; the edit form needs them back or saving resets both to 0.
             'freightPerUnit': float(item.freight_per_unit),
             'otherCostPerUnit': float(item.other_cost_per_unit),
@@ -1311,10 +1318,7 @@ class PurchaseDetailView(APIView):
 
         except PurchaseServiceError as e:
             logger.warning(f"Purchase service error: {str(e)}")
-            return Response(
-                {'error': {'code': 'PURCHASE_ERROR', 'message': str(e)}},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response(_purchase_error_body(e), status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             logger.error(f"Unexpected error updating purchase: {e}", exc_info=True)
             return Response(
@@ -2238,10 +2242,7 @@ class InvoiceDraftConfirmView(APIView):
 
         except PurchaseServiceError as e:
             logger.warning(f"Purchase service error confirming draft {purchase_id}: {e}")
-            return Response(
-                {'error': {'code': 'PURCHASE_ERROR', 'message': str(e)}},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response(_purchase_error_body(e), status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             logger.error(f"Error confirming draft {purchase_id}: {e}", exc_info=True)
             return Response(
