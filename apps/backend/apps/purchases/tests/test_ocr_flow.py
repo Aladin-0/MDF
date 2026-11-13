@@ -363,3 +363,94 @@ class ReviewFindingsTest(OCRFlowTest):
                 except OSError:
                     pass
             self.assertFalse(PurchaseInvoice.objects.filter(outlet=self.outlet, status='SAVED').exists())
+
+
+@override_settings(CACHES={'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}})
+@mock.patch.dict('os.environ', {'GEMINI_API_KEY': 'test-key', 'OCR_AUTO_ROTATE': '0', 'OCR_VERIFY_PASS': '0',
+                                'OCR_ROW_STRIPS': '0'})
+class TrainingDataTest(OCRFlowTest):
+    """Confirmed scans are kept as training data (AI reading vs what staff saved)."""
+
+    def _confirm_with_corrections(self, keep_images='0'):
+        import tempfile
+        from apps.purchases.models import ScanTrainingSample
+        self._setup_ledgers()
+        result = self._run()                                   # AI reads DOLO-650 (qty 10), PAN-D, TELMIBROOK
+        result['items'][0]['_medicine_match'] = {'matched': True, 'product_id': str(self.dolo500.id),
+                                                 'product_name': 'DOLO 500 TAB', 'confidence': 0.9}
+        with override_settings(MEDIA_ROOT=tempfile.mkdtemp()), \
+                mock.patch.dict('os.environ', {'OCR_KEEP_TRAINING_IMAGES': keep_images}):
+            draft = PurchaseInvoice.objects.create(
+                outlet=self.outlet, status='SAVED', invoice_image=_jpeg(60), created_by=self.user, invoice_no='',
+                invoice_date=date.today(), subtotal=0, taxable_amount=0, grand_total=0, ocr_raw_data=result)
+            payload = self._payload(self.dolo650, ocr_name='DOLO-650')   # staff: right product ...
+            payload['items'][0]['qty'] = 12                              # ... and qty 12
+            payload['invoiceNo'] = 'B2644490'
+            client = APIClient()
+            client.force_authenticate(self.user)
+            res = client.post(f'/api/v1/purchases/{draft.id}/confirm/', payload, format='json')
+            self.assertEqual(res.status_code, 201, res.content[:300])
+            sample = ScanTrainingSample.objects.get()
+            files_exist = [default_storage_exists(n) for n in sample.image_files]
+        return sample, files_exist
+
+    def test_confirmed_scan_is_saved_with_the_corrections(self):
+        sample, _ = self._confirm_with_corrections()
+        self.assertEqual(sample.rows, 1)
+        self.assertEqual(sample.confirmed['items'][0]['product_id'], str(self.dolo650.id))
+        self.assertEqual(sample.confirmed['items'][0]['bill_name'], 'DOLO-650')
+        self.assertEqual(sample.ocr_result['items'][0]['qty'], 10.0)
+        fields = {(c['field'], c.get('ai'), c.get('final')) for c in sample.corrections}
+        self.assertIn(('product', 'DOLO 500 TAB', 'DOLO 650 TAB'), fields)
+        self.assertIn(('qty', 10.0, 12.0), fields)
+        self.assertTrue(any(c['field'] == 'row_removed' for c in sample.corrections))  # staff dropped 2 AI rows
+        self.assertEqual(sample.image_files, [])                                      # photos switched off here
+
+    def test_training_photo_is_a_small_compressed_copy(self):
+        import io
+        from PIL import Image
+        from apps.purchases.training_data import compress_for_training, keep_training_images
+        self.assertTrue(keep_training_images())                     # on by default
+        buf = io.BytesIO()
+        Image.new('RGB', (4000, 3000), (240, 240, 240)).save(buf, format='JPEG', quality=95)
+        small = compress_for_training(buf.getvalue())
+        im = Image.open(io.BytesIO(small))
+        self.assertEqual(max(im.size), 1600)
+        self.assertEqual(im.mode, 'L')
+        self.assertLess(len(small), len(buf.getvalue()))
+
+    def test_training_photos_kept_only_when_enabled(self):
+        sample, exists = self._confirm_with_corrections(keep_images='1')
+        self.assertEqual(len(sample.image_files), 1)
+        self.assertTrue(sample.image_files[0].startswith('ocr_training/'))
+        self.assertTrue(all(exists))
+
+    def test_export_writes_samples_and_learned_names(self):
+        import json, os, tempfile, io
+        from django.core.management import call_command
+        self._confirm_with_corrections()
+        out = tempfile.mkdtemp()
+        buf = io.StringIO()
+        call_command('export_scan_training', out=out, stdout=buf)
+        self.assertIn('Exported 1 confirmed bill', buf.getvalue())
+        lines = open(os.path.join(out, 'samples.jsonl'), encoding='utf-8').read().splitlines()
+        row = json.loads(lines[0])
+        self.assertEqual(row['truth']['items'][0]['qty'], 12.0)
+        self.assertTrue(any(c['field'] == 'product' for c in row['corrections']))
+        aliases = open(os.path.join(out, 'product_aliases.csv'), encoding='utf-8').read()
+        self.assertIn('DOLO 650', aliases)                     # learned: printed name -> product
+        self.assertTrue(os.path.exists(os.path.join(out, 'README.txt')))
+
+    def test_recording_never_blocks_saving(self):
+        from apps.purchases.training_data import record_training_sample
+        class Broken:
+            id = 'x'
+            @property
+            def ocr_raw_data(self):
+                raise RuntimeError('boom')
+        self.assertIsNone(record_training_sample(Broken(), None, {}))
+
+
+def default_storage_exists(name):
+    from django.core.files.storage import default_storage
+    return default_storage.exists(name)

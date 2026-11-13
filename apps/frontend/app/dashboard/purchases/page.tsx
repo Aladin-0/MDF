@@ -9,7 +9,7 @@ import { PurchasesList } from '@/components/purchases/PurchasesList';
 import { NewPurchaseForm } from '@/components/purchases/NewPurchaseForm';
 import { DistributorsTab } from '@/components/purchases/DistributorsTab';
 import { PurchaseOrdersList } from '@/components/purchases/PurchaseOrdersList';
-import { FileText, Plus, Users, ShoppingCart, Edit, ClipboardList, ListChecks } from 'lucide-react';
+import { FileText, Plus, Users, ShoppingCart, Edit, ClipboardList, ListChecks, ScanLine } from 'lucide-react';
 import { ShortbookTab, AddToShortbook } from '@/components/purchases/ShortbookTab';
 import { NewPurchaseOrderModal } from '@/components/purchases/NewPurchaseOrderModal';
 import { usePOList, useShortbook } from '@/hooks/usePO';
@@ -39,6 +39,11 @@ export default function PurchasesPage() {
     const [addShortbookOpen, setAddShortbookOpen] = useState(false);
     const [newPoOpen, setNewPoOpen] = useState(searchParams.get('newPo') === '1');
     const [editingInvoice, setEditingInvoice] = useState<PurchaseInvoiceFull | null>(null);
+    // A scanned bill opens as a draft (status 'SAVED' — 'DRAFT' kept for old data): that is
+    // a NEW purchase under review, not an edit of an already-posted invoice.
+    const isScanDraft = !!editingInvoice && ['SAVED', 'DRAFT'].includes(String(editingInvoice.status));
+    const isEditingPosted = !!editingInvoice && !isScanDraft;
+    const isReviewingScan = isScanDraft;
     const [lastModifiedInvoiceId, setLastModifiedInvoiceId] = useState<string | null>(null);
 
     const { hasPermission } = usePermissions();
@@ -103,7 +108,8 @@ export default function PurchasesPage() {
                 <div className={cn('flex overflow-x-auto border-b border-border max-sm:no-scrollbar', activeTab === 'new' && 'bg-white')}>
                     {tabs.map(({ value, label, icon: Icon }) => {
                         const isActive = activeTab === value;
-                        const isEditTab = value === 'new' && !!editingInvoice && editingInvoice.status !== 'DRAFT';
+                        const isEditTab = value === 'new' && isEditingPosted;
+                        const isScanTab = value === 'new' && isReviewingScan;
                         return (
                             <button
                                 key={value}
@@ -120,9 +126,11 @@ export default function PurchasesPage() {
                             >
                                 {isEditTab
                                     ? <Edit className={cn('h-4 w-4', isActive ? 'text-amber-500' : 'text-muted-foreground')} />
-                                    : <Icon className={cn('h-4 w-4', isActive ? 'text-primary' : 'text-muted-foreground')} />
+                                    : isScanTab
+                                        ? <ScanLine className={cn('h-4 w-4', isActive ? 'text-primary' : 'text-muted-foreground')} />
+                                        : <Icon className={cn('h-4 w-4', isActive ? 'text-primary' : 'text-muted-foreground')} />
                                 }
-                                {isEditTab ? 'Edit Purchase' : label}
+                                {isEditTab ? 'Edit Purchase' : isScanTab ? 'Review Scanned Bill' : label}
                                 {value === 'shortbook' && shortbookCount > 0 && <span className="rounded-full bg-primary/10 px-1.5 text-xs font-semibold text-primary">{shortbookCount}</span>}
                                 {value === 'purchase_orders' && openPoCount > 0 && <span className="rounded-full bg-primary/10 px-1.5 text-xs font-semibold text-primary">{openPoCount}</span>}
                             </button>
@@ -152,7 +160,7 @@ export default function PurchasesPage() {
 
                     <TabsContent value="new" className="mt-0 bg-slate-100/60 outline-none xl:min-h-[calc(100dvh-11rem)]">
                         <div className="w-full min-w-0">
-                            {editingInvoice && editingInvoice.status !== 'DRAFT' && (
+                            {isEditingPosted && editingInvoice && (
                                 <div className="mb-4 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                                     <Edit className="h-4 w-4 shrink-0 text-amber-600" />
                                     <span>You are <strong>editing</strong> invoice <strong>{editingInvoice.invoiceNo}</strong>. Changes will be synced across inventory, ledgers and journal entries.</span>

@@ -92,6 +92,7 @@ function PurchaseGridForm({ onSuccess, invoiceToEdit }: NewPurchaseFormProps) {
         scannedImage,
         scannedImageModalOpen,
         scannedPages,
+        scannedPageSizes,
         setAdjustmentSign,
         setCreditDays,
         setDrawerOpen,
@@ -545,6 +546,8 @@ function PurchaseGridForm({ onSuccess, invoiceToEdit }: NewPurchaseFormProps) {
                                         onOpenAddProduct={handleOpenAddProduct}
                                         outletId={outletId}
                                         errors={(errors.items as any)?.[idx]}
+                                        scanPages={scannedPages}
+                                        scanPageSizes={scannedPageSizes}
                                     />
                                 ))}
                             </tbody>
@@ -720,11 +723,10 @@ function PurchaseGridForm({ onSuccess, invoiceToEdit }: NewPurchaseFormProps) {
                             <Button
                                 type="submit"
                                 onClick={(e) => {
+                                    // We submit explicitly below: stop the button's own form submit, or every click saves the bill twice.
+                                    e.preventDefault();
                                     const valid = cleanItemsBeforeSubmit();
-                                    if (!valid) {
-                                        e.preventDefault();
-                                        return;
-                                    }
+                                    if (!valid) return;
                                     handleSubmit(onSubmit, onInvalid)();
                                 }}
                                 disabled={isSubmitting}

@@ -96,6 +96,9 @@ export function usePurchaseEntry({ onSuccess, invoiceToEdit }: UsePurchaseEntryO
     const [scannedImage, setScannedImage] = useState<string | null>(null);
     // Every page of a multi-page scan (page 1 first); scannedImage is page 1.
     const [scannedPages, setScannedPages] = useState<string[]>([]);
+    const [scannedPageSizes, setScannedPageSizes] = useState<number[][]>([]);
+    // One save at a time: a double click, or Ctrl+Enter plus a click, must not send the bill twice.
+    const submitInFlightRef = useRef(false);
     const [scannedImageModalOpen, setScannedImageModalOpen] = useState(false);
 
     const handleOpenAddProduct = (rowIndex: number, name: string) => {
@@ -220,6 +223,7 @@ export function usePurchaseEntry({ onSuccess, invoiceToEdit }: UsePurchaseEntryO
             setOcrNeedsReview(false);
             setScannedImage(null);
             setScannedPages([]);
+            setScannedPageSizes([]);
             return;
         }
 
@@ -253,6 +257,7 @@ export function usePurchaseEntry({ onSuccess, invoiceToEdit }: UsePurchaseEntryO
                         setScannedImage(ocrData.invoiceImageUrl ? new URL(ocrData.invoiceImageUrl, API_URL).toString() : null);
                         setScannedPages(((ocrData.invoiceImageUrls as string[] | undefined) ?? [])
                             .filter(Boolean).map((u) => new URL(u, API_URL).toString()));
+                        setScannedPageSizes(Array.isArray(ocrData.pageSizes) ? ocrData.pageSizes : []);
 
                         // Set the Ledger object directly so the UI updates
                         if (ocrData.header?.partyLedger) {
@@ -290,6 +295,8 @@ export function usePurchaseEntry({ onSuccess, invoiceToEdit }: UsePurchaseEntryO
                             ocrOriginalName: item.ocrOriginalName || item.name || '',
                             ocrMatchConfidence: item.medicineMatch?.productId ? Number(item.medicineMatch?.confidence ?? 0) : 0,
                             ocrSuggestions: Array.isArray(item.medicineMatch?.suggestions) ? item.medicineMatch.suggestions : [],
+                            ocrRowBox: item.rowBox ?? null,
+                            ocrRowNote: item.rowCheckOk === false ? (item.rowCheckNote || 'Values may be from another row.') : undefined,
                         }));
 
                         setItems(formItems.length ? formItems : [emptyItem()]);
@@ -650,6 +657,8 @@ export function usePurchaseEntry({ onSuccess, invoiceToEdit }: UsePurchaseEntryO
     };
 
     const onSubmit = async (data: FormData) => {
+        if (submitInFlightRef.current) return;
+        submitInFlightRef.current = true;
         try {
             const validItems = cleanItemsBeforeSubmit();
             if (!validItems) return;
@@ -745,6 +754,8 @@ export function usePurchaseEntry({ onSuccess, invoiceToEdit }: UsePurchaseEntryO
                 const msg = err?.error?.message ?? err?.message ?? err?.detail ?? 'Failed to save purchase';
                 toast({ variant: 'destructive', title: 'Submission Failed', description: msg });
             }
+        } finally {
+            submitInFlightRef.current = false;
         }
     };
 
@@ -828,6 +839,7 @@ export function usePurchaseEntry({ onSuccess, invoiceToEdit }: UsePurchaseEntryO
         scannedImage,
         scannedImageModalOpen,
         scannedPages,
+        scannedPageSizes,
         searchParams,
         setActiveDrawerRow,
         setAdjustmentSign,

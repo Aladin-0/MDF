@@ -28,7 +28,7 @@ from rapidfuzz import fuzz, process
 # ---------------------------------------------------------------------------
 
 FORM_MAP = {
-    'TAB': 'TAB', 'TABS': 'TAB', 'TABLET': 'TAB', 'TABLETS': 'TAB', 'TBL': 'TAB',
+    'TAB': 'TAB', 'TABS': 'TAB', 'TABLET': 'TAB', 'TABLETS': 'TAB', 'TBL': 'TAB', 'TB': 'TAB',
     'CAP': 'CAP', 'CAPS': 'CAP', 'CAPSULE': 'CAP', 'CAPSULES': 'CAP',
     'SYP': 'SYP', 'SYR': 'SYP', 'SYRUP': 'SYP',
     'SUSP': 'SUSP', 'SUS': 'SUSP', 'SUSPENSION': 'SUSP',
@@ -69,6 +69,9 @@ _PACK_PATTERNS = [
     re.compile(r"\b\d+\s*[X\*]\s*\d+\s*'?\s*S?\b"),     # 1X10, 1*15, 10X10'S
     re.compile(r"\b\d+\s*'\s*S\b"),                     # 10'S
     re.compile(r"\b\d+\s*S\b"),                         # 10S, 15S
+    # pack count glued to a unit word: 15TB, 10TAB, 15CAP, 10PCS (a strength is
+    # written with a space or a unit: "PAN 40 TAB", "DOLO 650MG")
+    re.compile(r"\b\d+(?:TB|TBS|TAB|TABS|CAP|CAPS|PCS|NOS|STRIPS?)\b"),
 ]
 _SPLIT_ALNUM_RE = re.compile(r'(?<=[A-Z])(?=\d)|(?<=\d)(?=[A-Z%])')
 _NUM_RE = re.compile(r'^\d+(?:\.\d+)?$')

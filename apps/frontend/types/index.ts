@@ -879,6 +879,10 @@ export interface PurchaseItemFormData {
     ocrMatchConfidence?: number;
     /** Catalogue candidates offered when the scan could not decide on its own. */
     ocrSuggestions?: OcrProductSuggestion[];
+    /** Where this row is on the scanned (straightened) page, for "View on bill". */
+    ocrRowBox?: { page: number; box: number[] } | null;
+    /** Set when this row's values were not found on its own printed line (possible row shift). */
+    ocrRowNote?: string;
 }
 
 export interface OcrProductSuggestion {

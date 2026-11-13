@@ -1716,6 +1716,11 @@ OCR_FAILURE_MESSAGES = {
 MAX_SCAN_PAGES = 6
 
 
+def ocr_meta_sizes(ocr) -> list:
+    """[[width, height], ...] of each straightened scan page (for row photo strips)."""
+    return list(((ocr or {}).get('meta') or {}).get('page_sizes') or [])
+
+
 def _dedupe_uploads(files) -> tuple:
     """Drop byte-identical photos (the same page added twice). Returns (files, skipped_count)."""
     import hashlib
@@ -2003,6 +2008,8 @@ class InvoiceOCRStatusView(APIView):
         # Serialize items for review screen
         import re as _re
         items_serialized = []
+        ocr_meta = ocr.get('meta') or {}
+        page_upright = ocr_meta.get('page_upright') or []
         for item in items_raw:
             med_match = item.get('_medicine_match', {})
             raw_exp = item.get('expiry', '')
@@ -2063,6 +2070,16 @@ class InvoiceOCRStatusView(APIView):
                 },
                 'validationOk': item.get('_validation_ok', True),
                 'validationNote': item.get('_validation_note'),
+                # Row check (values must be on the row's own printed line) and where
+                # the row is on the (straightened) photo, for the "View on bill" strip.
+                'rowText': item.get('row_text'),
+                'rowCheckOk': item.get('_row_ok', True),
+                'rowCheckNote': item.get('_row_note'),
+                'rowBox': (
+                    {'page': item.get('page', 1), 'box': item['box']}
+                    if item.get('box') and (item.get('page', 1) - 1) < len(page_upright)
+                    and page_upright[item.get('page', 1) - 1] else None
+                ),
                 # Unknown columns flagged for review
                 'unknownColumns': {k: v for k, v in item.items() if k.startswith('_col_')},
             })
@@ -2096,6 +2113,7 @@ class InvoiceOCRStatusView(APIView):
             'draftId': str(invoice.id),
             'invoiceImageUrl': image_url,
             'invoiceImageUrls': page_urls,
+            'pageSizes': ocr_meta_sizes(ocr),
             # Photo already removed by the retention clean-up (24 h after scanning).
             'scanPhotoRemoved': bool(invoice.scan_uploaded_at and not invoice.invoice_image),
             'confidence': invoice.ocr_confidence,
@@ -2224,6 +2242,11 @@ class InvoiceDraftConfirmView(APIView):
             # Extra pages of a multi-page scan move with page 1 (else the
             # draft's delete would cascade them away).
             draft.extra_pages.update(invoice=purchase_invoice)
+
+            # Keep this confirmed scan as training data (what the AI read vs what
+            # staff saved) for a future in-house reader. Never blocks saving.
+            from apps.purchases.training_data import record_training_sample
+            record_training_sample(draft, purchase_invoice, payload)
 
             # Delete the draft now that it's confirmed
             draft_image = draft.invoice_image.name if draft.invoice_image else None
