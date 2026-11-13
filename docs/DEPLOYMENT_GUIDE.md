@@ -1,7 +1,7 @@
 # MediFlow (MDF) — Production Deployment Guide
 
 Read this fully before deploying. Last verified deploy: **2026-11-12**, server moved `d065f12` → `d83c0e4`
-(backup: `/mediflow/backups/deploy_20261112_195318/`).
+(backup: `/mediflow/backups/deploy_20261112_195318/`). Newest deploy: **2026-11-13/14**, `d83c0e4` → `e65de06` (see §7).
 
 > **Never put the SSH password in this file or in git.** Ask the user for it each time.
 
@@ -288,6 +288,7 @@ docker start mediflow_backend mediflow_celery
 
 | Date | From → To | Backup dir | Notes |
 |---|---|---|---|
+| 2026-11-14 | `d83c0e4` → `e65de06` | `/mediflow/backups/deploy_20261113_204710/` | Phone billing + phone New Purchase layouts, medicine search syntax, catalogue suggestions (Composition / Manufacturer), PKG safety rules, login form posts (never GET), plus the merged `fix/scan-review-save` (scanned-bill save, row check, orientation, training samples). backend/celery/frontend rebuilt + nginx restart; one migration on boot: `purchases.0022_scantrainingsample` (creates a table, additive). Server config files byte-identical before/after; saudapakka untouched. DB dump 27 MB (94 tables verified), media tar 552 MB. Note: the dev test login (7972127935) does not exist in production. A first SSH attempt with a wrong password got the dev IP banned by fail2ban: use `-o NumberOfPasswordPrompts=1` and make only ONE attempt. |
 | 2026-11-12 | `d065f12` → `d83c0e4` | `/mediflow/backups/deploy_20261112_195318/` | Family accounts, PO lifecycle, server-side access control, OCR overhaul, mobile-responsive frontend, bill-edit date fix. backend/celery/frontend rebuilt + nginx restart; 14 migrations applied on boot (accounts 0028-0030, billing 0028-0030, core 0016, inventory 0029, purchases 0016-0021), none destructive. Pre-deploy staff check clean (11 active staff, no unknown roles, no unusable passwords). Server config files untouched. DB dump 28 MB, media tar 650 MB. |
 | 2026-11-03 (2nd) | `ca2d047` → `d065f12` | `/mediflow/backups/deploy_20261103_173854/` | Frontend-only: purchase product-search dropdown (4 visible + scroll) and arrow-key duplicate-row fix. Only `frontend` rebuilt/recreated (1m12s build, ~45s start) + nginx restart; backend/celery untouched, media tarball skipped (not affected). |
 | 2026-11-03 | `763de0d9` → `ca2d047` | `/mediflow/backups/deploy_20261103_142602/` | ERP reports, purchases/OCR, billing integrity, tax-slab migration `core.0015`; OpenCV pinned `5.0.0.93`. Build 3m45s. All checks passed; saudapakka unaffected. |
