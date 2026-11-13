@@ -153,6 +153,7 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
     const [partyLedger, setPartyLedger] = useState<Ledger | null>(null);
 
     const [items, setItems] = useState<PurchaseItemFormData[]>([emptyItem()]);
+    const submitInFlightRef = useRef(false);
     const [hasDraft, setHasDraft] = useState(false);
 
     // Refs for enter navigation
@@ -186,6 +187,7 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
     const [scannedImage, setScannedImage] = useState<string | null>(null);
     // Every page of a multi-page scan (page 1 first); scannedImage is page 1.
     const [scannedPages, setScannedPages] = useState<string[]>([]);
+    const [scannedPageSizes, setScannedPageSizes] = useState<number[][]>([]);
     const [scannedImageModalOpen, setScannedImageModalOpen] = useState(false);
 
     const handleOpenAddProduct = (rowIndex: number, name: string) => {
@@ -199,28 +201,32 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
         const mrp = firstBatch?.mrp ?? product.mrp ?? 0;
         const saleRate = firstBatch?.saleRate ?? product.saleRate ?? 0;
         const gstRate = product.gstRate ?? 0;
-        setItems((prev) => prev.map((item, i) => {
-            if (i !== rowIndex) return item;
-            const newPkg = typeof product.packSize === 'number' && product.packSize > 0 ? product.packSize : ('' as unknown as number);
-            // On a row filled from a scanned bill, the bill is the source of truth
-            // for this purchase's MRP and GST — don't replace them with old stock values.
-            const fromBill = !!item.ocrOriginalName;
-            return {
-                ...item,
-                productId: product.id,
-                productName: product.name,
-                isCustom: false,
-                hsnCode: (fromBill && item.hsnCode) ? item.hsnCode : (product.hsnCode ?? item.hsnCode),
-                pkg: newPkg,
-                packUnitLabel: product.packUnit || '',
-                gstRate: fromBill && item.gstRate > 0 ? item.gstRate : gstRate,
-                mrp: fromBill && item.mrp > 0 ? item.mrp : mrp,
-                saleRate,
-                // A human picked it: treat as confirmed, drop the suggestion chips.
-                ocrMatchConfidence: fromBill ? 1 : item.ocrMatchConfidence,
-                ocrSuggestions: [],
-            };
-        }));
+        setItems((prev) => {
+            const next = prev.map((item, i) => {
+                if (i !== rowIndex) return item;
+                const newPkg = typeof product.packSize === 'number' && product.packSize > 0 ? product.packSize : ('' as unknown as number);
+                // On a row filled from a scanned bill, the bill is the source of truth
+                // for this purchase's MRP and GST — don't replace them with old stock values.
+                const fromBill = !!item.ocrOriginalName;
+                return {
+                    ...item,
+                    productId: product.id,
+                    productName: product.name,
+                    isCustom: false,
+                    hsnCode: (fromBill && item.hsnCode) ? item.hsnCode : (product.hsnCode ?? item.hsnCode),
+                    pkg: newPkg,
+                    packUnitLabel: product.packUnit || '',
+                    gstRate: fromBill && item.gstRate > 0 ? item.gstRate : gstRate,
+                    mrp: fromBill && item.mrp > 0 ? item.mrp : mrp,
+                    saleRate,
+                    // A human picked it: treat as confirmed, drop the suggestion chips.
+                    ocrMatchConfidence: fromBill ? 1 : item.ocrMatchConfidence,
+                    ocrSuggestions: [],
+                };
+            });
+            setValue('items', next);   // validation copy, same as handleItemChange
+            return next;
+        });
     };
 
     const handleProductCreated = (product: ProductSearchResult) => {
@@ -248,6 +254,16 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
             items: [emptyItem()],
         },
     });
+
+    // The grid rows live in `items` state, but Save validates the form value
+    // `items`. Keep them identical whatever changed the rows (product picked from
+    // search or a suggestion chip, new product created, PO lines filled, draft
+    // restored). Without this, picking a product and pressing Save straight away
+    // (typical on a scanned bill) failed with "Product selection from catalog is
+    // required" although the row showed the product.
+    useEffect(() => {
+        setValue('items', items);
+    }, [items, setValue]);
 
     const watchedPurchaseType = watch('purchaseType');
     const watchedFreight = watch('freight') ?? 0;
@@ -300,6 +316,7 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
             setOcrNeedsReview(false);
             setScannedImage(null);
             setScannedPages([]);
+            setScannedPageSizes([]);
             return;
         }
 
@@ -333,6 +350,7 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
                         setScannedImage(ocrData.invoiceImageUrl ? new URL(ocrData.invoiceImageUrl, API_URL).toString() : null);
                         setScannedPages(((ocrData.invoiceImageUrls as string[] | undefined) ?? [])
                             .filter(Boolean).map((u) => new URL(u, API_URL).toString()));
+                        setScannedPageSizes(Array.isArray(ocrData.pageSizes) ? ocrData.pageSizes : []);
 
                         // Set the Ledger object directly so the UI updates
                         if (ocrData.header?.partyLedger) {
@@ -368,6 +386,8 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
                             ocrOriginalName: item.ocrOriginalName || item.name || '',
                             ocrMatchConfidence: item.medicineMatch?.productId ? Number(item.medicineMatch?.confidence ?? 0) : 0,
                             ocrSuggestions: Array.isArray(item.medicineMatch?.suggestions) ? item.medicineMatch.suggestions : [],
+                            ocrRowBox: item.rowBox ?? null,
+                            ocrRowNote: item.rowCheckOk === false ? (item.rowCheckNote || 'Values may be from another row.') : undefined,
                         }));
 
                         setItems(formItems.length ? formItems : [emptyItem()]);
@@ -656,12 +676,32 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
         } else if (errors.invoiceNo) {
             errMsg = errors.invoiceNo.message || "Invoice No is required";
         } else if (errors.items && Array.isArray(errors.items) && errors.items.length > 0) {
-            const firstErrIdx = errors.items.findIndex((row: any) => row && Object.keys(row).length > 0);
-            if (firstErrIdx >= 0) {
+            // Rows still without a catalogue product (typical after a scan): name them
+            // all and take the user to the first one, instead of a bare "Row 2".
+            const needProduct: number[] = errors.items
+                .map((row: any, i: number) => (row?.productId ? i : -1))
+                .filter((i: number) => i >= 0);
+            const firstErrIdx = needProduct.length
+                ? needProduct[0]
+                : errors.items.findIndex((row: any) => row && Object.keys(row).length > 0);
+            if (needProduct.length) {
+                const listed = needProduct.slice(0, 3)
+                    .map((i) => `row ${i + 1} (${items[i]?.productName || 'no name'})`).join(', ');
+                const more = needProduct.length > 3 ? ` and ${needProduct.length - 3} more` : '';
+                errMsg = `${needProduct.length} medicine line${needProduct.length > 1 ? 's need' : ' needs'} a product from the catalogue: `
+                    + `${listed}${more}. Tap a purple suggestion under the name, or search the catalogue.`;
+            } else if (firstErrIdx >= 0) {
                 const rowErrors = errors.items[firstErrIdx];
                 const failingKeys = Object.keys(rowErrors);
                 const firstMsg = rowErrors[failingKeys[0]]?.message || failingKeys.join(", ");
                 errMsg = `Item Row ${firstErrIdx + 1}: ${firstMsg}`;
+            }
+            if (firstErrIdx >= 0) {
+                setTimeout(() => {
+                    const row = document.querySelector<HTMLElement>(`[data-cart-row="${firstErrIdx}"]`);
+                    row?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+                    (row?.querySelector('input[data-field="product-search"]') as HTMLInputElement | null)?.focus();
+                }, 50);
             }
         } else if ((errors.items as any)?.message) {
             errMsg = (errors.items as any).message;
@@ -693,6 +733,10 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
     // ── Submit ───────────────────────────────────────────────────────────────
 
     const onSubmit = async (data: FormData) => {
+        // One save at a time: a double click, Ctrl+Enter plus a click, etc. must not
+        // send the bill twice.
+        if (submitInFlightRef.current) return;
+        submitInFlightRef.current = true;
         try {
             const validItems = cleanItemsBeforeSubmit();
             if (!validItems) return;
@@ -762,6 +806,8 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
                 const msg = err?.error?.message ?? err?.message ?? err?.detail ?? 'Failed to save purchase';
                 toast({ variant: 'destructive', title: 'Submission Failed', description: msg });
             }
+        } finally {
+            submitInFlightRef.current = false;
         }
     };
 
@@ -1175,6 +1221,8 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
                                         onOpenAddProduct={handleOpenAddProduct}
                                         outletId={outletId}
                                         errors={(errors.items as any)?.[idx]}
+                                        scanPages={scannedPages}
+                                        scanPageSizes={scannedPageSizes}
                                     />
                                 ))}
                             </tbody>
@@ -1337,11 +1385,12 @@ export function NewPurchaseForm({ onSuccess, invoiceToEdit }: { onSuccess: (upda
                             <Button
                                 type="submit"
                                 onClick={(e) => {
+                                    // We submit explicitly below, so stop the button's native form
+                                    // submit — otherwise every click saved the bill TWICE (the second
+                                    // request then failed: "Draft invoice not found" / "already exists").
+                                    e.preventDefault();
                                     const valid = cleanItemsBeforeSubmit();
-                                    if (!valid) {
-                                        e.preventDefault();
-                                        return;
-                                    }
+                                    if (!valid) return;
                                     handleSubmit(onSubmit, onInvalid)();
                                 }}
                                 disabled={isSubmitting}

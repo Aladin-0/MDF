@@ -518,3 +518,35 @@ class Rule37Adjustment(models.Model):
 
     def __str__(self):
         return f"{self.action_type} for {self.invoice.invoice_no} ({self.status})"
+
+
+class ScanTrainingSample(models.Model):
+    """
+    One confirmed scanned bill kept as training data for a future in-house
+    reader: what the AI read, what staff finally saved (the correct answer),
+    and which fields staff had to correct. Written when a scan draft is
+    confirmed; never used by the app itself. Export with
+    `python manage.py export_scan_training`.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    outlet = models.ForeignKey('core.Outlet', on_delete=models.CASCADE, related_name='scan_training_samples')
+    purchase_invoice = models.ForeignKey(PurchaseInvoice, on_delete=models.SET_NULL, null=True, blank=True,
+                                         related_name='scan_training_samples')
+    distributor = models.ForeignKey(Distributor, on_delete=models.SET_NULL, null=True, blank=True,
+                                    related_name='scan_training_samples')
+    ocr_result = models.JSONField(default=dict, help_text='What the AI read: header, items, totals, meta')
+    confirmed = models.JSONField(default=dict, help_text='What staff saved: header + items (the correct answer)')
+    corrections = models.JSONField(default=list, help_text='Fields staff changed: [{row, field, ai, final}]')
+    image_files = models.JSONField(default=list, help_text='Stored training copies of the page photos (if kept)')
+    rows = models.PositiveIntegerField(default=0)
+    corrected_fields = models.PositiveIntegerField(default=0)
+    model_name = models.CharField(max_length=100, blank=True, default='')
+    prompt_version = models.CharField(max_length=20, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        db_table = 'purchases_scantrainingsample'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'Training sample {self.id} ({self.rows} rows, {self.corrected_fields} corrected)'

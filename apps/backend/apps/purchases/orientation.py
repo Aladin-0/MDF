@@ -101,3 +101,125 @@ def detect_orientation(im) -> tuple:
     except Exception as exc:  # orientation is an optimisation, never a failure
         logger.warning('Orientation detection failed: %s', exc)
         return 0, {'error': str(exc)[:200]}
+
+
+# ---------------------------------------------------------------------------
+# Row locating (for the review screen's per-row photo strips)
+# ---------------------------------------------------------------------------
+LOCATE_SIDE = 1800
+MIN_MATCH = 75        # match score (0-100) a printed line must reach to be trusted
+
+
+def _text_lines(im):
+    """
+    Printed lines on an upright page: RapidOCR boxes merged into rows by
+    vertical overlap. Returns [(y0, x0, y1, x1, text)] in 0..1000 page units,
+    top to bottom. Recognition is only used to *find* the line by fuzzy
+    matching, never as the value that is read.
+    """
+    import numpy as np
+    small = im.convert('L')
+    scale = LOCATE_SIDE / float(max(small.size))
+    if scale < 1:
+        small = small.resize((round(small.width * scale), round(small.height * scale)))
+    w, h = small.size
+    res, _ = _engine()(np.array(small.convert('RGB')))
+    cells = []
+    for box, text, _score in (res or []):
+        xs = [p[0] for p in box]
+        ys = [p[1] for p in box]
+        cells.append([min(ys), min(xs), max(ys), max(xs), str(text)])
+    cells.sort(key=lambda c: (c[0] + c[2]) / 2)
+    rows = []
+    for c in cells:
+        cy, ch = (c[0] + c[2]) / 2, c[2] - c[0]
+        if rows:
+            r = rows[-1]
+            ry, rh = (r[0] + r[2]) / 2, r[2] - r[0]
+            if abs(cy - ry) < 0.6 * max(min(ch, rh), 1):
+                r[0], r[1], r[2], r[3] = min(r[0], c[0]), min(r[1], c[1]), max(r[2], c[2]), max(r[3], c[3])
+                r[4].append((c[1], c[4]))
+                continue
+        rows.append([c[0], c[1], c[2], c[3], [(c[1], c[4])]])
+    out = []
+    for y0, x0, y1, x1, parts in rows:
+        text = ' '.join(t for _, t in sorted(parts))
+        out.append((round(y0 * 1000 / h), round(x0 * 1000 / w), round(y1 * 1000 / h), round(x1 * 1000 / w), text))
+    # Height of one printed text line = median height of the individual word
+    # boxes (a word is always one row tall, even on a tilted photo).
+    word_heights = sorted((c[2] - c[0]) * 1000 / h for c in cells) or [0]
+    _text_lines.word_height = word_heights[len(word_heights) // 2]
+    return out
+
+
+def locate_rows(image_bytes: bytes, items: list) -> list:
+    """
+    Snap each scanned row to the printed line it came from. ``items`` are
+    normalised rows (name, batch_no, row_text, amount, box) of ONE page in bill
+    order. Returns a box [y0, x0, y1, x1] (0..1000) per item, or None when no
+    line matches confidently — a missing strip is better than a wrong one.
+    Never raises.
+    """
+    try:
+        import io
+        from PIL import Image
+        from rapidfuzz import fuzz
+        lines = _text_lines(Image.open(io.BytesIO(image_bytes)))
+    except Exception as exc:
+        logger.warning('Row locating failed: %s', exc)
+        return [None] * len(items)
+    if not lines:
+        return [None] * len(items)
+    # A "line" much taller than the page's typical line is several rows merged
+    # (tilted photo, or names printed offset from their numbers): a strip of it
+    # would show two rows, so such lines are never used.
+    typical = getattr(_text_lines, 'word_height', 0) or sorted(l[2] - l[0] for l in lines)[len(lines) // 2] or 1
+    max_height = 1.7 * typical
+
+    import re
+
+    def compact(t):
+        return re.sub(r'[^A-Z0-9.]', '', str(t or '').upper())
+
+    def money_forms(v):
+        try:
+            f = float(v)
+        except (TypeError, ValueError):
+            return []
+        return list({f'{f:.2f}', f'{f:g}'})
+
+    def score(it, line_text):
+        """0-100: name 35 + batch 35 + MRP/rate/amount 30, all space-insensitive."""
+        line = compact(line_text)
+        name = compact(it.get('name'))
+        s_name = fuzz.partial_ratio(name, line) / 100.0 if len(name) >= 3 else 0.0
+        batch = compact(it.get('batch_no'))
+        s_batch = fuzz.partial_ratio(batch, line) / 100.0 if len(batch) >= 3 else None
+        nums = [money_forms(it.get(k)) for k in ('mrp', 'rate', 'amount')]
+        nums = [forms for forms in nums if forms]
+        s_nums = (sum(1 for forms in nums if any(f in line for f in forms)) / len(nums)) if nums else None
+        parts = [(35, s_name)]
+        if s_batch is not None:
+            parts.append((35, 1.0 if s_batch >= 0.95 else s_batch * 0.5))   # a different batch is strong evidence against
+        if s_nums is not None:
+            parts.append((30, s_nums))
+        total_w = sum(w for w, _ in parts)
+        return 100.0 * sum(w * v for w, v in parts) / total_w
+
+    out, last = [], -1
+    for it in items:
+        best, best_score = None, 0.0
+        for idx in range(last + 1, len(lines)):          # rows keep their printed order
+            sc = score(it, lines[idx][4])
+            hint = it.get('box')
+            if hint:                                     # tiny nudge towards Gemini's rough position
+                sc -= min(abs((lines[idx][0] + lines[idx][2]) / 2 - (hint[0] + hint[2]) / 2) / 50.0, 5)
+            if sc > best_score:
+                best, best_score = idx, sc
+        if best is None or best_score < MIN_MATCH:
+            out.append(None)
+            continue
+        y0, x0, y1, x1, _ = lines[best]
+        last = best
+        out.append([y0, x0, y1, x1] if (y1 - y0) <= max_height else None)
+    return out

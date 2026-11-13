@@ -1213,9 +1213,9 @@ def process_invoice_image(image_path, outlet_id: str) -> dict:
             if not any(issue[:40] in w or w[:40] in issue for w in warnings):
                 warnings.append(issue)
         if meta.get('strong_check_unavailable'):
-            warnings.insert(0, "This bill looked doubtful and today's limit for the stronger checking model was "
-                               "reached, so it was only re-checked by the basic model. Please compare every line "
-                               "with the paper bill before saving.")
+            warnings.insert(0, "This bill looked doubtful and the automatic re-check could not run fully "
+                               "(Gemini usage limit reached). Please compare every line with the paper bill "
+                               "before saving.")
         needs_review = bool(meta.get('unresolved_issues') or meta.get('strong_check_unavailable') or bad_math
                             or extracted.get('missing_pages') or extracted.get('duplicate_rows'))
         logger.info('OCR done: engine=%s model=%s items=%d dist=%s tokens=%s ms=%s cached=%s',

@@ -3,13 +3,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { differenceInDays } from 'date-fns';
-import { X, AlertTriangle, ChevronDown, ChevronUp, Plus, Loader2 } from 'lucide-react';
+import { X, AlertTriangle, ChevronDown, ChevronUp, Plus, Loader2, ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { PurchaseItemFormData, ProductSearchResult } from '@/types';
 import { productsApi } from '@/lib/apiClient';
 import { useOutletSettings } from '@/hooks/useOutletSettings';
 import { calculateLandingRate } from '@/lib/purchase-calculations';
+import { ModalShell } from '@/components/shared/ModalShell';
+import { ScanRowStrip } from './ScanRowStrip';
 
 interface ItemFieldError { message?: string; }
 
@@ -25,6 +27,9 @@ interface Props {
     onOpenAddProduct: (index: number, name: string) => void;
     outletId: string;
     errors?: Partial<Record<keyof PurchaseItemFormData, ItemFieldError>>;
+    /** Straightened scan page photos (page 1 first) and their sizes, for "View on bill". */
+    scanPages?: string[];
+    scanPageSizes?: number[][];
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -116,9 +121,12 @@ export const PURCHASE_ITEM_COLS = [
 
 export function PurchaseItemRow({
     index, value, onChange, onRemove,
-    onSelectProduct, onOpenAddProduct, outletId, errors,
+    onSelectProduct, onOpenAddProduct, outletId, errors, scanPages, scanPageSizes,
 }: Props) {
     const [expanded, setExpanded] = useState(false);
+    const [rowPhotoOpen, setRowPhotoOpen] = useState(false);
+    const rowBox = value.ocrRowBox;
+    const rowPhotoSrc = rowBox ? scanPages?.[rowBox.page - 1] : undefined;
 
     // Product search state
     const [query, setQuery]               = useState('');
@@ -305,6 +313,8 @@ export function PurchaseItemRow({
     const num = (field: keyof PurchaseItemFormData, raw: string) =>
         onChange(index, field, parseFloat(raw) || 0);
 
+    // Save was attempted and this row still has no catalogue product (cleared as soon as one is picked).
+    const needsProduct = !!errors?.productId && !value.productId && !value.isCustom;
     const expStatus = getExpiryStatus(value.expiryDate);
     const total     = computeTotal(value);
     const rowBg     = index % 2 === 0 ? 'bg-white' : 'bg-slate-50/40';
@@ -324,6 +334,23 @@ export function PurchaseItemRow({
 
     return (
         <>
+            {rowPhotoOpen && rowPhotoSrc && rowBox && (
+                <ModalShell
+                    open
+                    onClose={() => setRowPhotoOpen(false)}
+                    title={`Row ${index + 1} on the bill`}
+                    size="lg"
+                    footer={<Button variant="outline" className="flex-1" onClick={() => setRowPhotoOpen(false)}>Close</Button>}
+                >
+                    {value.ocrOriginalName && (
+                        <p className="text-sm text-muted-foreground">Bill: <span className="font-semibold text-foreground">{value.ocrOriginalName}</span></p>
+                    )}
+                    <ScanRowStrip src={rowPhotoSrc} box={rowBox.box} pageSize={scanPageSizes?.[rowBox.page - 1]} />
+                    <p className="text-xs text-muted-foreground">
+                        Compare batch, expiry, qty, free, MRP, rate and amount in this row with the line on the photo.
+                    </p>
+                </ModalShell>
+            )}
             {/* Portal: Search dropdown (rendered at document.body to escape overflow clipping) */}
             {dropdownOpen && !value.productId && dropdownStyle && createPortal(
                 <div
@@ -430,7 +457,7 @@ export function PurchaseItemRow({
                             <input
                                 ref={inputRef}
                                 data-field="product-search"
-                                className={cn(cellInputCls(!!errors?.productName), 'w-full')}
+                                className={cn(cellInputCls(!!errors?.productName || needsProduct), 'w-full')}
                                 value={query || value.productName}
                                 data-dropdown-open={dropdownOpen ? 'true' : 'false'}
                                 placeholder="Search product..."
@@ -502,15 +529,37 @@ export function PurchaseItemRow({
                     {errors?.productName && (
                         <p className="mt-0.5 text-[10px] leading-none text-red-500">{errors.productName.message}</p>
                     )}
+                    {needsProduct && !errors?.productName && (
+                        <p className="mt-0.5 px-1.5 text-[10px] font-medium leading-tight text-red-600" role="alert">
+                            Pick a product: tap a suggestion or search
+                        </p>
+                    )}
                     {value.ocrOriginalName && (
                         (() => {
                             const billName = value.ocrOriginalName;
                             const sameName = normName(billName) === normName(value.productName);
                             const lowConfidence = !!value.productId && (value.ocrMatchConfidence ?? 1) < 0.9;
                             const suggestions = !value.productId ? (value.ocrSuggestions ?? []) : [];
-                            if (sameName && !lowConfidence && suggestions.length === 0) return null;
+                            const rowNote = value.ocrRowNote;
+                            if (sameName && !lowConfidence && suggestions.length === 0 && !rowNote && !rowPhotoSrc) return null;
                             return (
                                 <div className="px-1.5 pb-0.5">
+                                    {rowNote && (
+                                        <p className="text-[10px] font-medium leading-tight text-red-600" role="alert" title={rowNote}>
+                                            Check this row against the bill — {rowNote}
+                                        </p>
+                                    )}
+                                    {rowPhotoSrc && rowBox && (
+                                        <button
+                                            type="button"
+                                            onMouseDown={(e) => e.preventDefault()}
+                                            onClick={() => setRowPhotoOpen(true)}
+                                            className="mt-0.5 inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[10px] font-medium text-slate-700 hover:bg-slate-100"
+                                            title="Show this row on the scanned bill"
+                                        >
+                                            <ImageIcon className="h-3 w-3" /> View on bill
+                                        </button>
+                                    )}
                                     {(!sameName || lowConfidence) && (
                                         <p
                                             className={cn(

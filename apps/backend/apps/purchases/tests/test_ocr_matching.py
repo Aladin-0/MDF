@@ -213,3 +213,17 @@ def test_gstin_rebuilt_when_characters_lost_under_blot():
     # gemini-3.1-flash-lite dropped 2 characters under the ink blot on the Raajyog bill.
     assert normalize_gstin('27APP9221A1ZC', pan='AMCPP9221A') == ('27AMCPP9221A1ZC', True)
     assert normalize_gstin('27APP9221A1ZC') == ('27APP9221A1ZC', False)
+
+
+def test_glued_pack_count_is_not_part_of_the_name():
+    # Production bill: catalogue "TELMA 40MG TAB 15TB" ranked BELOW "TELMA H" because
+    # "15TB" was read as a variant + strength.
+    t = tokenize_product('TELMA 40MG TAB 15TB')
+    assert t.core == ('TELMA',) and t.strengths == {'40'} and t.forms == {'TAB'}
+    assert tokenize_product('BIO D3 PLUS CAPSULE 15TAB').strengths == {'3'}
+    assert tokenize_product('PAN 40 TAB').strengths == {'40'}        # spaced strength untouched
+    idx = _catalog('TELMA H 40MG TAB 15S', 'TELMA AM 40MG TAB 15S', 'TELMA 40MG TAB 15TB')
+    assert _pick('TELMA 40MG TAB', idx)[0] == 'TELMA 40MG TAB 15TB'
+    # Bill without strength stays a staff decision
+    idx2 = _catalog("LARIAGO 250MG TAB 10'S", "LARIAGO DS TAB 5'S", 'LARIAGO SUSP 60ML')
+    assert _pick('LARIAGO TAB', idx2)[0] is None

@@ -33,15 +33,18 @@ from apps.purchases.ocr_matching import alias_key, normalize_gstin
 
 logger = logging.getLogger(__name__)
 
-PROMPT_VERSION = 'v6'
-# Cascade: every bill is read by the cheap first-pass model; only readings that
-# fail their own consistency checks are re-read by the stronger verify model.
+PROMPT_VERSION = 'v8'
+# Every bill is read once by the cheap first-pass model. Only readings that fail
+# their own consistency checks get ONE re-check (same cheap model, high resolution,
+# problems named) — on a second Gemini account (GEMINI_VERIFY_API_KEY) when set,
+# falling back to the main account (GEMINI_API_KEY).
 DEFAULT_MODEL = 'gemini-3.1-flash-lite'
 DEFAULT_FALLBACK_MODEL = 'gemini-3.5-flash-lite'
-DEFAULT_VERIFY_MODEL = 'gemini-3.5-flash'
+DEFAULT_VERIFY_MODEL = 'gemini-3.1-flash-lite'
 MAX_SIDE = 2400
 JPEG_QUALITY = 85
 REQUEST_TIMEOUT_MS = 90_000
+RECHECK_BUDGET_SECONDS = 150   # after this, stop re-checking and flag the bill for staff
 CACHE_TTL = 60 * 60 * 24 * 30
 
 
@@ -54,8 +57,13 @@ def fallback_model() -> str:
 
 
 def verify_model() -> str:
-    """Model for the second (verification) read — normally the strongest one."""
+    """Model for the re-check read."""
     return os.environ.get('GEMINI_OCR_VERIFY_MODEL') or DEFAULT_VERIFY_MODEL
+
+
+def verify_api_key() -> Optional[str]:
+    """Key of the second Gemini account used for re-checks (optional)."""
+    return (os.environ.get('GEMINI_VERIFY_API_KEY') or '').strip() or None
 
 
 # ---------------------------------------------------------------------------
@@ -79,6 +87,12 @@ class GeminiLineItem(BaseModel):
     discount_pct: Optional[float] = Field(None, description="Line discount percent (DISC / DIS / D%).")
     gst_pct: Optional[float] = Field(None, description="GST percent of the line; SGST%+CGST% if split.")
     amount: Optional[float] = Field(None, description="Line amount as printed.")
+    row_text: Optional[str] = Field(None, description="The whole printed row exactly as it reads from left to "
+                                                      "right, every cell in order (serial no., name, pack, batch, "
+                                                      "expiry, qty, free, MRP, rate, discount, GST, amount).")
+    box_2d: Optional[List[int]] = Field(None, description="Where this row is on the image: [ymin, xmin, ymax, xmax] "
+                                                          "scaled 0-1000, from the first to the last cell of the row.")
+    page: Optional[int] = Field(None, description="Which image (page) this row is on, starting at 1.")
 
 
 class GeminiParty(BaseModel):
@@ -135,6 +149,7 @@ SELLER vs BUYER
 LINE ITEMS — one entry per printed product row, top to bottom:
 - Follow each row straight across; do not shift values between rows.
 - Skip rows that are not products: totals, sub totals, "TOTAL B/F", "C/F", credit/debit note references (e.g. "Cr/Dr No ..."), scheme or remark lines, blank rows.
+- Rows listed under a credit/debit note or return reference ("Cr/Dr No", "Adj. CN", "Credit Note", "Return") are adjustments of earlier bills, not purchases on this bill — skip them too.
 - qty = billed quantity; free_qty = FREE / F.QTY / SCH column of THAT row (0 only if blank, "-" or 0 is printed there). Free quantities are small numbers like 1, 2, 5 — look carefully at each row's FREE cell.
 - rate = per-unit purchase rate the amount is calculated from (RATE, P.RATE, PTR, PTS, NET RATE). If PTR is 0 or blank, use PTS. Never MRP.
 - discount_pct = line DISC % column; gst_pct = line GST %, or SGST% + CGST% when split.
@@ -142,6 +157,7 @@ LINE ITEMS — one entry per printed product row, top to bottom:
 - Before answering, re-check that every value you put in a row was printed on that same row (same height across the page, or the same line when the photo is rotated).
 - name, batch_no, expiry: exactly as printed. Distinguish O/0, I/1, S/5, B/8 by context (batch numbers are usually letters followed by digits).
 - Use null for anything not printed or unreadable. Never invent values or rows.
+- row_text: write the whole printed row as it reads left to right, every cell in order. box_2d: where that row sits on the image (0-1000). These must describe the SAME printed line the row's values come from.
 """
 
 
@@ -225,6 +241,11 @@ def _is_transient(exc) -> bool:
     return any(k in name for k in ('timeout', 'connect', 'remoteprotocol'))
 
 
+def _is_slow(exc) -> bool:
+    code = getattr(exc, 'code', None) or getattr(exc, 'status_code', None)
+    return code == 504 or 'timeout' in type(exc).__name__.lower() or 'timed out' in str(exc).lower()
+
+
 def _is_model_unavailable(exc) -> bool:
     code = getattr(exc, 'code', None)
     return code == 404 or (code == 400 and 'model' in str(exc).lower())
@@ -257,7 +278,8 @@ def _quota_retry_delay(exc) -> Optional[float]:
 
 
 def call_gemini(image_bytes: bytes, mime: str, prompt: str, api_key: str,
-                models: Optional[list] = None, client=None, high_res: bool = False) -> dict:
+                models: Optional[list] = None, client=None, high_res: bool = False,
+                quota_wait: Optional[float] = None, max_attempts: int = 3) -> dict:
     """Run extraction; returns {'data': dict, 'model': str, 'usage': {...}, 'ms': int}."""
     from google import genai
     from google.genai import types
@@ -277,7 +299,7 @@ def call_gemini(image_bytes: bytes, mime: str, prompt: str, api_key: str,
             thinking_config=_thinking_config(types, model),
             media_resolution=types.MediaResolution.MEDIA_RESOLUTION_HIGH if high_res else None,
         )
-        for attempt in range(3):
+        for attempt in range(max_attempts):
             t0 = time.monotonic()
             try:
                 resp = client.models.generate_content(model=model, contents=[*parts, prompt], config=cfg)
@@ -306,13 +328,16 @@ def call_gemini(image_bytes: bytes, mime: str, prompt: str, api_key: str,
                     # Each model has its own quota: wait once for a short
                     # per-minute window, otherwise move to the next model.
                     delay = _quota_retry_delay(exc)
-                    if delay is None or delay > max_quota_wait() or attempt >= 1:
+                    limit = max_quota_wait() if quota_wait is None else quota_wait
+                    if delay is None or delay > limit or attempt >= 1:
                         logger.warning('Gemini %s quota exhausted; trying next model', model)
                         break
                     logger.info('Gemini %s rate-limited; waiting %.0fs', model, delay)
                     time.sleep(delay + 1)
                     continue
-                if not _is_transient(exc) or attempt == 2:
+                # A request that timed out (504 / read timeout) is too slow as sent:
+                # repeating it identically rarely helps — at most one retry.
+                if not _is_transient(exc) or attempt >= max_attempts - 1 or (_is_slow(exc) and attempt >= 1):
                     logger.warning('Gemini %s failed: %s', model, exc)
                     break
                 delay = 2 * (2 ** attempt)
@@ -417,6 +442,57 @@ def _num(v) -> Optional[float]:
         return None
 
 
+_ROW_NUMBER_RE = re.compile(r'\d[\d,]*(?:\.\d+)?')
+
+
+def _row_numbers(text: str) -> list:
+    out = []
+    for tok in _ROW_NUMBER_RE.findall(text or ''):
+        try:
+            out.append(float(tok.replace(',', '')))
+        except ValueError:
+            pass
+    return out
+
+
+def check_row_alignment(item: dict) -> tuple:
+    """
+    (ok, note). The batch / MRP / rate / amount read for a row must appear in
+    that row's own printed line (row_text). If they don't, they were probably
+    taken from a neighbouring row — the shift the per-line maths can't see
+    when qty, rate and amount all moved together.
+    """
+    text = item.get('row_text')
+    if not text:
+        return True, None
+    nums = _row_numbers(text)
+    missing = []
+    for field, label in (('mrp', 'MRP'), ('rate', 'rate'), ('amount', 'amount')):
+        v = item.get(field)
+        if v is not None and not any(abs(v - n) < 0.006 for n in nums):
+            missing.append(label)
+    batch = re.sub(r'[^A-Z0-9]', '', str(item.get('batch_no') or '').upper())
+    if len(batch) >= 3 and batch not in re.sub(r'[^A-Z0-9]', '', text.upper()):
+        missing.append('batch')
+    if not missing:
+        return True, None
+    what = ', '.join(missing)
+    return False, f'The {what} read for this row {"is" if len(missing) == 1 else "are"} not on its printed line — may be from another row.'
+
+
+def _clean_box(raw) -> Optional[list]:
+    """[ymin, xmin, ymax, xmax] in 0..1000, or None when unusable."""
+    try:
+        y0, x0, y1, x1 = (int(round(float(v))) for v in raw)
+    except (TypeError, ValueError):
+        return None
+    y0, y1 = sorted((max(0, min(1000, y0)), max(0, min(1000, y1))))
+    x0, x1 = sorted((max(0, min(1000, x0)), max(0, min(1000, x1))))
+    if y1 - y0 < 3 or x1 - x0 < 20:
+        return None
+    return [y0, x0, y1, x1]
+
+
 def check_line_math(item: dict) -> tuple:
     """(ok, note). Amount may be printed before or after GST."""
     qty, rate, amount = _num(item.get('qty')), _num(item.get('rate')), _num(item.get('amount'))
@@ -517,11 +593,18 @@ def normalize_extraction(data: dict, outlet_gstin: Optional[str] = None, pages: 
             'discount': _num(raw.get('discount_pct')) or 0,
             'gst_pct': _num(raw.get('gst_pct')),
             'amount': _num(raw.get('amount')),
+            'row_text': (str(raw.get('row_text') or '').strip() or None),
+            'box': _clean_box(raw.get('box_2d')),
+            'page': min(max(int(_num(raw.get('page')) or 1), 1), max(pages, 1)),
         }
         ok, note = check_line_math(item)
         item['_validation_ok'] = ok
         if note:
             item['_validation_note'] = note
+        row_ok, row_note = check_row_alignment(item)
+        item['_row_ok'] = row_ok
+        if row_note:
+            item['_row_note'] = row_note
         items.append({k: v for k, v in item.items() if v is not None})
 
     t = data.get('totals') or {}
@@ -591,6 +674,10 @@ def find_issues(data: dict, normalized: dict) -> list:
     if invented:
         issues.append('These rates have more than 2 decimals, so they were probably calculated instead of read: '
                       + ', '.join(invented[:5]) + '.')
+    misaligned = [i['name'] for i in items if i.get('_row_ok') is False]
+    if misaligned:
+        issues.append('On these rows some values are not on the row\'s own printed line (they may come from the '
+                      'row above or below): ' + ', '.join(misaligned[:5]) + '. Read each row straight across.')
     bad_math = [i['name'] for i in items if i.get('_validation_ok') is False]
     if bad_math:
         issues.append('On these rows qty x rate x (1 - discount%) does not equal the amount, so a value '
@@ -693,6 +780,8 @@ def extract_invoice(image_path, api_key: str, outlet_name: Optional[str] = None,
 
     out = normalize_extraction(result['data'], outlet_gstin, pages=pages)
     remaining = find_issues(result['data'], out)
+    page_upright = save_upright_copies(paths, prepared)
+    snap_row_boxes(out['items'], prepared, page_upright)
     out['meta'] = {
         'engine': 'gemini',
         'model': result.get('model'),
@@ -704,12 +793,76 @@ def extract_invoice(image_path, api_key: str, outlet_name: Optional[str] = None,
         'image': img_meta,
         'pages': pages,
         'pages_meta': [m for _, _, m in prepared] if pages > 1 else None,
+        # For the review screen's per-row photo strips: size of each straightened
+        # page Gemini saw, and whether the stored photo now matches it.
+        'page_sizes': [list(m.get('size') or ()) for _, _, m in prepared],
+        'page_upright': page_upright,
         'passes': result.get('passes', 1),
         'pass_usage': result.get('pass_usage') or [{'model': result.get('model'), **(result.get('usage') or {})}],
         'unresolved_issues': remaining,
         'strong_check_unavailable': bool(result.get('strong_check_unavailable')),
     }
     return out
+
+
+def snap_row_boxes(items: list, prepared: list, page_upright: list) -> None:
+    """
+    Replace Gemini's rough row positions with the real printed line of each row
+    (located locally, free). Rows that can't be matched confidently get no box,
+    so the review screen shows no strip rather than a wrong one. In place.
+    """
+    enabled = os.environ.get('OCR_ROW_STRIPS', '1').lower() not in ('0', 'false', 'no')
+    for page_no, (data, mime, _meta) in enumerate(prepared, start=1):
+        on_page = [i for i in items if i.get('page', 1) == page_no]
+        usable = enabled and mime == 'image/jpeg' and page_no <= len(page_upright) and page_upright[page_no - 1]
+        if not on_page:
+            continue
+        if not usable:
+            for i in on_page:
+                i.pop('box', None)
+            continue
+        try:
+            from apps.purchases.orientation import locate_rows
+            boxes = locate_rows(data, on_page)
+        except Exception:
+            logger.warning('Row strip locating failed', exc_info=True)
+            boxes = [None] * len(on_page)
+        for item, box in zip(on_page, boxes):
+            if box:
+                item['box'] = box
+            else:
+                item.pop('box', None)
+
+
+def save_upright_copies(paths, prepared) -> list:
+    """
+    Replace each stored scan photo with the straightened copy Gemini read, so
+    the review screen shows the bill upright and Gemini's row positions line
+    up with the photo staff see. Returns, per page, whether the stored photo
+    matches what Gemini saw. Only local JPEG files are rewritten (atomically);
+    other pages keep their original and count as matching only if they did not
+    need rotating. Never raises.
+    """
+    enabled = os.environ.get('OCR_SAVE_UPRIGHT', '1').lower() not in ('0', 'false', 'no')
+    result = []
+    for path, (data, mime, meta) in zip(paths, prepared):
+        rotated = bool((meta or {}).get('rotated_cw'))
+        ok = not rotated
+        if enabled and mime == 'image/jpeg' and str(path).lower().endswith(('.jpg', '.jpeg')):
+            tmp = f'{path}.upright-tmp'
+            try:
+                with open(tmp, 'wb') as fh:
+                    fh.write(data)
+                os.replace(tmp, path)
+                ok = True
+            except OSError:
+                logger.warning('Could not store upright copy of %s', path, exc_info=True)
+                try:
+                    os.remove(tmp)
+                except OSError:
+                    pass
+        result.append(ok)
+    return result
 
 
 def _extract_with_verification(image_bytes, mime, prompt, api_key, outlet_gstin, pages: int = 1) -> dict:
@@ -727,22 +880,44 @@ def _extract_with_verification(image_bytes, mime, prompt, api_key, outlet_gstin,
     if not issues:
         return first
 
-    logger.info('OCR verification pass: %s', issues)
-    try:
-        second = call_gemini(image_bytes, mime,
-                             prompt + VERIFY_SUFFIX.format(issues='\n'.join(f'- {i}' for i in issues)),
-                             api_key, models=[verify_model(), primary_model()], high_res=True)
-    except Exception:
-        logger.warning('OCR verification pass failed; keeping first reading', exc_info=True)
+    logger.info('OCR re-check: %s', issues)
+    retry_prompt = prompt + VERIFY_SUFFIX.format(issues='\n'.join(f'- {i}' for i in issues))
+    # Second account first (no waiting on its rate limit — a full quota just moves
+    # on), then the main account. Keys are never logged; only the account label.
+    # (account, key, models, high_res, quota_wait, max_attempts). The high-res
+    # read is tried once; if it is too slow / refused, the main account tries a
+    # lighter normal-resolution read. A total budget stops a scan hanging.
+    attempts = []
+    second_key = verify_api_key()
+    if second_key and second_key != api_key:
+        attempts.append(('second', second_key, [verify_model()], True, 0, 1))
+    # Main account: high resolution if it is the first try, otherwise the lighter read.
+    attempts.append(('main', api_key, [verify_model(), fallback_model()], not attempts, None, 2))
+    second, account = None, None
+    started = time.monotonic()
+    for label, key, models, high_res, wait, tries in attempts:
+        if time.monotonic() - started > RECHECK_BUDGET_SECONDS:
+            logger.warning('OCR re-check time budget used up; keeping first reading for staff review')
+            break
+        try:
+            second = call_gemini(image_bytes, mime, retry_prompt, key, models=models,
+                                 high_res=high_res, quota_wait=wait, max_attempts=tries)
+            account = label
+            break
+        except Exception as exc:
+            logger.warning('OCR re-check on the %s Gemini account failed (%s: %s)',
+                           label, type(exc).__name__, getattr(exc, 'code', ''))
+    if second is None:
+        # Both accounts out of quota / failing: keep the first reading, staff review it.
         return {**first, 'strong_check_unavailable': True, 'first_pass_issues': issues}
     issues2 = find_issues(second['data'], normalize_extraction(second['data'], outlet_gstin, pages=pages))
     usage = {k: (first['usage'].get(k) or 0) + (second['usage'].get(k) or 0) for k in first['usage']}
     best = second if _issue_score(issues2) <= _issue_score(issues) else first
-    # The stronger model was out of quota (e.g. free-tier daily limit) and the
-    # re-read fell back to the basic model: staff must review this bill.
-    strong_unavailable = second.get('model') != verify_model()
+    # Re-check had to use a weaker fallback model than intended: staff review.
+    degraded = second.get('model') != verify_model()
     return {**best, 'usage': usage, 'ms': first['ms'] + second['ms'], 'passes': 2,
-            'strong_check_unavailable': strong_unavailable,
+            'strong_check_unavailable': degraded,
             'first_pass_model': first['model'], 'first_pass_issues': issues,
-            'pass_usage': [{'model': first['model'], **first['usage']},
-                           {'model': second['model'], **second['usage']}]}
+            'recheck_account': account,
+            'pass_usage': [{'model': first['model'], 'account': 'main', **first['usage']},
+                           {'model': second['model'], 'account': account, **second['usage']}]}
