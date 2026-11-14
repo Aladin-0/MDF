@@ -1,7 +1,7 @@
 # MediFlow (MDF) — Production Deployment Guide
 
 Read this fully before deploying. Last verified deploy: **2026-11-12**, server moved `d065f12` → `d83c0e4`
-(backup: `/mediflow/backups/deploy_20261112_195318/`). Newest deploy: **2026-11-14** (3rd), `44c9373` → `19fcf07` (see §7).
+(backup: `/mediflow/backups/deploy_20261112_195318/`). Newest deploy: **2026-11-14** (4th), `19fcf07` → `62c4a12` (see §7).
 
 > **Never put the SSH password in this file or in git.** Ask the user for it each time.
 
@@ -288,6 +288,7 @@ docker start mediflow_backend mediflow_celery
 
 | Date | From → To | Backup dir | Notes |
 |---|---|---|---|
+| 2026-11-14 (4th) | `19fcf07` → `62c4a12` | `/mediflow/backups/deploy_20261114_094130/` | Frontend-only: fixes the white screen after saving a bill and tapping New bill on the phone (`app/billing/page.tsx` keeps one bill on screen). Only `frontend` rebuilt/recreated + nginx restart; backend/celery/postgres untouched, no migrations. DB dump 27 MB (95 tables verified), configs and old frontend image tagged (`60a91fc1eee3`; new `90034f996524`). Server config files byte-identical before/after; saudapakka untouched. |
 | 2026-11-14 (3rd) | `44c9373` → `19fcf07` | `/mediflow/backups/deploy_20261114_092058/` | Frontend-only: installed web app no longer locks to landscape (`public/manifest.json` `orientation: "any"`, the conflicting `app/manifest.ts` removed). Only `frontend` rebuilt/recreated (~60 s to ready) + nginx restart; backend/celery/postgres untouched, no migrations. DB dump 27 MB (95 tables verified), configs and old frontend image tagged. Server config files byte-identical before/after; saudapakka untouched. Live check: `/manifest.json` says `any`, `/manifest.webmanifest` is 404, one manifest link on the page. Phones that already installed the app keep the old setting until it is removed and installed again. |
 | 2026-11-14 (2nd) | `e65de06` → `44c9373` | `/mediflow/backups/deploy_20261114_090159/` | Frontend-only: phone navigation (accordion menu, Find a page, section chips; Back closes the menu; fixes the billing-screen menu that could not navigate) and the scanned-bill "name the unmatched lines" message. Only `frontend` rebuilt/recreated (build ok, ~75 s to ready) + nginx restart; backend/celery/postgres untouched, no migrations. Backup: DB dump 27 MB (95 tables verified) + configs + old frontend image tag; media tarball skipped. Server config files byte-identical before/after; saudapakka untouched. One SSH attempt (`NumberOfPasswordPrompts=1`), no lockout. |
 | 2026-11-14 | `d83c0e4` → `e65de06` | `/mediflow/backups/deploy_20261113_204710/` | Phone billing + phone New Purchase layouts, medicine search syntax, catalogue suggestions (Composition / Manufacturer), PKG safety rules, login form posts (never GET), plus the merged `fix/scan-review-save` (scanned-bill save, row check, orientation, training samples). backend/celery/frontend rebuilt + nginx restart; one migration on boot: `purchases.0022_scantrainingsample` (creates a table, additive). Server config files byte-identical before/after; saudapakka untouched. DB dump 27 MB (94 tables verified), media tar 552 MB. Note: the dev test login (7972127935) does not exist in production. A first SSH attempt with a wrong password got the dev IP banned by fail2ban: use `-o NumberOfPasswordPrompts=1` and make only ONE attempt. |
