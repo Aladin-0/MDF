@@ -9,8 +9,10 @@ import { visibleNavItems, activeSubHref, NavItem } from '@/lib/navConfig';
 import { cn } from '@/lib/utils';
 import { Pill, Menu, Bell, Settings, Building2, Keyboard } from 'lucide-react';
 import { OPEN_SHORTCUT_HELP_EVENT } from '@/hooks/useShortcutHandler';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Sidebar } from '@/components/shared/Sidebar';
+import { useBackToClose } from '@/hooks/useBackToClose';
+import { MobileSectionTabs } from '@/components/layout/MobileSectionTabs';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
@@ -41,6 +43,8 @@ export function GlobalNavigation() {
     const [focusedChildIndex, setFocusedChildIndex] = useState<number>(-1);
     const [openMenuIndex, setOpenMenuIndex] = useState<number>(-1);
     const [mobileNavOpen, setMobileNavOpen] = useState(false);
+    // the phone's Back button closes the open menu instead of leaving the page (its links replace the menu's history entry: see MobileNav)
+    useBackToClose(mobileNavOpen, () => setMobileNavOpen(false));
 
     // Refs for focusing DOM elements
     const topItemRefs = useRef<(HTMLAnchorElement | HTMLButtonElement | null)[]>([]);
@@ -193,6 +197,7 @@ export function GlobalNavigation() {
     };
 
     return (
+        <>
         <div
             className="w-full bg-white shadow-sm border-b border-slate-200 flex flex-col relative z-50 shrink-0"
             role="menubar"
@@ -207,14 +212,17 @@ export function GlobalNavigation() {
                     <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
                         <SheetTrigger asChild>
                             <button
-                                className="flex h-10 w-10 items-center justify-center rounded hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors"
+                                className="flex h-11 w-11 touch-manipulation items-center justify-center rounded hover:bg-slate-100 active:bg-slate-200 text-slate-600 hover:text-slate-800 transition-colors"
                                 aria-label="Open menu"
                             >
                                 <Menu className="w-5 h-5" />
                             </button>
                         </SheetTrigger>
-                        <SheetContent side="left" className="p-0 w-[85vw] max-w-[300px] border-r-0">
-                            <Sidebar isCollapsed={false} onToggle={() => setMobileNavOpen(false)} isMobile={true} />
+                        {/* no auto-focus: the first focusable thing is the search box, and focusing it would raise a phone's keyboard over the list */}
+                        <SheetContent side="left" className="p-0 w-[88vw] max-w-[340px] border-r-0" onOpenAutoFocus={(e) => e.preventDefault()}>
+                            <SheetTitle className="sr-only">Menu</SheetTitle>
+                            <SheetDescription className="sr-only">Go to another page</SheetDescription>
+                            <Sidebar isCollapsed={false} onToggle={() => setMobileNavOpen(false)} isMobile={true} replaceHistory />
                         </SheetContent>
                     </Sheet>
                 </div>
@@ -400,5 +408,8 @@ export function GlobalNavigation() {
                 </div>
             </div>
         </div>
+        {/* Phone only (hidden from lg): the pages of the group you are in, one tap apart */}
+        <MobileSectionTabs />
+        </>
     );
 }

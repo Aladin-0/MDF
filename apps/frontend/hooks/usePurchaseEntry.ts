@@ -584,8 +584,18 @@ export function usePurchaseEntry({ onSuccess, invoiceToEdit }: UsePurchaseEntryO
         } else if (errors.invoiceNo) {
             errMsg = errors.invoiceNo.message || "Enter the invoice number";
         } else if (errors.items && Array.isArray(errors.items) && errors.items.length > 0) {
-            const firstErrIdx = errors.items.findIndex((row: any) => row && Object.keys(row).length > 0);
-            if (firstErrIdx >= 0) {
+            // Lines still without a catalogue product (typical after a scan): name them all, not a bare "Row 2", and start with the first of them.
+            const needProduct: number[] = errors.items
+                .map((row: any, i: number) => (row?.productId ? i : -1))
+                .filter((i: number) => i >= 0);
+            const firstErrIdx = needProduct.length
+                ? needProduct[0]
+                : errors.items.findIndex((row: any) => row && Object.keys(row).length > 0);
+            if (needProduct.length) {
+                const listed = needProduct.slice(0, 3).map((i) => `row ${i + 1} (${items[i]?.productName || 'no name'})`).join(', ');
+                const more = needProduct.length > 3 ? ` and ${needProduct.length - 3} more` : '';
+                errMsg = `${needProduct.length} medicine line${needProduct.length > 1 ? 's need' : ' needs'} a product from the catalogue: ${listed}${more}. Tap a suggestion under the name, or search the catalogue.`;
+            } else if (firstErrIdx >= 0) {
                 const rowErrors = errors.items[firstErrIdx];
                 const failingKeys = Object.keys(rowErrors);
                 const firstMsg = rowErrors[failingKeys[0]]?.message || failingKeys.join(", ");
@@ -610,7 +620,9 @@ export function usePurchaseEntry({ onSuccess, invoiceToEdit }: UsePurchaseEntryO
             if (errs?.partyLedgerId) target = partyRef.current?.querySelector('input');
             else if (errs?.invoiceNo) target = invoiceNoRef.current;
             else if (Array.isArray(errs?.items)) {
-                const row = errs.items.findIndex((r: any) => r && Object.keys(r).length > 0);
+                // a line with no catalogue product comes first (it is what the message names), then any other bad line
+                const noProduct = errs.items.findIndex((r: any) => r?.productId);
+                const row = noProduct >= 0 ? noProduct : errs.items.findIndex((r: any) => r && Object.keys(r).length > 0);
                 if (row >= 0) {
                     const rowEl = document.querySelector(`[data-cart-row="${row}"]`);
                     const hit = CELL_ORDER.find(([key]) => errs.items[row][key]);

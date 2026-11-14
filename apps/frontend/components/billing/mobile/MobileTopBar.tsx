@@ -215,10 +215,11 @@ export function MobileTopBar() {
             </header>
 
             <Sheet open={navOpen} onOpenChange={setNavOpen}>
-                <SheetContent side="left" className="z-[70] w-[85vw] max-w-[300px] border-r-0 p-0">
+                {/* no auto-focus: it would land on the search box and raise the keyboard over the list */}
+                <SheetContent side="left" className="z-[70] w-[88vw] max-w-[340px] border-r-0 p-0" onOpenAutoFocus={(e) => e.preventDefault()}>
                     <SheetTitle className="sr-only">Menu</SheetTitle>
                     <SheetDescription className="sr-only">Go to another page</SheetDescription>
-                    <Sidebar isCollapsed={false} onToggle={() => setNavOpen(false)} isMobile={true} />
+                    <Sidebar isCollapsed={false} onToggle={() => setNavOpen(false)} isMobile={true} replaceHistory />
                 </SheetContent>
             </Sheet>
 

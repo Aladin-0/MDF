@@ -172,3 +172,46 @@ export function activeSubHref(pathname: string, subItems?: SubNavItem[]): string
     }
     return best;
 }
+
+/**
+ * The top-level entry the current page belongs to, by the rule the desktop bar uses: a listed sub-page wins, otherwise the entry whose
+ * path the page sits under (the longest such path; Dashboard only on its own page, it prefixes everything).
+ * Null for a page the menu does not list (the phone then shows no section tabs and opens no group).
+ */
+export function activeNavItem(pathname: string, items: NavItem[]): NavItem | null {
+    const bySub = items.find((i) => activeSubHref(pathname, i.subItems) !== null);
+    if (bySub) return bySub;
+    let best: NavItem | null = null;
+    for (const i of items) {
+        if (i.href === '/dashboard') {
+            if (pathname === '/dashboard') return i;
+            continue;
+        }
+        const hit = pathname === i.href || pathname.startsWith(i.href + '/');
+        if (hit && (best === null || i.href.length > best.href.length)) best = i;
+    }
+    return best;
+}
+
+export type NavMatch = { label: string; href: string; icon: any; group?: string };
+
+/**
+ * "Find a page" on the phone: every page the user may open, flattened, whose name (or whose group's name) contains what was typed.
+ * Typing "accounts" lists all of Accounts' pages; typing "trial" lists Trial Balance with "Accounts" under it.
+ */
+export function searchNav(items: NavItem[], query: string): NavMatch[] {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    const out: NavMatch[] = [];
+    for (const item of items) {
+        const groupHit = item.label.toLowerCase().includes(q);
+        if (!item.subItems?.length) {
+            if (groupHit) out.push({ label: item.label, href: item.href, icon: item.icon });
+            continue;
+        }
+        for (const sub of item.subItems) {
+            if (groupHit || sub.label.toLowerCase().includes(q)) out.push({ label: sub.label, href: sub.href, icon: sub.icon, group: item.label });
+        }
+    }
+    return out;
+}

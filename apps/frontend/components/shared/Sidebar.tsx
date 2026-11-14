@@ -15,11 +15,14 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { visibleNavItems, activeSubHref } from '@/lib/navConfig';
 import { shortcutHintForHref } from '@/lib/shortcutEngine';
 import { Building2, Pill, ChevronLeft, ChevronRight, MoreVertical, LogOut, User } from 'lucide-react';
+import { MobileNav } from '@/components/layout/MobileNav';
 
 interface SidebarProps {
     isCollapsed: boolean;
     onToggle: () => void;
     isMobile?: boolean;
+    /** phone drawer only: see MobileNav `replaceHistory` */
+    replaceHistory?: boolean;
 }
 
 // Helper to reliably check route matching without collision
@@ -28,7 +31,7 @@ const checkIsActive = (pathname: string, href: string) => {
     return pathname === href || pathname.startsWith(`${href}/`);
 };
 
-export function Sidebar({ isCollapsed, onToggle, isMobile = false }: SidebarProps) {
+export function Sidebar({ isCollapsed, onToggle, isMobile = false, replaceHistory = false }: SidebarProps) {
     const pathname = usePathname();
     const { hasPermission } = usePermissions();
     const { user } = useAuthStore();
@@ -58,6 +61,9 @@ export function Sidebar({ isCollapsed, onToggle, isMobile = false }: SidebarProp
         return states;
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pathname, navItems.map((i) => i.href).join('|')]);
+
+    // Phone drawer (top bar hamburger, phone billing screen): its own accordion menu. The rest of this component is the wide sidebar.
+    if (isMobile) return <MobileNav onNavigate={onToggle} replaceHistory={replaceHistory} />;
 
     return (
         <div
