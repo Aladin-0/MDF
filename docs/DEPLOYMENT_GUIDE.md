@@ -1,7 +1,7 @@
 # MediFlow (MDF) — Production Deployment Guide
 
 Read this fully before deploying. Last verified deploy: **2026-11-12**, server moved `d065f12` → `d83c0e4`
-(backup: `/mediflow/backups/deploy_20261112_195318/`). Newest deploy: **2026-11-14** (4th), `19fcf07` → `62c4a12` (see §7).
+(backup: `/mediflow/backups/deploy_20261112_195318/`). Newest deploy: **2026-11-15**, `62c4a12` → `4bf5102` (see §7).
 
 > **Never put the SSH password in this file or in git.** Ask the user for it each time.
 
@@ -288,6 +288,7 @@ docker start mediflow_backend mediflow_celery
 
 | Date | From → To | Backup dir | Notes |
 |---|---|---|---|
+| 2026-11-15 | `62c4a12` → `4bf5102` | `/mediflow/backups/deploy_20261114_192517/` | Backend-only fix: scans failed with "value too long for type character varying(20)" (Gemini returns every phone number on the bill; `ocr_distributor_phone` is 20 chars) — `tasks.fit_to_columns` now fits OCR text to column lengths (phone keeps whole numbers). Found in `mediflow_celery` logs. Only `backend` + `celery` rebuilt/recreated + nginx restart; frontend/postgres/redis untouched, no migrations. Backup: DB dump 27 MB (95/95 tables verified), media tar 552 MB (gzip OK), configs, images tagged `pre_deploy_20261114_192517`. Server config files byte-identical before/after; saudapakka untouched (3000 → 200). Verified: /login 200, /api/schema/ 200, public site 200, celery ready, fix present in worker. |
 | 2026-11-14 (4th) | `19fcf07` → `62c4a12` | `/mediflow/backups/deploy_20261114_094130/` | Frontend-only: fixes the white screen after saving a bill and tapping New bill on the phone (`app/billing/page.tsx` keeps one bill on screen). Only `frontend` rebuilt/recreated + nginx restart; backend/celery/postgres untouched, no migrations. DB dump 27 MB (95 tables verified), configs and old frontend image tagged (`60a91fc1eee3`; new `90034f996524`). Server config files byte-identical before/after; saudapakka untouched. |
 | 2026-11-14 (3rd) | `44c9373` → `19fcf07` | `/mediflow/backups/deploy_20261114_092058/` | Frontend-only: installed web app no longer locks to landscape (`public/manifest.json` `orientation: "any"`, the conflicting `app/manifest.ts` removed). Only `frontend` rebuilt/recreated (~60 s to ready) + nginx restart; backend/celery/postgres untouched, no migrations. DB dump 27 MB (95 tables verified), configs and old frontend image tagged. Server config files byte-identical before/after; saudapakka untouched. Live check: `/manifest.json` says `any`, `/manifest.webmanifest` is 404, one manifest link on the page. Phones that already installed the app keep the old setting until it is removed and installed again. |
 | 2026-11-14 (2nd) | `e65de06` → `44c9373` | `/mediflow/backups/deploy_20261114_090159/` | Frontend-only: phone navigation (accordion menu, Find a page, section chips; Back closes the menu; fixes the billing-screen menu that could not navigate) and the scanned-bill "name the unmatched lines" message. Only `frontend` rebuilt/recreated (build ok, ~75 s to ready) + nginx restart; backend/celery/postgres untouched, no migrations. Backup: DB dump 27 MB (95 tables verified) + configs + old frontend image tag; media tarball skipped. Server config files byte-identical before/after; saudapakka untouched. One SSH attempt (`NumberOfPasswordPrompts=1`), no lockout. |
