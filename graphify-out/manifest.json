@@ -2886,9 +2886,9 @@
     "semantic_hash": ""
   },
   "apps/frontend/app/billing/page.tsx": {
-    "mtime": 1794572870.1338408,
-    "seen": 1794573088.4595532,
-    "ast_hash": "fef67a9db1709962da994e7bb09054b7",
+    "mtime": 1794648972.6571012,
+    "seen": 1794649090.3484023,
+    "ast_hash": "c88280455bcc480ce155ed7985cbecf4",
     "semantic_hash": ""
   },
   "apps/frontend/app/dashboard/accounts/audit/page.tsx": {
@@ -3282,16 +3282,10 @@
     "semantic_hash": ""
   },
   "apps/frontend/app/layout.tsx": {
-    "mtime": 1793958621.1945662,
-    "seen": 1793959675.7112792,
-    "ast_hash": "1cee23a3b4eb911ebbe74c89c18bd928",
+    "mtime": 1794647671.292985,
+    "seen": 1794649090.3484845,
+    "ast_hash": "0ca328a5610d706d16f9be7c636e570e",
     "semantic_hash": ""
-  },
-  "apps/frontend/app/manifest.ts": {
-    "mtime": 1792599329.692305,
-    "seen": 1793701732.7199063,
-    "ast_hash": "b55f72580640644825cb8790fc0f6cf0",
-    "semantic_hash": "b55f72580640644825cb8790fc0f6cf0"
   },
   "apps/frontend/app/page.tsx": {
     "mtime": 1776418379.9621098,
@@ -4902,10 +4896,10 @@
     "semantic_hash": "8c0f11a0c0827cfe223e0f448dd743ee"
   },
   "apps/frontend/public/manifest.json": {
-    "mtime": 1792599329.6953185,
-    "seen": 1793701732.720184,
-    "ast_hash": "28e91156097f441f390e61c24c2a7e5b",
-    "semantic_hash": "28e91156097f441f390e61c24c2a7e5b"
+    "mtime": 1794647671.2924764,
+    "seen": 1794649090.3490658,
+    "ast_hash": "05afd3f1c7da0b109d05da9dba27e9d3",
+    "semantic_hash": ""
   },
   "apps/frontend/public/sw.js": {
     "mtime": 1791729846.885236,
@@ -5520,9 +5514,9 @@
     "semantic_hash": ""
   },
   "PROJECT_MAP.md": {
-    "mtime": 1794636421.6152909,
-    "seen": 1794636457.2759237,
-    "ast_hash": "5fefce5d1a356474cc69db3d5eafbfc3",
+    "mtime": 1794647671.2956996,
+    "seen": 1794649090.3491504,
+    "ast_hash": "fdd232f5dfd8f239ec43d280ea6011cd",
     "semantic_hash": ""
   },
   "apps/backend/apps/reports/tests/tests_purchase_reports_db.py": {
@@ -5592,9 +5586,9 @@
     "semantic_hash": ""
   },
   "docs/DEPLOYMENT_GUIDE.md": {
-    "mtime": 1794603250.234594,
-    "seen": 1794636457.2759402,
-    "ast_hash": "32f8019c6f016da7e545a1433edc01cd",
+    "mtime": 1794648253.9300559,
+    "seen": 1794649090.3491592,
+    "ast_hash": "7d2ae3af16d870cdd6277250a900a7af",
     "semantic_hash": ""
   },
   "apps/backend/apps/core/management/commands/dump_permission_matrix.py": {
@@ -6870,9 +6864,9 @@
     "semantic_hash": ""
   },
   "docs/MOBILE_BILLING_DESIGN.md": {
-    "mtime": 1794573039.6368449,
-    "seen": 1794573088.4602802,
-    "ast_hash": "163f9e886ea83d5fd4722d2af73e8471",
+    "mtime": 1794649066.6882746,
+    "seen": 1794649090.3491678,
+    "ast_hash": "080dac1ed7207bbcb375d5ce5910dedb",
     "semantic_hash": ""
   },
   "apps/frontend/__tests__/billingTotalsConsistency.test.ts": {
@@ -7197,6 +7191,18 @@
     "mtime": 1794635548.334033,
     "seen": 1794636457.2756183,
     "ast_hash": "9c378b5886dd45d953acd31b924797ae",
+    "semantic_hash": ""
+  },
+  "apps/frontend/__tests__/billingNewBillAfterSave.test.tsx": {
+    "mtime": 1794648970.725718,
+    "seen": 1794649090.3483813,
+    "ast_hash": "cf4984f415e1c375bfbe5687a2308fc9",
+    "semantic_hash": ""
+  },
+  "apps/frontend/__tests__/pwaManifest.test.ts": {
+    "mtime": 1794647671.3161147,
+    "seen": 1794649090.348391,
+    "ast_hash": "e5572d022921cce42a4caea7395b7d85",
     "semantic_hash": ""
   },
   "package-lock.json": {

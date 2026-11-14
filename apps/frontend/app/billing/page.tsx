@@ -19,7 +19,7 @@ import { MobileBilling } from '@/components/billing/mobile/MobileBilling';
 import { SuccessView } from '@/components/billing/mobile/SuccessView';
 
 export default function FullScreenBillingPage() {
-    const { isPinVerified, activeDraftId, lastInvoice, setLastInvoice, drafts } = useBillingStore();
+    const { isPinVerified, activeDraftId, lastInvoice, setLastInvoice, drafts, createDraft, switchDraft } = useBillingStore();
     const hasHydrated = useBillingStore(state => state._hasHydrated);
     useAutosaveDraft();
     const draftsLoaded = useLoadDrafts();
@@ -28,6 +28,16 @@ export default function FullScreenBillingPage() {
     // Phones (< 768px) get their own layout (components/billing/mobile); tablet and desktop keep the screen below, unchanged.
     // null until the browser has been asked: shown as the same "Loading" state, so nobody sees the wrong layout flash.
     const isPhone = useIsPhone();
+
+    // There is always one bill on screen. Saving a bill closes the draft it was made from; when that was the only one nothing was left to draw:
+    // the desktop layout recreated it (ActiveBillsTabs), the phone layout did not, so "New bill" after a save showed a blank page. Done here, once,
+    // for both layouts and for every way of getting into this state (New bill, closing the last bill, a bill saved from another tab).
+    useEffect(() => {
+        if (!hasHydrated || !draftsLoaded) return;
+        if (activeDraftId && drafts[activeDraftId]) return;
+        const first = Object.keys(drafts)[0];
+        if (first) switchDraft(first); else createDraft();
+    }, [hasHydrated, draftsLoaded, activeDraftId, drafts, createDraft, switchDraft]);
 
     // Ensure billing store finishes rehydration on mount
     useEffect(() => {

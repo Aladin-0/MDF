@@ -200,3 +200,9 @@ Never hide the payment step for an edit and never reset the method when the shee
 - **Modify goes straight to the editor.** `app/billing/page.tsx` skips the "Bill saved" screen (phone `SuccessView` and desktop `BillSuccessScreen`) when the URL has `?edit=`. Before this, a previous bill's success screen was still in memory, the page returned it early, and the editor and `EditSaleHydrator` (which loads the bill) were not on the page, so Modify showed the old success screen until New Bill was pressed. Covered by `__tests__/billingEditLink.test.tsx`.
 - **Playwright harness rule:** register a catch-all that answers every non-GET to `/api/v1/` with a stand-in (let only login / token calls through), THEN the specific stand-ins. Match `POST /sales/<id>/revise/` too.
 
+### 8.2 There is always one bill on screen (the "white screen after New bill" bug)
+
+Saving a bill closes the draft it was made from (`useSaveBill` -> `closeDraft`). When that was the only draft, the store is left with none: `activeDraftId = null`. The desktop recreated one (an effect in `ActiveBillsTabs`), but `MobileBilling` returns `null` without an active draft and nothing recreated it, so **Save, then New bill, showed a completely blank page** (no error in the console, nothing is drawn).
+
+The rule now lives once, in `app/billing/page.tsx`: when the store is loaded and there is no active bill, switch to an existing one or create an empty one. It covers every route into the state (New bill, closing the last bill, a bill saved from another tab) for both layouts, and the Modify loader (`EditSaleHydrator`) reuses that empty bill. Do not add a per-layout copy, and do not make a phone screen depend on a draft that something else may not have created. Test: `__tests__/billingNewBillAfterSave.test.tsx` (fails without the effect). When testing a save flow in a browser, always click **New bill** afterwards and save a second bill.
+
