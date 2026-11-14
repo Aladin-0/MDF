@@ -40,13 +40,47 @@ def _clear_in_flight(draft_id) -> None:
         pass
 
 
+def _fit_phone(value: str, limit: int) -> str:
+    """Keep as many COMPLETE phone numbers as fit (never cut a number in half)."""
+    import re
+    numbers = [n.strip() for n in re.split(r'[,/;|]+', value) if n.strip()]
+    kept = ''
+    for n in numbers:
+        candidate = f'{kept}, {n}' if kept else n
+        if len(candidate) > limit:
+            break
+        kept = candidate
+    return kept or value[:limit]
+
+
+def fit_to_columns(fields: dict) -> dict:
+    """
+    Shorten text values to their database column length. The AI can return
+    more than a column holds (e.g. every phone number printed on the bill);
+    the full reading stays in ocr_raw_data, these columns are only copies.
+    Without this, saving failed with "value too long for type character
+    varying(20)" and the scan showed as failed.
+    """
+    out = {}
+    for name, value in fields.items():
+        if isinstance(value, str):
+            try:
+                limit = PurchaseInvoice._meta.get_field(name).max_length
+            except Exception:
+                limit = None
+            if limit and len(value) > limit:
+                value = _fit_phone(value, limit) if name == 'ocr_distributor_phone' else value[:limit]
+        out[name] = value
+    return out
+
+
 def _write_back(draft_id, **fields) -> bool:
     """
     Store OCR output on the draft only if it is still a draft. A queryset
     update never re-creates a row, so a draft deleted or confirmed while the
     scan was running cannot come back as a ghost.
     """
-    updated = PurchaseInvoice.objects.filter(id=draft_id, status='SAVED').update(**fields)
+    updated = PurchaseInvoice.objects.filter(id=draft_id, status='SAVED').update(**fit_to_columns(fields))
     if not updated:
         logger.info('Draft %s was deleted or confirmed during OCR; result discarded', draft_id)
     return bool(updated)

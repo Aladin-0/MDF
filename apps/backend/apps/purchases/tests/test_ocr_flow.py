@@ -454,3 +454,38 @@ class TrainingDataTest(OCRFlowTest):
 def default_storage_exists(name):
     from django.core.files.storage import default_storage
     return default_storage.exists(name)
+
+
+class LongOcrValuesTest(TestCase):
+    """Production bug: 'value too long for type character varying(20)' failed scans that Gemini read fine."""
+
+    def setUp(self):
+        org = Organization.objects.create(name='Org')
+        self.outlet = Outlet.objects.create(name='Outlet', organization=org)
+        self.user = Staff.objects.create(name='u', phone='9999999993', outlet=self.outlet, role='super_admin')
+
+    def test_scan_with_many_phone_numbers_saves(self):
+        from apps.purchases.tasks import process_invoice_ocr
+        draft = PurchaseInvoice.objects.create(
+            outlet=self.outlet, status='SAVED', invoice_image='purchase_invoices/x.jpg', created_by=self.user,
+            invoice_no='', invoice_date=date.today(), subtotal=0, taxable_amount=0, grand_total=0)
+        phones = '2358110, 7028165123/7387100871'                      # as printed on the Anil Medical bill
+        result = {'header': {'distributor_name': 'Anil Medical Stores', 'phone': phones,
+                             'gstin': '27AARHS1077E1ZUX', 'dl_no': '20b-218007/21b-218009 ' * 6},
+                  'items': [{'name': 'LACTOBRAIN'}], 'totals': {}, 'distributor_match': {},
+                  'confidence': 0.9, 'warnings': []}
+        with mock.patch('apps.purchases.tasks.process_invoice_image', return_value=result):
+            process_invoice_ocr(str(draft.id))
+        draft.refresh_from_db()
+        self.assertIsNone(draft.ocr_processing_error)                     # not "Invoice processing failed"
+        self.assertIsNotNone(draft.ocr_raw_data)
+        self.assertLessEqual(len(draft.ocr_distributor_phone), 20)
+        self.assertEqual(draft.ocr_distributor_phone, '2358110, 7028165123')   # whole numbers only
+        self.assertLessEqual(len(draft.ocr_distributor_gstin), 15)
+        self.assertLessEqual(len(draft.ocr_distributor_dl), 100)
+        self.assertEqual(draft.ocr_raw_data['header']['phone'], phones)    # full reading kept for matching
+
+    def test_fit_phone_never_cuts_a_number(self):
+        from apps.purchases.tasks import _fit_phone
+        self.assertEqual(_fit_phone('9022693815/9403502683', 20), '9022693815')
+        self.assertEqual(_fit_phone('0240 2325067, 2364167, 2352558', 20), '0240 2325067')
