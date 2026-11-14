@@ -139,7 +139,7 @@ There is no `CELERY_BEAT_SCHEDULE`, no `django_celery_beat`, and no beat contain
 | `apps/backend/apps/audit/` | Audit logging middleware/JWT auth, ActivityLog, DocumentRevisionV2 (bill revision history) |
 | `apps/backend/apps/attendance/` | Staff check-in/out with selfie photos |
 | `apps/backend/apps/integrations/`, `compliance/`, `apps/apps/gst/` | Sandbox GST provider client; compliance services (Rule 37 tracker). **Not in `INSTALLED_APPS`** / no routes; `apps/apps/gst` is empty |
-| `apps/frontend/app/` | Next.js routes: `(auth)/login`, `billing`, `dashboard/*`, `admin`, `gst`, `print`, `sw.ts`, `manifest.ts` |
+| `apps/frontend/app/` | Next.js routes: `(auth)/login`, `billing`, `dashboard/*`, `admin`, `gst`, `print`, `sw.ts` |
 | `apps/frontend/components/` | Feature components (billing, purchases, reports, accounts, settings, attendance, credit, customers…) + `ui/` shadcn primitives |
 | `apps/frontend/{hooks,lib,store,types,utils,schemas,config,constants}/` | React Query hooks; `lib/apiClient.ts`/`api.ts` clients + billing math; Zustand stores; shared types/zod; misc |
 | `apps/frontend/{__tests__,tests,e2e}/` | Jest unit tests; Playwright e2e (`tests/e2e`, `e2e`) |
@@ -1217,7 +1217,7 @@ Reports with NO page route: `BatchReportTab`, `GSTReportTab`, `PurchaseReportTab
 |---|---|---|---|---|---|
 | `/admin/audit` | `admin/audit/page.tsx` (298 L) | System audit log viewer + CSV export; client-side role check (admin/super_admin) | inline | `authStore`, `useDebounce` | GET `/audit/logs/`, GET `/audit/logs/export/`, GET `/staff/` |
 
-PWA: `app/manifest.ts` (name "MediFlow ERP", landscape, standalone, icons 192/512) and `app/sw.ts` (Serwist, `defaultCache`). `public/manifest.json` and `public/sw.js` also exist; root layout links `/manifest.json` (static) not the generated `/manifest.webmanifest`.
+PWA: ONE manifest, `public/manifest.json` (name "MediFlow POS & Pharmacy Management", standalone, `orientation: "any"` so a phone install follows the phone's rotation instead of being locked sideways, start page `/billing`, icons 192/512), linked once by `metadata.manifest` in `app/layout.tsx`. There is deliberately no `app/manifest.ts`: it served a second, conflicting manifest (`/manifest.webmanifest`) that also said landscape. `app/sw.ts` (Serwist, unused) and `public/sw.js` (cleanup worker) also exist.
 
 ### 6.2 Key components
 
