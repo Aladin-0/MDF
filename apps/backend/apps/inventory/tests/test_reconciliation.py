@@ -87,7 +87,9 @@ def test_reconcile_inventory_success():
     outlet = Outlet.objects.create(name='Test Outlet', organization=org)
     product = MasterProduct.objects.create(name='Paracetamol', pack_size=10, pack_unit='tablet', mrp=50.0)
     batch = Batch.objects.create(outlet=outlet, product=product, batch_no='BATCH001', expiry_date=timezone.now().date() + timedelta(days=365), mrp=Decimal('50.00'), purchase_rate=Decimal('40.00'), pack_size=10, qty_strips=5, qty_loose=0, is_active=True)
-    StockLedger.objects.create(outlet=outlet, product=product, batch=batch, txn_type='OPENING', txn_date=timezone.now().date(), qty_in=Decimal('50.000'), qty_out=Decimal('0.000'))
+    # the ledger counts PACKS: 5 strips of 10 is ledger quantity 5 (this test used 50, which only "matched" because the
+    # command compared the batch's UNITS with the ledger's packs)
+    StockLedger.objects.create(outlet=outlet, product=product, batch=batch, txn_type='OPENING', txn_date=timezone.now().date(), qty_in=Decimal('5.000'), qty_out=Decimal('0.000'), running_qty=Decimal('5.000'))
     out = StringIO()
     call_command('reconcile_inventory', stdout=out)
     output = out.getvalue()
@@ -99,12 +101,12 @@ def test_reconcile_inventory_discrepancy():
     outlet = Outlet.objects.create(name='Test Outlet 2', organization=org)
     product = MasterProduct.objects.create(name='Paracetamol 2', pack_size=10, pack_unit='tablet', mrp=50.0)
     batch = Batch.objects.create(outlet=outlet, product=product, batch_no='BATCH002', expiry_date=timezone.now().date() + timedelta(days=365), mrp=Decimal('50.00'), purchase_rate=Decimal('40.00'), pack_size=10, qty_strips=5, qty_loose=0, is_active=True)
-    StockLedger.objects.create(outlet=outlet, product=product, batch=batch, txn_type='OPENING', txn_date=timezone.now().date(), qty_in=Decimal('60.000'), qty_out=Decimal('0.000'))
+    StockLedger.objects.create(outlet=outlet, product=product, batch=batch, txn_type='OPENING', txn_date=timezone.now().date(), qty_in=Decimal('6.000'), qty_out=Decimal('0.000'), running_qty=Decimal('6.000'))
     out = StringIO()
     call_command('reconcile_inventory', stdout=out)
     output = out.getvalue()
-    assert 'discrepancies' in output
-    assert 'expected 60.0000, got 50' in output
+    assert 'ledger problem' in output
+    assert 'batch holds 50 unit(s), ledger says 60 unit(s)' in output
 
 @pytest.mark.django_db
 def test_playwright_seeded_batch_rebuild():

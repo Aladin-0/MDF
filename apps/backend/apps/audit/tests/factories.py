@@ -2,7 +2,7 @@ import uuid
 from apps.accounts.models import Staff, Customer
 from apps.core.models import Organization, Outlet
 from apps.inventory.models import MasterProduct, Batch
-from apps.audit.models import ActivityLog
+from apps.audit.models import ActivityEvent, ActivityLog
 from django.utils import timezone
 from datetime import timedelta
 
@@ -41,15 +41,52 @@ def make_batch(product, batch_number='B123', qty_strips=50, expiry=None, outlet=
     batch, _ = Batch.objects.create(product=product, batch_no=batch_number, defaults={'outlet': outlet if 'outlet' in locals() and outlet else make_outlet(), 'expiry_date': expiry, 'mrp': 100.0, 'purchase_rate': 80.0, 'sale_rate': 100.0, 'qty_strips': qty_strips, 'qty_loose': 0})
     return batch
 
-def get_latest_log(action=None, module=None, entity_type=None):
-    qs = ActivityLog.objects.all()
+class LegacyLog:
+    """An ActivityEvent seen with the attribute names the old ActivityLog had, so the older tests keep testing behaviour, not the table."""
+
+    def __init__(self, ev):
+        self._ev = ev
+
+    def __getattr__(self, name):
+        ev = self.__dict__['_ev']
+        if name == 'user':
+            from apps.accounts.models import Staff
+            return Staff.objects.filter(pk=ev.actor_id).first() if ev.actor_id else None
+        if name == 'timestamp':
+            return ev.occurred_at
+        if name == 'description':
+            return ev.metadata_json.get('description') or ev.summary
+        if name == 'http_method':
+            return ev.metadata_json.get('method', '')
+        if name == 'endpoint':
+            return ev.metadata_json.get('endpoint', '')
+        if name == 'changes_json':
+            return {c['field']: {'old': c.get('before'), 'new': c.get('after')} for c in (ev.changes_json or [])}
+        return getattr(ev, name)
+
+
+def _events(action=None, module=None, entity_type=None, **filters):
+    qs = ActivityEvent.objects.all()
     if action:
         qs = qs.filter(action=action)
     if module:
         qs = qs.filter(module=module)
     if entity_type:
         qs = qs.filter(entity_type=entity_type)
-    return qs.order_by('-timestamp').first()
+    return qs.filter(**filters) if filters else qs
+
+
+def get_latest_log(action=None, module=None, entity_type=None):
+    ev = _events(action, module, entity_type).order_by('-occurred_at').first()
+    return LegacyLog(ev) if ev else None
+
 
 def count_logs(**filters):
-    return ActivityLog.objects.filter(**filters).count()
+    return _events(**filters).count()
+
+
+def allow_history_rewrite():
+    """The audit table refuses UPDATE / DELETE of events (a database trigger). A test that needs to back-date an event lifts that for its own transaction."""
+    from django.db import connection
+    with connection.cursor() as c:
+        c.execute("SET LOCAL audit.allow_purge = 'on'")

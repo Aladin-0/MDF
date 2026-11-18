@@ -4,7 +4,7 @@ import {
     CreditCard, UserCog, CalendarCheck, BarChart3, Settings,
     Pill, ChevronLeft, ChevronRight, MoreVertical, Wallet, Building2,
     BookOpen, ArrowUpLeft, ArrowDownLeft, List, Scale, PieChart, FileSearch,
-    ClipboardList, TrendingUp, History,
+    ClipboardList, TrendingUp, History, CalendarClock, ShieldAlert,
 } from 'lucide-react';
 
 export type SubNavItem = {
@@ -57,6 +57,7 @@ export const NAV_ITEMS: NavItem[] = [
         permission: 'view_outlet' as Permission,
         subItems: [
             { label: 'Stock List', href: '/dashboard/inventory', icon: List },
+            { label: 'Expiry Manager', href: '/dashboard/inventory/expiry', icon: CalendarClock },
             { label: 'Stock Ledger', href: '/dashboard/stockledger', icon: ClipboardList },
         ],
     },
@@ -123,6 +124,12 @@ export const NAV_ITEMS: NavItem[] = [
             { label: 'Reports Dashboard', href: '/dashboard/reports', icon: LayoutDashboard },
             { label: 'Daily Report', href: '/dashboard/reports/daily', icon: ClipboardList },
         ],
+    },
+    {
+        label: 'Audit',
+        href: '/admin/audit',
+        icon: ShieldAlert,
+        permission: 'view_audit_trail' as Permission,   // super admin only
     },
     {
         label: 'Settings',

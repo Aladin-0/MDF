@@ -1,298 +1,83 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { auditApi, staffApi } from '@/lib/apiClient';
-import { useAuthStore } from '@/store/authStore';
-import { useDebounce } from '@/hooks/useDebounce';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Lock, ShieldAlert } from 'lucide-react';
+import { ActivityTab } from '@/components/audit/ActivityTab';
+import { AttentionTab } from '@/components/audit/AttentionTab';
+import { EventDetail } from '@/components/audit/EventDetail';
+import { PeopleTab } from '@/components/audit/PeopleTab';
+import { SettingsTab } from '@/components/audit/SettingsTab';
+import { usePermissions } from '@/hooks/usePermissions';
+import { EMPTY_FILTERS, ago, type AuditEvent, type EventFilters } from '@/lib/audit';
+import { fetchEvent, fetchPeople, fetchSummary } from '@/lib/auditApi';
+import { cn } from '@/lib/utils';
+
+type Tab = 'attention' | 'activity' | 'people' | 'settings';
+const TABS: { id: Tab; label: string }[] = [
+    { id: 'attention', label: 'Needs attention' },
+    { id: 'activity', label: 'Activity' },
+    { id: 'people', label: 'People' },
+    { id: 'settings', label: 'Settings' },
+];
 
 export default function AuditPage() {
-    const { user } = useAuthStore();
-    const router = useRouter();
-    const [logs, setLogs] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
-    const [page, setPage] = useState(1);
-    const [totalPages, setTotalPages] = useState(1);
-    const [totalRecords, setTotalRecords] = useState(0);
-    
-    const [filterModule, setFilterModule] = useState('all');
-    const [filterAction, setFilterAction] = useState('');
-    const [filterSearch, setFilterSearch] = useState('');
-    const [filterStartDate, setFilterStartDate] = useState('');
-    const [filterEndDate, setFilterEndDate] = useState('');
-    const [filterUser, setFilterUser] = useState('all');
-    
-    const [selectedLog, setSelectedLog] = useState<any>(null);
-    const [staffList, setStaffList] = useState<any[]>([]);
+    const { hasPermission } = usePermissions();
+    const allowed = hasPermission('view_audit_trail');
+    const [tab, setTab] = useState<Tab>('attention');
+    const [filters, setFilters] = useState<EventFilters>(EMPTY_FILTERS);
+    const [open, setOpen] = useState<AuditEvent | null>(null);
+    const [pickedTab, setPickedTab] = useState(false);
 
-    const debouncedSearch = useDebounce(filterSearch, 500);
-    const debouncedAction = useDebounce(filterAction, 500);
+    const summary = useQuery({ queryKey: ['audit', 'summary'], queryFn: fetchSummary, enabled: allowed, refetchInterval: 60_000 });
+    const people = useQuery({ queryKey: ['audit', 'people', 30], queryFn: () => fetchPeople(30), enabled: allowed, staleTime: 60_000 });
 
+    // open on "Activity" when there is nothing to look at (unless the person already chose a tab)
     useEffect(() => {
-        if (user?.outletId) {
-            staffApi.list(user.outletId).then(setStaffList).catch(console.error);
-        }
-    }, [user]);
+        if (!pickedTab && summary.data && summary.data.newFlags.total === 0) setTab('activity');
+    }, [summary.data, pickedTab]);
 
-    useEffect(() => {
-        if (!user) return;
-        if (user.role !== 'admin' && user.role !== 'super_admin') {
-            setError('Unauthorized access. Admin privileges required.');
-            setLoading(false);
-            return;
-        }
-
-        const abortController = new AbortController();
-
-        const fetchLogs = async () => {
-            setLoading(true);
-            try {
-                const params: any = { page, pageSize: 50 };
-                if (filterModule && filterModule !== 'all') params.module = filterModule;
-                if (debouncedAction) params.action = debouncedAction;
-                if (debouncedSearch) params.search = debouncedSearch;
-                if (filterStartDate) params.startDate = new Date(filterStartDate).toISOString();
-                if (filterEndDate) params.endDate = new Date(filterEndDate).toISOString();
-                if (filterUser && filterUser !== 'all') params.user = filterUser;
-                
-                const data = await auditApi.getLogs(params, abortController.signal);
-                setLogs(data.results || data.data || []);
-                setTotalRecords(data.count || 0);
-                setTotalPages(Math.ceil((data.count || 0) / 50) || 1);
-            } catch (err: any) {
-                if (err.name === 'AbortError') return;
-                setError(err.detail || 'Failed to load audit logs');
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchLogs();
-
-        return () => {
-            abortController.abort();
-        };
-    }, [user, page, filterModule, debouncedAction, debouncedSearch, filterStartDate, filterEndDate, filterUser]);
-
-    const handleExport = async () => {
-        try {
-            const params: any = {};
-            if (filterModule && filterModule !== 'all') params.module = filterModule;
-            if (debouncedAction) params.action = debouncedAction;
-            if (debouncedSearch) params.search = debouncedSearch;
-            if (filterStartDate) params.startDate = new Date(filterStartDate).toISOString();
-            if (filterEndDate) params.endDate = new Date(filterEndDate).toISOString();
-            if (filterUser && filterUser !== 'all') params.user = filterUser;
-            
-            await auditApi.exportLogs(params);
-        } catch (err: any) {
-            alert(err.detail || 'Failed to export audit logs');
-        }
-    };
-
-    if (error) {
+    if (!allowed) {
         return (
-            <div className="p-0 sm:p-6">
-                <Card className="border-red-200">
-                    <CardHeader>
-                        <CardTitle className="text-red-600">Access Denied</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <p>{error}</p>
-                        <Button className="mt-4" onClick={() => router.push('/dashboard')}>Return to Dashboard</Button>
-                    </CardContent>
-                </Card>
+            <div className="mx-auto flex max-w-md flex-col items-center gap-2 px-4 py-20 text-center">
+                <Lock className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
+                <h1 className="text-lg font-semibold">Only the owner can open the audit trail</h1>
+                <p className="text-sm text-muted-foreground">It records who did what in every shop, so it is limited to the super admin account.</p>
             </div>
         );
     }
 
+    const s = summary.data;
+    const flagTotal = s?.newFlags.total ?? 0;
+    const pick = (t: Tab) => { setPickedTab(true); setTab(t); };
+    const openEventById = async (id: string) => { try { setOpen(await fetchEvent(id)); } catch { /* the toast of the failed request is shown by the shared client */ } };
+
     return (
-        <div className="p-0 sm:p-6 max-w-7xl mx-auto space-y-4 sm:space-y-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
-                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Audit Logs</h1>
-                <Button onClick={handleExport} variant="outline" className="bg-white w-full sm:w-auto">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-                    Export CSV
-                </Button>
-            </div>
-            
-            <div className="flex flex-wrap gap-3 sm:gap-4 items-center">
-                <Select value={filterModule} onValueChange={(val) => { setFilterModule(val); setPage(1); }}>
-                    <SelectTrigger className="w-full sm:w-[180px]">
-                        <SelectValue placeholder="All Modules" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">All Modules</SelectItem>
-                        <SelectItem value="auth">Authentication</SelectItem>
-                        <SelectItem value="purchases">Purchases</SelectItem>
-                        <SelectItem value="billing">Billing</SelectItem>
-                        <SelectItem value="inventory">Inventory</SelectItem>
-                        <SelectItem value="payments">Payments</SelectItem>
-                        <SelectItem value="patient">Patient</SelectItem>
-                        <SelectItem value="staff">Staff / Admin</SelectItem>
-                        <SelectItem value="accounts">Accounts / Vouchers</SelectItem>
-                    </SelectContent>
-                </Select>
-                
-                <Select value={filterUser} onValueChange={(val) => { setFilterUser(val); setPage(1); }}>
-                    <SelectTrigger className="w-full sm:w-[180px]">
-                        <SelectValue placeholder="All Users" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">All Users</SelectItem>
-                        {staffList.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                    </SelectContent>
-                </Select>
+        <div className="mx-auto w-full max-w-5xl px-3 py-4 sm:px-6">
+            <header className="mb-4">
+                <h1 className="flex items-center gap-2 text-xl font-semibold"><ShieldAlert className="h-5 w-5" aria-hidden="true" /> Audit trail</h1>
+                <p className="text-sm text-muted-foreground">Who changed what, and when. {s ? `${s.eventsToday} event${s.eventsToday === 1 ? '' : 's'} today · last ${s.lastEventAt ? ago(s.lastEventAt) : 'never'} · kept for ${s.retentionDays} days` : ''}</p>
+            </header>
 
-                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-                    <span className="text-sm text-gray-500">From</span>
-                    <Input 
-                        type="date"
-                        value={filterStartDate}
-                        onChange={(e) => { setFilterStartDate(e.target.value); setPage(1); }}
-                        className="w-auto flex-1 min-w-[9rem] sm:flex-none"
-                    />
-                    <span className="text-sm text-gray-500">To</span>
-                    <Input 
-                        type="date"
-                        value={filterEndDate}
-                        onChange={(e) => { setFilterEndDate(e.target.value); setPage(1); }}
-                        className="w-auto flex-1 min-w-[9rem] sm:flex-none"
-                    />
-                </div>
-                
-                <Input 
-                    placeholder="Filter by Action..." 
-                    value={filterAction}
-                    onChange={(e) => { setFilterAction(e.target.value); setPage(1); }}
-                    className="w-full sm:w-[160px]"
-                />
-
-                <Input 
-                    placeholder="Search description or entity..." 
-                    value={filterSearch}
-                    onChange={(e) => { setFilterSearch(e.target.value); setPage(1); }}
-                    className="w-full sm:w-auto sm:flex-1 sm:min-w-[200px]"
-                />
-            </div>
-
-            <Card>
-                <CardContent className="p-0">
-                    <div className="overflow-x-auto">
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Timestamp</TableHead>
-                                    <TableHead>User</TableHead>
-                                    <TableHead>Action</TableHead>
-                                    <TableHead>Module</TableHead>
-                                    <TableHead>Object</TableHead>
-                                    <TableHead>Description</TableHead>
-                                    <TableHead>IP Address</TableHead>
-                                    <TableHead>Action</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {loading ? (
-                                    <TableRow>
-                                        <TableCell colSpan={7} className="text-center py-8 text-slate-500">Loading audit logs...</TableCell>
-                                    </TableRow>
-                                ) : logs.length === 0 ? (
-                                    <TableRow>
-                                        <TableCell colSpan={7} className="text-center py-8 text-slate-500">No audit logs found.</TableCell>
-                                    </TableRow>
-                                ) : (
-                                    logs.map((log: any) => (
-                                        <TableRow key={log.id}>
-                                            <TableCell className="whitespace-nowrap">
-                                                {new Date(log.timestamp).toLocaleString()}
-                                            </TableCell>
-                                            <TableCell>{log.user_email || 'System'}</TableCell>
-                                            <TableCell>
-                                                <Badge variant={log.action.includes('FAILED') ? 'destructive' : 'secondary'}>
-                                                    {log.action}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell className="uppercase text-xs font-semibold">{log.module}</TableCell>
-                                            <TableCell className="text-sm font-medium">{log.entity_label || log.entity_id}</TableCell>
-                                            <TableCell className="max-w-xs truncate" title={log.description}>{log.description}</TableCell>
-                                            <TableCell>
-                                                {log.ip_address ? (
-                                                    <div className="flex flex-col gap-1 items-start">
-                                                        <span className="text-xs font-mono">{log.ip_address}</span>
-                                                        <Badge variant="outline" className={`text-[10px] px-1 py-0 h-4 ${log.ip_is_routable === true ? 'bg-green-50 text-green-700 border-green-200' : log.ip_is_routable === false ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-gray-50 text-gray-700 border-gray-200'}`}>
-                                                            {log.ip_is_routable === true ? 'Public' : log.ip_is_routable === false ? 'Internal / VPN' : 'Unknown'}
-                                                        </Badge>
-                                                    </div>
-                                                ) : (
-                                                    <span className="text-xs text-gray-400">N/A</span>
-                                                )}
-                                            </TableCell>
-                                            <TableCell>
-                                                {(log.changes_json && Object.keys(log.changes_json).length > 0) && (
-                                                    <Button variant="ghost" size="sm" onClick={() => setSelectedLog(log)}>View Diff</Button>
-                                                )}
-                                            </TableCell>
-                                        </TableRow>
-                                    ))
-                                )}
-                            </TableBody>
-                        </Table>
-                    </div>
-                </CardContent>
-            </Card>
-
-            <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center px-2">
-                <div className="text-sm text-gray-500">
-                    Showing page {page} of {totalPages} ({totalRecords} records)
-                </div>
-                <div className="flex space-x-2">
-                    <Button variant="outline" disabled={page === 1 || loading} onClick={() => setPage(p => p - 1)}>Previous</Button>
-                    <Button variant="outline" disabled={page >= totalPages || loading} onClick={() => setPage(p => p + 1)}>Next</Button>
-                </div>
-            </div>
-            
-            <Dialog open={!!selectedLog} onOpenChange={() => setSelectedLog(null)}>
-                <DialogContent className="max-w-3xl">
-                    <DialogHeader>
-                        <DialogTitle>Change Diff: {selectedLog?.action} on {selectedLog?.entity_label}</DialogTitle>
-                    </DialogHeader>
-                    <div className="mt-4 max-h-[60dvh] overflow-auto">
-                        {selectedLog?.changes_json && (
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Field</TableHead>
-                                        <TableHead>Old Value</TableHead>
-                                        <TableHead>New Value</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {Object.entries(selectedLog.changes_json).map(([field, diff]: [string, any]) => (
-                                        <TableRow key={field}>
-                                            <TableCell className="font-semibold">{field}</TableCell>
-                                            <TableCell className="text-red-600 bg-red-50/50 line-through decoration-red-300">
-                                                {JSON.stringify(diff.old)}
-                                            </TableCell>
-                                            <TableCell className="text-green-600 bg-green-50/50">
-                                                {JSON.stringify(diff.new)}
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
+            <div role="tablist" aria-label="Audit sections" className="mb-4 flex gap-1 overflow-x-auto border-b">
+                {TABS.map((t) => (
+                    <button key={t.id} role="tab" type="button" aria-selected={tab === t.id} onClick={() => pick(t.id)}
+                        className={cn('-mb-px shrink-0 border-b-2 px-3 py-2 text-sm font-medium', tab === t.id ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground')}>
+                        {t.label}
+                        {t.id === 'attention' && flagTotal > 0 && (
+                            <span className={cn('ml-1.5 rounded-full px-1.5 py-0.5 text-[11px] font-bold', s && s.newFlags.critical > 0 ? 'bg-red-600 text-white' : 'bg-amber-500 text-white')} aria-label={`${flagTotal} to look at`}>{flagTotal}</span>
                         )}
-                    </div>
-                </DialogContent>
-            </Dialog>
+                        {t.id === 'settings' && !!s?.failedWrites && <span className="ml-1.5 inline-block h-2 w-2 rounded-full bg-red-500" aria-label="Some records could not be saved" />}
+                    </button>
+                ))}
+            </div>
+
+            {tab === 'attention' && <AttentionTab onOpenEvent={openEventById} />}
+            {tab === 'activity' && <ActivityTab filters={filters} setFilters={setFilters} people={people.data?.results ?? []} onOpen={setOpen} />}
+            {tab === 'people' && <PeopleTab people={people.data?.results ?? []} loading={people.isLoading} days={30} onShow={(id) => { setFilters({ ...EMPTY_FILTERS, actor: id }); pick('activity'); }} />}
+            {tab === 'settings' && <SettingsTab />}
+
+            {open && <EventDetail event={open} onClose={() => setOpen(null)} />}
         </div>
     );
 }

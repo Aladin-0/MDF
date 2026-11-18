@@ -15,7 +15,7 @@ from apps.accounts.models import VoucherBillAdjustment
 class VoucherModTests(TestCase):
 
     def setUp(self):
-        self.patcher = patch('apps.audit.services.create_audit_log_async.delay')
+        self.patcher = patch('apps.audit.tasks.create_audit_log_async.delay')
         self.mock_delay = self.patcher.start()
         self.client = APIClient()
         self.org = Organization.objects.create(name='Test Org')

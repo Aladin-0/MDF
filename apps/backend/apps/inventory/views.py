@@ -226,6 +226,7 @@ class BatchDetailUpdateView(APIView):
                     user=request.user,
                     request=request,
                     outlet=batch.outlet,
+                    code='batch.edited', ctx={'detail': summary},
                 )
 
         if changed:
@@ -587,6 +588,7 @@ class ProductDetailView(APIView):
                 user=request.user,
                 request=request,
                 outlet=getattr(request.user, 'outlet', None),
+                code='product.edited',
             )
         logger.info(f"MasterProduct {product.id} updated by {request.user} ({batches_updated} batches re-synced)")
         payload = serialize_product(product)
@@ -1672,6 +1674,9 @@ class InventoryAdjustView(APIView):
 
                 # Post to Stock Ledger
                 from apps.inventory.services import post_stock_ledger_entry
+                from apps.inventory.ledger_health import open_if_missing
+                # a batch with no ledger history would start from zero here and show a negative balance
+                open_if_missing(outlet, batch, Decimal(old_qty_strips) + Decimal(old_qty_loose) / Decimal(batch.pack_size or 1), staff if staff else request.user)
                 from datetime import date as _date
                 # Compute the strip-equivalent qty for the ledger
                 if adjust_unit == 'loose':
@@ -1712,6 +1717,13 @@ class InventoryAdjustView(APIView):
                         actor=staff if staff else request.user,
                     )
 
+                # what leaves the shelf, in packs and at cost: the audit rules read it. Worked out here, defensively: it must never be able to fail the adjustment.
+                try:
+                    removed_packs = abs(Decimal(str(qty)) if adjust_unit != 'loose' else Decimal(str(qty)) / Decimal(str(batch.pack_size or 1)))
+                    removed_value = float(removed_packs * (batch.purchase_rate or 0)) if qty < 0 else 0.0
+                    detail = f"{Decimal(str(qty)):+f} {adjust_unit}"
+                except Exception:
+                    removed_value, detail = 0.0, f"{qty} {adjust_unit}"
                 log_activity(
                     action="ADJUST",
                     module="inventory",
@@ -1724,7 +1736,10 @@ class InventoryAdjustView(APIView):
                     changes={
                         'qty_strips': {'old': old_qty_strips, 'new': batch.qty_strips},
                         'qty_loose': {'old': old_qty_loose, 'new': batch.qty_loose}
-                    }
+                    },
+                    code='stock.adjusted', reason=reason or '', ctx={'detail': detail},
+                    amount=removed_value or None,
+                    metadata={'count': 1, 'value': removed_value, 'adjust_type': str(adjust_type), 'unit': adjust_unit},
                 )
 
         except Exception as e:
@@ -1844,126 +1859,87 @@ class StockLedgerView(APIView):
                 Q(party_name__icontains=search_query)
             )
 
-        # Calculate all aggregates in a single consolidated database roundtrip on the un-sliced query set
-        totals = qs.aggregate(
-            total_in=Sum('qty_in'),
-            total_out=Sum('qty_out'),
-            total_value_in=Sum('value_in'),
-            total_value_out=Sum('value_out')
-        )
-        total_in = totals['total_in'] or Decimal('0')
-        total_out = totals['total_out'] or Decimal('0')
-        total_value_in = totals['total_value_in'] or Decimal('0')
-        total_value_out = totals['total_value_out'] or Decimal('0')
+        from django.db.models import Sum as _Sum
+        from apps.core.permissions import effective_permissions
+        from apps.inventory import ledger_view as lv
+        show_rates = 'view_purchase_rates' in effective_permissions(request.user)    # cost figures are for people who may see purchase rates
+
+        # Every aggregate in ONE database round trip on the un-sliced query set
+        aggs = {'total_in': _Sum('qty_in'), 'total_out': _Sum('qty_out')}
+        for name, (field, cond) in lv.summary_filters().items():
+            aggs[name] = _Sum(field, filter=cond)
+        if show_rates:
+            aggs.update(total_value_in=_Sum('value_in'), total_value_out=_Sum('value_out'))
+        totals = qs.aggregate(**aggs)
+        num = lambda k: float(totals.get(k) or 0)
+        summary = {
+            'total_in': num('total_in'), 'total_out': num('total_out'),
+            'received': num('received'), 'sold': num('sold'), 'customer_returns': num('customer_returns'),
+            'written_off': num('written_off'), 'supplier_returns': num('supplier_returns'), 'added': num('added'),
+            'total_value_in': num('total_value_in') if show_rates else None,
+            'total_value_out': num('total_value_out') if show_rates else None,
+        }
 
         export_format = request.query_params.get('export_format')
         if export_format == 'xlsx':
-            return self.export_xlsx(qs)
+            return self.export_xlsx(request, outlet, qs, show_rates, summary, batch_id, product_id, start_date, end_date, txn_type, search_query)
 
         # Pagination
-        page = int(request.query_params.get('page', 1))
-        page_size = int(request.query_params.get('pageSize') or request.query_params.get('page_size', 50))
+        try:
+            page = max(1, int(request.query_params.get('page', 1)))
+            page_size = max(1, min(100, int(request.query_params.get('pageSize') or request.query_params.get('page_size', 50))))
+        except ValueError:
+            return Response({'detail': 'page and pageSize must be whole numbers'}, status=status.HTTP_400_BAD_REQUEST)
         total_records = qs.count()
         total_pages = (total_records + page_size - 1) // page_size
-        
+
         qs = qs[(page - 1) * page_size : page * page_size]
+        page_entries = list(qs)
+        sources = lv.resolve_sources(page_entries)
+        data = [{**lv.row_json(entry, show_rates), 'source': sources.get(str(entry.id))} for entry in page_entries]   # `source`: the invoice to open
 
-        TXN_LABELS = {
-            'OPENING':         'Opening Stock',
-            'PURCHASE_IN':     'Purchase In',
-            'SALE_OUT':        'Sale Out',
-            'PURCHASE_RETURN': 'Purchase Return',
-            'SALE_RETURN':     'Sale Return',
-            'ADJUSTMENT_IN':   'Adjustment In',
-            'ADJUSTMENT_OUT':  'Adjustment Out',
-        }
-
-        data = []
-        for entry in qs:
-            data.append({
-                'id': str(entry.id),
-                'batch_id': str(entry.batch.id) if entry.batch else None,
-                'product_id': str(entry.product.id) if entry.product else None,
-                'txn_date': entry.txn_date.isoformat(),
-                'txn_type': entry.txn_type,
-                'txn_type_label': TXN_LABELS.get(entry.txn_type, entry.txn_type),
-                'voucher_type': entry.voucher_type,
-                'voucher_number': entry.voucher_number,
-                'party_name': entry.party_name,
-                'product_name': entry.product.name if entry.product else '',
-                'batch_number': entry.batch_number,
-                'expiry_date': entry.expiry_date.isoformat() if entry.expiry_date else None,
-                'pack_size': entry.product.pack_size if entry.product else 1,
-                'qty_in': float(entry.qty_in),
-                'qty_out': float(entry.qty_out),
-                'rate': float(entry.rate),
-                'value_in': float(entry.value_in),
-                'value_out': float(entry.value_out),
-                'running_qty': float(entry.running_qty),
-                'running_value': float(entry.running_value),
-                'created_at': entry.created_at.isoformat(),
-            })
-
-        return Response({
+        body = {
             'data': data,
-            'summary': {
-                'total_in': float(total_in),
-                'total_out': float(total_out),
-                'total_value_in': float(total_value_in),
-                'total_value_out': float(total_value_out),
-            },
+            'summary': summary,
             'pagination': {
                 'page': page,
                 'pageSize': page_size,
                 'totalPages': total_pages,
                 'totalRecords': total_records
             }
-        })
-
-    def export_xlsx(self, qs):
-        import openpyxl
-        from django.http import HttpResponse
-
-        wb = openpyxl.Workbook()
-        ws = wb.active
-        ws.title = "Stock Ledger"
-
-        headers = [
-            "Date", "Type", "Voucher No", "Party", "Product", "Batch",
-            "Expiry", "Qty In", "Qty Out", "Rate", "Value In", "Value Out", "Stock Balance"
-        ]
-        ws.append(headers)
-
-        TXN_LABELS = {
-            'OPENING': 'Opening Stock',
-            'PURCHASE_IN': 'Purchase In',
-            'SALE_OUT': 'Sale Out',
-            'PURCHASE_RETURN': 'Purchase Return',
-            'SALE_RETURN': 'Sale Return',
-            'ADJUSTMENT_IN': 'Adjustment In',
-            'ADJUSTMENT_OUT': 'Adjustment Out',
         }
+        if batch_id:
+            sel = Batch.objects.filter(id=batch_id, outlet=outlet).select_related('product').first()
+            if sel:
+                body['batch'] = lv.batch_card(sel, show_rates)
+        return Response(body)
 
-        for entry in qs:
-            ws.append([
-                entry.txn_date.strftime('%Y-%m-%d') if entry.txn_date else '',
-                TXN_LABELS.get(entry.txn_type, entry.txn_type),
-                entry.voucher_number or '',
-                entry.party_name or '',
-                entry.product.name if entry.product else '',
-                entry.batch_number or '',
-                entry.expiry_date.strftime('%Y-%m-%d') if entry.expiry_date else '',
-                float(entry.qty_in or 0),
-                float(entry.qty_out or 0),
-                float(entry.rate or 0),
-                float(entry.value_in or 0),
-                float(entry.value_out or 0),
-                float(entry.running_qty or 0)
-            ])
+    def export_xlsx(self, request, outlet, qs, show_rates, summary, batch_id, product_id, start_date, end_date, txn_type, search_query):
+        """The same filters as the screen as a tidy workbook (see ledger_export.py): oldest first, real dates and numbers, a Summary sheet."""
+        from django.http import HttpResponse
+        from apps.inventory import ledger_export as lx
+        from apps.inventory import ledger_view as lv
 
-        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        total = qs.count()
+        entries = qs.order_by('txn_date', 'created_at')[:lx.MAX_ROWS]
+        product_name = batch_label = None
+        one_pack = None
+        if batch_id:
+            b = Batch.objects.filter(id=batch_id, outlet=outlet).select_related('product').first()
+            if b:
+                batch_label = f"{b.product.name if b.product else 'Custom product'} {b.batch_no}"
+                one_pack = lv.pack_of(b)
+        elif product_id:
+            from apps.inventory.models import MasterProduct
+            p = MasterProduct.objects.filter(id=product_id).first()
+            product_name = p.name if p else None
+        event_label = lx.EVENT_FILTER_LABELS.get(txn_type, '') if txn_type else ''
+        data = lx.build_workbook(
+            entries.iterator(chunk_size=1000), show_rates=show_rates, outlet_name=outlet.name, summary=summary, total_records=total, one_pack=one_pack,
+            filters_line=lx.filters_text(start=start_date, end=end_date, product=product_name, batch=batch_label, event_label=event_label, search=search_query),
+        )
+        response = HttpResponse(data, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         response['Content-Disposition'] = 'attachment; filename="stock_ledger_export.xlsx"'
-        wb.save(response)
         return response
 
 class BatchAvailabilityCheckView(APIView):

@@ -167,7 +167,8 @@ export function InvoicePreviewModal({ isOpen, onClose, invoice, onNewBill, onEdi
                                 <Edit className="w-4 h-4 mr-2" /> Edit
                             </Button>
                         )}
-                        <Button variant="outline" size="sm" onClick={() => { }}>
+                        {/* it had an empty handler: nothing happened. The browser's print window saves a PDF ("Save as PDF"). */}
+                        <Button variant="outline" size="sm" onClick={handlePrint} title="Opens the print window: choose “Save as PDF” as the printer to download it">
                             <Download className="w-4 h-4 mr-2" /> PDF
                         </Button>
                         <Button size="sm" onClick={handlePrint}>

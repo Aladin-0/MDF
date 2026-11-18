@@ -30,10 +30,36 @@ describe('BatchGrid', () => {
     it('shows every batch as a row of editable cells, pack size included, so none has to be opened one by one', () => {
         setup();
         for (const no of ['B1', 'B2', 'B3']) {
-            for (const label of ['Batch no', 'Expiry', 'Pack size', 'MRP', 'Purchase rate', 'Landing rate', 'Rack']) expect(cell(no, label)).toBeEnabled();
+            for (const label of ['Batch no', 'Mfg date', 'Expiry', 'Pack size', 'Pack type', 'Pack unit', 'MRP', 'Purchase rate', 'Landing rate', 'Rack']) expect(cell(no, label)).toBeEnabled();
         }
         expect(cell('B2', 'MRP').value).toBe('120');
         expect(cell('B1', 'Pack size').value).toBe('10');
+    });
+
+    it('an empty Landing or Rack is still a visible, editable box (not an invisible one), and Mfg date / type / unit can be changed here', async () => {
+        const p = setup({ batches: [batch('b1', { landingRate: null, rackLocation: null, packUnit: 'Tablet' })] });
+        expect(cell('B1', 'Landing rate').value).toBe('');
+        expect(cell('B1', 'Landing rate').className).toMatch(/border-input/);
+        expect(cell('B1', 'Rack').className).toMatch(/border-input/);
+        expect((cell('B1', 'Pack unit') as unknown as HTMLSelectElement).value).toBe('tablet');   // 'Tablet' is the tablet option, not a change
+        expect(screen.getByText(/No changes yet/)).toBeInTheDocument();
+        await type(cell('B1', 'Landing rate'), '55');
+        await type(cell('B1', 'Rack'), 'A-3');
+        fireEvent.change(cell('B1', 'Mfg date'), { target: { value: '2027-01-01' } });
+        fireEvent.change(cell('B1', 'Pack type'), { target: { value: 'box' } });
+        fireEvent.change(cell('B1', 'Pack unit'), { target: { value: 'piece' } });
+        await userEvent.click(saveButton());
+        await waitFor(() => expect(p.onSaveBatch).toHaveBeenCalledWith('b1', { landingRate: 55, rackLocation: 'A-3', mfgDate: '2027-01-01', packType: 'box', packUnit: 'piece' }));
+    });
+
+    it('greys out a sold-out batch with a "Sold out" tag, but it stays visible and editable', () => {
+        setup();                                              // b3 has no stock
+        expect(screen.getAllByText('Sold out')).toHaveLength(1);
+        const row = cell('B3', 'MRP').closest('tr') as HTMLElement;
+        expect(row).toHaveAttribute('data-sold-out');
+        expect(cell('B3', 'MRP')).toBeEnabled();
+        expect(cell('B3', 'MRP').className).toMatch(/text-muted-foreground/);
+        expect((cell('B1', 'MRP').closest('tr') as HTMLElement)).not.toHaveAttribute('data-sold-out');
     });
 
     it('hides the cost columns from people who may not see purchase rates', () => {

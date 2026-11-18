@@ -2075,27 +2075,6 @@ const realDoctorsApi = {
 };
 
 
-export const auditApi = {
-    getLogs: async (params?: any, signal?: AbortSignal): Promise<any> => {
-        const searchParams = new URLSearchParams(params || {});
-        const response = await fetch(`${API_URL}/audit/logs/?${searchParams.toString()}`, { headers: getHeaders(), signal });
-        await assertOk(response);
-        return response.json();
-    },
-    exportLogs: async (params?: any): Promise<void> => {
-        const searchParams = new URLSearchParams(params || {});
-        const response = await fetch(`${API_URL}/audit/logs/export/?${searchParams.toString()}`, { headers: getHeaders() });
-        await assertOk(response);
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `audit-logs-${new Date().toISOString().split('T')[0]}.csv`;
-        a.click();
-        window.URL.revokeObjectURL(url);
-    }
-};
-
 const realGstApi = {
     getPeriods: async () => {
         const response = await fetch(`${API_URL}/gst/periods/`, { headers: getHeaders() });

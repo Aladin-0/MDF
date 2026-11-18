@@ -15,6 +15,7 @@ import {
 import { formatCurrency } from '@/lib/gst';
 import { batchState, type DetailBatch } from '@/lib/productDetail';
 import { cn, formatQty } from '@/lib/utils';
+import { PACK_TYPE_OPTIONS, PACK_UNIT_OPTIONS } from '@/constants/productBehavior';
 import type { SaveResult } from './EditBatchModal';
 
 type GridBatchRow = DetailBatch & { packType?: string | null; packUnit?: string | null };
@@ -31,22 +32,39 @@ interface BatchGridProps {
     onExit: () => void;
 }
 
-interface ColumnSpec { field: GridField; label: string; align: 'left' | 'right'; inputMode?: 'decimal' | 'numeric' | 'text'; type?: 'date'; width: string; ratesOnly?: boolean }
+interface ColumnSpec { field: GridField; label: string; align: 'left' | 'right'; inputMode?: 'decimal' | 'numeric' | 'text'; type?: 'date'; select?: 'packType' | 'packUnit'; width: string; ratesOnly?: boolean }
 
+/**
+ * EVERY batch field is a column, each a visible box (an empty Landing or Rack used to be an invisible borderless input, so
+ * it looked like the grid only had a few editable fields). Quantity is the one read-only column (use Adjust: PIN, audited);
+ * it sits between the pack columns and the prices.
+ */
 const COLUMNS: ColumnSpec[] = [
-    { field: 'batchNo', label: 'Batch', align: 'left', width: 'w-40' },
-    { field: 'expiryDate', label: 'Expiry', align: 'left', type: 'date', width: 'w-44' },
-    { field: 'packSize', label: 'Pack size', align: 'right', inputMode: 'numeric', width: 'w-32' },
-    { field: 'mrp', label: 'MRP', align: 'right', inputMode: 'decimal', width: 'w-28' },
-    { field: 'purchaseRate', label: 'Purchase', align: 'right', inputMode: 'decimal', width: 'w-28', ratesOnly: true },
-    { field: 'landingRate', label: 'Landing', align: 'right', inputMode: 'decimal', width: 'w-28', ratesOnly: true },
-    { field: 'rackLocation', label: 'Rack', align: 'left', width: 'w-32' },
+    { field: 'batchNo', label: 'Batch', align: 'left', width: 'w-[7.5rem]' },
+    { field: 'mfgDate', label: 'Mfg date', align: 'left', type: 'date', width: 'w-[9rem]' },
+    { field: 'expiryDate', label: 'Expiry', align: 'left', type: 'date', width: 'w-[9rem]' },
+    { field: 'packSize', label: 'Pack size', align: 'right', inputMode: 'numeric', width: 'w-[5.5rem]' },
+    { field: 'packType', label: 'Pack type', align: 'left', select: 'packType', width: 'w-[6.5rem]' },
+    { field: 'packUnit', label: 'Unit', align: 'left', select: 'packUnit', width: 'w-[7rem]' },
+    { field: 'mrp', label: 'MRP', align: 'right', inputMode: 'decimal', width: 'w-[6rem]' },
+    { field: 'purchaseRate', label: 'Purchase', align: 'right', inputMode: 'decimal', width: 'w-[6rem]', ratesOnly: true },
+    { field: 'landingRate', label: 'Landing', align: 'right', inputMode: 'decimal', width: 'w-[6rem]', ratesOnly: true },
+    { field: 'rackLocation', label: 'Rack', align: 'left', width: 'w-[6.5rem]' },
 ];
+const STOCK_WIDTH = 'w-[6.5rem]';
+
+/** the options a pick-list offers, plus the batch's own value when it is not one of them (so it never shows blank) */
+function optionsFor(kind: 'packType' | 'packUnit', current: string): { value: string; label: string }[] {
+    const base: readonly { value: string; label: string }[] = kind === 'packType' ? PACK_TYPE_OPTIONS : PACK_UNIT_OPTIONS;
+    return !current || base.some((o) => o.value === current.toLowerCase()) ? [...base] : [...base, { value: current, label: current }];
+}
+/** 'Tablet' on an old batch is the 'tablet' option: show it selected, without calling it a change */
+const selectValue = (kind: 'packType' | 'packUnit', current: string) => optionsFor(kind, current).find((o) => o.value === current.toLowerCase())?.value ?? current;
 
 const SHOW_AS_MONEY: GridField[] = ['mrp', 'purchaseRate', 'landingRate'];
 const was = (f: GridField, v: string) => (v === '' ? 'empty' : SHOW_AS_MONEY.includes(f) ? formatCurrency(Number(v)) : v);
 
-const CELL_BASE = 'h-9 w-full rounded-sm border bg-transparent px-2 text-sm tabular-nums outline-none transition-colors placeholder:text-muted-foreground/50 focus:border-ring focus:bg-background focus:ring-2 focus:ring-ring/30';
+const CELL_BASE = 'h-9 w-full rounded-sm border bg-background px-2 text-sm tabular-nums outline-none transition-colors placeholder:text-muted-foreground/50 focus:border-ring focus:bg-background focus:ring-2 focus:ring-ring/30';
 
 export function BatchGrid({ product, batches, showRates, onSaveBatch, onSaved, onExit }: BatchGridProps) {
     const { toast } = useToast();
@@ -99,7 +117,7 @@ export function BatchGrid({ product, batches, showRates, onSaveBatch, onSaved, o
 
     const focusCell = (row: number, field: GridField) => {
         const el = root.current?.querySelector<HTMLInputElement>(`[data-r="${row}"][data-c="${field}"]`);
-        if (el) { el.focus(); el.select?.(); }
+        if (el) { el.focus(); (el as HTMLInputElement).select?.(); }
         return !!el;
     };
 
@@ -168,6 +186,8 @@ export function BatchGrid({ product, batches, showRates, onSaveBatch, onSaved, o
     };
 
     const differ = packSizesDiffer(batches);
+    const split = columns.findIndex((c) => c.field === 'mrp');   // the read-only stock column sits just before the prices
+    const head = (c: ColumnSpec) => <th key={c.field} scope="col" className={cn('h-9 px-2 text-xs font-medium', c.align === 'right' ? 'text-right' : 'text-left', c.width)}>{c.label}</th>;
 
     return (
         <section aria-labelledby="batches-title" className="space-y-2">
@@ -190,13 +210,13 @@ export function BatchGrid({ product, batches, showRates, onSaveBatch, onSaved, o
 
             <Card className="overflow-hidden">
                 <div ref={root} className="overflow-x-auto">
-                    <table className="w-full min-w-[56rem] border-collapse text-sm">
+                    <table className="w-full min-w-[72rem] table-fixed border-collapse text-sm">
                         <caption className="sr-only">Editable batches of {product.name}. Each cell is a field; changed cells are highlighted.</caption>
                         <thead className="bg-muted/50">
                             <tr>
-                                {columns.slice(0, 3).map((c) => <th key={c.field} scope="col" className={cn('h-9 px-2 text-xs font-medium', c.align === 'right' ? 'text-right' : 'text-left', c.width)}>{c.label}</th>)}
-                                <th scope="col" className="h-9 px-3 text-right text-xs font-medium">In stock</th>
-                                {columns.slice(3).map((c) => <th key={c.field} scope="col" className={cn('h-9 px-2 text-xs font-medium', c.align === 'right' ? 'text-right' : 'text-left', c.width)}>{c.label}</th>)}
+                                {columns.slice(0, split).map(head)}
+                                <th scope="col" className={cn('h-9 px-3 text-right text-xs font-medium', STOCK_WIDTH)}>In stock</th>
+                                {columns.slice(split).map(head)}
                             </tr>
                         </thead>
                         <tbody className="divide-y">
@@ -206,6 +226,7 @@ export function BatchGrid({ product, batches, showRates, onSaveBatch, onSaved, o
                                 const rowDirty = dirtyIds.has(b.id);
                                 const dirtyFields = new Set(rows.find((r) => r.id === b.id)?.changes.map((c) => c.field) ?? []);
                                 const state = batchState(b);
+                                const soldOut = state === 'empty';
                                 const pack = Number(form.packSize) || 1;
                                 // marked when it disagrees with the product's own pack size (else with the first batch)
                                 const odd = differ && Number(initials[b.id].packSize) !== Number(product.packSize ?? batches[0]?.packSize ?? 1) && !rowDirty;
@@ -214,39 +235,51 @@ export function BatchGrid({ product, batches, showRates, onSaveBatch, onSaved, o
                                     const err = errs[c.field];
                                     const dirty = dirtyFields.has(c.field);
                                     const below = c.field === 'mrp' && sellsBelowCost(form);
+                                    const cellTone = err ? 'border-destructive bg-red-50 dark:bg-red-950/30'
+                                        : dirty ? 'border-amber-400 bg-amber-50 dark:bg-amber-950/30'
+                                        : soldOut ? 'border-input bg-muted/70 text-muted-foreground hover:border-ring/60'   // sold out: greyed, still readable and editable
+                                        : 'border-input hover:border-ring/60';
                                     return (
-                                        <td key={c.field} className="px-1 py-1 align-middle">
+                                        <td key={c.field} className={cn('px-1 py-1 align-middle', c.field === 'batchNo' && 'sticky left-0 z-10', c.field === 'batchNo' && (soldOut ? 'bg-muted' : 'bg-card'))}>
                                             <div className="relative">
-                                                <input
-                                                    data-r={rowIndex}
-                                                    data-c={c.field}
-                                                    type={c.type ?? 'text'}
-                                                    inputMode={c.inputMode}
-                                                    autoComplete="off"
-                                                    spellCheck={false}
-                                                    value={form[c.field]}
-                                                    disabled={busy}
-                                                    aria-label={`${FIELD_LABELS[c.field]} of batch ${initials[b.id].batchNo}`}
-                                                    aria-invalid={err ? true : undefined}
-                                                    title={err ?? (dirty ? `Was ${was(c.field, initials[b.id][c.field])}` : below ? 'The MRP is below the cost' : undefined)}
-                                                    onChange={(e) => setCell(b.id, c.field, e.target.value)}
-                                                    onKeyDown={(e) => onKeyDown(e, rowIndex, c.field)}
-                                                    onPaste={(e) => onPaste(e, rowIndex, c.field)}
-                                                    className={cn(
-                                                        CELL_BASE,
-                                                        c.align === 'right' && 'text-right',
-                                                        c.field === 'batchNo' && 'font-mono font-medium',
-                                                        c.field === 'packSize' && 'pr-14',
-                                                        err ? 'border-destructive bg-red-50 dark:bg-red-950/30'
-                                                            : dirty ? 'border-amber-400 bg-amber-50 dark:bg-amber-950/30'
-                                                            : 'border-transparent hover:border-input',
-                                                    )}
-                                                />
-                                                {c.field === 'packSize' && (
-                                                    <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center gap-1 text-[11px] text-muted-foreground">
-                                                        {odd && <span title="Different from the other batches" className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-label="different from the other batches" role="img" />}
-                                                        {(b.packUnit || product.packUnit || '').slice(0, 6)}
-                                                    </span>
+                                                {c.select ? (
+                                                    <select
+                                                        data-r={rowIndex}
+                                                        data-c={c.field}
+                                                        value={selectValue(c.select, form[c.field])}
+                                                        disabled={busy}
+                                                        aria-label={`${FIELD_LABELS[c.field]} of batch ${initials[b.id].batchNo}`}
+                                                        aria-invalid={err ? true : undefined}
+                                                        title={err ?? (dirty ? `Was ${initials[b.id][c.field] || 'empty'}` : undefined)}
+                                                        onChange={(e) => setCell(b.id, c.field, e.target.value)}
+                                                        onKeyDown={(e) => onKeyDown(e as unknown as React.KeyboardEvent<HTMLInputElement>, rowIndex, c.field)}
+                                                        className={cn(CELL_BASE, 'cursor-pointer', cellTone)}
+                                                    >
+                                                        {!form[c.field] && <option value="">Choose…</option>}
+                                                        {optionsFor(c.select, form[c.field]).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                                    </select>
+                                                ) : (
+                                                    <input
+                                                        data-r={rowIndex}
+                                                        data-c={c.field}
+                                                        type={c.type ?? 'text'}
+                                                        inputMode={c.inputMode}
+                                                        autoComplete="off"
+                                                        spellCheck={false}
+                                                        value={form[c.field]}
+                                                        placeholder={c.field === 'landingRate' ? form.purchaseRate || 'Landing' : c.field === 'rackLocation' ? 'Rack' : c.field === 'mfgDate' ? 'dd/mm/yyyy' : undefined}
+                                                        disabled={busy}
+                                                        aria-label={`${FIELD_LABELS[c.field]} of batch ${initials[b.id].batchNo}`}
+                                                        aria-invalid={err ? true : undefined}
+                                                        title={err ?? (dirty ? `Was ${was(c.field, initials[b.id][c.field])}` : below ? 'The MRP is below the cost' : c.field === 'landingRate' && !form.landingRate ? 'Empty: the purchase rate is used as the landing rate' : undefined)}
+                                                        onChange={(e) => setCell(b.id, c.field, e.target.value)}
+                                                        onKeyDown={(e) => onKeyDown(e, rowIndex, c.field)}
+                                                        onPaste={(e) => onPaste(e, rowIndex, c.field)}
+                                                        className={cn(CELL_BASE, c.align === 'right' && 'text-right', c.field === 'batchNo' && 'font-mono font-medium', c.field === 'packSize' && odd && 'pr-5', cellTone)}
+                                                    />
+                                                )}
+                                                {c.field === 'packSize' && odd && (
+                                                    <span title="Different from the other batches" className="pointer-events-none absolute right-1.5 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-amber-500" aria-label="different from the other batches" role="img" />
                                                 )}
                                                 {below && !err && <AlertTriangle className="pointer-events-none absolute left-1.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-amber-600" aria-hidden="true" />}
                                             </div>
@@ -255,14 +288,14 @@ export function BatchGrid({ product, batches, showRates, onSaveBatch, onSaved, o
                                 };
 
                                 return (
-                                    <tr key={b.id} className={cn(state === 'empty' && 'bg-muted/20', state === 'expired' && 'bg-red-50/40')}>
-                                        {columns.slice(0, 3).map(cell)}
+                                    <tr key={b.id} data-sold-out={soldOut || undefined} className={cn(soldOut && 'bg-muted/50', state === 'expired' && 'bg-red-50/40')}>
+                                        {columns.slice(0, split).map(cell)}
                                         <td className="whitespace-nowrap px-3 py-1 text-right tabular-nums text-muted-foreground">
-                                            {state === 'empty' ? 'Empty' : formatQty(b.qtyStrips || 0, b.qtyLoose || 0, Number(initials[b.id].packSize) || 1, b.packType || product.packType, b.packUnit || product.packUnit)}
+                                            {soldOut ? <span className="inline-flex items-center rounded-full border bg-muted px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Sold out</span> : formatQty(b.qtyStrips || 0, b.qtyLoose || 0, Number(initials[b.id].packSize) || 1, b.packType || product.packType, b.packUnit || product.packUnit)}
                                             {serverErr[b.id]?.row && <span role="alert" className="block text-xs font-medium text-destructive">{serverErr[b.id]!.row}</span>}
                                             {state !== 'empty' && pack !== Number(initials[b.id].packSize) && (b.qtyLoose || 0) > 0 && <span className="block text-xs text-amber-700">loose re-counted</span>}
                                         </td>
-                                        {columns.slice(3).map(cell)}
+                                        {columns.slice(split).map(cell)}
                                     </tr>
                                 );
                             })}
@@ -276,7 +309,7 @@ export function BatchGrid({ product, batches, showRates, onSaveBatch, onSaved, o
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                     <div className="min-w-0 flex-1 text-sm">
                         {rows.length === 0 ? (
-                            <span className="text-muted-foreground">No changes yet. Click a cell and type; every batch is editable at once.</span>
+                            <span className="text-muted-foreground">No changes yet. Every box is editable at once: type, pick, Tab to the next, then Save all.</span>
                         ) : (
                             <details>
                                 <summary className="cursor-pointer select-none font-medium">

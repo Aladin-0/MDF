@@ -71,5 +71,11 @@ def test_bottle_purchase_and_billing(api_client, test_data):
     sale_url = '/api/v1/sales/'
     response = api_client.post(sale_url, sale_payload, format='json')
     assert response.status_code == 201, f'Sale failed: {response.content}'
+    # the new sale is in the audit trail, with the facts the suspicious-behaviour rules read
+    from apps.audit.models import ActivityEvent
+    ev = ActivityEvent.objects.get(code='bill.created')
+    assert float(ev.amount) == 300.0 and ev.entity_type == 'SaleInvoice' and ev.entity_id
+    assert ev.metadata_json['discount_pct'] == 0 and ev.metadata_json['days_back'] == 0
+    assert 'created bill' in ev.summary
     batch.refresh_from_db()
     assert batch.qty_strips == 3

@@ -6,6 +6,9 @@ from apps.inventory.views import (
     BatchDetailUpdateView, OutletProductConfigView, MasterCatalogSearchView, ProductSubstitutesView, ProductSuggestionsView
 )
 
+from apps.inventory.ledger_views import AssignSupplierView, BatchTraceView, StockLedgerProductsView, StockLedgerHealthView
+from apps.inventory.expiry_views import ExpiryListView, ExpiryExportView, ExpiryRemoveView
+
 urlpatterns = [
     path('batches/<uuid:batch_id>/', BatchDetailUpdateView.as_view(), name='batch-detail-update'),
     path('batches/<uuid:batch_id>/landing-cost/', BatchLandingCostView.as_view(), name='batch-landing-cost'),
@@ -19,9 +22,16 @@ urlpatterns = [
     path('inventory/', InventoryListView.as_view(), name='inventory-list'),
     path('inventory/alerts/', InventoryAlertsView.as_view(), name='inventory-alerts'),
     path('inventory/adjust/', InventoryAdjustView.as_view(), name='inventory-adjust'),
+    path('inventory/expiry/', ExpiryListView.as_view(), name='inventory-expiry'),
+    path('inventory/expiry/export/', ExpiryExportView.as_view(), name='inventory-expiry-export'),
+    path('inventory/expiry/remove/', ExpiryRemoveView.as_view(), name='inventory-expiry-remove'),
     path('inventory/export/excel/', InventoryExportExcelView.as_view(), name='inventory-export-excel'),
     path('inventory/outlet-configs/', OutletProductConfigView.as_view(), name='outlet-product-config'),
     path('inventory/stockledger/batches/', StockLedgerBatchesView.as_view(), name='stockledger-batches'),
+    path('batches/<uuid:batch_id>/trace/', BatchTraceView.as_view(), name='batch-trace'),
+    path('inventory/batches/assign-supplier/', AssignSupplierView.as_view(), name='batch-assign-supplier'),
+    path('inventory/stockledger/products/', StockLedgerProductsView.as_view(), name='stockledger-products'),
+    path('inventory/stockledger/health/', StockLedgerHealthView.as_view(), name='stockledger-health'),
     path('inventory/stockledger/', StockLedgerView.as_view(), name='stockledger'),
     path('inventory/batches/availability-check/', BatchAvailabilityCheckView.as_view(), name='batch-availability-check'),
 ]

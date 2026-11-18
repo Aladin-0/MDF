@@ -378,6 +378,13 @@ class SaleReviseAPITests(APITestCase):
         revision = DocumentRevisionV2.objects.get(object_id=self.invoice.id, action='cancel_and_reissue')
         print('DEBUG_DIFF:', revision.diff_summary_json)
         self.assertEqual(str(revision.new_snapshot_json.get('_resulting_invoice_id')), str(new_invoice.id))
+        # and the audit trail says it in words, with the amount and who did it
+        from apps.audit.models import ActivityEvent
+        ev = ActivityEvent.objects.get(code='bill.reissued', entity_id=str(self.invoice.id))
+        self.assertEqual(ev.actor_id, str(self.staff.id))
+        self.assertIn('cancelled and re-issued', ev.summary)
+        self.assertIsNotNone(ev.amount)
+        self.assertIn('was_paid', ev.metadata_json)
         
         # Assert stock is correct: 
         # Started at 5 + 1 (reverted from old item during cancel) = 6

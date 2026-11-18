@@ -32,6 +32,28 @@ class PaidCorrectionTestCase(BaseRevisionTestCase):
         self.assertIsNotNone(revision)
 
 
+    def test_a_paid_bill_correction_reaches_the_audit_trail_and_can_raise_a_flag(self):
+        """End to end: the real endpoint -> an event with who / amount / was_paid -> the suspicious-behaviour rule -> a flag with a reason."""
+        from apps.audit import policy, rules
+        from apps.audit.models import ActivityEvent, AuditFlag
+        invoice = make_test_invoice(self.outlet, self.billing_staff, self.customer, items=[{'batch': self.batch, 'qty': 10, 'rate': 100}], status='finalized', paid=1000)
+        self.assertGreater(invoice.amount_paid, 0)
+        self.authenticate_as(self.manager)
+        payload = {'customerId': str(self.customer.id), 'revisionAction': 'paid_bill_correction', 'revisionReasonCode': 'CUSTOMER_REQUEST', 'revisionReasonText': 'price corrected', 'grandTotal': 700, 'cashPaid': 700,
+                   'items': [{'productId': str(self.medicine.id), 'batchId': str(self.batch.id), 'productName': self.medicine.name, 'batchNo': self.batch.batch_no, 'qtyStrips': 7, 'rate': 100}]}
+        response = self.client.post(reverse('sale-revise', kwargs={'sale_id': invoice.id}), payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        ev = ActivityEvent.objects.get(code='bill.corrected_after_payment')
+        self.assertEqual((ev.actor_id, float(ev.amount), ev.metadata_json['was_paid'], ev.reason_text), (str(self.manager.id), 700.0, True, 'price corrected'))
+        self.assertIn('corrected paid bill', ev.summary)
+        # the rule, tuned to fire on one change, explains itself
+        pol = policy.get_policy(self.outlet.organization_id)
+        pol.rules_json = {'paid_bill_changes': {'threshold': 1}}
+        pol.save()
+        flags = rules.evaluate_event(ev.pk)
+        self.assertEqual([f.rule_code for f in flags], ['paid_bill_changes'])
+        self.assertTrue(AuditFlag.objects.get(rule_code='paid_bill_changes').why)
+
     def test_journal_balanced_after_paid_correction(self):
         invoice = make_test_invoice(self.outlet, self.billing_staff, self.customer, items=[{'batch': self.batch, 'qty': 10, 'rate': 100}], status='finalized', paid=0)
         make_test_receipt(self.outlet, self.manager, invoice, amount=1000, date_offset_days=0)

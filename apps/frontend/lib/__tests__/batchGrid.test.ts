@@ -46,12 +46,12 @@ describe('gridErrors', () => {
         expect(gridErrors({ ...ok, purchaseRate: '' }, { showRates: false })).toEqual({});
     });
 
-    it('is not blocked by fields the grid has no column for (a batch with no pack unit)', () => {
-        expect(gridErrors({ ...ok, packUnit: '' })).toEqual({});
+    it('shows a missing pack unit on its own cell (every field of the form is a grid column)', () => {
+        expect(gridErrors({ ...ok, packUnit: '' }).packUnit).toMatch(/unit/i);
     });
 
-    it('blames the expiry cell when the expiry is before the mfg date', () => {
-        expect(gridErrors({ ...ok, mfgDate: '2030-01-01', expiryDate: '2029-06-01' }).expiryDate).toMatch(/mfg/);
+    it('blames the mfg cell when the mfg date is after the expiry', () => {
+        expect(gridErrors({ ...ok, mfgDate: '2030-01-01', expiryDate: '2029-06-01' }).mfgDate).toMatch(/before the expiry/);
     });
 });
 

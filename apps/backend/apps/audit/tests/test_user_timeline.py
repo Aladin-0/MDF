@@ -1,60 +1,51 @@
-from django.test import override_settings
-from rest_framework.test import APITestCase
-from django.urls import reverse
-from .factories import make_staff, count_logs
-from apps.audit.models import ActivityLog
 import time
 
-@override_settings(CELERY_TASK_ALWAYS_EAGER=True, CELERY_TASK_EAGER_PROPAGATES=True)
+from django.urls import reverse
+from rest_framework.test import APITestCase
+
+from apps.audit import recorder
+from .factories import count_logs, make_staff, make_outlet
+
+
 class UserTimelineTests(APITestCase):
 
     def setUp(self):
-        self.staff_a = make_staff(phone='1111111111', pin='1234')
-        self.staff_b = make_staff(phone='2222222222', pin='5678')
+        self.outlet = make_outlet()
+        self.staff_a = make_staff(phone='1111111111', pin='1234', outlet=self.outlet)
+        self.staff_b = make_staff(phone='2222222222', pin='5678', outlet=self.outlet)
         self.login_url = '/api/v1/auth/login/'
         self.list_url = reverse('activity-log-list')
 
     def test_each_login_logged_separately(self):
-        initial_count = count_logs(action='LOGIN', user=self.staff_a)
+        before = count_logs(action='LOGIN', actor_id=str(self.staff_a.id))
         self.client.post(self.login_url, {'phone': '1111111111', 'password': '1234'})
         self.client.post(self.login_url, {'phone': '1111111111', 'password': '1234'})
-        self.assertEqual(count_logs(action='LOGIN', user=self.staff_a), initial_count + 2)
+        self.assertEqual(count_logs(action='LOGIN', actor_id=str(self.staff_a.id)), before + 2)
 
     def test_user_a_logs_do_not_mix_with_user_b(self):
         self.client.post(self.login_url, {'phone': '1111111111', 'password': '1234'})
         self.client.post(self.login_url, {'phone': '2222222222', 'password': '5678'})
-        logs_a = ActivityLog.objects.filter(user=self.staff_a, action='LOGIN')
-        logs_b = ActivityLog.objects.filter(user=self.staff_b, action='LOGIN')
-        self.assertEqual(logs_a.count(), 1)
-        self.assertEqual(logs_b.count(), 1)
-        self.assertNotEqual(logs_a.first().user, logs_b.first().user)
+        self.assertEqual(count_logs(action='LOGIN', actor_id=str(self.staff_a.id)), 1)
+        self.assertEqual(count_logs(action='LOGIN', actor_id=str(self.staff_b.id)), 1)
 
-    def test_api_filter_by_user_returns_correct_logs(self):
-        self.staff_a.is_staff = True
+    def test_api_filter_by_person_returns_only_that_person(self):
         self.staff_a.role = 'super_admin'
         self.staff_a.save()
-        ActivityLog.objects.create(user=self.staff_a, action='TEST_A', module='test')
-        ActivityLog.objects.create(user=self.staff_b, action='TEST_B', module='test')
+        recorder.record('product.edited', actor=self.staff_a, outlet=self.outlet, module='inventory', action='UPDATE')
+        recorder.record('product.edited', actor=self.staff_b, outlet=self.outlet, module='inventory', action='UPDATE')
         self.client.force_authenticate(user=self.staff_a)
-        response = self.client.get(self.list_url + f'?user={self.staff_a.id}')
+        response = self.client.get(self.list_url + f'?actor={self.staff_a.id}')
         self.assertEqual(response.status_code, 200)
-        data = response.data.get('data', response.data.get('results', response.data))
-        self.assertTrue(len(data) > 0)
-        self.assertTrue(all((log['user'] == str(self.staff_a.id) for log in data if 'user' in log and isinstance(log['user'], str))))
+        data = response.data['results']
+        self.assertTrue(data)
+        self.assertTrue(all(row['actor']['id'] == str(self.staff_a.id) for row in data))
 
-    def test_logs_ordered_newest_first(self):
-        ActivityLog.objects.all().delete()
-        log1 = ActivityLog.objects.create(user=self.staff_a, action='FIRST', module='test')
+    def test_events_are_newest_first(self):
+        self.staff_a.role = 'super_admin'
+        self.staff_a.save()
+        recorder.record('product.edited', actor=self.staff_a, outlet=self.outlet, module='test', action='FIRST')
         time.sleep(0.01)
-        log2 = ActivityLog.objects.create(user=self.staff_a, action='SECOND', module='test')
-        self.staff_a.is_staff = True
-        self.staff_a.role = 'super_admin'
-        self.staff_a.save()
+        recorder.record('product.edited', actor=self.staff_a, outlet=self.outlet, module='test', action='SECOND')
         self.client.force_authenticate(user=self.staff_a)
-        response = self.client.get(self.list_url)
-        self.assertEqual(response.status_code, 200)
-        data = response.data.get('data', response.data.get('results', response.data))
-        actions = [log['action'] for log in data]
-        first_idx = actions.index('FIRST')
-        second_idx = actions.index('SECOND')
-        self.assertLess(second_idx, first_idx)
+        actions = [r['action'] for r in self.client.get(self.list_url).data['results']]
+        self.assertLess(actions.index('SECOND'), actions.index('FIRST'))

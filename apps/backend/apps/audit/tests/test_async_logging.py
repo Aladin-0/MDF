@@ -21,19 +21,18 @@ class AsyncLoggingTests(TestCase):
         log_activity(action='CREATE', module='test_crud', user=self.staff)
         self.assertEqual(count_logs(action='CREATE', module='test_crud'), initial_count + 1)
 
-    @patch('apps.audit.services.create_audit_log_async.delay')
-    @patch('apps.audit.services.fallback_logger.error')
-    def test_log_not_lost_if_celery_unavailable(self, mock_fallback, mock_delay):
-        """
-        GAP: No fallback DB logging when Celery is unavailable.
-        The current implementation writes to a local file logger instead of trying
-        a synchronous DB write. We verify that the fallback logger is called.
-        """
-        mock_delay.side_effect = Exception('Celery is down')
-        initial_count = count_logs(action='CELERY_FAIL')
-        log_activity(action='CELERY_FAIL', module='test', user=self.staff)
-        self.assertEqual(count_logs(action='CELERY_FAIL'), initial_count)
-        mock_fallback.assert_called_once()
-        logged_data = json.loads(mock_fallback.call_args[0][0])
-        self.assertEqual(logged_data['action'], 'CELERY_FAIL')
-        self.assertEqual(logged_data['error'], 'Celery is down')
+    def test_event_is_written_even_if_celery_is_down(self):
+        """Events no longer travel through a queue: a dead broker (or a worker nobody runs) can not lose them."""
+        from apps.audit.tasks import create_audit_log_async
+        with patch.object(create_audit_log_async, 'delay', side_effect=Exception('Celery is down')):
+            before = count_logs(action='CELERY_FAIL')
+            log_activity(action='CELERY_FAIL', module='test', user=self.staff)
+            self.assertEqual(count_logs(action='CELERY_FAIL'), before + 1)
+
+    def test_a_failing_audit_write_is_counted_and_never_raises(self):
+        from apps.audit import recorder
+        with patch.object(recorder, 'record', side_effect=RuntimeError('db is sad')):
+            before = recorder.failed_writes()
+            result = log_activity(action='BOOM', module='test', user=self.staff)   # must not raise: the sale it describes already happened
+            self.assertIsNone(result)
+            self.assertEqual(recorder.failed_writes(), before + 1)

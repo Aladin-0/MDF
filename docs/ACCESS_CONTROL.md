@@ -55,6 +55,7 @@ those classes, so the list cannot disagree with enforcement.
 | `cancel_purchase_orders` | admin, or flag `can_edit_purchases` | `CanCancelPurchaseOrders` |
 | `manage_po_settings` | admin, super_admin | `IsAdminStaff` (+ password re-confirm) |
 | `view_all_outlets`, `manage_outlets` | super_admin | outlet-isolation bypass |
+| `view_audit_trail` | super_admin only | `audit.permissions.IsSuperAdmin` (the whole Audit page and `/audit/*` API; scoped to the super admin's organisation) |
 
 ## Rules that are easy to get wrong
 

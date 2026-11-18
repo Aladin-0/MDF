@@ -38,24 +38,16 @@ def record_activity(
 
     with transaction.atomic():
         if actor_type == "human":
-            event = ActivityEvent.objects.create(
-                tenant_id=context.tenant_id,
-                actor_id=actor_id,
-                actor_type=actor_type,
-                request_id=context.request_id,
-                session_id=context.session_id,
-                ip_address=context.ip_address,
-                user_agent=context.user_agent,
-                action=action,
-                module=module,
-                entity_type=entity_type,
-                entity_id=entity_id,
-                entity_label=entity_label,
-                reason_code=reason_code,
-                reason_text=reason_text,
-                metadata_json=metadata or {},
-                severity=severity
+            # through the ONE recorder: person and outlet snapshots, a plain sentence, the amount, the device. In the transaction (a failure
+            # here rolls the action back, by design: no action without its record).
+            from apps.audit import recorder, vocabulary as vocab
+            code = vocab.infer_code(module, action, entity_type)
+            amount = next((getattr(entity, a) for a in ('grand_total', 'total_amount', 'amount') if entity is not None and getattr(entity, a, None) not in (None, '')), None)
+            event = recorder.record(
+                code, actor=actor_id, outlet=context.tenant_id, entity=entity, entity_label=entity_label, module=module, action=action, amount=amount,
+                reason=reason_text, reason_code=reason_code, metadata=metadata, severity=severity if severity != "info" else None,
             )
+            recorder.after_commit(event)
         else:
             # System event
             event = SystemEvent.objects.create(

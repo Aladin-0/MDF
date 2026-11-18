@@ -89,6 +89,9 @@ class OutletSettingsView(APIView):
             return Response({'detail': 'Outlet not found'}, status=status.HTTP_404_NOT_FOUND)
 
         settings, _ = OutletSettings.objects.get_or_create(outlet=outlet)
+        # what was there before, for the audit trail (secrets are recorded as "changed", never as a value)
+        _before = {f.name: getattr(settings, f.name) for f in settings._meta.concrete_fields}
+        _outlet_before = {f: getattr(outlet, f) for f in ('name', 'address', 'city', 'state', 'pincode', 'phone', 'gstin', 'drug_license_no', 'invoice_footer')}
 
         field_map = {
             'openingTime': 'opening_time',
@@ -196,9 +199,44 @@ class OutletSettingsView(APIView):
         if outlet_updated:
             outlet.save(update_fields=list(set(outlet_updated)))
 
+        # compare with what the database NOW holds (typed values), not with the raw request text left on the instance:
+        # "09:00" vs time(9, 0) or "0" vs Decimal('0.00') would otherwise read as a change on every save
+        self._audit_changes(request, outlet, type(settings).objects.get(pk=settings.pk), _before, _outlet_before, type(outlet).objects.get(pk=outlet.pk))
+
         return Response({
             'success': True,
             'data': self._serialize(settings),
             'outlet': serialize_outlet(outlet),
         }, status=status.HTTP_200_OK)
+
+    # settings that change what the system allows or who is trusted: flagged, not just listed
+    _SENSITIVE_FIELDS = {'gst_registered', 'enable_eway_bill', 'enable_einvoice', 'allowed_attendance_ips', 'attendance_latitude', 'attendance_longitude',
+                         'attendance_radius_meters', 'gstin', 'drug_license_no', 'min_margin_warning_pct'}
+
+    def _audit_changes(self, request, outlet, settings, before, outlet_before, outlet_now):
+        """One event for the settings that really changed and, separately, one for a changed secret (the value is never stored)."""
+        try:
+            from apps.audit import recorder
+            changed, secrets = [], []
+            for name, old in before.items():
+                new = getattr(settings, name)
+                if str(old) != str(new) and name not in ('updated_at', 'id', 'outlet'):
+                    (secrets if recorder.is_sensitive(name) else changed).append((name, old, new))
+            for name, old in outlet_before.items():
+                new = getattr(outlet_now, name)
+                if str(old) != str(new):
+                    changed.append((name, old, new))
+            if secrets:
+                recorder.safe_record('settings.secret_changed', actor=request.user, outlet=outlet, request=request, module='settings', action='UPDATE', entity_type='OutletSettings',
+                                     entity_label=outlet.name, ctx={'what': ', '.join(recorder.label_of(n).lower() for n, _, _ in secrets)},
+                                     changes=[{'field': n, 'before': old, 'after': new} for n, old, new in secrets], metadata={'fields': [n for n, _, _ in secrets]})
+            if changed:
+                names = [n for n, _, _ in changed]
+                recorder.safe_record('settings.changed', actor=request.user, outlet=outlet, request=request, module='settings', action='UPDATE', entity_type='OutletSettings',
+                                     entity_label=outlet.name, ctx={'what': ', '.join(recorder.label_of(n).lower() for n in names[:6]) + (f' and {len(names) - 6} more' if len(names) > 6 else '')},
+                                     changes=[{'field': n, 'before': old, 'after': new} for n, old, new in changed],
+                                     metadata={'fields': names, 'sensitive': any(n in self._SENSITIVE_FIELDS for n in names)})
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception('could not audit the settings change')
 

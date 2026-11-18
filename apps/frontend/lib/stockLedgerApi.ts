@@ -1,19 +1,16 @@
 import { API_URL, assertOk, getHeaders } from '@/lib/apiClient';
-import { EMPTY_SUMMARY, type BatchSummaryItem, type LedgerPage } from '@/lib/stockLedger';
+import { EMPTY_SUMMARY, type BatchTrace, type LedgerHealth, type LedgerPage, type ProductHit } from '@/lib/stockLedger';
 
 /**
- * Stock ledger API calls.
- *
- * They go through the shared client helpers (`getHeaders`, `assertOk`) like the rest of the app.
- * This page used to read the token cookie and call `fetch` itself, so an expired session showed
- * a red "Error 401" box instead of returning to the login page, and a 403 never refreshed the
- * user's permissions.
+ * Stock ledger API calls, through the shared client helpers (`getHeaders`, `assertOk`) like the rest of the app:
+ * an expired session returns to the login page, and a 403 refreshes the user's permissions.
  */
 
 export interface LedgerQuery {
     outletId: string;
     from: string;
     to: string;
+    product: string | null;
     batch: string | null;
     type: string;
     q: string;
@@ -22,15 +19,13 @@ export interface LedgerQuery {
 function baseParams(query: LedgerQuery): URLSearchParams {
     const p = new URLSearchParams({ outletId: query.outletId, startDate: query.from, endDate: query.to });
     if (query.batch) p.set('batchId', query.batch);
+    else if (query.product) p.set('productId', query.product);
     if (query.type) p.set('txnType', query.type);
     if (query.q) p.set('search', query.q);
     return p;
 }
 
-export async function fetchLedgerPage(
-    query: LedgerQuery & { page: number; size: number },
-    signal?: AbortSignal,
-): Promise<LedgerPage> {
+export async function fetchLedgerPage(query: LedgerQuery & { page: number; size: number }, signal?: AbortSignal): Promise<LedgerPage> {
     const params = baseParams(query);
     params.set('page', String(query.page));
     params.set('pageSize', String(query.size));
@@ -39,19 +34,40 @@ export async function fetchLedgerPage(
     const data = await res.json();
     return {
         entries: data.data ?? [],
-        summary: data.summary ?? EMPTY_SUMMARY,
+        summary: { ...EMPTY_SUMMARY, ...(data.summary ?? {}) },
+        batch: data.batch ?? null,
         totalRecords: data.pagination?.totalRecords ?? 0,
         totalPages: data.pagination?.totalPages ?? 1,
     };
 }
 
-export async function fetchLedgerBatches(outletId: string, signal?: AbortSignal): Promise<BatchSummaryItem[]> {
-    const res = await fetch(`${API_URL}/inventory/stockledger/batches/?outletId=${encodeURIComponent(outletId)}`, {
-        headers: getHeaders(),
-        signal,
+/** One product with its batches, by id (a shared link or a refresh, where nothing was typed). */
+export async function fetchLedgerProduct(outletId: string, productId: string, signal?: AbortSignal): Promise<ProductHit | null> {
+    const res = await fetch(`${API_URL}/inventory/stockledger/products/?${new URLSearchParams({ outletId, productId })}`, { headers: getHeaders(), signal });
+    await assertOk(res);
+    return ((await res.json()).data ?? [])[0] ?? null;
+}
+
+/** Products (or batch numbers) matching what was typed, each with its batches. */
+export async function fetchLedgerProducts(outletId: string, q: string, signal?: AbortSignal): Promise<ProductHit[]> {
+    const res = await fetch(`${API_URL}/inventory/stockledger/products/?${new URLSearchParams({ outletId, q })}`, { headers: getHeaders(), signal });
+    await assertOk(res);
+    return (await res.json()).data ?? [];
+}
+
+export async function fetchLedgerHealth(outletId: string, signal?: AbortSignal): Promise<LedgerHealth> {
+    const res = await fetch(`${API_URL}/inventory/stockledger/health/?outletId=${encodeURIComponent(outletId)}`, { headers: getHeaders(), signal });
+    await assertOk(res);
+    return res.json();
+}
+
+/** Add the missing opening balances (admin, confirmed with their own password). Rejects with `{error:{code,message}}`. */
+export async function repairLedger(outletId: string, password: string): Promise<{ repaired: Record<string, number>; total: number }> {
+    const res = await fetch(`${API_URL}/inventory/stockledger/health/?outletId=${encodeURIComponent(outletId)}`, {
+        method: 'POST', headers: getHeaders(), body: JSON.stringify({ password }),
     });
     await assertOk(res);
-    return (await res.json()) ?? [];
+    return res.json();
 }
 
 /** Download the filtered ledger as an Excel file. Same filters as the screen, all pages. */
@@ -62,6 +78,27 @@ export async function downloadLedgerExport(query: LedgerQuery, fileName: string)
     await assertOk(res);
     const blob = await res.blob();
     const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+}
+
+/** Where a batch came from and who got it (a recall, an inspector, a complaint). */
+export async function fetchBatchTrace(outletId: string, batchId: string, signal?: AbortSignal): Promise<BatchTrace> {
+    const res = await fetch(`${API_URL}/batches/${batchId}/trace/?outletId=${encodeURIComponent(outletId)}`, { headers: getHeaders(), signal });
+    await assertOk(res);
+    return res.json();
+}
+
+/** The same as an Excel file, for the supplier or the inspector. */
+export async function downloadBatchTrace(outletId: string, batchId: string, fileName: string): Promise<void> {
+    const res = await fetch(`${API_URL}/batches/${batchId}/trace/?outletId=${encodeURIComponent(outletId)}&export=xlsx`, { headers: getHeaders() });
+    await assertOk(res);
+    const url = window.URL.createObjectURL(await res.blob());
     const link = document.createElement('a');
     link.href = url;
     link.download = fileName;

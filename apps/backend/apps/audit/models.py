@@ -2,6 +2,7 @@ from django.db import models
 from django.conf import settings
 import uuid
 from django.contrib.contenttypes.models import ContentType
+from django.utils import timezone
 
 class ActivityLog(models.Model):
     timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
@@ -138,31 +139,49 @@ class DocumentRevisionV2(models.Model):
         ]
 
 class ActivityEvent(models.Model):
+    """
+    THE audit trail: one row per thing somebody did, written when it happens (inside the transaction for money, stock and staff
+    changes). A row answers who / what / when / where / why in plain words (`summary`) and keeps the exact before and after
+    (`changes_json`). The person and the outlet are SNAPSHOTS (name, role), not links, so history survives a deletion.
+    See docs/AUDIT_IMPROVEMENT_PLAN.md and apps/audit/vocabulary.py (the controlled list of `code`s).
+    """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    tenant_id = models.CharField(max_length=255, null=True, blank=True)
-    occurred_at = models.DateTimeField(auto_now_add=True, db_index=True)
-    
+    tenant_id = models.CharField(max_length=255, null=True, blank=True)          # the OUTLET id
+    occurred_at = models.DateTimeField(default=timezone.now, db_index=True)       # the real event time (was auto_now_add: a backfill would be stamped "now")
+
     actor_id = models.CharField(max_length=255, null=True, blank=True)
     actor_type = models.CharField(max_length=50, default='human')
+    actor_name = models.CharField(max_length=255, blank=True, default='')
+    actor_role = models.CharField(max_length=50, blank=True, default='')
+    outlet_name = models.CharField(max_length=255, blank=True, default='')
     request_id = models.CharField(max_length=255, null=True, blank=True)
     session_id = models.CharField(max_length=255, null=True, blank=True)
     ip_address = models.GenericIPAddressField(null=True, blank=True)
     user_agent = models.TextField(blank=True)
-    
-    action = models.CharField(max_length=255, db_index=True)
+    device = models.CharField(max_length=160, blank=True, default='')            # "Chrome on Android"
+    inside_network = models.BooleanField(null=True, blank=True)                  # from the shop's allowed IP list; null = no list set
+    source = models.CharField(max_length=30, blank=True, default='web')          # web, api, job, import
+
+    action = models.CharField(max_length=255, db_index=True)                     # legacy verb ('CREATE', 'paid_bill_correction'...)
     module = models.CharField(max_length=255, db_index=True)
-    
+    code = models.CharField(max_length=64, blank=True, default='', db_index=True)  # the controlled vocabulary ('bill.cancelled')
+    category = models.CharField(max_length=20, blank=True, default='', db_index=True)  # money / stock / people / settings / data / documents / other
+
     entity_type = models.CharField(max_length=255, blank=True, db_index=True)
     entity_id = models.CharField(max_length=255, blank=True, db_index=True)
     entity_label = models.CharField(max_length=255, blank=True)
-    
+
+    summary = models.TextField(blank=True, default='')                           # "Asha cancelled bill INV-... (₹1,240)"
+    changes_json = models.JSONField(default=list, blank=True)                    # [{field, label, before, after}]
+    amount = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
     reason_code = models.CharField(max_length=50, blank=True)
     reason_text = models.TextField(blank=True)
     metadata_json = models.JSONField(default=dict, blank=True)
-    
-    severity = models.CharField(max_length=50, default='info')
+
+    severity = models.CharField(max_length=50, default='info')                   # info / notice / warning / critical
+    flag_count = models.IntegerField(default=0)                                  # rules that flagged this event (for "flagged only")
     correlation_id = models.CharField(max_length=255, null=True, blank=True)
-    
+
     class Meta:
         db_table = 'audit_activity_event'
         ordering = ['-occurred_at']
@@ -170,7 +189,51 @@ class ActivityEvent(models.Model):
             models.Index(fields=['module', 'action']),
             models.Index(fields=['entity_type', 'entity_id']),
             models.Index(fields=['tenant_id', 'occurred_at']),
+            models.Index(fields=['actor_id', 'occurred_at']),
+            models.Index(fields=['category', 'occurred_at']),
         ]
+
+
+class AuditFlag(models.Model):
+    """A rule noticed something worth a look. It says WHY in words, links the evidence, and is reviewed by a person."""
+    STATUS = [('new', 'New'), ('reviewed', 'Reviewed'), ('dismissed', 'Not a problem')]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    event = models.ForeignKey(ActivityEvent, on_delete=models.CASCADE, related_name='flags')
+    tenant_id = models.CharField(max_length=255, null=True, blank=True)
+    rule_code = models.CharField(max_length=64, db_index=True)
+    severity = models.CharField(max_length=20, default='notice')                 # notice / warning / critical
+    title = models.CharField(max_length=255)                                     # the sentence
+    why = models.TextField(blank=True, default='')                               # why it matters (shown small)
+    evidence_json = models.JSONField(default=dict, blank=True)
+    subject_actor_id = models.CharField(max_length=255, blank=True, default='')
+    subject_name = models.CharField(max_length=255, blank=True, default='')
+    dedupe_key = models.CharField(max_length=255, unique=True)                   # one flag per rule + person + day (a spike is ONE flag, not fifty)
+    status = models.CharField(max_length=20, choices=STATUS, default='new')
+    reviewed_by_id = models.CharField(max_length=255, blank=True, default='')
+    reviewed_by_name = models.CharField(max_length=255, blank=True, default='')
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    review_note = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(default=timezone.now, db_index=True)
+
+    class Meta:
+        db_table = 'audit_flag'
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['status', 'created_at']), models.Index(fields=['tenant_id', 'status'])]
+
+
+class AuditPolicy(models.Model):
+    """How long to keep the trail and how sensitive the rules are. One row per organisation (`organization_id`)."""
+    organization_id = models.CharField(max_length=64, unique=True)
+    retention_days = models.IntegerField(default=365)
+    rules_json = models.JSONField(default=dict, blank=True)                      # {"rule_code": {"enabled": true, "threshold": 3}}
+    last_purge_at = models.DateTimeField(null=True, blank=True)
+    last_purge_count = models.IntegerField(default=0)
+    updated_by_name = models.CharField(max_length=255, blank=True, default='')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'audit_policy'
+
 
 class SystemEvent(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

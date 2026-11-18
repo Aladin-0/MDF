@@ -28,7 +28,6 @@ from apps.billing.models import (
     SalesReturnItem,
 )
 from apps.inventory.models import Batch
-from apps.audit.models import ActivityEvent
 from apps.audit.services import log_activity
 
 logger = logging.getLogger(__name__)
@@ -204,10 +203,11 @@ def create_receipt_payment(payload: Dict[str, Any], outlet_id: str, created_by_i
         module="payments",
         entity_type="ReceiptEntry",
         entity_id=receipt.id,
-        entity_label=f"REC-{receipt.id}",
+        entity_label=customer.name,
         description=f"Recorded receipt of ₹{total_amount} from customer {customer.name}",
         user=created_by,
-        outlet=outlet
+        outlet=outlet,
+        code='payment.received', amount=total_amount,
     )
 
     return receipt
@@ -453,21 +453,12 @@ def create_sales_return(payload: Dict[str, Any], outlet_id: str, created_by_id: 
     )
     
     if manual_override:
-        ActivityEvent.objects.create(
-            actor_id=str(created_by.id),
-            actor_type='staff',
-            action='create_manual_override_return',
-            module='billing',
-            entity_type='SalesReturn',
-            entity_id=str(sales_return.id),
-            entity_label=sales_return.return_no,
-            reason_text=reason,
-            severity='warning',
-            metadata_json={
-                'role_used': created_by.role,
-                'total_amount': float(total_amount),
-            }
-        )
+        from apps.audit import recorder
+        recorder.after_commit(recorder.record(
+            'return.manual_override', actor=created_by, entity=sales_return, entity_label=sales_return.return_no, module='billing',
+            action='create_manual_override_return', amount=total_amount, reason=reason, severity='warning',
+            metadata={'role_used': created_by.role, 'total_amount': float(total_amount)},
+        ))
 
     # C1: all mutations are inside the @transaction.atomic decorator —
     # any failure (including journal reversal) rolls back everything atomically.

@@ -69,6 +69,8 @@ function NewDebitNoteContent() {
     // Handle auto-load from URL
     useEffect(() => {
         const urlInvoiceNo = searchParams.get('invoiceNo');
+        const urlInvoiceId = searchParams.get('invoiceId');      // from the Expiry Manager: two distributors can share an invoice number
+        const onlyBatches = (searchParams.get('batchIds') ?? '').split(',').filter(Boolean);
         const editId = searchParams.get('editId');
         
         // If an editId was passed, redirect directly to the new full-page edit route!
@@ -80,8 +82,9 @@ function NewDebitNoteContent() {
         if (urlInvoiceNo && outletId) {
             handleInvoiceSearch(urlInvoiceNo).then((results) => {
                 if (results && results.length > 0) {
-                    const match = results.find((r: any) => r.invoiceNo === urlInvoiceNo) || results[0];
-                    handleSelectInvoice(match);
+                    const match = results.find((r: any) => urlInvoiceId && r.id === urlInvoiceId)
+                        || results.find((r: any) => r.invoiceNo === urlInvoiceNo) || results[0];
+                    handleSelectInvoice(match, onlyBatches);
                 } else {
                     toast({
                         variant: 'destructive',
@@ -115,15 +118,17 @@ function NewDebitNoteContent() {
         }
     }
 
-    function handleSelectInvoice(inv: any) {
+    /** `onlyBatches` (from the Expiry Manager) keeps just those batches of the invoice, not every line. */
+    function handleSelectInvoice(inv: any, onlyBatches: string[] = []) {
         setDistributorId(inv.distributorId);
         setPurchaseInvoiceId(inv.id);
         setInvoiceSearch(`${inv.invoiceNo} — ${inv.distributorName}`);
         setShowInvoiceDropdown(false);
 
-        if (inv.items && inv.items.length > 0) {
+        const lines = onlyBatches.length ? (inv.items ?? []).filter((item: any) => onlyBatches.includes(item.batchId)) : inv.items;
+        if (lines && lines.length > 0) {
             setItems(
-                inv.items.map((item: any) => {
+                lines.map((item: any) => {
                     const packSize = item.packSize || 1;
                     const maxAllowed = item.availableQty !== undefined 
                         ? Math.min(Number(item.qty), Number(item.availableQty)) 

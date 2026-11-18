@@ -1367,6 +1367,22 @@ class SaleCreateView(APIView):
             # Serialize response
             response_data = build_sale_response_payload(sale_invoice)
 
+            # audit: AFTER the sale committed and never able to undo it (safe_record). The rules read the discount and the back-dating from here.
+            try:
+                from apps.audit import recorder
+                gross = float(sale_invoice.subtotal or 0)
+                pct = round(float(sale_invoice.discount_amount or 0) / gross * 100, 2) if gross > 0 else 0
+                recorder.safe_record(
+                    'bill.created', actor=request.user, outlet=outlet, request=request, module='billing', action='CREATE', entity=sale_invoice,
+                    amount=sale_invoice.grand_total, ctx={'payment_mode': getattr(sale_invoice, 'payment_mode', '') or ''},
+                    metadata={'invoice_no': sale_invoice.invoice_no, 'total': float(sale_invoice.grand_total or 0), 'discount_pct': pct,
+                              'discount_amount': float(sale_invoice.discount_amount or 0), 'staff_max_discount': float(getattr(request.user, 'max_discount', 0) or 0),
+                              'days_back': (datetime.now().date() - sale_invoice.invoice_date.date()).days,   # the project stores naive local time (USE_TZ = False)
+                              'payment_mode': getattr(sale_invoice, 'payment_mode', '') or ''},
+                )
+            except Exception:
+                logger.exception('could not audit the new sale')
+
             logger.info(f"Sale invoice {invoice_no} created successfully with {len(sale_items)} items")
 
             # Quotation linking (if converted from UI)
@@ -2716,6 +2732,7 @@ class SalePrintView(APIView):
             description=f"Printed sales invoice {invoice.invoice_no}",
             user=request.user,
             outlet=outlet,
+            code='bill.printed',
         )
 
         return Response(result, status=status.HTTP_200_OK)
@@ -2938,6 +2955,7 @@ class SaleDetailView(APIView):
                     return Response({'detail': denied.message}, status=denied.status_code)
 
                 old_snapshot = SnapshotBuilderRegistry.build_snapshot(invoice_obj)
+                was_paid = (invoice_obj.amount_paid or 0) > 0
 
                 # 2. Perform business logic update
                 invoice = atomic_sale_update(sale_id, request.data, outlet_id, updated_by_id)
@@ -2964,10 +2982,10 @@ class SaleDetailView(APIView):
                 orchestrator.record_activity(
                     module="billing",
                     entity=invoice,
-                    action=action,
+                    action=effective_action,       # what the edit amounts to for THIS bill (a paid bill is a paid-bill correction), not what the client labelled it
                     reason_code=reason_code,
                     reason_text=reason_text,
-                    metadata={"revision_id": rev_id_str}
+                    metadata={"revision_id": rev_id_str, "was_paid": was_paid, "requested_action": action}
                 )
 
             response_data = build_sale_response_payload(
@@ -3055,6 +3073,7 @@ class SaleReviseView(APIView):
             with transaction.atomic():
                 # 1. Take pre-update snapshot
                 old_snapshot = SnapshotBuilderRegistry.build_snapshot(invoice)
+                was_paid = (invoice.amount_paid or 0) > 0          # the audit rules care about changes to bills the customer already paid
 
                 if action == 'cancel_and_reissue':
                     # 2a. Cancel the old invoice
@@ -3106,7 +3125,7 @@ class SaleReviseView(APIView):
                         action=action,
                         reason_code=reason_code,
                         reason_text=reason_text,
-                        metadata={"resulting_invoice_id": str(updated_invoice.id), "revision_id": rev_id_str}
+                        metadata={"resulting_invoice_id": str(updated_invoice.id), "revision_id": rev_id_str, "was_paid": was_paid}
                     )
 
                 else:
@@ -3134,7 +3153,7 @@ class SaleReviseView(APIView):
                         action=action,
                         reason_code=reason_code,
                         reason_text=reason_text,
-                        metadata={"revision_id": rev_id_str}
+                        metadata={"revision_id": rev_id_str, "was_paid": was_paid}
                     )
 
             response_data = build_sale_response_payload(
@@ -3564,8 +3583,17 @@ class UpdateCreditLimitView(APIView):
         if credit_limit is None:
             return Response({'error': 'creditLimit is required'}, status=status.HTTP_400_BAD_REQUEST)
 
+        old_limit = customer.credit_limit
         customer.credit_limit = Decimal(str(credit_limit))
         customer.save(update_fields=['credit_limit'])
+        if old_limit != customer.credit_limit:
+            from apps.audit import recorder
+            from apps.audit.vocabulary import money
+            recorder.safe_record(
+                'credit_limit.changed', actor=request.user, outlet=outlet, request=request, module='billing', action='UPDATE', entity=customer, entity_label=customer.name,
+                ctx={'from_': money(old_limit), 'to': money(customer.credit_limit)}, changes={'credit_limit': {'old': old_limit, 'new': customer.credit_limit}},
+                metadata={'from': float(old_limit or 0), 'to': float(customer.credit_limit), 'customer_id': str(customer.id)},
+            )
 
         return Response({
             'success': True,

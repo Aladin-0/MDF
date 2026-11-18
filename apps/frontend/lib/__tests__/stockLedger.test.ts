@@ -72,3 +72,49 @@ describe('URL filters', () => {
         expect(next.toString()).toBe('');
     });
 });
+
+describe('quantities in the batch\'s own words', () => {
+    const { packsText, signedPacksText, expiryDayText, rangeEndingToday } = require('../stockLedger');
+    const strip = { pack_size: 10, pack_type: 'strip', pack_unit: 'tablet' };
+
+    it('splits fractional packs into packs and loose units', () => {
+        expect(packsText(5.3, strip)).toBe('5 strips + 3 tablets');
+        expect(packsText(0.4, strip)).toBe('4 tablets');
+        expect(packsText(2, strip)).toBe('2 strips');
+        expect(packsText(0, strip)).toBe('0');
+    });
+    it('rounds floating-point noise (11.9999999 packs is 12)', () => {
+        expect(packsText(11.9999999, strip)).toBe('12 strips');
+    });
+    it('uses the batch\'s type and unit, not "strip" and "tablet" for everything (a 300 GM product showed "1 tablet")', () => {
+        expect(packsText(3, { pack_size: 1, pack_type: 'jar', pack_unit: 'gm' })).toBe('3 jars');
+        expect(packsText(2, { pack_size: 100, pack_type: 'bottle', pack_unit: 'ml' })).toBe('2 bottles');
+        expect(packsText(0.5, { pack_size: 100, pack_type: 'bottle', pack_unit: 'ml' })).toBe('50 mls');
+    });
+    it('lower-cases stored words that vary in case', () => {
+        expect(packsText(0.3, { pack_size: 10, pack_type: 'Strip', pack_unit: 'Tablet' })).toBe('3 tablets');
+    });
+    it('shows the sign', () => {
+        expect(signedPacksText(-2, strip)).toBe('−2 strips');
+        expect(signedPacksText(1.4, strip)).toBe('+1 strip + 4 tablets');
+        expect(signedPacksText(0, strip)).toBe('0');
+    });
+    it('says an expired batch in words', () => {
+        expect(expiryDayText(-1)).toBe('expired 1 day ago');
+        expect(expiryDayText(0)).toBe('expires today');
+        expect(expiryDayText(12)).toBe('12 days left');
+    });
+    it('builds a range from local date parts (early morning in India is still today)', () => {
+        const now = new Date(2026, 10, 17, 1, 30);
+        expect(rangeEndingToday(0, now)).toEqual({ from: '2026-11-17', to: '2026-11-17' });
+        expect(rangeEndingToday(7, now)).toEqual({ from: '2026-11-10', to: '2026-11-17' });
+        expect(rangeEndingToday(30, now).from).toBe('2026-10-18');
+    });
+    it('a product in the URL is kept and cleared like the other filters', () => {
+        const { readFilters, applyFilterPatch } = require('../stockLedger');
+        expect(readFilters(new URLSearchParams('product=p1&batch=b1')).product).toBe('p1');
+        const next = applyFilterPatch(new URLSearchParams('product=p1&page=3'), { product: null });
+        expect(next.get('product')).toBeNull();
+        expect(next.get('page')).toBeNull();
+    });
+});

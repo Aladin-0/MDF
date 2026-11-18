@@ -10,19 +10,18 @@ import {
     type BatchFormField, type BatchFormValues, type Change, type EditableBatch,
 } from '@/lib/batchEdit';
 
-/** The columns a person edits in the grid, in the order Tab visits them. (Mfg date, pack type and unit stay in Edit Batch.) */
-export const GRID_FIELDS = ['batchNo', 'expiryDate', 'packSize', 'mrp', 'purchaseRate', 'landingRate', 'rackLocation'] as const;
+/** The columns a person edits in the grid, in the order Tab visits them. Every field Edit Batch can change is a column here. */
+export const GRID_FIELDS = ['batchNo', 'mfgDate', 'expiryDate', 'packSize', 'packType', 'packUnit', 'mrp', 'purchaseRate', 'landingRate', 'rackLocation'] as const;
 export type GridField = (typeof GRID_FIELDS)[number];
 export type GridErrors = Partial<Record<GridField, string>>;
 
 export interface GridBatch extends EditableBatch { id: string }
 
-/** Everything wrong with a row, as { column: message }. Only the grid's own columns (a missing pack unit is not the grid's to fix). */
+/** Everything wrong with a row, as { column: message }. Every grid column is a field of the form, so every problem is shown on its own cell. */
 export function gridErrors(form: BatchFormValues, opts: { showRates?: boolean } = {}): GridErrors {
     const all = validateBatchForm(form, opts);
     const out: GridErrors = {};
     for (const f of GRID_FIELDS) if (all[f]) out[f] = all[f];
-    if (all.mfgDate && !out.expiryDate) out.expiryDate = 'Expiry is before the mfg date';   // mfg is not a column: blame the expiry cell
     return out;
 }
 

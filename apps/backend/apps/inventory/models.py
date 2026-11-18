@@ -143,6 +143,8 @@ class Batch(models.Model):
         help_text='Original quantity at time of import/creation. Never changes.'
     )
     rack_location = models.CharField(max_length=100, null=True, blank=True, help_text='Physical shelf/rack location')
+    supplier = models.ForeignKey('purchases.Distributor', on_delete=models.SET_NULL, null=True, blank=True, related_name='supplied_batches',
+                                 help_text='Who supplied this stock when there is NO posted purchase invoice for it (opening stock). A posted purchase always wins.')
     is_active = models.BooleanField(default=True)
     is_opening_stock = models.BooleanField(default=False, help_text='True if imported as opening stock (Marg migration)')
     created_at = models.DateTimeField(auto_now_add=True)

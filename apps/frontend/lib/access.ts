@@ -41,6 +41,7 @@ export type Permission =
     | 'cancel_purchase_orders'
     | 'manage_po_settings'
     | 'view_all_outlets'
+    | 'view_audit_trail'
     | 'manage_outlets';
 
 export const ROLES: readonly StaffRole[] = ['super_admin', 'admin', 'manager', 'billing_staff', 'view_only'];
@@ -107,6 +108,7 @@ export function fallbackPermissions(user: UserLike | null | undefined): Permissi
     if (role === 'super_admin') {
         out.add('view_all_outlets');
         out.add('manage_outlets');
+        out.add('view_audit_trail');   // audit.permissions.IsSuperAdmin: the audit trail is for the super admin only
     }
     return Array.from(out).sort();
 }

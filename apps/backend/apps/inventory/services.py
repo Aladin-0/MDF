@@ -19,6 +19,9 @@ def post_stock_ledger_entry(
     rate,
     source_object=None,
     actor=None,
+    adjustment_type=None,      # ADJUSTMENT_OUT only: EXPIRED (default) / DAMAGED / DESTROYED / THEFT_LOSS
+    adjustment_reason=None,    # ADJUSTMENT_OUT only: the note kept on the GST adjustment record
+    gst_record=True,           # False for bookkeeping corrections that are NOT a loss of stock (no GST write-off record)
 ):
     """
     Append-only. Call inside transaction.atomic() from purchase/sale services.
@@ -76,33 +79,42 @@ def post_stock_ledger_entry(
         actor          = actor,
     )
 
-    if txn_type == 'ADJUSTMENT_OUT':
-        _auto_create_stock_adjustment(entry)
+    if txn_type == 'ADJUSTMENT_OUT' and gst_record:
+        _auto_create_stock_adjustment(entry, adjustment_type=adjustment_type, reason=adjustment_reason)
 
     return entry
 
-def _auto_create_stock_adjustment(entry):
+def _auto_create_stock_adjustment(entry, adjustment_type=None, reason=None):
+    """
+    Record a stock write-off for GST (ITC reversal) from an ADJUSTMENT_OUT ledger row.
+
+    UNITS: the ledger counts PACKS (a purchase posts qty_in = packs, the adjust view posts packs, loose units are a
+    fraction of a pack), while `PurchaseItem.actual_qty` is UNITS (pkg x qty). This used to treat the ledger's packs as
+    units, so writing off 43 packs of a pack-size-10 batch was recorded as 4 strips + 3 loose and reversed a tenth of
+    the tax. Everything below is in units (`qty_out_units`), converted once, here.
+    """
     batch = entry.batch
     if not batch:
         return
-    
-    qty_out_loose = entry.qty_out
+
     pack_size = batch.pack_size or 1
-    qty_strips = int(qty_out_loose // pack_size)
-    qty_loose = int(qty_out_loose % pack_size)
+    qty_out_packs = Decimal(str(entry.qty_out))
+    qty_out_units = (qty_out_packs * pack_size).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
+    qty_strips = int(qty_out_units // pack_size)
+    qty_loose = int(qty_out_units % pack_size)
 
     with transaction.atomic():
         adj = StockAdjustment.objects.create(
             outlet=entry.outlet,
             batch=batch,
             source_ledger_entry=entry,
-            adjustment_type='EXPIRED',
+            adjustment_type=adjustment_type or 'EXPIRED',
             qty_strips=qty_strips,
             qty_loose=qty_loose,
             status='PROPOSED',
             traceability_status='NEEDS_REVIEW',
             effective_date=entry.txn_date,
-            reason="Auto-generated from StockLedger ADJUSTMENT_OUT"
+            reason=reason or "Auto-generated from StockLedger ADJUSTMENT_OUT"
         )
 
         pis = list(
@@ -113,13 +125,13 @@ def _auto_create_stock_adjustment(entry):
         )
         total_pi_qty = sum(Decimal(str(pi.actual_qty)) for pi in pis)
 
-        prior_qty = entry.running_qty + entry.qty_out
+        prior_qty = (entry.running_qty + entry.qty_out) * pack_size      # units still held before this write-off
         total_consumed_before = total_pi_qty - prior_qty
 
         if total_consumed_before < 0 or total_pi_qty < prior_qty:
             return
         
-        remaining_to_allocate = Decimal(str(qty_out_loose))
+        remaining_to_allocate = qty_out_units
         allocations = []
         current_consumed = Decimal(str(total_consumed_before))
 

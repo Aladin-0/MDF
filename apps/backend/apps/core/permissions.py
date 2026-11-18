@@ -600,6 +600,7 @@ def effective_permissions(user):
         perms.update({'manage_staff', 'manage_settings', 'manage_po_settings'})   # IsAdminStaff
     if role == 'super_admin':
         perms.update({'view_all_outlets', 'manage_outlets'})       # outlet-isolation bypass
+        perms.add('view_audit_trail')                              # audit.permissions.IsSuperAdmin (the audit trail is for the super admin only)
     return sorted(perms)
 
 

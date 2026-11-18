@@ -188,7 +188,10 @@ class LoginView(APIView):
                 action='LOGIN_FAILED',
                 module='auth',
                 user=staff,
-                description=f"Failed login attempt for phone {phone}",
+                entity_label=_mask_phone(phone),
+                description=f"Failed login attempt for phone {_mask_phone(phone)}",
+                code='login.failed',
+                metadata={'phone_masked': _mask_phone(phone), 'known_account': bool(staff)},
             )
             return Response(
                 {'detail': 'Invalid phone or password'},
@@ -211,7 +214,9 @@ class LoginView(APIView):
             action='LOGIN',
             module='auth',
             user=staff,
+            outlet=staff.outlet,
             description=f"Successful login for staff {staff.name}",
+            code='login.succeeded',
         )
 
         # Generate JWT tokens
@@ -1526,9 +1531,16 @@ class StaffCreateView(APIView):
             entity_label=staff.name, user=caller, outlet=staff.outlet, request=request,
             description=f"{caller.name} created staff {staff.name} with role {staff.role}",
             changes={'role': {'old': None, 'new': staff.role}},
+            code='staff.created', ctx={'role': staff.role}, metadata={'target_id': str(staff.id), 'target_role': staff.role, 'role_to': staff.role},
         )
 
         return Response({'success': True, 'data': _serialize_staff(staff)}, status=status.HTTP_201_CREATED)
+
+
+def _mask_phone(phone) -> str:
+    """98•••••210: enough to recognise a number in the audit trail, not enough to copy it."""
+    p = str(phone or '')
+    return (p[:2] + '•' * max(len(p) - 5, 1) + p[-3:]) if len(p) > 5 else p
 
 
 class StaffDetailView(APIView):
@@ -1729,12 +1741,26 @@ class StaffDetailView(APIView):
             changes['pin'] = {'old': '***', 'new': '***'}
 
         if changes:
-            log_activity(
-                action='UPDATE', module='staff', entity_type='Staff', entity_id=staff.id,
-                entity_label=staff.name, user=caller, outlet=staff.outlet, request=request,
-                description=f"{caller.name} changed staff {staff.name}: {', '.join(sorted(changes))}",
-                changes=changes,
-            )
+            base = dict(module='staff', entity_type='Staff', entity_id=staff.id, entity_label=staff.name, user=caller, outlet=staff.outlet, request=request)
+            target = {'target_id': str(staff.id), 'target_role': staff.role}
+            handled = set()
+            if 'role' in changes:
+                handled.add('role')
+                log_activity(action='UPDATE', description=f"{caller.name} changed the role of {staff.name}", changes={'role': changes['role']}, code='staff.role_changed',
+                             ctx={'from_': changes['role']['old'], 'to': changes['role']['new']},
+                             metadata={**target, 'role_from': changes['role']['old'], 'role_to': changes['role']['new']}, **base)
+            if 'is_active' in changes and changes['is_active']['new'] is True:
+                handled.add('is_active')
+                log_activity(action='UPDATE', description=f"{caller.name} reactivated {staff.name}", changes={'is_active': changes['is_active']}, code='staff.reactivated', metadata=target, **base)
+            creds = [k for k in ('password', 'pin') if k in changes]
+            if creds:
+                handled.update(creds)
+                log_activity(action='UPDATE', description=f"{caller.name} changed the {' and '.join('PIN' if k == 'pin' else 'password' for k in creds)} of {staff.name}",
+                             changes={k: changes[k] for k in creds}, code='staff.pin_changed', ctx={'what': ' and '.join('PIN' if k == 'pin' else 'password' for k in creds)},
+                             metadata={**target, 'what': 'PIN or password'}, **base)
+            rest = {k: v for k, v in changes.items() if k not in handled}
+            if rest:
+                log_activity(action='UPDATE', description=f"{caller.name} changed staff {staff.name}: {', '.join(sorted(rest))}", changes=rest, code='staff.edited', **base)
 
         return Response({'success': True, 'data': _serialize_staff(staff)}, status=status.HTTP_200_OK)
 
@@ -1764,6 +1790,7 @@ class StaffDetailView(APIView):
             entity_label=staff.name, user=caller, outlet=staff.outlet, request=request,
             description=f"{caller.name} deactivated staff {staff.name}",
             changes={'is_active': {'old': True, 'new': False}},
+            code='staff.deactivated', metadata={'target_id': str(staff.id), 'target_role': staff.role},
         )
 
         return Response({'success': True, 'data': {'id': str(staff.id), 'isActive': False}}, status=status.HTTP_200_OK)
@@ -2260,7 +2287,8 @@ class ChangePinView(APIView):
             description=f"Staff {staff.name} changed their PIN",
             user=staff,
             outlet=staff.outlet,
-            changes={'staff_pin': {'old': '***', 'new': '***'}}
+            changes={'staff_pin': {'old': '***', 'new': '***'}},
+            code='staff.pin_changed', ctx={'what': 'PIN'}, metadata={'target_id': str(staff.id), 'what': 'PIN'},
         )
 
         return Response({'success': True, 'data': {'message': 'PIN updated successfully'}}, status=status.HTTP_200_OK)

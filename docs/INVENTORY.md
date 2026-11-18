@@ -77,6 +77,18 @@ every row, selects saving the moment you picked) is gone.
   key include that version, so a new price/date/rack shows at once (the billing search cache is 60 s and was never
   refreshed, so billing kept selling at the old MRP for up to a minute).
 
+* **Edit all batches** (`components/inventory/product/BatchGrid.tsx`, columns in `lib/batchGrid.ts GRID_FIELDS`): every field
+  `EditBatchModal` can change is a visible, editable column (Batch, Mfg date, Expiry, Pack size, Pack type, Unit, MRP,
+  Purchase, Landing, Rack); only In stock is read-only (use Adjust). Every cell has a visible border: an empty Landing/Rack
+  used to be an invisible borderless input, which looked like the grid only had a few editable fields. An empty Landing means
+  "same as purchase rate" (shown as the placeholder). Pack type/unit are native pick-lists (`optionsFor`); an old value like
+  `Tablet` is shown as the `tablet` option without counting as a change. Do not drop a column from `GRID_FIELDS` without
+  adding it back to the modal's side, and never validate a field the grid has no column for (the error would be invisible).
+
+* **Expiry Manager** (`/dashboard/inventory/expiry`, `docs/EXPIRY.md`): find near-expiry stock by date / month / distributor, export it, return it or write it off in bulk. Use it, not the Expiring Soon tab, to act on expiry.
+
+* **Stock Ledger** (`/dashboard/stockledger`, `docs/STOCK_LEDGER.md`): product first, then batch, then its history, in words; ledger health and repair live there.
+
 ## Keeping the screens calm (no flashing)
 
 * **Dim a table only while the previous rows stand in for a change the user just made** (`isPlaceholderData`: new sort,

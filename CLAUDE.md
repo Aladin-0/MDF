@@ -20,9 +20,21 @@ Before changing pack size / unit / type, loose selling (`qty_loose`), or the pro
 
 Before changing the Inventory page, `GET /inventory/` or stock adjustment, read `docs/INVENTORY.md`. Low stock, expiring and nearest-expiry each have one rule on the server; counts come from `useInventorySummary`; an adjustment needs `type`, signed `qty` and a PIN (`buildAdjustPayload`); never ask for more than 100 rows a page or use `cache.delete_pattern`. The medicine search box (`L+23.50`, `C,salt`, barcode, substitutes) is parsed only by `apps/inventory/search_query.py`; see "Medicine search" in that doc before changing it.
 
+## Expiry Manager
+
+Before changing near-expiry search, the expiry Excel export, bulk write-off or "return to distributor", read `docs/EXPIRY.md`. Expired means `expiry < today`; the supplier of a batch is its first POSTED purchase; totals and "select all" come from the server; write-off is all-or-nothing through `apps/inventory/expiry.py`; cost figures need `view_purchase_rates`. The stock ledger counts packs, purchase items count units.
+
+## Stock ledger
+
+Before changing the Stock Ledger screen, `post_stock_ledger_entry`, or anything that writes `StockLedger` rows, read `docs/STOCK_LEDGER.md`. The batch row is the truth about stock and the ledger is repaired to agree with it (never `rebuild_stock_ledger`, which overwrites stock); the P&L adds up `OPENING` rows, so repairs are booked as "Ledger repair" adjustments; show quantities with `packsText` (the batch's own words), never `formatDecimalQty`; no cost figure without `view_purchase_rates`.
+
 ## Purchase orders
 
 Before changing purchase orders, the Shortbook or receiving goods against a PO, read `docs/PURCHASE_ORDERS.md`. Status changes only through `transition()` in `apps/purchases/po_services.py`; received quantities are derived from linked invoices (`recompute_receipts`), never nudged by hand.
+
+## Audit trail
+
+Before changing `apps/audit/`, adding something to the audit trail, or touching `/admin/audit`, read `docs/AUDIT_TRAIL.md`. Events are written synchronously through `recorder.record` / `safe_record` with a vocabulary `code` (never a Celery queue); secrets are never stored; the page is super-admin only (`view_audit_trail`); rules explain themselves and are tuned with `audit_rules_dry_run`; the table is append-only (Postgres trigger) and kept 365 days by default.
 
 ## UI consistency
 
