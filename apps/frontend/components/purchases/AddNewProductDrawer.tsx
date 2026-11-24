@@ -13,6 +13,7 @@ import { SuggestInput } from '@/components/shared/SuggestInput';
 import { SCHEDULE_TYPE_OPTIONS } from '@/constants/scheduleTypes';
 import { PACK_TYPE_OPTIONS, DISPENSING_UNIT_OPTIONS } from '@/constants/productBehavior';
 import { inferPackUnit } from '@/utils/productUtils';
+import { GST_RATES as STANDARD_GST_RATES } from '@/lib/gstRates';
 import { Pencil, Sparkles } from 'lucide-react';
 
 interface Props {
@@ -47,7 +48,8 @@ interface FieldErrors {
 }
 
 const PACK_UNITS = ['Tablet', 'Capsule', 'Syrup', 'Injection', 'Cream', 'Drops', 'Powder', 'Strip', 'Piece', 'ml', 'gm'];
-const GST_RATES = ['0', '5', '12', '18', '28'];
+// one list for every GST pick-list (lib/gstRates.ts); this form keeps its values as text
+const GST_RATES = STANDARD_GST_RATES.map(String);
 
 const emptyForm = (name = ''): FormState => ({
     name,

@@ -67,6 +67,16 @@ every row, selects saving the moment you picked) is gone.
 * **Batch edit** (`EditBatchModal`): one form per batch with live validation, a "What will change" list, only the changed
   fields sent, an **Undo** on the saved message, and a tick-box before the pack can be changed. Quantities are NOT edited
   here: use Adjust (PIN, audited).
+* **Every product-level fact on the product page is editable** (Maker, Salt, Type, HSN, GST, Pack, Reorder at): in
+  **Edit Product** and, except the reorder level, in the list's Quick edit (`QuickEditField` in `InlineEditCell.tsx`).
+  They belong to the product, not to a batch, so one save applies to every batch of it. MRP is the exception: it is a
+  batch fact (the header shows the first batch's) and is edited in the batch table.
+  * **GST:** any rate from 0 to 100 is accepted (`TaxSlab.rate_error`); there is no "allowed slab" gate on a product or
+    on a sale. A 40% product (energy drinks) could neither be billed nor even have its salt corrected, because every
+    save re-sent the rate and was refused. Pick-lists come from `lib/gstRates.ts` and always include the product's own rate.
+  * **Type** (`drugType`: allopathy, ayurveda, homeo, surgical, general, fmcg; the UI list is `DRUG_TYPE_OPTIONS` and must
+    equal `MasterProduct.DRUG_TYPE_CHOICES`) is its own field. It follows the schedule only when the schedule changes and
+    no type is sent; it used to be reset from the schedule on every save.
 * **Product edit** changes the product for **every outlet** (the catalogue is shared). The list's "Quick edit (all
   outlets)" column says so and every save has an Undo. Product fields are never edited from a batch row.
 * **Server rules** (`BatchDetailUpdateView`): the row is locked and only changed fields are written (the old code

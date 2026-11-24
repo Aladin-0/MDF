@@ -334,14 +334,13 @@ class ProductListView(APIView):
         if not pack_unit:
             errors['packUnit'] = 'Pack unit is required'
 
-        try:
-            gst_rate = Decimal(str(data.get('gstRate', 0)))
-            is_valid, err_msg = TaxSlab.is_rate_active(gst_rate)
-            if not is_valid:
-                errors['gstRate'] = err_msg
-        except (InvalidOperation, TypeError):
-            errors['gstRate'] = 'Invalid GST rate'
+        # Any possible rate is accepted (0 to 100): the rate is whatever the purchase bill says. See TaxSlab.
+        gst_problem = TaxSlab.rate_error(data.get('gstRate', 0))
+        if gst_problem:
+            errors['gstRate'] = gst_problem
             gst_rate = Decimal('0')
+        else:
+            gst_rate = Decimal(str(data.get('gstRate', 0)))
 
         try:
             pack_size = int(data.get('packSize', 1))
@@ -365,14 +364,11 @@ class ProductListView(APIView):
         if errors:
             return Response({'errors': errors}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Derive drug_type from schedule_type
-        schedule_to_drug = {
-            'OTC': 'allopathy', 'G': 'allopathy', 'H': 'allopathy', 'H1': 'allopathy',
-            'X': 'allopathy', 'C': 'allopathy', 'Narcotic': 'allopathy',
-            'Ayurvedic': 'ayurveda', 'Surgical': 'allopathy',
-            'Cosmetic': 'fmcg', 'Veterinary': 'allopathy',
-        }
-        drug_type = schedule_to_drug.get(schedule_type, 'allopathy')
+        # The type the user chose; when none was sent, the usual one for the schedule
+        drug_type = (data.get('drugType') or '').strip() or SCHEDULE_TO_DRUG.get(schedule_type, 'allopathy')
+        if drug_type not in DRUG_TYPES:
+            return Response({'errors': {'drugType': f'Type must be one of: {", ".join(sorted(DRUG_TYPES))}'}},
+                            status=status.HTTP_400_BAD_REQUEST)
 
         composition = (data.get('composition') or '')
         manufacturer = (data.get('manufacturer') or '')
@@ -423,6 +419,15 @@ def _sync_batches_to_product(product, size_changed):
     return touched
 
 
+# The type a product gets from its schedule when the user did not choose one
+SCHEDULE_TO_DRUG = {
+    'OTC': 'allopathy', 'G': 'allopathy', 'H': 'allopathy', 'H1': 'allopathy',
+    'X': 'allopathy', 'C': 'allopathy', 'Narcotic': 'allopathy',
+    'Ayurvedic': 'ayurveda', 'Surgical': 'allopathy',
+    'Cosmetic': 'fmcg', 'Veterinary': 'allopathy',
+}
+DRUG_TYPES = {value for value, _label in MasterProduct.DRUG_TYPE_CHOICES}
+
 PRODUCT_AUDITED_FIELDS = (
     'name', 'composition', 'manufacturer', 'hsn_code', 'gst_rate', 'pack_size', 'pack_unit', 'pack_type',
     'schedule_type', 'drug_type', 'mrp', 'barcode', 'is_fridge', 'is_discontinued',
@@ -455,13 +460,6 @@ class ProductDetailView(APIView):
         before = {f: getattr(product, f) for f in PRODUCT_AUDITED_FIELDS}
 
         # --- Validate & apply fields ---
-        SCHEDULE_TO_DRUG = {
-            'OTC': 'allopathy', 'G': 'allopathy', 'H': 'allopathy', 'H1': 'allopathy',
-            'X': 'allopathy', 'C': 'allopathy', 'Narcotic': 'allopathy',
-            'Ayurvedic': 'ayurveda', 'Surgical': 'allopathy',
-            'Cosmetic': 'fmcg', 'Veterinary': 'allopathy',
-        }
-
         if 'name' in data:
             name = (data['name'] or '').strip()
             if not name:
@@ -483,15 +481,13 @@ class ProductDetailView(APIView):
                 product.hsn_code = hsn
 
         if 'gstRate' in data:
-            try:
-                candidate_rate = Decimal(str(data['gstRate']))
-                is_valid, err_msg = TaxSlab.is_rate_active(candidate_rate)
-                if not is_valid:
-                    errors['gstRate'] = err_msg
-                else:
-                    product.gst_rate = candidate_rate
-            except (InvalidOperation, TypeError):
-                errors['gstRate'] = 'Invalid GST rate'
+            # Any possible rate (0 to 100). A product whose rate was not an "active slab" (40% drinks) could not be
+            # saved at all: every edit re-sent its rate and was refused, so its salt or type could not be fixed either.
+            gst_problem = TaxSlab.rate_error(data['gstRate'])
+            if gst_problem:
+                errors['gstRate'] = gst_problem
+            else:
+                product.gst_rate = Decimal(str(data['gstRate']))
 
         if 'packSize' in data:
             try:
@@ -519,8 +515,18 @@ class ProductDetailView(APIView):
 
         if 'scheduleType' in data:
             st = (data['scheduleType'] or 'OTC').strip()
+            # The type follows the schedule only when the schedule itself changes and no type was sent. It used to be
+            # reset on EVERY save (the form always sends the schedule), so a type could never be anything else.
+            if st != product.schedule_type and 'drugType' not in data:
+                product.drug_type = SCHEDULE_TO_DRUG.get(st, 'allopathy')
             product.schedule_type = st
-            product.drug_type = SCHEDULE_TO_DRUG.get(st, 'allopathy')
+
+        if 'drugType' in data:
+            dt = (data['drugType'] or '').strip()
+            if dt not in DRUG_TYPES:
+                errors['drugType'] = f'Type must be one of: {", ".join(sorted(DRUG_TYPES))}'
+            else:
+                product.drug_type = dt
 
         if 'mrp' in data:
             try:

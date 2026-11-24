@@ -406,21 +406,26 @@ class GstTaxpayerAuth(models.Model):
 
 class TaxSlab(models.Model):
     """
-    Dynamic GST Tax Slab model for GST 2.0 compliance.
-    Under GST 2.0 (effective Sept 2025), slabs 12% and 28% are deactivated for new sales.
-    Historical transactions created before Sept 2025 preserve their original tax rates.
+    The standard GST rates the system knows (0, 5, 12, 18, 28, 40).
+
+    This table is a LIST, not a gate. It feeds pick-lists (`GET /gst/tax-slabs/`) and lets the accounting journals
+    recognise a rate; it never decides whether something may be sold or saved. It used to: a sale, and even an
+    unrelated edit of the product, was refused when the product's rate was not an "active" slab. That broke three
+    times as the law moved (12% and 28% "abolished", then needed again; then 40% goods such as energy drinks that
+    were bought, were in stock and could not be billed). The rate of a product is whatever its purchase bill says:
+    if it is in stock it can be sold at that rate. The only check on a rate is `rate_error` (a number from 0 to 100).
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     rate = models.DecimalField(
         max_digits=5,
         decimal_places=2,
         unique=True,
-        help_text="Total GST Rate percentage, e.g. 0.00, 5.00, 12.00, 18.00, 28.00"
+        help_text="Total GST Rate percentage, e.g. 0.00, 5.00, 12.00, 18.00, 28.00, 40.00"
     )
     description = models.CharField(max_length=120, blank=True)
     is_active = models.BooleanField(
         default=True,
-        help_text="Whether this rate is active for new transactions under current GST regime"
+        help_text="Shown first in pick-lists. Not a permission: an inactive rate can still be sold and saved."
     )
     effective_from = models.DateField(null=True, blank=True, help_text="Effective start date")
     effective_to = models.DateField(null=True, blank=True, help_text="Effective end date if abolished/phased out")
@@ -436,17 +441,6 @@ class TaxSlab(models.Model):
         return f"{self.rate}% - {self.description or status}"
 
     @classmethod
-    def get_active_rates(cls) -> set:
-        """Return set of active Decimal GST rates."""
-        try:
-            rates = set(cls.objects.filter(is_active=True).values_list('rate', flat=True))
-            if rates:
-                return {Decimal(str(r)) for r in rates}
-        except Exception:
-            pass
-        return {Decimal('0.00'), Decimal('5.00'), Decimal('12.00'), Decimal('18.00'), Decimal('28.00')}
-
-    @classmethod
     def get_all_rates(cls) -> list:
         """Return sorted list of all known standard rates (active and legacy)."""
         try:
@@ -457,64 +451,17 @@ class TaxSlab(models.Model):
             pass
         return [Decimal('0.00'), Decimal('5.00'), Decimal('12.00'), Decimal('18.00'), Decimal('28.00'), Decimal('40.00')]
 
-    @classmethod
-    def is_rate_active(cls, rate, transaction_date=None, rates_cache=None) -> tuple[bool, str]:
+    @staticmethod
+    def rate_error(rate) -> str:
         """
-        Validate whether a GST rate is allowed for a given transaction date.
-        - Historical invoices before Sept 1, 2025: All standard legacy rates (12%, 28%) are permitted.
-        - New transactions (on or after Sept 1, 2025 or current): Only active slabs (0%, 5%, 18%) are permitted.
-
-        `rates_cache`: pass the same empty dict for every line of one bill so the slab table is read once per bill
-        instead of once per line. It lives only as long as the caller keeps it (never across requests).
+        '' when `rate` can be a GST rate, else why not. The ONLY check a GST rate gets, on a sale or on a product:
+        it must be a number from 0 to 100. Which rates the law currently uses is not checked (see the class note).
         """
-        def _rates(key, loader):
-            if rates_cache is None:
-                return loader()
-            if key not in rates_cache:
-                rates_cache[key] = loader()
-            return rates_cache[key]
-
-        from datetime import date
         try:
             dec_rate = Decimal(str(rate))
         except Exception:
-            return False, f"Invalid GST rate format: '{rate}'."
-
-        target_date = None
-        if transaction_date:
-            if hasattr(transaction_date, 'date') and callable(transaction_date.date):
-                target_date = transaction_date.date()
-            elif isinstance(transaction_date, date):
-                target_date = transaction_date
-            elif isinstance(transaction_date, str):
-                try:
-                    from django.utils.dateparse import parse_date, parse_datetime
-                    dt = parse_datetime(transaction_date)
-                    if dt:
-                        target_date = dt.date()
-                    else:
-                        target_date = parse_date(transaction_date)
-                except Exception:
-                    pass
-
-        gst2_cutoff = date(2025, 9, 1)
-
-        # Historical transactions before Sept 2025: accept standard legacy rates
-        if target_date and target_date < gst2_cutoff:
-            all_known = _rates('all', cls.get_all_rates)
-            if any(abs(dec_rate - r) < Decimal('0.01') for r in all_known):
-                return True, ""
-            return False, f"Rate {dec_rate}% was not a standard GST rate prior to Sept 2025."
-
-        # Current and new transactions: must be an active slab
-        active_rates = _rates('active', cls.get_active_rates)
-        if any(abs(dec_rate - r) < Decimal('0.01') for r in active_rates):
-            return True, ""
-
-        active_str = ", ".join(f"{r}%" for r in sorted(active_rates))
-        return (
-            False,
-            f"GST rate {dec_rate}% is deactivated under GST 2.0 reforms (effective Sept 2025). "
-            f"Active rates are: {active_str}."
-        )
+            return f"'{rate}' is not a GST rate. Enter a number such as 5, 12, 18 or 40."
+        if not dec_rate.is_finite() or dec_rate < 0 or dec_rate > 100:
+            return f"GST rate {rate}% is not possible. It must be between 0 and 100."
+        return ""
 

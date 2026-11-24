@@ -24,7 +24,7 @@ export type DrugSchedule =
   | 'Surgical'
   | 'Cosmetic'
   | 'Veterinary';
-export type DrugType = 'allopathy' | 'ayurveda' | 'homeo' | 'fmcg';
+export type DrugType = 'allopathy' | 'ayurveda' | 'homeo' | 'surgical' | 'general' | 'fmcg';
 export type PaymentMode = 'cash' | 'upi' | 'card' | 'credit' | 'split' | 'ledger' | 'cheque' | 'bank_transfer';
 export type SaleMode = 'strip' | 'loose' | 'bottle' | 'mixed';
 export type AttendanceStatus = 'present' | 'absent' | 'late' | 'half_day' | 'holiday' | 'weekly_off';

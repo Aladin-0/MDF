@@ -16,10 +16,10 @@ import { useOutletSettings } from '@/hooks/useOutletSettings';
 import { calculateLandingRate } from '@/lib/purchase-calculations';
 import { fmt, effectivePkg, lineAmount } from '@/lib/purchaseEntry';
 import { parsePkg, pkgNote } from '@/lib/purchasePack';
+import { gstRateChoices } from '@/lib/gstRates';
 import { calcPTR, calcPTS, finishExpiryInput, formatExpiryForDisplay, getExpiryStatus, lineIssues, maskExpiryInput } from '@/lib/purchaseLine';
 import { formatStockQty } from '../PurchaseItemRow';
 
-const GST_SLABS = [0, 5, 12, 18, 28];
 
 /** A group of the desktop row's columns (shadcn FieldSet + FieldLegend), shown as a card with the slate band the desktop table header uses */
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -119,7 +119,7 @@ export function PurchaseLineSheet({ entry, index, onClose }: PurchaseLineSheetPr
         settings?.landingCostIncludeFreight ?? true,
         value.otherCostPerUnit || 0,
     );
-    const slabs = GST_SLABS.includes(value.gstRate) ? GST_SLABS : [...GST_SLABS, value.gstRate].sort((a, b) => a - b);
+    const slabs = gstRateChoices(value.gstRate);   // the standard rates plus this line's own
     const onMrp = (mrp: number) => {
         set('mrp', mrp);
         if (mrp > 0) {                                  // same defaults as the desktop grid

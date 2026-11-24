@@ -608,46 +608,29 @@ class SaleCreateView(APIView):
                             status=status.HTTP_400_BAD_REQUEST
                         )
 
-            # Read every product and batch this bill names ONCE. The checks below (GST slab, loss-sale) used to fetch
-            # them line by line, twice per line. Values that are not valid UUIDs are left to the old per-line lookups
-            # so they fail exactly as before.
+            # Read every product and batch this bill names ONCE. The checks below (loss-sale) and the save used to
+            # fetch them line by line, twice per line. Values that are not valid UUIDs are left to the old per-line
+            # lookups so they fail exactly as before.
             products_by_id, batches_by_id = _prefetch_bill_rows(items_data, outlet)
-            slab_rates = {}     # the GST slab table, read once for the whole bill
 
-            # Validate GST 2.0 Tax Rates for all items in cart
-            raw_invoice_date = request.data.get('invoiceDate')
+            # A line is sold at the GST rate it carries (the product's, which came from its purchase bill). The only
+            # check is that the rate is a possible one (a number from 0 to 100). There is deliberately NO "allowed
+            # slab" check here: it refused goods that were bought and in stock (12%, 28%, then 40% energy drinks)
+            # every time the law changed. See TaxSlab in core/models.py before adding one back.
             for item_data in items_data:
-                product_obj = None
-                product_id = item_data.get('productId')
-                batch_id = item_data.get('batchId')
-                if product_id:
-                    product_obj = _lookup(products_by_id, product_id, lambda: MasterProduct.objects.filter(id=product_id).first())
-                elif batch_id:
-                    batch_obj = _lookup(batches_by_id, batch_id,
-                                        lambda: Batch.objects.filter(id=batch_id, outlet=outlet).select_related('product').first())
-                    if batch_obj:
-                        product_obj = batch_obj.product
-
                 raw_rate = item_data.get('gstRate')
                 if raw_rate is None:
                     raw_rate = item_data.get('gst_rate')
-                if raw_rate is None and product_obj:
-                    raw_rate = product_obj.gst_rate
-
-                try:
-                    dec_rate = Decimal(str(raw_rate if raw_rate is not None else 0))
-                except Exception:
-                    dec_rate = Decimal('0')
-
-                is_valid, err_msg = TaxSlab.is_rate_active(dec_rate, transaction_date=raw_invoice_date, rates_cache=slab_rates)
-                if not is_valid:
-                    prod_name = item_data.get('productName') or (product_obj.name if product_obj else 'Unknown Item')
+                if raw_rate is None:
+                    continue          # the product's own rate is used further down
+                rate_problem = TaxSlab.rate_error(raw_rate)
+                if rate_problem:
+                    prod_name = item_data.get('productName') or 'an item'
                     return Response(
                         {
-                            'detail': f"Product '{prod_name}' has an inactive/legacy GST rate of {dec_rate}%. {err_msg}",
-                            'code': 'DEACTIVATED_GST_RATE',
+                            'detail': f"{prod_name}: {rate_problem}",
+                            'code': 'INVALID_GST_RATE',
                             'product_name': prod_name,
-                            'gst_rate': float(dec_rate)
                         },
                         status=status.HTTP_400_BAD_REQUEST
                     )

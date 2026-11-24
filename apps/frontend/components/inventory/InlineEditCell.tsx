@@ -5,13 +5,19 @@ import { Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { PACK_TYPE_OPTIONS, PACK_UNIT_OPTIONS } from '@/constants/productBehavior';
+import { DRUG_TYPE_OPTIONS, PACK_TYPE_OPTIONS, PACK_UNIT_OPTIONS } from '@/constants/productBehavior';
 import { SCHEDULE_TYPE_OPTIONS } from '@/constants/scheduleTypes';
 import type { MasterProduct } from '@/types';
 
-export type QuickEditField = 'gstRate' | 'hsnCode' | 'scheduleType' | 'packType' | 'packSize' | 'packUnit';
+// Every product-level fact shown on the product page can be quick-edited here. The list used to offer six of them:
+// the salt, the maker and the type could only be changed one product at a time. (MRP is not here on purpose: it
+// belongs to each batch and is edited in the product's batch table.)
+export type QuickEditField = 'composition' | 'manufacturer' | 'drugType' | 'gstRate' | 'hsnCode' | 'scheduleType' | 'packType' | 'packSize' | 'packUnit';
 
 export const QUICK_EDIT_LABELS: Record<QuickEditField, string> = {
+    composition: 'Salt (Composition)',
+    manufacturer: 'Maker',
+    drugType: 'Type',
     gstRate: 'GST Rate (%)',
     hsnCode: 'HSN Code',
     scheduleType: 'Schedule Type',
@@ -19,6 +25,8 @@ export const QUICK_EDIT_LABELS: Record<QuickEditField, string> = {
     packSize: 'Pack Size',
     packUnit: 'Unit Name',
 };
+
+const NUMERIC_FIELDS: ReadonlySet<QuickEditField> = new Set<QuickEditField>(['gstRate', 'packSize']);
 
 interface InlineEditCellProps {
     product: MasterProduct;
@@ -36,18 +44,19 @@ export function InlineEditCell({ product, field, onSave }: InlineEditCellProps) 
     useEffect(() => { setValue(String(stored ?? '')); }, [stored, field]);
 
     const save = async (next: string) => {
-        const numeric = field === 'gstRate' || field === 'packSize';
+        const numeric = NUMERIC_FIELDS.has(field);
         const final = numeric ? Number(next) : next;
-        if (numeric && Number.isNaN(final)) return;
+        if (numeric && (next.trim() === '' || Number.isNaN(final))) return;
         setSaving(true);
         try { await onSave(final); } catch { setValue(String(stored ?? '')); /* the caller already told the user; show the saved value again */ }
         finally { setSaving(false); }
     };
 
-    const isSelect = field === 'packType' || field === 'scheduleType' || field === 'packUnit';
+    const isSelect = field === 'packType' || field === 'scheduleType' || field === 'packUnit' || field === 'drugType';
     const options =
         field === 'packType' ? PACK_TYPE_OPTIONS.map((o) => ({ value: o.value as string, label: o.label as string }))
         : field === 'scheduleType' ? SCHEDULE_TYPE_OPTIONS.map((o) => ({ value: o.value as string, label: o.label as string }))
+        : field === 'drugType' ? DRUG_TYPE_OPTIONS.map((o) => ({ value: o.value as string, label: o.label as string }))
         : PACK_UNIT_OPTIONS.map((o) => ({ value: o.value as string, label: o.label as string }));
     // show a stored value the list does not offer (e.g. "Capsule" with different casing) instead of an empty box
     const shown = options.some((o) => o.value.toLowerCase() === value.toLowerCase()) ? options : [...options, { value, label: value }];
@@ -70,7 +79,7 @@ export function InlineEditCell({ product, field, onSave }: InlineEditCellProps) 
             <Input
                 aria-label={label}
                 name={field}
-                type={field === 'gstRate' || field === 'packSize' ? 'number' : 'text'}
+                type={NUMERIC_FIELDS.has(field) ? 'number' : 'text'}
                 autoComplete="off"
                 spellCheck={false}
                 className="h-8 px-2 text-xs tabular-nums"

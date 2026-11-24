@@ -16,6 +16,19 @@ export const PACK_TYPE_OPTIONS = [
     { value: 'other', label: 'Other' },
 ] as const;
 
+/**
+ * What kind of product it is ("Type" on the product page). Exactly the server's list
+ * (apps/inventory/models.py MasterProduct.DRUG_TYPE_CHOICES): a value it does not know is refused on save.
+ */
+export const DRUG_TYPE_OPTIONS = [
+    { value: 'allopathy', label: 'Allopathy' },
+    { value: 'ayurveda', label: 'Ayurveda' },
+    { value: 'homeo', label: 'Homeopathy' },
+    { value: 'surgical', label: 'Surgical / Device' },
+    { value: 'general', label: 'General / FMCG' },
+    { value: 'fmcg', label: 'FMCG' },
+] as const;
+
 export const DISPENSING_UNIT_OPTIONS = [
     { value: 'Tablet', label: 'Tablet' },
     { value: 'Piece', label: 'Piece' },

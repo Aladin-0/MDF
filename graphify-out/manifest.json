@@ -1308,9 +1308,9 @@
     "semantic_hash": ""
   },
   "apps/backend/apps/billing/views.py": {
-    "mtime": 1795505903.244382,
-    "seen": 1795507043.2355068,
-    "ast_hash": "8bcaa6c1c3a8397c28fb580b69c1a32c",
+    "mtime": 1795518240.651265,
+    "seen": 1795518631.7156959,
+    "ast_hash": "4dbe1fbb4d6e6ea86024d7b0e930057b",
     "semantic_hash": ""
   },
   "apps/backend/apps/compliance/services/__init__.py": {
@@ -1524,9 +1524,9 @@
     "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
   },
   "apps/backend/apps/core/models.py": {
-    "mtime": 1795422484.175018,
-    "seen": 1795423525.3659601,
-    "ast_hash": "023803ac94f214f4ef2119fa3264cb76",
+    "mtime": 1795518217.990633,
+    "seen": 1795518631.7157516,
+    "ast_hash": "d796d8a50cbc222d3541ea53f8066c30",
     "semantic_hash": ""
   },
   "apps/backend/apps/core/outlet_urls.py": {
@@ -2094,9 +2094,9 @@
     "semantic_hash": "036ca5fedf13945dbd0855d34100b1a8"
   },
   "apps/backend/apps/inventory/views.py": {
-    "mtime": 1795510906.718681,
-    "seen": 1795511319.6179128,
-    "ast_hash": "f77ef18de111b61173d60a3bedfceba3",
+    "mtime": 1795518240.6521811,
+    "seen": 1795518631.7159173,
+    "ast_hash": "9be0165827c962db02f2ad97b37b1e3a",
     "semantic_hash": ""
   },
   "apps/backend/apps/purchases/__init__.py": {
@@ -3846,9 +3846,9 @@
     "semantic_hash": ""
   },
   "apps/frontend/components/inventory/EditProductModal.tsx": {
-    "mtime": 1794684529.9418008,
-    "seen": 1795419533.4697232,
-    "ast_hash": "f3d51bcb4c91893cbc88a5d0a6574a92",
+    "mtime": 1795518443.055967,
+    "seen": 1795518631.7165818,
+    "ast_hash": "70c1728e752c93cd4e476997586e0462",
     "semantic_hash": ""
   },
   "apps/frontend/components/inventory/ExpiryTable.tsx": {
@@ -3912,9 +3912,9 @@
     "semantic_hash": "2b59c1bb39e3bc4f82e1a37dd7009d81"
   },
   "apps/frontend/components/purchases/AddNewProductDrawer.tsx": {
-    "mtime": 1794684529.94297,
-    "seen": 1795419533.4697618,
-    "ast_hash": "71b43f85488c73959a360af5c6bb99d5",
+    "mtime": 1795518397.3090212,
+    "seen": 1795518631.7166286,
+    "ast_hash": "56c2652eab6130fb8c9189db73106113",
     "semantic_hash": ""
   },
   "apps/frontend/components/purchases/DistributorsTab.tsx": {
@@ -4464,9 +4464,9 @@
     "semantic_hash": ""
   },
   "apps/frontend/constants/productBehavior.ts": {
-    "mtime": 1794572982.0199463,
-    "seen": 1795419533.4699566,
-    "ast_hash": "012830810c8a13fbc8e18c8a3cc7a13c",
+    "mtime": 1795518378.9624681,
+    "seen": 1795518631.7168555,
+    "ast_hash": "0f1d79527e21560f1c900a02852717c2",
     "semantic_hash": ""
   },
   "apps/frontend/constants/scheduleTypes.ts": {
@@ -5208,9 +5208,9 @@
     "semantic_hash": "b8ba289506238b65bc4c7e096ae38b5f"
   },
   "apps/frontend/types/index.ts": {
-    "mtime": 1794684529.9515817,
-    "seen": 1795419533.470198,
-    "ast_hash": "1b8b5f1c1fa80fe5002329b8015ab3d8",
+    "mtime": 1795518378.9622798,
+    "seen": 1795518631.7171512,
+    "ast_hash": "d5873ae4d0a36107db9b37376447f7e3",
     "semantic_hash": ""
   },
   "apps/frontend/utils/expiry.ts": {
@@ -5502,9 +5502,9 @@
     "semantic_hash": ""
   },
   "PROJECT_MAP.md": {
-    "mtime": 1795513573.216123,
-    "seen": 1795513622.965592,
-    "ast_hash": "f16e05aa2cad3a86eaab15a440e0ab2f",
+    "mtime": 1795518613.1205726,
+    "seen": 1795518631.7171876,
+    "ast_hash": "bbb5ba5486c888a87afad94b860214c7",
     "semantic_hash": ""
   },
   "apps/backend/apps/reports/tests/tests_purchase_reports_db.py": {
@@ -5574,9 +5574,9 @@
     "semantic_hash": ""
   },
   "docs/DEPLOYMENT_GUIDE.md": {
-    "mtime": 1795512357.5950017,
-    "seen": 1795513622.9656117,
-    "ast_hash": "71db831776d73511dcf50cb0bd43bfe3",
+    "mtime": 1795514588.7178378,
+    "seen": 1795518631.717205,
+    "ast_hash": "fe3fb58cab2185e90838e054ec7aa81d",
     "semantic_hash": ""
   },
   "apps/backend/apps/core/management/commands/dump_permission_matrix.py": {
@@ -6072,9 +6072,9 @@
     "semantic_hash": ""
   },
   "apps/frontend/components/inventory/InlineEditCell.tsx": {
-    "mtime": 1794572982.0107477,
-    "seen": 1795419533.4697254,
-    "ast_hash": "35a4a0838dd7fe0ec185480967e2bc8c",
+    "mtime": 1795518481.2545729,
+    "seen": 1795518631.7165844,
+    "ast_hash": "209756921d1c737d96323d1896543c8a",
     "semantic_hash": ""
   },
   "apps/frontend/components/inventory/ListBanner.tsx": {
@@ -6174,9 +6174,9 @@
     "semantic_hash": ""
   },
   "docs/INVENTORY.md": {
-    "mtime": 1795511365.1622055,
-    "seen": 1795513622.9656246,
-    "ast_hash": "d0917925f9fe7e411fcd9c0a25d31738",
+    "mtime": 1795518613.1215718,
+    "seen": 1795518631.7172163,
+    "ast_hash": "3c9e6d204be0e346ddbb341733008724",
     "semantic_hash": ""
   },
   "apps/frontend/app/dashboard/inventory/[productId]/__tests__/ProductPage.test.tsx": {
@@ -6918,9 +6918,9 @@
     "semantic_hash": ""
   },
   "apps/frontend/components/purchases/mobile/PurchaseLineSheet.tsx": {
-    "mtime": 1794684529.945582,
-    "seen": 1795419533.4698093,
-    "ast_hash": "21f0355c1a709f2cb034ae4206243ebc",
+    "mtime": 1795518397.3093615,
+    "seen": 1795518631.7166865,
+    "ast_hash": "90f5896d7599994613b06bb51be16886",
     "semantic_hash": ""
   },
   "apps/frontend/components/purchases/mobile/PurchaseParts.test.tsx": {
@@ -7797,6 +7797,42 @@
     "mtime": 1795513352.424936,
     "seen": 1795513622.9653656,
     "ast_hash": "c3912c6f229fe818cbd12623c2eb1c19",
+    "semantic_hash": ""
+  },
+  "apps/backend/apps/accounts/tests/test_customer_update.py": {
+    "mtime": 1795513227.8487883,
+    "seen": 1795518631.7154515,
+    "ast_hash": "50da12937baffce36f824f1a5fb370e3",
+    "semantic_hash": ""
+  },
+  "apps/backend/apps/core/migrations/0017_taxslab_40_percent.py": {
+    "mtime": 1795518261.521144,
+    "seen": 1795518631.7157488,
+    "ast_hash": "9a83913fc61ceb6e811b57756fa3b225",
+    "semantic_hash": ""
+  },
+  "apps/frontend/components/inventory/__tests__/EditProductModal.fields.test.tsx": {
+    "mtime": 1795518521.6306977,
+    "seen": 1795518631.7166002,
+    "ast_hash": "7eca9347f24fbdd80021200fd1168e1b",
+    "semantic_hash": ""
+  },
+  "apps/frontend/components/inventory/__tests__/InlineEditCell.test.tsx": {
+    "mtime": 1795518521.6316977,
+    "seen": 1795518631.716603,
+    "ast_hash": "2b52b6457be7d75a254cc4768cd70341",
+    "semantic_hash": ""
+  },
+  "apps/frontend/lib/__tests__/gstRates.test.ts": {
+    "mtime": 1795518521.6296978,
+    "seen": 1795518631.7169535,
+    "ast_hash": "4724910f34b8e9631146fad7ef5188aa",
+    "semantic_hash": ""
+  },
+  "apps/frontend/lib/gstRates.ts": {
+    "mtime": 1795518378.9465477,
+    "seen": 1795518631.7170086,
+    "ast_hash": "fb8025eb27934412d50281e2c48e0003",
     "semantic_hash": ""
   },
   "package-lock.json": {

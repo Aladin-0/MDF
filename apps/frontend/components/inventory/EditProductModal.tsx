@@ -28,7 +28,8 @@ import {
     RotateCcw, IndianRupee, ReceiptText, FlaskConical,
 } from 'lucide-react';
 import { useDistributorList } from '@/hooks/usePurchases';
-import { PACK_TYPE_OPTIONS, DISPENSING_UNIT_OPTIONS } from '@/constants/productBehavior';
+import { PACK_TYPE_OPTIONS, DISPENSING_UNIT_OPTIONS, DRUG_TYPE_OPTIONS } from '@/constants/productBehavior';
+import { gstRateChoices } from '@/lib/gstRates';
 import { LOOSE_PACK_TYPES, allowsLoose } from '@/lib/packRules';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { inferPackUnit } from '@/utils/productUtils';
@@ -50,8 +51,6 @@ const SCHEDULE_OPTIONS = [
     { value: 'Veterinary', label: 'Veterinary' },
 ];
 
-const GST_RATES = [0, 5, 12, 18, 28];
-
 // ─── Form type ────────────────────────────────────────────────────────────────
 
 interface FormValues {
@@ -64,6 +63,7 @@ interface FormValues {
     packUnit: string;
     packType: string;
     scheduleType: string;
+    drugType: string;
     mrp: number;
     barcode: string;
     minQty: number;
@@ -177,6 +177,7 @@ export function EditProductModal({
                 packUnit:      product.packUnit ?? '',
                 packType:      product.packType ?? 'strip',
                 scheduleType:  product.scheduleType ?? 'OTC',
+                drugType:      product.drugType ?? 'allopathy',
                 mrp:           product.mrp ?? 0,
                 barcode:       product.barcode ?? '',
                 minQty:        product.minQty ?? 10,
@@ -204,6 +205,7 @@ export function EditProductModal({
                 packUnit:       values.packUnit,
                 packType:       values.packType,
                 scheduleType:   values.scheduleType as any,
+                drugType:       values.drugType as any,
                 mrp:            Number(values.mrp),
                 barcode:        values.barcode || undefined,
                 isFridge:       values.isFridge,
@@ -327,6 +329,20 @@ export function EditProductModal({
                                             <Field label="Barcode" error={fieldErr('barcode')} hint="Leave blank to clear">
                                                 <Input {...register('barcode')} placeholder="Scan or enter barcode" />
                                             </Field>
+                                            <Field label="Type" error={fieldErr('drugType')}>
+                                                <Controller
+                                                    name="drugType"
+                                                    control={control}
+                                                    render={({ field }) => (
+                                                        <Select value={field.value} onValueChange={field.onChange}>
+                                                            <SelectTrigger aria-label="Type"><SelectValue placeholder="Select type" /></SelectTrigger>
+                                                            <SelectContent>
+                                                                {DRUG_TYPE_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    )}
+                                                />
+                                            </Field>
                                         </div>
                                     </Section>
                                     <Separator />
@@ -387,7 +403,7 @@ export function EditProductModal({
                                 <TabsContent value="compliance" className="space-y-6 outline-none">
                                     <Section icon={<AlertTriangle className="h-4 w-4 text-orange-500" />} title="Compliance Details">
                                         <div className="grid grid-cols-2 gap-4">
-                                            <Field label="Schedule / Drug Type" error={fieldErr('scheduleType')}>
+                                            <Field label="Schedule" error={fieldErr('scheduleType')}>
                                                 <Controller
                                                     name="scheduleType"
                                                     control={control}
@@ -406,10 +422,11 @@ export function EditProductModal({
                                                     name="gstRate"
                                                     control={control}
                                                     render={({ field }) => (
+                                                        // the standard rates plus this product's own, so a 40% (or any other) rate is shown and can be kept
                                                         <Select value={String(field.value)} onValueChange={(v) => field.onChange(Number(v))}>
-                                                            <SelectTrigger><SelectValue /></SelectTrigger>
+                                                            <SelectTrigger aria-label="GST Rate"><SelectValue /></SelectTrigger>
                                                             <SelectContent>
-                                                                {GST_RATES.map(r => <SelectItem key={r} value={String(r)}>{r}%</SelectItem>)}
+                                                                {gstRateChoices(product.gstRate).map(r => <SelectItem key={r} value={String(r)}>{r}%</SelectItem>)}
                                                             </SelectContent>
                                                         </Select>
                                                     )}
