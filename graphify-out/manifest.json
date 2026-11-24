@@ -2094,9 +2094,9 @@
     "semantic_hash": "036ca5fedf13945dbd0855d34100b1a8"
   },
   "apps/backend/apps/inventory/views.py": {
-    "mtime": 1795518240.6521811,
-    "seen": 1795518631.7159173,
-    "ast_hash": "9be0165827c962db02f2ad97b37b1e3a",
+    "mtime": 1795518865.990473,
+    "seen": 1795519158.8581216,
+    "ast_hash": "a388ef4c13910c1c9eb47ef96eddc174",
     "semantic_hash": ""
   },
   "apps/backend/apps/purchases/__init__.py": {
@@ -3846,9 +3846,9 @@
     "semantic_hash": ""
   },
   "apps/frontend/components/inventory/EditProductModal.tsx": {
-    "mtime": 1795518443.055967,
-    "seen": 1795518631.7165818,
-    "ast_hash": "70c1728e752c93cd4e476997586e0462",
+    "mtime": 1795518865.9908848,
+    "seen": 1795519158.8587544,
+    "ast_hash": "42042b8c05df96f6e8a9acc93977e428",
     "semantic_hash": ""
   },
   "apps/frontend/components/inventory/ExpiryTable.tsx": {
@@ -5574,9 +5574,9 @@
     "semantic_hash": ""
   },
   "docs/DEPLOYMENT_GUIDE.md": {
-    "mtime": 1795514588.7178378,
-    "seen": 1795518631.717205,
-    "ast_hash": "fe3fb58cab2185e90838e054ec7aa81d",
+    "mtime": 1795519141.7091837,
+    "seen": 1795519158.859364,
+    "ast_hash": "36970694c452b86a3737cc935d203841",
     "semantic_hash": ""
   },
   "apps/backend/apps/core/management/commands/dump_permission_matrix.py": {
@@ -7812,9 +7812,9 @@
     "semantic_hash": ""
   },
   "apps/frontend/components/inventory/__tests__/EditProductModal.fields.test.tsx": {
-    "mtime": 1795518521.6306977,
-    "seen": 1795518631.7166002,
-    "ast_hash": "7eca9347f24fbdd80021200fd1168e1b",
+    "mtime": 1795518865.99098,
+    "seen": 1795519158.8587728,
+    "ast_hash": "a9ce5bebc792f732818991e96b9896b5",
     "semantic_hash": ""
   },
   "apps/frontend/components/inventory/__tests__/InlineEditCell.test.tsx": {
@@ -7833,6 +7833,18 @@
     "mtime": 1795518378.9465477,
     "seen": 1795518631.7170086,
     "ast_hash": "fb8025eb27934412d50281e2c48e0003",
+    "semantic_hash": ""
+  },
+  "apps/backend/apps/billing/tests/test_gst_rate_never_blocks.py": {
+    "mtime": 1795518654.7081122,
+    "seen": 1795519158.857869,
+    "ast_hash": "a466728bf798b0a148e3f97365573212",
+    "semantic_hash": ""
+  },
+  "apps/backend/apps/inventory/tests/test_product_edit.py": {
+    "mtime": 1795518865.9905682,
+    "seen": 1795519158.8581095,
+    "ast_hash": "1954010f05de3ecea3b839c82772f7c6",
     "semantic_hash": ""
   },
   "package-lock.json": {
