@@ -129,7 +129,7 @@ Tick, "Bill saved", invoice number, amount, payment mode, time, billed by. Butto
 
 ### 3.7 Sheets for the party fields
 
-- **Customer sheet:** search box (name/mobile, debounced), recent results, `Add new customer` (the existing form as a full-height sheet), retail-only `Counter bill` (there is no name-only "Non-valued customer": a bill is a Counter bill or a customer bill). Selected state shows phone, address, GSTIN, Due, Limit (retail) / DL no., Limit, Out (wholesale).
+- **Customer sheet:** search box (name/mobile, debounced), recent results, `Add new customer` (the existing form as a full-height sheet), retail-only `Counter bill` (there is no name-only "Non-valued customer": a bill is a Counter bill or a customer bill). Selected state has **Edit** (the shared `EditBillCustomer` popup; the sheet steps aside while it is open) and Remove, and shows phone, address, GSTIN, Due, Limit (retail) / DL no., Limit, Out (wholesale).
 - **Billing-for sheet (retail):** Self + family members as large radio rows, `Add family member` (relation chips, new vs link existing).
 - **Doctor sheet:** search name / reg no, `Add new doctor` (full-height form).
 - **More details sheet:** hospital, Rx number, `Add Rx photo` (camera or gallery, preview, remove); wholesale + e-way setting: transporter GSTIN, distance, mode, vehicle type, vehicle no; invoice date (invoice mode).

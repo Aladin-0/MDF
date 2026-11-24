@@ -65,15 +65,24 @@ const defaultForm = (): FormState => ({
 
 // ─── Validation ───────────────────────────────────────────────────────────────
 
-function validate(form: FormState): FieldErrors {
+/**
+ * `savedPhone` is the number an existing customer already has. It is accepted as it is: customers brought over from the
+ * old software carry landline, 11-digit or blank numbers, and re-checking that number on every save meant nothing else
+ * on such a record (address, GSTIN, licence) could be corrected. A number that is typed or changed must be a mobile.
+ */
+export function validate(form: FormState, savedPhone?: string | null): FieldErrors {
     const errors: FieldErrors = {};
 
     if (!form.name.trim()) errors.name = 'Name is required';
 
-    if (!form.phone.trim()) {
-        errors.phone = 'Phone is required';
-    } else if (!/^[6-9]\d{9}$/.test(form.phone.trim())) {
-        errors.phone = 'Enter a valid 10-digit Indian mobile number';
+    const phone = form.phone.trim();
+    const untouched = savedPhone != null && phone === savedPhone.trim();
+    if (!untouched) {
+        if (!phone) {
+            errors.phone = 'Phone is required';
+        } else if (!/^[6-9]\d{9}$/.test(phone)) {
+            errors.phone = 'Enter a valid 10-digit Indian mobile number';
+        }
     }
 
     if (form.gstin.trim() && !/^\d{2}[A-Z]{5}\d{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(form.gstin.trim().toUpperCase())) {
@@ -370,9 +379,11 @@ interface CustomerFormProps {
     open: boolean;
     onClose: () => void;
     customer?: Customer | null;
+    /** Called with the customer as the server saved it (billing uses it to refresh the bill on screen). */
+    onSaved?: (saved: Customer) => void;
 }
 
-export default function CustomerForm({ open, onClose, customer }: CustomerFormProps) {
+export default function CustomerForm({ open, onClose, customer, onSaved }: CustomerFormProps) {
     const { toast } = useToast();
     const outletId = useOutletId();
     const createMutation = useCreateCustomer();
@@ -388,10 +399,11 @@ export default function CustomerForm({ open, onClose, customer }: CustomerFormPr
                 // Build full address from address field (may contain city/state inline)
                 setForm({
                     name: customer.name,
-                    phone: customer.phone,
+                    phone: customer.phone ?? '',
                     address: customer.address ?? '',
                     city: '',
-                    state: customer.state || 'Maharashtra',
+                    // no state name on record: show the one its GST state code stands for, not a blanket default
+                    state: customer.state || INDIAN_STATES.find((s) => s.code === customer.stateCode)?.name || 'Maharashtra',
                     pincode: '',
                     dob: customer.dob ?? '',
                     gstin: customer.gstin ?? '',
@@ -427,12 +439,14 @@ export default function CustomerForm({ open, onClose, customer }: CustomerFormPr
     };
 
     const buildAddress = () => {
-        const parts = [form.address, form.city, form.state, form.pincode].filter(Boolean);
+        // A saved address already holds everything (the box shows it whole). Only a NEW customer gets the state added:
+        // adding it on every edit grew the address by ", Maharashtra" each time it was saved.
+        const parts = [form.address, form.city, customer ? '' : form.state, form.pincode].map((p) => p.trim()).filter(Boolean);
         return parts.join(', ') || null;
     };
 
     const handleSave = async () => {
-        const errs = validate(form);
+        const errs = validate(form, customer ? customer.phone ?? '' : null);
         if (Object.keys(errs).length > 0) {
             setErrors(errs);
             return;
@@ -441,13 +455,15 @@ export default function CustomerForm({ open, onClose, customer }: CustomerFormPr
         const payload = buildCustomerPayload(outletId, form, buildAddress);
 
         try {
+            let saved: Customer;
             if (customer) {
-                await updateMutation.mutateAsync(payload);
+                saved = await updateMutation.mutateAsync(payload);
                 toast({ title: 'Customer updated' });
             } else {
-                await createMutation.mutateAsync(payload);
+                saved = await createMutation.mutateAsync(payload);
                 toast({ title: 'Customer added' });
             }
+            onSaved?.(saved);
             onClose();
         } catch (err: unknown) {
             // axios keeps the server's reason in response.data.detail (its own message is just "status code 400")

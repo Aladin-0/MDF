@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { calculateRowTotals } from '../lib/cartUtils';
 import { isControlledSchedule } from '../lib/scheduleRules';
 import { distributeSmartDiscounts } from '../lib/billingMarginUtils';
+import { billCustomerFromLedger, ledgerAfterCustomerEdit, ledgerHasCustomer, patientAfterCustomerEdit, type SavedCustomer } from '../lib/billCustomer';
 import {
     CartItem,
     StaffPinVerifyResponse,
@@ -59,6 +60,8 @@ interface BillingState {
     // Actions - Active Draft Setters (Helpers)
     setCustomer: (c: Customer | null) => void;
     setCustomerLedger: (l: Ledger | null) => void;
+    /** A customer was edited: every open bill that carries them shows the saved details (the person billed for is kept). */
+    applyCustomerEdit: (saved: SavedCustomer) => void;
     setDoctor: (d: Doctor | null) => void;
     setHospitalName: (name: string | null) => void;
     setPayment: (payment: Partial<PaymentSplit>) => void;
@@ -338,6 +341,19 @@ export const useBillingStore = create<BillingState>()(
         const activeId = get().activeDraftId;
         // Changing the customer also drops the patient: they belonged to the previous customer's account.
         if (activeId) get().updateDraftHeader(activeId, { customerLedger, patient: null, ...(customerLedger ? { walkInName: null } : {}) });
+    },
+
+    applyCustomerEdit: (saved) => {
+        // Not setCustomerLedger: that is "a different customer was picked" and drops the person the bill is for.
+        for (const draft of Object.values(get().drafts)) {
+            if (!draft.customerLedger || !ledgerHasCustomer(draft.customerLedger, saved.id)) continue;
+            const customerLedger = ledgerAfterCustomerEdit(draft.customerLedger, saved);
+            get().updateDraftHeader(draft.id, {
+                customerLedger,
+                customer: billCustomerFromLedger(customerLedger),
+                patient: patientAfterCustomerEdit(draft.patient, saved),
+            });
+        }
     },
 
     setWalkInName: (name) => {

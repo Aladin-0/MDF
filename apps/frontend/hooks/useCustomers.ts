@@ -78,6 +78,8 @@ export function useUpdateCustomer(id: string) {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['customers', id] });
             queryClient.invalidateQueries({ queryKey: ['customers'] });
+            // the customer's ledger carries a copy of the name, mobile and address (billing's customer search reads it)
+            queryClient.invalidateQueries({ queryKey: ['ledgers'] });
         },
     });
 }

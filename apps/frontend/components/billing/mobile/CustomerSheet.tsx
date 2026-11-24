@@ -2,11 +2,13 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Loader2, Plus, Receipt, Search, UserX, X } from 'lucide-react';
+import { Loader2, Pencil, Plus, Receipt, Search, UserX, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { NewCustomerModal } from '@/components/billing/NewCustomerModal';
+import { EditBillCustomer } from '@/components/billing/EditBillCustomer';
+import { billCustomerFromLedger } from '@/lib/billCustomer';
 import { useOutletId } from '@/hooks/useOutletId';
 import { voucherApi } from '@/lib/apiClient';
 import { useBillingStore } from '@/store/billingStore';
@@ -44,6 +46,7 @@ export function CustomerSheet({ open, onClose }: Props) {
     const [debounced, setDebounced] = useState('');
     // A popup (ModalShell) cannot sit on top of a bottom sheet, so the sheet steps aside while one is open
     const [adding, setAdding] = useState(false);
+    const [editing, setEditing] = useState(false);
 
     const wholesale = draft?.saleType === 'WHOLESALE';
     const ledger = draft?.customerLedger ?? null;
@@ -51,7 +54,7 @@ export function CustomerSheet({ open, onClose }: Props) {
     const walkInName = draft?.walkInName ?? null;
 
     useEffect(() => {
-        if (open) { setQuery(''); setDebounced(''); } else { setAdding(false); }
+        if (open) { setQuery(''); setDebounced(''); } else { setAdding(false); setEditing(false); }
     }, [open]);
     useEffect(() => {
         const t = setTimeout(() => setDebounced(query), 300);
@@ -72,19 +75,7 @@ export function CustomerSheet({ open, onClose }: Props) {
     const selectCustomer = (picked: Ledger, member: FamilyMember | null) => {
         setCustomerLedger(picked);                                         // also clears the previous patient and any walk-in name
         setPatient(wholesale ? null : member);                             // null = Self; wholesale bills one party, never a family member
-        setCustomer({
-            id: picked.linkedCustomerId || picked.id,
-            name: picked.name,
-            phone: picked.phone || '',
-            gstin: picked.gstin || '',
-            address: picked.address || '',
-            creditLimit: (picked as any).creditLimit,
-            dlNo20b: (picked as any).dlNo20b,
-            dlNo21b: (picked as any).dlNo21b,
-            dlExpiry: (picked as any).dlExpiry,
-            customerType: (picked as any).customerType,
-            stateCode: (picked as any).stateCode,
-        } as any);
+        setCustomer(billCustomerFromLedger(picked));
     };
 
     const choose = (picked: Ledger) => {
@@ -103,12 +94,14 @@ export function CustomerSheet({ open, onClose }: Props) {
     if (!activeDraftId || !draft) return null;
 
     const typed = query.trim();
+    // the customer on the bill can be edited when the ledger has a customer record behind it (same rule as the desktop header)
+    const editableCustomerId: string | null = (ledger && !(ledger as any).isMock && ledger.linkedCustomerId) || null;
     const showDue = !wholesale && ledger && !(ledger as any).isMock && (Number(ledger.currentBalance) > 0 || Number((customer as any)?.creditLimit) > 0);
 
     return (
         <>
             <SheetShell
-                open={open && !adding}
+                open={open && !adding && !editing}
                 onClose={onClose}
                 title="Customer"
                 description={wholesale ? 'Wholesale bills go to one named customer.' : 'Search by name or mobile number.'}
@@ -133,9 +126,16 @@ export function CustomerSheet({ open, onClose }: Props) {
                         <section aria-label="Selected customer" className={cn(T.selected, 'space-y-1.5 rounded-xl border-2 p-3')}>
                             <div className="flex items-start justify-between gap-2">
                                 <p className="min-w-0 break-words text-sm font-bold text-slate-900">{cleanLedgerName(ledger.name)}</p>
-                                <Button variant="outline" className="h-11 shrink-0 rounded-xl border-2 border-red-600 bg-white font-bold text-red-700 hover:bg-red-50 hover:text-red-800 active:bg-red-50" onClick={() => { startCounterBill(); }}>
-                                    <X className="h-4 w-4" aria-hidden /> Remove
-                                </Button>
+                                <div className="flex shrink-0 gap-2">
+                                    {editableCustomerId && (
+                                        <Button variant="outline" data-testid="edit-customer" className={cn(T.btn, 'h-11 shrink-0')} onClick={() => setEditing(true)}>
+                                            <Pencil className="h-4 w-4" aria-hidden /> Edit
+                                        </Button>
+                                    )}
+                                    <Button variant="outline" className="h-11 shrink-0 rounded-xl border-2 border-red-600 bg-white font-bold text-red-700 hover:bg-red-50 hover:text-red-800 active:bg-red-50" onClick={() => { startCounterBill(); }}>
+                                        <X className="h-4 w-4" aria-hidden /> Remove
+                                    </Button>
+                                </div>
                             </div>
                             <p className="text-sm font-medium text-slate-900">{ledger.phone || 'No mobile number'}</p>
                             <p className="break-words text-sm text-slate-600">{ledger.address || 'No address'}</p>
@@ -240,6 +240,8 @@ export function CustomerSheet({ open, onClose }: Props) {
                     onCreated={(created) => { selectCustomer(created, null); setAdding(false); onClose(); }}
                 />
             )}
+            {/* the same Edit Customer form as the desktop header; the sheet steps aside while it is open */}
+            <EditBillCustomer customerId={editableCustomerId} open={open && editing} onClose={() => setEditing(false)} />
         </>
     );
 }

@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { AddFamilyMemberDialog } from './AddFamilyMemberDialog';
 import { BillingFor } from './BillingFor';
 import { NewCustomerModal } from './NewCustomerModal';
+import { EditBillCustomer } from './EditBillCustomer';
+import { billCustomerFromLedger } from '@/lib/billCustomer';
 import type { FamilyMember } from '@/types';
 import { useAuthStore } from '@/store/authStore';
 import { useBillingStore } from '@/store/billingStore';
@@ -13,7 +15,7 @@ import { LedgerPicker } from './LedgerPicker';
 import { DoctorPicker } from './DoctorPicker';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { UserPlus, UserX, Receipt, MoreVertical, Search, Stethoscope, PlusSquare, Upload, FileText, Check, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { UserPlus, UserX, UserCog, Receipt, MoreVertical, Search, Stethoscope, PlusSquare, Upload, FileText, Check, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface BillingHeaderStripProps {
@@ -32,6 +34,7 @@ export function BillingHeaderStrip({ customerRef, doctorRef, medicineSearchRef }
     const [addPersonOpen, setAddPersonOpen] = useState(false);
     const [newCustomerOpen, setNewCustomerOpen] = useState(false);
     const [newCustomerQuery, setNewCustomerQuery] = useState('');
+    const [editCustomerOpen, setEditCustomerOpen] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
     const outletIdForFamily = useAuthStore((s) => s.user?.outlet?.id);
@@ -53,25 +56,11 @@ export function BillingHeaderStrip({ customerRef, doctorRef, medicineSearchRef }
     const selectCustomer = (ledger: any | null, member: FamilyMember | null) => {
         setCustomerLedger(ledger);                 // (also clears the previous patient and any walk-in name)
         setPatient(saleType === 'WHOLESALE' ? null : (member ?? null));   // null = Self; wholesale bills one party, never a family member
-        if (ledger) {
-            setCustomer({
-                // the real customer record when the ledger has one; the server also accepts a ledger id
-                id: ledger.linkedCustomerId || ledger.id,
-                name: ledger.name,
-                phone: ledger.phone || '',
-                gstin: ledger.gstin || '',
-                address: ledger.address || '',
-                creditLimit: ledger.creditLimit,
-                dlNo20b: ledger.dlNo20b,
-                dlNo21b: ledger.dlNo21b,
-                dlExpiry: ledger.dlExpiry,
-                customerType: ledger.customerType,
-                stateCode: ledger.stateCode,
-            } as any);
-        } else {
-            setCustomer(null);
-        }
+        setCustomer(ledger ? billCustomerFromLedger(ledger) : null);
     };
+
+    // The customer on the bill can be edited when the ledger has a customer record behind it
+    const editableCustomerId: string | null = (customerLedger && !(customerLedger as any).isMock && customerLedger.linkedCustomerId) || null;
 
     // Only allow toggling if no quotationId (open/convert sets mode explicitly)
     const canToggleMode = !quotationId;
@@ -163,6 +152,12 @@ export function BillingHeaderStrip({ customerRef, doctorRef, medicineSearchRef }
                                                 onClick={() => { setMenuOpen(false); setNewCustomerQuery(''); setNewCustomerOpen(true); }}>
                                                 <UserPlus className="h-4 w-4 text-blue-600" /> Add New Customer
                                             </button>
+                                            <button role="menuitem" type="button" disabled={!editableCustomerId}
+                                                title={editableCustomerId ? undefined : 'Select a customer first'}
+                                                className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+                                                onClick={() => { setMenuOpen(false); setEditCustomerOpen(true); }}>
+                                                <UserCog className="h-4 w-4 text-blue-600" /> Edit This Customer
+                                            </button>
                                             {saleType !== 'WHOLESALE' && <button role="menuitem" type="button" className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left hover:bg-slate-50"
                                                 onClick={() => { setMenuOpen(false); startCounterBill(); }}>
                                                 <span className="flex items-center gap-2"><Receipt className="h-4 w-4 text-emerald-600" /> Create as Counter Bill</span>
@@ -189,6 +184,7 @@ export function BillingHeaderStrip({ customerRef, doctorRef, medicineSearchRef }
                             matchFamilyMember={saleType !== 'WHOLESALE'}
                             showFamily={saleType !== 'WHOLESALE'}
                             onAddNew={(q) => { setNewCustomerQuery(q); setNewCustomerOpen(true); }}
+                            onEdit={editableCustomerId ? () => setEditCustomerOpen(true) : undefined}
                             onSelect={(ledger, member) => selectCustomer(ledger, member ?? null)}
                             defaultGroupName="Sundry Debtors"
                             icon={<UserPlus className="w-4 h-4" />}
@@ -438,6 +434,7 @@ export function BillingHeaderStrip({ customerRef, doctorRef, medicineSearchRef }
                     onCreated={(ledger) => selectCustomer(ledger, null)}
                 />
             )}
+            <EditBillCustomer customerId={editableCustomerId} open={editCustomerOpen} onClose={() => setEditCustomerOpen(false)} />
         </div>
     );
 }

@@ -30,6 +30,18 @@ Family features are for **retail** bills. A **wholesale** bill sells to one part
 - Editing a bill keeps its patient unless a new `patientId` is sent. Changing the patient needs `can_correct_customer`.
 - A person's purchase history = bills made for them (patient) + their own bills with no patient. The account's history = everything.
 
+## Editing a customer (what must stay true)
+- **The ledger follows the customer.** Billing and every ledger list show the *ledger's* copy of the name, mobile, address and
+  GSTIN. `PUT /customers/<id>/` therefore ends with `sync_customer_ledger` (`apps/accounts/family_accounts.py`): the ledger is
+  renamed while its name is still the automatic one ("Name (mobile)", or plain "Name" on older records) and left alone if someone
+  typed a name by hand in Accounts; a name another ledger already uses is skipped, never a failed save.
+- **A number is checked only when it changes.** Imported customers carry landline / 11-digit / `TMP-` numbers; the form
+  (`validate(form, savedPhone)`) and the server accept the number a customer already has, so their other details can be corrected.
+- **Every field travels.** `customersApi.create` / `update` send what the form built (`customerBody`); a cleared box is sent as
+  `null`. The address box holds the whole saved address: the state is added to it only when a customer is first created.
+- A family member's edit never touches the owner's ledger or credit limit. Joining / leaving an account is still only
+  `POST /customers/<id>/account/`.
+
 ## API
 | Endpoint | Purpose |
 |---|---|
@@ -47,6 +59,10 @@ Family features are for **retail** bills. A **wholesale** bill sells to one part
      City, Pincode, Default Discount %). A customer with a mobile number unlocks history, WhatsApp invoices and reminders.
   2. **Counter Bill** (button, ⋮ menu or **Alt+C**): clears customer, person and name: a generic cash sale.
   3. A customer already on the bill can have family added, below.
+  4. A customer already on the bill can be **edited** without leaving the bill: **Edit** beside Change on the selected customer
+     (also ⋮ -> Edit This Customer; on a phone, Edit beside Remove in the customer sheet). It opens the same Edit Customer form
+     as the Customers page (`components/billing/EditBillCustomer.tsx`), and the saved name, mobile, address, GSTIN and licence
+     details appear on every open bill for that customer at once (`billingStore.applyCustomerEdit`); who the bill is for is kept.
 - **Billing for** (directly under the customer; indigo-bordered so it is hard to miss): defaults to **Self**. The dropdown lists the owner
   (relation "Self") then each family member with mobile, age and relation on the right, and **+ Add New Family Member** at the bottom.
   Also shows the family size and the shared **Due** / **Limit**. A purely shared record has no "Self": it turns amber and the cashier must choose.

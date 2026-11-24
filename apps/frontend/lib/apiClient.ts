@@ -993,6 +993,27 @@ export interface CustomerSummary {
     totalOutstanding: number;
 }
 
+// Every customer field the server accepts. These two calls used to copy nine of them by hand, so the state, the drug
+// licence numbers and their expiry, email, gender, relationship and the family choices were dropped on the way:
+// the form said "saved" and nothing had changed.
+const CUSTOMER_FIELDS = [
+    'name', 'phone', 'address', 'state', 'dob', 'gstin', 'email', 'isChronic', 'fixedDiscount', 'creditLimit',
+    'dlNo20b', 'dlNo21b', 'dlExpiry', 'customerType', 'stateCode', 'gender', 'relationship',
+] as const;
+const CUSTOMER_CREATE_FIELDS = [...CUSTOMER_FIELDS, 'isFamilyAccount', 'accountHolderId'] as const;
+
+/**
+ * The request body for creating / editing a customer: only the fields the caller passed (the server leaves the rest
+ * alone), and a field the form emptied (it arrives as `undefined`) goes as `null` so the server clears it.
+ */
+export function customerBody(payload: Record<string, unknown>, fields: readonly string[] = CUSTOMER_FIELDS) {
+    const body: Record<string, unknown> = { outletId: payload.outletId };
+    for (const field of fields) {
+        if (field in payload) body[field] = payload[field] ?? null;
+    }
+    return body;
+}
+
 const realCustomersApi = {
     /** The Customers page's four numbers, computed by the server (each family account counted once). */
     getSummary: async (outletId: string, signal?: AbortSignal): Promise<CustomerSummary> => {
@@ -1044,17 +1065,7 @@ const realCustomersApi = {
         const response = await fetch(`${API_URL}/customers/`, {
             method: 'POST',
             headers: getHeaders(),
-            body: JSON.stringify({
-                outletId: payload.outletId,
-                name: payload.name,
-                phone: payload.phone,
-                address: payload.address || null,
-                dob: payload.dob || null,
-                gstin: payload.gstin || null,
-                isChronic: payload.isChronic ?? false,
-                fixedDiscount: payload.fixedDiscount ?? 0,
-                creditLimit: payload.creditLimit ?? 0,
-            }),
+            body: JSON.stringify(customerBody(payload, CUSTOMER_CREATE_FIELDS)),
         });
         await assertOk(response);
         return response.json();
@@ -1063,17 +1074,7 @@ const realCustomersApi = {
         const response = await fetch(`${API_URL}/customers/${id}/`, {
             method: 'PUT',
             headers: getHeaders(),
-            body: JSON.stringify({
-                outletId: payload.outletId,
-                name: payload.name,
-                phone: payload.phone,
-                address: payload.address || null,
-                dob: payload.dob || null,
-                gstin: payload.gstin || null,
-                isChronic: payload.isChronic ?? false,
-                fixedDiscount: payload.fixedDiscount ?? 0,
-                creditLimit: payload.creditLimit ?? 0,
-            }),
+            body: JSON.stringify(customerBody(payload, CUSTOMER_FIELDS)),
         });
         await assertOk(response);
         return response.json();

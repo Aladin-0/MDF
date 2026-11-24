@@ -40,6 +40,39 @@ def ensure_customer_ledger(customer: Customer) -> Ledger:
     )
 
 
+def sync_customer_ledger(customer: Customer, old_name: str, old_phone: str) -> None:
+    """
+    Carry an edited customer's name, mobile, address and GSTIN onto their own ledger(s).
+
+    The billing screen and every ledger list show the LEDGER's copy of these, so without this an edited customer kept
+    showing the old name and address there (only mobile and GSTIN were copied), which looked like the edit had not saved.
+
+    The ledger is renamed only while its name is still the automatic one ("Name (mobile)", or plain "Name" on older
+    records), in the same style it had. A name someone typed by hand in Accounts is left alone. Ledger names are unique in
+    an outlet, so a name that another ledger already uses is skipped instead of failing the customer's save.
+    """
+    old_name = (old_name or '').strip()
+    old_phone = old_phone or ''
+    auto_full = f'{old_name} ({old_phone})'.lower()
+    for ledger in Ledger.objects.filter(linked_customer=customer):
+        ledger.phone = (customer.phone or '')[:15]
+        ledger.gstin = customer.gstin or ''
+        ledger.address = customer.address or ''
+        current = (ledger.name or '').strip().lower()
+        wanted = None
+        if current == auto_full:
+            wanted = [f'{customer.name} ({customer.phone})']
+        elif current == old_name.lower():
+            wanted = [customer.name, f'{customer.name} ({customer.phone})']
+        for name in wanted or []:
+            if name == ledger.name:
+                break
+            if not Ledger.objects.filter(outlet_id=ledger.outlet_id, name__iexact=name).exclude(pk=ledger.pk).exists():
+                ledger.name = name[:255]
+                break
+        ledger.save(update_fields=['name', 'phone', 'gstin', 'address'])
+
+
 def customer_for_ledger(outlet, ledger: Ledger) -> Customer:
     """
     The Customer behind a Sundry Debtors ledger that has no linked customer yet (e.g. imported from Tally).

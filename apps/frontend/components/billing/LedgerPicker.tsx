@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Search, Loader2, Plus, X } from 'lucide-react';
+import { Search, Loader2, Plus, X, Pencil } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { voucherApi } from '@/lib/apiClient';
@@ -29,6 +29,8 @@ interface LedgerPickerProps {
     matchFamilyMember?: boolean;
     /** Show the "Family: …" hint on rows. Off for wholesale, which bills one party. Default on. */
     showFamily?: boolean;
+    /** Billing: show an Edit button beside Change on the selected customer (only for a ledger that has a customer record). */
+    onEdit?: (ledger: Ledger) => void;
 }
 
 export function LedgerPicker({ 
@@ -38,6 +40,7 @@ export function LedgerPicker({
     onAddNew,
     matchFamilyMember = false,
     showFamily = true,
+    onEdit,
     defaultGroupName, 
     icon, 
     placeholder = 'Search...',
@@ -194,7 +197,7 @@ export function LedgerPicker({
                 <div className="absolute left-2.5 top-2.5 text-blue-500">
                     {icon}
                 </div>
-                <div className="flex items-center gap-2 truncate">
+                <div className="flex min-w-0 flex-1 items-center gap-2 truncate">
                     <span className="font-semibold text-blue-900 text-sm truncate">{currentLedger.name}</span>
                     {currentLedger.phone && (
                         <span className="text-[10px] bg-white text-slate-800 px-1.5 py-0.5 rounded font-bold shrink-0">{currentLedger.phone}</span>
@@ -211,9 +214,20 @@ export function LedgerPicker({
                         }
                     }}
                 />
+                {onEdit && currentLedger.linkedCustomerId && (
+                    <button
+                        type="button"
+                        data-testid="edit-customer"
+                        title="Edit this customer's details"
+                        className="flex items-center gap-1 text-xs text-blue-700 hover:text-blue-900 font-bold uppercase tracking-wider ml-2 shrink-0 px-2 py-1 rounded bg-white border border-blue-200 hover:bg-blue-100 active:bg-blue-200 transition-colors"
+                        onClick={() => onEdit(currentLedger)}
+                    >
+                        <Pencil className="h-3 w-3" aria-hidden /> Edit
+                    </button>
+                )}
                 <button 
                     type="button"
-                    className="text-xs text-blue-700 hover:text-blue-900 font-bold uppercase tracking-wider ml-2 shrink-0 px-2 py-1 rounded bg-blue-100 hover:bg-blue-200 active:bg-blue-300 transition-colors" 
+                    className={cn("text-xs text-blue-700 hover:text-blue-900 font-bold uppercase tracking-wider shrink-0 px-2 py-1 rounded bg-blue-100 hover:bg-blue-200 active:bg-blue-300 transition-colors", onEdit && currentLedger.linkedCustomerId ? 'ml-1' : 'ml-2')}
                     onPointerDown={(e) => {
                         e.preventDefault();
                         handleSelect(null);

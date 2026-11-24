@@ -493,49 +493,28 @@ class CustomerDetailView(APIView):
                 {'detail': f'Customer {customer_id} not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
-        from apps.accounts.family_accounts import account_ledger
-
-        result = {
-            'id': str(customer.id),
-            'name': customer.name,
-            'phone': customer.phone,
-            'address': customer.address,
-            'state': customer.state or '',
-            'dob': customer.dob.isoformat() if customer.dob else None,
-            'gstin': customer.gstin,
-            'email': customer.email,
-            'fixedDiscount': float(customer.fixed_discount),
-            'creditLimit': float(customer.financial_customer.credit_limit),
-            'dlNo20b': customer.dl_no_20b,
-            'dlNo21b': customer.dl_no_21b,
-            'dlExpiry': customer.dl_expiry.isoformat() if customer.dl_expiry else None,
-            'customerType': customer.customer_type,
-            'stateCode': customer.state_code,
-            'outstanding': float(customer.outstanding_balance),
-            'totalPurchases': float(customer.total_purchases),
-            'isChronic': customer.is_chronic,
-            'isActive': customer.is_active,
-            'createdAt': customer.created_at.isoformat(),
-            'ledgerId': (lambda l: str(l.id) if l else None)(account_ledger(customer)),
-            **_family_fields(customer),
-        }
-
-        return Response(result, status=status.HTTP_200_OK)
+        return Response(_customer_detail(customer), status=status.HTTP_200_OK)
 
     def put(self, request, customer_id, *args, **kwargs):
-        """Update customer details."""
+        """Update customer details. Only the fields that are sent are changed."""
         outlet_id = request.data.get('outletId')
 
-        try:
-            outlet = Outlet.objects.get(id=outlet_id)
-        except Outlet.DoesNotExist:
-            return Response(
-                {'detail': f'Outlet {outlet_id} not found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
+        if outlet_id:
+            try:
+                outlet = Outlet.objects.get(id=outlet_id)
+            except Outlet.DoesNotExist:
+                return Response(
+                    {'detail': f'Outlet {outlet_id} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+        else:
+            # Same fall-back as GET: the signed-in user's own outlet
+            outlet = getattr(request.user, 'outlet', None)
+            if outlet is None:
+                return Response({'detail': 'outletId is required'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            customer = Customer.objects.get(id=customer_id, outlet=outlet)
+            customer = Customer.objects.select_related('account_holder').get(id=customer_id, outlet=outlet)
         except Customer.DoesNotExist:
             return Response(
                 {'detail': f'Customer {customer_id} not found'},
@@ -562,13 +541,23 @@ class CustomerDetailView(APIView):
             customer.name = name
 
         if 'phone' in request.data:
-            phone = (request.data['phone'] or '').strip()
-            if not re.match(r'^[6-9]\d{9}$', phone):
-                return Response(
-                    {'detail': 'phone must be a valid 10-digit Indian mobile number starting with 6-9'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            customer.phone = phone
+            phone = str(request.data['phone'] or '').strip()
+            # Only a number that is being CHANGED has to be a valid mobile. Customers brought over from the old
+            # software carry landline, 11-digit or blank numbers; checking the number they already had meant that
+            # nothing at all could be edited on them (not the address, not the GSTIN) until the number was replaced.
+            if phone != (customer.phone or '').strip():
+                if not re.match(r'^[6-9]\d{9}$', phone):
+                    return Response(
+                        {'detail': 'phone must be a valid 10-digit Indian mobile number starting with 6-9'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                customer.phone = phone
+
+        # The same "no exact clone" rule as creating a customer, checked only when the name or number changes
+        if (customer.name, customer.phone) != (old_state['name'], old_state['phone']) and Customer.objects.filter(
+                outlet=outlet, phone=customer.phone, name__iexact=customer.name).exclude(pk=customer.pk).exists():
+            return Response({'detail': 'A customer with this exact name and phone number already exists.'},
+                            status=status.HTTP_400_BAD_REQUEST)
 
         if 'gstin' in request.data:
             gstin = (request.data['gstin'] or '').strip().upper() or None
@@ -581,7 +570,10 @@ class CustomerDetailView(APIView):
         if 'dlNo21b' in request.data:
             customer.dl_no_21b = request.data['dlNo21b'] or None
         if 'dlExpiry' in request.data:
-            customer.dl_expiry = request.data['dlExpiry'] or None
+            dl_expiry = _date_or_none(request.data['dlExpiry'])
+            if dl_expiry is False:
+                return Response({'detail': 'dlExpiry must be a date (YYYY-MM-DD)'}, status=status.HTTP_400_BAD_REQUEST)
+            customer.dl_expiry = dl_expiry
         if 'customerType' in request.data:
             customer.customer_type = request.data['customerType'] or 'RETAIL'
         if 'stateCode' in request.data:
@@ -594,7 +586,9 @@ class CustomerDetailView(APIView):
         if 'relationship' in request.data:
             customer.relationship = (request.data['relationship'] or '').strip()[:30]
 
-        if 'creditLimit' in request.data:
+        # A family member's credit is their account's: the form shows them the owner's limit, which must not be
+        # copied onto the member's own record.
+        if 'creditLimit' in request.data and not customer.account_holder_id:
             try:
                 credit_limit = float(request.data['creditLimit'])
                 if credit_limit < 0:
@@ -616,7 +610,10 @@ class CustomerDetailView(APIView):
             customer.address = request.data['address'] or None
 
         if 'dob' in request.data:
-            customer.dob = request.data['dob'] or None
+            dob = _date_or_none(request.data['dob'])
+            if dob is False:
+                return Response({'detail': 'dob must be a date (YYYY-MM-DD)'}, status=status.HTTP_400_BAD_REQUEST)
+            customer.dob = dob
 
         if 'isChronic' in request.data:
             customer.is_chronic = bool(request.data['isChronic'])
@@ -624,7 +621,12 @@ class CustomerDetailView(APIView):
         if 'state' in request.data:
             customer.state = (request.data['state'] or '').strip()[:100]
 
-        customer.save()
+        # The customer and their ledger change together: billing and the ledger lists show the ledger's copy
+        from django.db import transaction
+        from apps.accounts.family_accounts import sync_customer_ledger
+        with transaction.atomic():
+            customer.save()
+            sync_customer_ledger(customer, old_state['name'], old_state['phone'])
         logger.info(f"Updated customer {customer_id}")
 
         new_state = {
@@ -643,39 +645,51 @@ class CustomerDetailView(APIView):
             if old_state[key] != new_state[key]:
                 changes[key] = {'old': old_state[key], 'new': new_state[key]}
 
-        pass
+        return Response(_customer_detail(customer), status=status.HTTP_200_OK)
 
-        # Keep linked Ledger in sync
-        from apps.accounts.models import Ledger
-        Ledger.objects.filter(linked_customer=customer).update(
-            phone=customer.phone or '',
-            gstin=customer.gstin or '',
-        )
 
-        result = {
-            'id': str(customer.id),
-            'name': customer.name,
-            'phone': customer.phone,
-            'address': customer.address,
-            'state': customer.state or '',
-            'dob': customer.dob.isoformat() if customer.dob else None,
-            'gstin': customer.gstin,
-            'email': customer.email,
-            'fixedDiscount': float(customer.fixed_discount),
-            'creditLimit': float(customer.credit_limit),
-            'dlNo20b': customer.dl_no_20b,
-            'dlNo21b': customer.dl_no_21b,
-            'dlExpiry': customer.dl_expiry.isoformat() if customer.dl_expiry else None,
-            'customerType': customer.customer_type,
-            'stateCode': customer.state_code,
-            'outstanding': float(customer.outstanding_balance),
-            'totalPurchases': float(customer.total_purchases),
-            'isChronic': customer.is_chronic,
-            'isActive': customer.is_active,
-            'createdAt': customer.created_at.isoformat(),
-        }
+def _date_or_none(value):
+    """A date from request text; None when empty; False when it is not a date (the caller answers 400)."""
+    if not value:
+        return None
+    from django.utils.dateparse import parse_date
+    try:
+        parsed = parse_date(str(value)[:10])
+    except ValueError:
+        parsed = None
+    return parsed or False
 
-        return Response(result, status=status.HTTP_200_OK)
+
+def _customer_detail(customer):
+    """One customer as GET and PUT /customers/<id>/ return it."""
+    from apps.accounts.family_accounts import account_ledger
+    ledger = account_ledger(customer)
+    return {
+        'id': str(customer.id),
+        'name': customer.name,
+        'phone': customer.phone,
+        'address': customer.address,
+        'state': customer.state or '',
+        'dob': customer.dob.isoformat() if customer.dob else None,
+        'gstin': customer.gstin,
+        'email': customer.email,
+        'fixedDiscount': float(customer.fixed_discount),
+        'creditLimit': float(customer.financial_customer.credit_limit),
+        'dlNo20b': customer.dl_no_20b,
+        'dlNo21b': customer.dl_no_21b,
+        'dlExpiry': customer.dl_expiry.isoformat() if customer.dl_expiry else None,
+        'customerType': customer.customer_type,
+        'stateCode': customer.state_code,
+        'outstanding': float(customer.outstanding_balance),
+        'totalPurchases': float(customer.total_purchases),
+        'isChronic': customer.is_chronic,
+        'isActive': customer.is_active,
+        'createdAt': customer.created_at.isoformat(),
+        # the ledger bills go to (a member's is their account owner's); its name is what the billing screen shows
+        'ledgerId': str(ledger.id) if ledger else None,
+        'ledgerName': ledger.name if ledger else None,
+        **_family_fields(customer),
+    }
 
 
 def _family_fields(customer):
