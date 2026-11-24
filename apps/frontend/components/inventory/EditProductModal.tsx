@@ -177,7 +177,7 @@ export function EditProductModal({
                 packUnit:      product.packUnit ?? '',
                 packType:      product.packType ?? 'strip',
                 scheduleType:  product.scheduleType ?? 'OTC',
-                drugType:      product.drugType ?? 'allopathy',
+                drugType:      product.drugType || 'allopathy',   // a few older products have a blank type
                 mrp:           product.mrp ?? 0,
                 barcode:       product.barcode ?? '',
                 minQty:        product.minQty ?? 10,

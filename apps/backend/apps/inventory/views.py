@@ -517,16 +517,21 @@ class ProductDetailView(APIView):
             st = (data['scheduleType'] or 'OTC').strip()
             # The type follows the schedule only when the schedule itself changes and no type was sent. It used to be
             # reset on EVERY save (the form always sends the schedule), so a type could never be anything else.
-            if st != product.schedule_type and 'drugType' not in data:
+            type_sent = bool(str(data.get('drugType') or '').strip())
+            if st != product.schedule_type and not type_sent:
                 product.drug_type = SCHEDULE_TO_DRUG.get(st, 'allopathy')
             product.schedule_type = st
 
-        if 'drugType' in data:
-            dt = (data['drugType'] or '').strip()
+        # A blank type means "none chosen", not an error: some older products have no type on record, and a form
+        # that sends that blank back must still be able to save them.
+        dt = str(data.get('drugType') or '').strip()
+        if dt:
             if dt not in DRUG_TYPES:
                 errors['drugType'] = f'Type must be one of: {", ".join(sorted(DRUG_TYPES))}'
             else:
                 product.drug_type = dt
+        elif not product.drug_type:
+            product.drug_type = SCHEDULE_TO_DRUG.get(product.schedule_type, 'allopathy')
 
         if 'mrp' in data:
             try:

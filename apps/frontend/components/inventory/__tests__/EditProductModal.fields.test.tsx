@@ -61,6 +61,11 @@ describe('Edit Product: every fact on the product page can be changed', () => {
         expect(within(listbox).getAllByRole('option').map((o) => o.textContent)).toEqual(DRUG_TYPE_OPTIONS.map((o) => o.label));
     });
 
+    it('shows a product with no type on record as Allopathy instead of an empty box', async () => {
+        render(<EditProductModal product={enerzal({ drugType: '' })} open onOpenChange={() => {}} />);
+        expect(await screen.findByRole('combobox', { name: 'Type' })).toHaveTextContent('Allopathy');
+    });
+
     it('saves a new salt and type on a 40% product, sending its rate unchanged', async () => {
         const onOpenChange = jest.fn();
         render(<EditProductModal product={enerzal()} open onOpenChange={onOpenChange} />);

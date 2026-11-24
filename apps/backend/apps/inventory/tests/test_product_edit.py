@@ -65,6 +65,14 @@ class ProductEditTests(AccessControlBase):
         self.product.refresh_from_db()
         self.assertEqual((self.product.schedule_type, self.product.drug_type), ('H', 'homeo'))
 
+    def test_a_product_with_no_type_on_record_can_still_be_saved(self):
+        """13 live products have a blank type: a form sending that blank back must not be refused."""
+        MasterProduct.objects.filter(id=self.product.id).update(drug_type='')
+        r = self.put(name='ENERZAL ZERO ORANGE', scheduleType='OTC', drugType='', gstRate=40)
+        self.assertEqual(r.status_code, 200, r.content)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.drug_type, 'allopathy')            # the usual type for its schedule, as before
+
     def test_every_type_the_screen_offers_is_accepted(self):
         for value, _label in MasterProduct.DRUG_TYPE_CHOICES:
             self.assertEqual(self.put(drugType=value).status_code, 200, value)
