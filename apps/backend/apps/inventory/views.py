@@ -19,7 +19,6 @@ from apps.inventory.pack_rules import (
     allows_loose, batch_allows_loose, normalize_pack_type, pack_errors, sync_batch_to_pack, fold_loose_into_packs,
 )
 from apps.core.models import Outlet, TaxSlab
-from apps.accounts.models import Staff
 from apps.audit.services import log_activity
 
 logger = logging.getLogger(__name__)
@@ -1617,20 +1616,19 @@ class InventoryAdjustView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # Validate PIN - staff exists in this outlet
-        staff = None
-        if pin:
-            from django.contrib.auth.hashers import check_password
-            for s in Staff.objects.filter(outlet=outlet, is_active=True):
-                if check_password(pin, s.staff_pin):
-                    staff = s
-                    break
-                    
-            if not staff:
-                return Response(
-                    {'error': {'code': 'INVALID_PIN', 'message': 'Invalid PIN'}},
-                    status=status.HTTP_401_UNAUTHORIZED
-                )
+        # Validate PIN - staff exists in this outlet. Same finder and the same wrong-guess limit as the
+        # billing counter (apps/accounts/pins.py): this used to be a way to try PINs without any limit.
+        from apps.accounts.pins import PIN_USER_LIMITER, pin_blocked_response, staff_with_pin
+        blocked = pin_blocked_response(request.user)
+        if blocked:
+            return blocked
+        staff = next(iter(staff_with_pin(outlet, pin)), None)
+        if not staff:
+            PIN_USER_LIMITER.record_failure(request.user.id)
+            return Response(
+                {'error': {'code': 'INVALID_PIN', 'message': 'Invalid PIN'}},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
 
         # Fetch batch
         try:

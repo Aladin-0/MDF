@@ -306,9 +306,9 @@
     "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
   },
   "apps/backend/apps/accounts/models.py": {
-    "mtime": 1794381606.7176845,
-    "seen": 1795419533.468745,
-    "ast_hash": "5c5fc58efc6e5137834d5eefbc547e39",
+    "mtime": 1795510843.8969588,
+    "seen": 1795511319.6174226,
+    "ast_hash": "ce2be39c566508ae3cb3b74fcb3f5f9c",
     "semantic_hash": ""
   },
   "apps/backend/apps/accounts/partner_urls.py": {
@@ -384,9 +384,9 @@
     "semantic_hash": ""
   },
   "apps/backend/apps/accounts/views.py": {
-    "mtime": 1795505722.2668607,
-    "seen": 1795507043.2349544,
-    "ast_hash": "71223544d8bc6fdf62d1dcd588f69c9f",
+    "mtime": 1795510896.1423497,
+    "seen": 1795511319.6174452,
+    "ast_hash": "93f7f6e4db63e09565cc2d9161c3ac1c",
     "semantic_hash": ""
   },
   "apps/backend/apps/accounts/voucher_serializers.py": {
@@ -2094,9 +2094,9 @@
     "semantic_hash": "036ca5fedf13945dbd0855d34100b1a8"
   },
   "apps/backend/apps/inventory/views.py": {
-    "mtime": 1795418730.7078269,
-    "seen": 1795419533.469169,
-    "ast_hash": "0101fc1bf4f072e2dc25a902feef10ec",
+    "mtime": 1795510906.718681,
+    "seen": 1795511319.6179128,
+    "ast_hash": "f77ef18de111b61173d60a3bedfceba3",
     "semantic_hash": ""
   },
   "apps/backend/apps/purchases/__init__.py": {
@@ -2748,9 +2748,9 @@
     "semantic_hash": ""
   },
   "apps/backend/mediflow/urls.py": {
-    "mtime": 1795505706.1762416,
-    "seen": 1795507043.2365072,
-    "ast_hash": "83a229cea1baf9f4a3dec237555bd4d1",
+    "mtime": 1795509010.494575,
+    "seen": 1795511319.618097,
+    "ast_hash": "caf1931c006c2bf3a5c8f8ed039e5082",
     "semantic_hash": ""
   },
   "apps/backend/mediflow/wsgi.py": {
@@ -3648,9 +3648,9 @@
     "semantic_hash": ""
   },
   "apps/frontend/components/billing/StaffPinEntry.tsx": {
-    "mtime": 1795425317.6382234,
-    "seen": 1795426052.501482,
-    "ast_hash": "6f826357496e8d4e8153c4ca20223c1b",
+    "mtime": 1795511020.5465915,
+    "seen": 1795511319.6183712,
+    "ast_hash": "dbc3f272fc779d8fa6226f024d306208",
     "semantic_hash": ""
   },
   "apps/frontend/components/billing/TransactionStrip.tsx": {
@@ -5502,9 +5502,9 @@
     "semantic_hash": ""
   },
   "PROJECT_MAP.md": {
-    "mtime": 1795506370.2674637,
-    "seen": 1795507043.2391448,
-    "ast_hash": "aa92b6bcf8148a963027343dcd1cacf4",
+    "mtime": 1795511228.6483624,
+    "seen": 1795511319.619187,
+    "ast_hash": "0c7ca7758a4f346d9be48f3111ead1a6",
     "semantic_hash": ""
   },
   "apps/backend/apps/reports/tests/tests_purchase_reports_db.py": {
@@ -5574,9 +5574,9 @@
     "semantic_hash": ""
   },
   "docs/DEPLOYMENT_GUIDE.md": {
-    "mtime": 1795506364.458528,
-    "seen": 1795507043.2391908,
-    "ast_hash": "35883174d8e783a23572d06b2c7575a5",
+    "mtime": 1795509322.7287395,
+    "seen": 1795511319.6192045,
+    "ast_hash": "77ee8412336e0699093f92d046169472",
     "semantic_hash": ""
   },
   "apps/backend/apps/core/management/commands/dump_permission_matrix.py": {
@@ -5640,9 +5640,9 @@
     "semantic_hash": ""
   },
   "docs/ACCESS_CONTROL.md": {
-    "mtime": 1795415871.5671582,
-    "seen": 1795419533.470235,
-    "ast_hash": "7b0329d4f38c3354b90c02058760ac43",
+    "mtime": 1795511228.648846,
+    "seen": 1795511319.6191914,
+    "ast_hash": "360a538086cf92cf907c32e6f8ecf067",
     "semantic_hash": ""
   },
   "apps/backend/apps/core/management/commands/normalize_staff_roles.py": {
@@ -6282,9 +6282,9 @@
     "semantic_hash": ""
   },
   "apps/backend/apps/accounts/tests/test_access_control.py": {
-    "mtime": 1794572981.9685395,
-    "seen": 1795419533.468756,
-    "ast_hash": "8a2ed438ff31c2d4228ef6794776c60e",
+    "mtime": 1795511076.9061322,
+    "seen": 1795511319.617437,
+    "ast_hash": "49307dc604f505ec0b428ed905ed36de",
     "semantic_hash": ""
   },
   "apps/backend/apps/accounts/tests/test_chain_dashboard.py": {
@@ -6312,9 +6312,9 @@
     "semantic_hash": ""
   },
   "apps/backend/apps/inventory/tests/test_inventory_list.py": {
-    "mtime": 1794572981.983236,
-    "seen": 1795419533.4691565,
-    "ast_hash": "ea3898ca6b6ee040ce3407ab4614e93a",
+    "mtime": 1795511076.9063592,
+    "seen": 1795511319.6178987,
+    "ast_hash": "4a1d48cb3d0440dec3c6451b6e1b94fb",
     "semantic_hash": ""
   },
   "apps/backend/apps/inventory/tests/test_pack_rules.py": {
@@ -7749,6 +7749,24 @@
     "mtime": 1795505742.4717047,
     "seen": 1795507043.2370124,
     "ast_hash": "c79db66a3a4f79c8d0587833e4aaa901",
+    "semantic_hash": ""
+  },
+  "apps/backend/apps/accounts/migrations/0031_staff_pin_lookup.py": {
+    "mtime": 1795510843.9014983,
+    "seen": 1795511319.6174188,
+    "ast_hash": "09a678e8153c6fe0206dbd33fc3e48e2",
+    "semantic_hash": ""
+  },
+  "apps/backend/apps/accounts/pins.py": {
+    "mtime": 1795510834.132586,
+    "seen": 1795511319.6174285,
+    "ast_hash": "8a57c76527baf97e80f94e3151fd570a",
+    "semantic_hash": ""
+  },
+  "apps/frontend/components/billing/StaffPinEntry.test.tsx": {
+    "mtime": 1795511009.536986,
+    "seen": 1795511319.6183698,
+    "ast_hash": "cf48ef1caf2e83788413ea19402f6e12",
     "semantic_hash": ""
   },
   "package-lock.json": {

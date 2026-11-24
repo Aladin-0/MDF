@@ -81,6 +81,21 @@ audit log (credentials are logged as `***`, never as values).
 in 15 minutes locks that phone for the rest of the window (HTTP 429). PIN lookup/verify/change allow 10 wrong guesses per
 user per 5 minutes. PIN hashes are never sent to the client, and PIN checks never put the plaintext PIN in a cache key.
 
+**Counter PIN (fast and safe).** Everything about the staff PIN lives in `apps/accounts/pins.py`; do not call
+`check_password` / `make_password` on `staff_pin` anywhere else.
+
+* `staff_pin` is the truth: a slow password hash (about half a second per check, on purpose).
+* `pin_lookup` is a *receipt* written when the PIN is set, or right after the slow check passed. With it the PIN is
+  recognised again in microseconds, so "whose PIN is this?" no longer hashes once per staff member. A person who has
+  no receipt yet (their PIN was set before the column existed) gets the slow check once, the first time they type it.
+* The receipt is an HMAC keyed from `SECRET_KEY` over (the current hash, the PIN). A copy of the database alone cannot
+  be used to test guesses against it; it stops matching the moment `staff_pin` changes by any route; under a new
+  `SECRET_KEY` it is ignored and rebuilt by the slow check. It is never sent to a client.
+* Set a PIN only with `set_pin(staff, pin)` / `hashed_pin_fields(pin)` so the two columns move together.
+* A 4-digit PIN has only 10,000 values, so what really protects it is the guess limit, not the hash. **Every** view
+  that accepts a PIN calls `pin_blocked_response(request.user)` first and `PIN_USER_LIMITER.record_failure` on a wrong
+  one: lookup, verify, change-PIN and stock adjustment (`/inventory/adjust/` had no limit before).
+
 ## Editing a saved bill (revision actions)
 
 Every edit of a sale goes through ONE rule set, `check_revision_allowed` in `billing/sale_update_service.py`, whether it

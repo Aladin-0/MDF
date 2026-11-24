@@ -351,6 +351,105 @@ class PinTests(AccessControlBase):
         self.assertTrue(check_password('RealPass#1', self.cashier.password))
         self.assertTrue(check_password('5678', self.cashier.staff_pin))
 
+    # ── the fast path (apps/accounts/pins.py): a receipt replaces the slow hash check, never the rule ──
+
+    def no_slow_check(self):
+        """Fail the test if the slow hash check runs at all."""
+        from unittest import mock
+        return mock.patch('apps.accounts.pins.check_password', side_effect=AssertionError('slow hash check was run'))
+
+    def test_a_pin_typed_before_is_recognised_without_the_slow_check(self):
+        """The counter used to hash the PIN once per staff member of the outlet (about half a second each)."""
+        self.assertEqual(self.lookup('1234').status_code, 200)   # first time after the upgrade: slow, leaves a receipt
+        self.assertEqual(self.lookup('0000').status_code, 200)
+        cache.clear()                                            # nothing remembered in the cache either
+        with self.no_slow_check():
+            r = self.lookup('1234')
+            self.assertEqual((r.status_code, r.data['id']), (200, str(self.cashier.id)))
+            self.assertEqual(self.lookup('9999').data['error']['code'], 'INVALID_PIN')   # a wrong PIN is refused just as fast
+
+    def test_a_new_staff_member_and_a_reset_pin_are_fast_from_the_first_use(self):
+        created = self.as_user(self.admin).post(reverse('staff-create'), {
+            'name': 'New Cashier', 'phone': '9500000077', 'password': 'RealPass#2', 'pin': '2468', 'role': 'billing_staff'}, format='json')
+        self.assertEqual(created.status_code, 201, created.data)
+        reset = self.as_user(self.admin).patch(reverse('staff-detail', kwargs={'pk': self.cashier.id}), {'pin': '1357'}, format='json')
+        self.assertEqual(reset.status_code, 200, reset.data)
+        self.assertEqual(self.lookup('0000').status_code, 200)   # the admin is the only one left without a receipt
+        cache.clear()
+        with self.no_slow_check():
+            self.assertEqual(self.lookup('2468').data['name'], 'New Cashier')
+            self.assertEqual(self.lookup('1357').data['id'], str(self.cashier.id))
+            self.assertEqual(self.lookup('1234').status_code, 400)   # the PIN that was replaced
+
+    def test_changing_your_own_pin_switches_at_once(self):
+        self.assertEqual(self.lookup('1234').status_code, 200)
+        r = self.as_user(self.cashier).patch(reverse('change-pin'), {'currentPin': '1234', 'newPin': '5678'}, format='json')
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(self.lookup('1234').status_code, 400)
+        self.assertEqual(self.lookup('5678').data['id'], str(self.cashier.id))
+
+    def test_an_old_pin_stops_working_even_when_the_pin_is_changed_behind_this_codes_back(self):
+        """The receipt is tied to the hash: a script or the admin site writing `staff_pin` must not leave the old PIN alive."""
+        self.assertEqual(self.lookup('1234').status_code, 200)
+        Staff.objects.filter(id=self.cashier.id).update(staff_pin=make_password('5678'))   # receipt left untouched
+        self.assertEqual(self.lookup('1234').status_code, 400)
+        self.assertEqual(self.lookup('5678').data['id'], str(self.cashier.id))
+
+    def test_a_receipt_made_with_another_server_key_is_not_trusted(self):
+        """Whoever can write the database but does not hold SECRET_KEY cannot plant a PIN of their choice."""
+        from django.test import override_settings
+        from apps.accounts.pins import make_receipt
+        with override_settings(SECRET_KEY='not-the-servers-key'):
+            forged = make_receipt(self.cashier.staff_pin, '9999')
+        Staff.objects.filter(id=self.cashier.id).update(pin_lookup=forged)
+        self.assertEqual(self.lookup('9999').status_code, 400)
+        self.assertEqual(self.lookup('1234').data['id'], str(self.cashier.id))   # the real PIN still works (slow check, new receipt)
+
+    def test_receipts_survive_a_new_server_key_by_falling_back_to_the_slow_check(self):
+        from django.test import override_settings
+        self.assertEqual(self.lookup('1234').status_code, 200)
+        with override_settings(SECRET_KEY='rotated-key'):
+            cache.clear()
+            self.assertEqual(self.lookup('1234').data['id'], str(self.cashier.id))
+            self.assertEqual(self.lookup('4321').status_code, 400)
+
+    def test_two_people_with_the_same_pin_are_still_refused(self):
+        self.assertEqual(self.lookup('1234').status_code, 200)   # the cashier has a receipt, the twin below has none
+        make_staff(self.outlet, 'billing_staff', phone='9500000003', pin='1234')
+        r = self.lookup('1234')
+        self.assertEqual((r.status_code, r.data['error']['code']), (400, 'AMBIGUOUS_PIN'))
+
+    def test_a_pin_already_used_in_the_outlet_cannot_be_given_to_someone_else(self):
+        self.assertEqual(self.lookup('1234').status_code, 200)
+        admin = self.as_user(self.admin)
+        self.assertEqual(admin.post(reverse('staff-create'), {
+            'name': 'Twin', 'phone': '9500000078', 'password': 'RealPass#2', 'pin': '1234'}, format='json').status_code, 400)
+        self.assertEqual(admin.patch(reverse('staff-detail', kwargs={'pk': self.admin.id}), {'pin': '1234'}, format='json').status_code, 400)
+        self.assertEqual(self.as_user(self.admin).patch(
+            reverse('change-pin'), {'currentPin': '0000', 'newPin': '1234'}, format='json').status_code, 400)
+
+    def test_a_deactivated_persons_receipt_does_not_let_them_in(self):
+        self.assertEqual(self.lookup('1234').status_code, 200)
+        Staff.objects.filter(id=self.cashier.id).update(is_active=False)
+        self.assertEqual(self.lookup('1234').status_code, 400)
+
+    def test_the_receipt_never_leaves_the_server(self):
+        self.lookup('1234')
+        self.cashier.refresh_from_db()
+        self.assertTrue(self.cashier.pin_lookup)
+        listing = self.as_user(self.admin).get(reverse('staff-list'), {'outletId': str(self.outlet.id)})
+        for body in (self.lookup('1234').content, listing.content):
+            self.assertNotIn(self.cashier.pin_lookup.encode(), body)
+            self.assertNotIn(b'pin_lookup', body)
+            self.assertNotIn(b'pinLookup', body)
+
+    def test_nothing_readable_about_the_pin_or_its_hash_is_put_in_the_cache(self):
+        self.lookup('9999')
+        keys = [str(k) for k in getattr(cache, '_cache', {}).keys()]
+        self.assertTrue([k for k in keys if 'pin_check:' in k], keys)   # the check was remembered ...
+        for secret in ('9999', self.cashier.staff_pin, self.admin.staff_pin):
+            self.assertFalse([k for k in keys if secret in k], keys)     # ... under a keyed digest only
+
 
 # ─── effective_permissions must agree with the DRF classes that enforce the API ──
 

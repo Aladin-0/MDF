@@ -8,6 +8,10 @@ from apps.core.permissions import (
     can_assign_role, can_manage_staff_member, assert_outlet_access,
 )
 from apps.core.ratelimit import FailureLimiter, client_ip
+from apps.accounts.pins import (
+    PIN_USER_LIMITER, pin_blocked_response as _pin_blocked_response, pin_matches as _pin_matches,
+    staff_with_pin, set_pin, hashed_pin_fields,
+)
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework import status
 from django.db.models import Q, Sum, Count
@@ -26,8 +30,7 @@ logger = logging.getLogger(__name__)
 # IP: one machine trying many accounts. Cleared for a phone number on a successful login.
 LOGIN_PHONE_LIMITER = FailureLimiter('login:phone', limit=5, window=15 * 60)
 LOGIN_IP_LIMITER = FailureLimiter('login:ip', limit=30, window=15 * 60)
-# PIN guessing by an already logged-in user (cashier switch on the billing terminal).
-PIN_USER_LIMITER = FailureLimiter('pin:user', limit=10, window=5 * 60)
+# PIN guessing by an already logged-in user is limited by PIN_USER_LIMITER (apps/accounts/pins.py).
 
 
 def serialize_outlet_data(outlet):
@@ -1087,34 +1090,29 @@ class CustomerListView(APIView):
         return Response(result, status=status.HTTP_201_CREATED)
 
 
-def _pin_matches(staff, pin):
-    """
-    True if `pin` is this staff member's PIN. Hashing is slow on purpose, so results are cached,
-    but the cache key is a digest: the old key embedded the plaintext PIN in Redis.
-    """
-    import hashlib
-    from django.core.cache import cache
-    digest = hashlib.sha256(f'{staff.staff_pin}:{pin}'.encode('utf-8')).hexdigest()[:40]
-    cache_key = f'pin_check:{digest}'
-    cached = cache.get(cache_key)
-    if cached is None:
-        cached = bool(staff.staff_pin) and check_password(pin, staff.staff_pin)
-        cache.set(cache_key, cached, timeout=3600)
-    return cached
-
-
-def _pin_blocked_response(user):
-    """429 response when this logged-in user has made too many wrong PIN guesses, else None."""
-    wait = PIN_USER_LIMITER.blocked_for(user.id)
-    if not wait:
-        return None
-    response = Response(
-        {'error': {'code': 'TOO_MANY_ATTEMPTS',
-                   'message': f'Too many wrong PIN attempts. Try again in {max(wait // 60, 1)} minute(s).'}},
-        status=status.HTTP_429_TOO_MANY_REQUESTS,
-    )
-    response['Retry-After'] = str(wait)
-    return response
+def _counter_session(staff):
+    """What the billing counter needs once a PIN is accepted. Never the PIN hash or its receipt."""
+    from datetime import time, timedelta
+    from apps.billing.models import SaleInvoice
+    day_start = datetime.combine(date.today(), time.min)
+    # A date range on (outlet, invoice_date) uses that index and reads only today's bills;
+    # `invoice_date__date=today` had to visit every bill the person ever made, twice.
+    today = SaleInvoice.objects.filter(
+        outlet_id=staff.outlet_id, billed_by=staff,
+        invoice_date__gte=day_start, invoice_date__lt=day_start + timedelta(days=1),
+    ).aggregate(bills=Count('id'), total=Sum('grand_total'))
+    return {
+        'id': str(staff.id),
+        'name': staff.name,
+        'role': staff.role,
+        'maxDiscount': float(staff.max_discount),
+        'canEditRate': staff.can_edit_rate,
+        'canViewPurchaseRates': staff.can_view_purchase_rates,
+        'canEditSales': staff.can_edit_sales,
+        'canEditPurchases': staff.can_edit_purchases,
+        'billsToday': today['bills'] or 0,
+        'totalSalesToday': float(today['total'] or 0),
+    }
 
 
 class StaffLookupByPinView(APIView):
@@ -1157,7 +1155,9 @@ class StaffLookupByPinView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        matched_staff = [s for s in Staff.objects.filter(outlet=outlet, is_active=True) if _pin_matches(s, str(pin))]
+        # Instant for everyone who has typed their PIN before (apps/accounts/pins.py); the slow hash
+        # check runs only for someone who has not, and only once.
+        matched_staff = staff_with_pin(outlet, pin)
 
         if not matched_staff:
             PIN_USER_LIMITER.record_failure(request.user.id)
@@ -1172,31 +1172,8 @@ class StaffLookupByPinView(APIView):
             )
         
         staff = matched_staff[0]
-
-        from apps.billing.models import SaleInvoice
-        today = date.today()
-        bills_today = SaleInvoice.objects.filter(
-            billed_by=staff, invoice_date__date=today
-        ).count()
-        total_sales_today = SaleInvoice.objects.filter(
-            billed_by=staff, invoice_date__date=today
-        ).aggregate(total=Sum('grand_total'))['total'] or 0
-
-        result = {
-            'id': str(staff.id),
-            'name': staff.name,
-            'role': staff.role,
-            'maxDiscount': float(staff.max_discount),
-            'canEditRate': staff.can_edit_rate,
-            'canViewPurchaseRates': staff.can_view_purchase_rates,
-            'canEditSales': staff.can_edit_sales,
-            'canEditPurchases': staff.can_edit_purchases,
-            'billsToday': bills_today,
-            'totalSalesToday': float(total_sales_today),
-        }
-
         logger.info(f"PIN lookup successful for staff {staff.id} ({staff.name})")
-        return Response(result, status=status.HTTP_200_OK)
+        return Response(_counter_session(staff), status=status.HTTP_200_OK)
 
 
 class StaffListView(APIView):
@@ -1342,33 +1319,7 @@ class StaffPinVerifyView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Get today's bill count and total sales
-        from apps.billing.models import SaleInvoice
-        today = date.today()
-        bills_today = SaleInvoice.objects.filter(
-            billed_by=staff,
-            invoice_date__date=today
-        ).count()
-
-        total_sales_today = SaleInvoice.objects.filter(
-            billed_by=staff,
-            invoice_date__date=today
-        ).aggregate(total=Sum('grand_total'))['total'] or 0
-
-        result = {
-            'id': str(staff.id),
-            'name': staff.name,
-            'role': staff.role,
-            'maxDiscount': float(staff.max_discount),
-            'canEditRate': staff.can_edit_rate,
-            'canViewPurchaseRates': staff.can_view_purchase_rates,
-            'canEditSales': staff.can_edit_sales,
-            'canEditPurchases': staff.can_edit_purchases,
-            'billsToday': bills_today,
-            'totalSalesToday': float(total_sales_today),
-        }
-
-        return Response(result, status=status.HTTP_200_OK)
+        return Response(_counter_session(staff), status=status.HTTP_200_OK)
 
 
 class CustomerPurchaseHistoryView(APIView):
@@ -1507,7 +1458,6 @@ class StaffCreateView(APIView):
     permission_classes = [IsAdminStaff]
 
     def post(self, request, *args, **kwargs):
-        from django.contrib.auth.hashers import make_password
         caller = request.user
         if caller.role not in ('super_admin', 'admin'):
             return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
@@ -1547,10 +1497,8 @@ class StaffCreateView(APIView):
             return Response({'error': 'A staff member with this phone number already exists'}, status=status.HTTP_400_BAD_REQUEST)
 
         # Enforce PIN uniqueness per-outlet
-        from django.contrib.auth.hashers import check_password
-        for existing_staff in Staff.objects.filter(outlet=outlet, is_active=True):
-            if check_password(pin, existing_staff.staff_pin):
-                return Response({'error': 'This PIN is already in use by another staff member in this outlet.'}, status=status.HTTP_400_BAD_REQUEST)
+        if staff_with_pin(outlet, pin):
+            return Response({'error': 'This PIN is already in use by another staff member in this outlet.'}, status=status.HTTP_400_BAD_REQUEST)
 
         staff = Staff.objects.create_user(
             phone=phone,
@@ -1559,7 +1507,7 @@ class StaffCreateView(APIView):
             role=role,
             outlet=outlet,
             email=request.data.get('email'),
-            staff_pin=make_password(pin),  # billing counter PIN (stored separately)
+            **hashed_pin_fields(pin),   # billing counter PIN (stored separately from the login password)
             max_discount=request.data.get('maxDiscount', 0),
             can_edit_rate=request.data.get('canEditRate', False),
             can_view_purchase_rates=request.data.get('canViewPurchaseRates', False),
@@ -1615,7 +1563,6 @@ class StaffDetailView(APIView):
     permission_classes = [IsAdminStaff]
 
     def patch(self, request, pk, *args, **kwargs):
-        from django.contrib.auth.hashers import make_password
         caller = request.user
         if caller.role not in ('super_admin', 'admin'):
             return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
@@ -1751,11 +1698,9 @@ class StaffDetailView(APIView):
 
         if 'pin' in request.data and request.data['pin']:
             raw_pin = str(request.data['pin'])
-            from django.contrib.auth.hashers import check_password
-            for existing_staff in Staff.objects.filter(outlet=staff.outlet, is_active=True).exclude(id=staff.id):
-                if check_password(raw_pin, existing_staff.staff_pin):
-                    return Response({'error': 'This PIN is already in use by another staff member in this outlet.'}, status=status.HTTP_400_BAD_REQUEST)
-            staff.staff_pin = make_password(raw_pin)
+            if staff_with_pin(staff.outlet, raw_pin, exclude_id=staff.id):
+                return Response({'error': 'This PIN is already in use by another staff member in this outlet.'}, status=status.HTTP_400_BAD_REQUEST)
+            set_pin(staff, raw_pin)
 
         staff.save()
         staff.refresh_from_db()
@@ -2320,7 +2265,6 @@ class ChangePinView(APIView):
     permission_classes = [IsAuthenticated]
 
     def patch(self, request, *args, **kwargs):
-        from django.contrib.auth.hashers import make_password, check_password
         staff = request.user
         current_pin = str(request.data.get('currentPin', ''))
         new_pin = str(request.data.get('newPin', ''))
@@ -2329,21 +2273,20 @@ class ChangePinView(APIView):
         if blocked:
             return blocked
 
-        if not check_password(current_pin, staff.staff_pin):
+        if not _pin_matches(staff, current_pin):
             PIN_USER_LIMITER.record_failure(staff.id)
             return Response({'error': 'Current PIN is incorrect'}, status=status.HTTP_400_BAD_REQUEST)
 
         if not new_pin.isdigit() or not (4 <= len(new_pin) <= 6):
             return Response({'error': 'New PIN must be 4-6 digits'}, status=status.HTTP_400_BAD_REQUEST)
 
-        for existing_staff in Staff.objects.filter(outlet=staff.outlet, is_active=True).exclude(id=staff.id):
-            if check_password(new_pin, existing_staff.staff_pin):
-                return Response({'error': 'This PIN is already in use by another staff member in this outlet.'}, status=status.HTTP_400_BAD_REQUEST)
+        if staff_with_pin(staff.outlet, new_pin, exclude_id=staff.id):
+            return Response({'error': 'This PIN is already in use by another staff member in this outlet.'}, status=status.HTTP_400_BAD_REQUEST)
 
         # Only the PIN changes. This used to also overwrite the account's login password with
         # a hash of the PIN, silently destroying the password the admin had set.
-        staff.staff_pin = make_password(new_pin)
-        staff.save(update_fields=['staff_pin'])
+        set_pin(staff, new_pin)
+        staff.save(update_fields=['staff_pin', 'pin_lookup'])
 
         log_activity(
             action="UPDATE",

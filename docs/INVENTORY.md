@@ -19,6 +19,8 @@ adjustment (`POST /inventory/adjust/`). Pack definitions and loose selling are i
 * The request must have `type`, a **signed** `qty`, a staff `pin`, and `adjustUnit` (`strips` or `loose`), with
   `?outletId=` **in the query string**. Build it with `buildAdjustPayload()` and send it with `inventoryApi.adjustStock`.
   (The modal used to send other field names and no PIN, so every adjustment failed with a 400.)
+* The PIN is found with `staff_with_pin` (`apps/accounts/pins.py`) and wrong guesses count against the same limit as the
+  billing counter: 10 per signed-in user per 5 minutes, then **429** `TOO_MANY_ATTEMPTS`. Do not check the PIN by hand here.
 * Whole packs change only the pack count and cannot go below 0; loose units may break a pack open
   (`previewAdjustment()` mirrors this so the form can show the result before you confirm).
 * Permission name: `adjust_stock` (manager and above, `IsManagerOrAbove`). Gate buttons with it, not with `manage_staff`.

@@ -138,6 +138,19 @@ class AdjustmentTests(InventoryListBase):
         self.assertEqual(self.adjust(batch, 1, pin='').status_code, 400)
         self.assertEqual(self.adjust(batch, 1, pin='0000').status_code, 401)
 
+    def test_wrong_pins_at_the_adjustment_popup_are_limited_like_at_the_counter(self):
+        """This endpoint used to accept any number of PIN guesses: a way around the billing counter's limit."""
+        from django.core.cache import cache
+        cache.clear()
+        batch = self.stock(MasterProductFactory(name='Guessing'), strips=5)
+        for _ in range(10):
+            self.assertEqual(self.adjust(batch, -1, pin='0000').status_code, 401)
+        self.assertEqual(self.adjust(batch, -1, pin='0000').status_code, 429)
+        self.assertEqual(self.adjust(batch, -1).status_code, 429)   # even the right PIN, until the window passes
+        batch.refresh_from_db()
+        self.assertEqual(batch.qty_strips, 5)
+        cache.clear()
+
     def test_only_managers_may_adjust_and_the_permission_says_so(self):
         biller = make_staff(self.outlet, 'billing_staff')
         batch = self.stock(MasterProductFactory(name='Guarded'), strips=3)

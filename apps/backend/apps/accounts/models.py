@@ -52,6 +52,11 @@ class Staff(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(null=True, blank=True)
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='billing_staff')
     staff_pin = models.CharField(max_length=128, help_text='PIN for kiosk/quick auth')
+    # Receipt that lets a PIN which already passed the slow hash check be recognised again instantly.
+    # Written only by apps/accounts/pins.py; never sent to a client. Empty = not checked since the PIN was set.
+    # db_default: the column keeps its default in the database, so a rolled-back release (which does not
+    # know this field) can still add staff.
+    pin_lookup = models.CharField(max_length=128, blank=True, default='', db_default='', editable=False)
     avatar_url = models.URLField(null=True, blank=True)
     max_discount = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     can_edit_rate = models.BooleanField(default=False)
