@@ -16,6 +16,17 @@ def custom_500(request, exception=None):
 handler404 = custom_404
 handler500 = custom_500
 
+def _super_admin_only(request):
+    """
+    Who may use the Django admin (/admin/): an ACTIVE SUPER ADMIN only. Django's default lets in any account flagged
+    `is_staff`, whatever its role in the app; the page used to be hidden behind an nginx IP allow-list instead.
+    """
+    user = request.user
+    return bool(user.is_active and user.is_staff and getattr(user, 'role', None) == 'super_admin')
+
+
+admin.site.has_permission = _super_admin_only
+
 urlpatterns = [
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("admin/", admin.site.urls),

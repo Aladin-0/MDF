@@ -84,7 +84,7 @@ Needs: root `.env` (POSTGRES_*), `apps/backend/.env`, `apps/frontend/.env.local`
 | backend (`mediflow_backend`) | `docker/backend.Dockerfile` (python:3.10-slim) context `apps/backend` | 8000:8000 | `python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000` | overrides the image's gunicorn CMD (`gunicorn mediflow.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120`); bind-mounts `./apps/backend:/app`; settings = `mediflow.settings.dev` |
 | celery (`mediflow_celery`) | same image | none | `celery -A mediflow worker --loglevel=info --concurrency=2` | no `-Q`, no beat |
 | frontend (`mediflow_frontend`) | `docker/frontend.Dockerfile` (node:20-alpine, npm workspaces) context repo root | 3000:3000 | `npm run dev` (compose) vs image CMD `npm start` after `npm run build` | `next dev -H 0.0.0.0` |
-| nginx (`mediflow_nginx`) | nginx:stable-alpine | 8090:80 | default | `nginx/nginx.conf`: `/static/`, `/media/`, `/admin/` (IP allow-listed), `/api/v1/auth/login/` (rate 5 req/min burst 5), `/api/` (50 r/s burst 100, read timeout 120 s), `/` -> frontend (WebSocket upgrade), `client_max_body_size 50M` |
+| nginx (`mediflow_nginx`) | nginx:stable-alpine | 8090:80 | default | `nginx/nginx.conf`: `/static/`, `/media/`, `/admin/` (super admin only, enforced by Django `admin.site.has_permission` in `mediflow/urls.py`; `/admin/login/` rate 5 req/min), `/api/v1/auth/login/` (rate 5 req/min burst 5); real client IP from `X-Real-IP` (trusted from 172.16.0.0/12), `/api/` (50 r/s burst 100, read timeout 120 s), `/` -> frontend (WebSocket upgrade), `client_max_body_size 50M` |
 
 Health: `curl http://localhost:8000/api/v1/health/` (returns `{"status":"ok"}`); `./dev-health-check.sh` pings redis in container, logs in via `/api/v1/auth/login/`, hits `/api/v1/purchases/` and `/api/v1/sales/` and expects 200 (uses hard-coded test credentials, see H).
 
@@ -144,7 +144,7 @@ There is no `CELERY_BEAT_SCHEDULE`, no `django_celery_beat`, and no beat contain
 | `apps/frontend/{hooks,lib,store,types,utils,schemas,config,constants}/` | React Query hooks; `lib/apiClient.ts`/`api.ts` clients + billing math; Zustand stores; shared types/zod; misc |
 | `apps/frontend/{__tests__,tests,e2e}/` | Jest unit tests; Playwright e2e (`tests/e2e`, `e2e`) |
 | `packages/{types,constants}/` | Shared workspace packages (small) |
-| `docker/`, `docker-compose.yml`, `nginx/` | Container build files, stack definition, reverse proxy (rate-limit login, `/api/`, `/media/`, `/admin/` allow-list) |
+| `docker/`, `docker-compose.yml`, `nginx/` | Container build files, stack definition, reverse proxy (rate-limit login, `/api/`, `/media/`, `/admin/` super admin only) |
 | `docs/` | Curated reference docs (API_REFERENCE, MODEL_FIELDS, BUSINESS_FLOW_MATRIX, INVARIANT_MATRIX, GST sandbox/snapshot design). Old phase reports and `ca_review/` were removed. Treat as potentially stale vs code |
 | `scripts/`, root `*.py`/`*.js` | Ad-hoc one-off scripts (unit cleaning, contract sync `sync_contracts.sh`, tests probes) — not part of runtime |
 | `.github/workflows/playwright.yml` | Only CI workflow |
@@ -1501,7 +1501,7 @@ Not env, but fixed in settings: `AUDIT_V2_WRITE_ENABLED=True`, `AUDIT_V2_READ_EN
 #### D.6 Other config files
 - `netlify.toml` (7 lines): `base=apps/frontend`, `command=npm run build`, `publish=.next`, plugin `@netlify/plugin-nextjs`. No env vars declared; the frontend deploy also needs the backend URL (`NEXT_PUBLIC_API_URL`) set in Netlify UI (inferred).
 - `.github/workflows/playwright.yml`: no `env:` for backend (no SECRET_KEY/DATABASE_URL); only `CI`, `BASE_URL` for the Playwright step.
-- `nginx/nginx.conf`: hard-coded admin allow-list IP (`allow` directives at lines 56-57, `deny all` at 58), server_name `_`, no TLS.
+- `nginx/nginx.conf`: no IP allow-list any more (the old `182.70.63.4` was not the shop's address); `/admin/` is limited to active super admins by Django and its login page is rate limited. server_name `_`, no TLS (the public nginx terminates it).
 - root `package.json`: no env vars; scripts `dev/build/lint/type-check` via `turbo run`.
 - `scripts/sync_contracts.sh`: sets `DJANGO_SETTINGS_MODULE=mediflow.settings.base`.
 
@@ -2189,7 +2189,7 @@ Coverage summary: inventory 15 routes / 7 models; purchases 19 routes / 6 models
 4. `dev-health-check.sh:13-15` embeds a real-looking staff phone and password in a committed script.
 5. `FERNET_KEY` default literal in code (settings/base.py:10) is unused; `SandboxConfiguration` encryption key is derived from `SECRET_KEY[:32]` padded with `'0'` (core/models.py:259) - changing SECRET_KEY makes stored sandbox secrets undecryptable.
 6. `SANDBOX_BASE_URL` default differs by module: test host in settings, production host in `gst/services/sandbox_auth.py:27` and `integrations/sandbox/client.py:33` (risk of calling production Sandbox with test intent). Only `SandboxGstProvider` guards test-key-vs-prod-URL.
-7. Django `serve` of `/media/` with no auth (mediflow/urls.py:46-51) and nginx `/media/` alias (no auth): uploaded purchase-invoice images, potentially named predictably, are world-readable. `/admin/` allow-list IP hard-coded in nginx.conf:56-58.
+7. Django `serve` of `/media/` with no auth (mediflow/urls.py:46-51) and nginx `/media/` alias (no auth): uploaded purchase-invoice images, potentially named predictably, are world-readable. (`/admin/`: super admin only since 2026-11-24, see `mediflow/urls.py`.)
 8. `prod.py` is not used by any deployment path: wsgi/asgi/celery default to `dev` (DEBUG True default, `CORS_ALLOW_ALL_ORIGINS=True`, `ALLOWED_HOSTS=['*']`), docker-compose pins `mediflow.settings.dev`, and the Dockerfile CMD relies on the same default. Production safety depends on `.env` setting `DJANGO_SETTINGS_MODULE` and `DEBUG` (the compose `environment:` overrides `.env`, so .env cannot fix it for compose). No HTTPS/cookie hardening in any settings file.
 9. `WhatsApp` API key stored plaintext in `OutletSettings.whatsapp_api_key` and returned in the settings GET (core/views.py:53-54).
 10. `QA_DATABASE_URL` default embeds a username/password pair in code (base.py:85).
