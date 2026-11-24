@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Search, ScanLine, FileText } from 'lucide-react';
 import { useBillingStore } from '@/store/billingStore';
+import { useShallow } from 'zustand/react/shallow';
 import { useCheckout } from '@/hooks/useCheckout';
 import { MobileTopBar } from './MobileTopBar';
 import { MobileBanners } from './MobileBanners';
@@ -28,7 +29,7 @@ import { useIsOnline } from '@/hooks/useIsOnline';
  *   pinned bottom bar (NET PAYABLE + main button)    sheets: search, totals, payment, customer / doctor (fix-it targets)
  */
 export function MobileBilling() {
-    const { drafts, activeDraftId, getDraftTotals, landingCostIncludeGst, setDraftDocumentMode, setPayment, setRevisionContext } = useBillingStore();
+    const { drafts, activeDraftId, getDraftTotals, landingCostIncludeGst, setDraftDocumentMode, setPayment, setRevisionContext } = useBillingStore(useShallow((s) => ({ drafts: s.drafts, activeDraftId: s.activeDraftId, getDraftTotals: s.getDraftTotals, landingCostIncludeGst: s.landingCostIncludeGst, setDraftDocumentMode: s.setDraftDocumentMode, setPayment: s.setPayment, setRevisionContext: s.setRevisionContext })));
     const checkout = useCheckout();
     const isOnline = useIsOnline();
 

@@ -1,4 +1,4 @@
-from django.db import transaction
+from django.db import models, transaction
 from django.contrib.contenttypes.models import ContentType
 from decimal import Decimal, ROUND_HALF_UP
 from .models import StockLedger, Batch, StockAdjustment, StockAdjustmentAllocation
@@ -82,7 +82,23 @@ def post_stock_ledger_entry(
     if txn_type == 'ADJUSTMENT_OUT' and gst_record:
         _auto_create_stock_adjustment(entry, adjustment_type=adjustment_type, reason=adjustment_reason)
 
+    # Every stock movement (sale, revise, return, purchase, adjustment ...) passes through here, so this is the one
+    # place that tells the cached inventory list and medicine search that stock changed. It runs only once the
+    # transaction commits (a rolled-back bill must not refresh anything). Without it the screens kept showing the
+    # old stock for up to 2 minutes after a sale or purchase.
+    outlet_id = getattr(outlet, 'pk', outlet)
+    transaction.on_commit(lambda: _refresh_inventory_cache(outlet_id))
+
     return entry
+
+
+def _refresh_inventory_cache(outlet_id):
+    from apps.inventory.cache_utils import bump_inventory_cache
+    try:
+        bump_inventory_cache(outlet_id)
+    except Exception:   # the cache being unreachable must never break a committed sale
+        import logging
+        logging.getLogger(__name__).warning('could not refresh the inventory cache for outlet %s', outlet_id, exc_info=True)
 
 def _auto_create_stock_adjustment(entry, adjustment_type=None, reason=None):
     """
@@ -211,9 +227,9 @@ def rebuild_stock_ledger(batch_or_id=None, from_date=None, batch_id=None, batch=
     if from_date is not None:
         filter_kwargs['txn_date__gte'] = from_date
 
-    entries = StockLedger.objects.filter(
-        **filter_kwargs
-    ).select_for_update().order_by('txn_date', 'created_at')
+    entries = StockLedger.objects.filter(**filter_kwargs)
+    # lock the rows about to be rewritten (as before; the loop used to lock them by iterating a FOR UPDATE query)
+    list(entries.select_for_update().values_list('pk', flat=True))
 
     # Get the last entry before the from_date
     if from_date is not None:
@@ -235,13 +251,13 @@ def rebuild_stock_ledger(batch_or_id=None, from_date=None, batch_id=None, batch=
         else:
             running_value = Decimal('0')
 
-    for entry in entries:
-        running_qty = running_qty + entry.qty_in - entry.qty_out
-        running_value = running_value + (entry.qty_in * entry.rate) - (entry.qty_out * entry.rate)
-        StockLedger.objects.filter(pk=entry.pk).update(
-            running_qty=running_qty,
-            running_value=running_value
-        )
+    # Rewrite every row's running balance in ONE statement (it was one UPDATE per row, so revising an old bill of a
+    # busy batch ran hundreds of updates while holding its locks). Same arithmetic as the old loop: starting balance +
+    # cumulative (qty_in - qty_out) and (qty_in*rate - qty_out*rate) in date, then creation order; PostgreSQL rounds
+    # each stored value to the column's scale exactly as it did for the loop's values. `id` only breaks exact ties.
+    _rewrite_running_balances(target_id, from_date, running_qty, running_value)
+    moved = entries.aggregate(n=models.Sum(models.F('qty_in') - models.F('qty_out')))['n'] or Decimal('0')
+    running_qty = running_qty + moved
 
     # Step 3: Update Batch master
     pack_size = batch_obj.pack_size or 1
@@ -250,6 +266,27 @@ def rebuild_stock_ledger(batch_or_id=None, from_date=None, batch_id=None, batch=
     qty_strips = total_loose // pack_size
     qty_loose = total_loose % pack_size
     Batch.objects.filter(pk=target_id).update(qty_strips=qty_strips, qty_loose=qty_loose)
+
+def _rewrite_running_balances(batch_id, from_date, start_qty, start_value):
+    """running_qty / running_value of a batch's ledger rows (from `from_date` on) = start + cumulative movement."""
+    from django.db import connection
+    table = connection.ops.quote_name(StockLedger._meta.db_table)
+    date_filter = 'AND txn_date >= %s' if from_date is not None else ''
+    params = [start_qty, start_value, str(batch_id)] + ([from_date] if from_date is not None else [])
+    with connection.cursor() as cur:
+        cur.execute(f'''
+            UPDATE {table} AS sl
+               SET running_qty = %s + w.cum_qty,
+                   running_value = %s + w.cum_value
+              FROM (SELECT id,
+                           SUM(qty_in - qty_out) OVER run AS cum_qty,
+                           SUM(qty_in * rate - qty_out * rate) OVER run AS cum_value
+                      FROM {table}
+                     WHERE batch_id = %s {date_filter}
+                    WINDOW run AS (ORDER BY txn_date, created_at, id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)) AS w
+             WHERE sl.id = w.id
+        ''', params)
+
 
 def reverse_stock_ledger_entry(outlet, txn_type, source_object, product=None, batch=None):
     """

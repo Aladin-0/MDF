@@ -1,5 +1,7 @@
 'use client';
 
+import { useShownRows, REPORT_ROWS_STEP } from '@/hooks/useShownRows';
+import { ShowMoreRows } from '@/components/reports/ShowMoreRows';
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { format, startOfMonth, endOfMonth, subMonths, startOfYear } from 'date-fns';
@@ -143,6 +145,8 @@ export default function SalesReturnBookPage() {
     };
 
     const rows = data?.rows || [];
+    // draw a long result in parts (totals below still use every row): see hooks/useShownRows
+    const { shown: shownRows, total: rowCount, showMore } = useShownRows(rows);
     const summary = data?.summary || {
         total_taxable: 0,
         total_tax_5: 0,
@@ -406,7 +410,7 @@ export default function SalesReturnBookPage() {
                                 </TableHeader>
 
                                 <TableBody>
-                                    {rows.map((row: any, idx: number) => (
+                                    {shownRows.map((row: any, idx: number) => (
                                         <TableRow
                                             key={`${row.date}-${row.return_no || row.bill_no || idx}`}
                                             className="transition-colors hover:bg-rose-50/30"
@@ -493,6 +497,7 @@ export default function SalesReturnBookPage() {
                                 </TableFooter>
                             </Table>
                         </div>
+                        <ShowMoreRows shown={shownRows.length} total={rowCount} step={REPORT_ROWS_STEP} onShowMore={showMore} />
                     </div>
                 )}
             </div>

@@ -1,3 +1,4 @@
+from celery.exceptions import SoftTimeLimitExceeded
 from celery import shared_task
 from apps.purchases.ocr_engine import process_invoice_image
 from apps.purchases.models import PurchaseInvoice
@@ -125,6 +126,14 @@ def process_invoice_ocr(draft_id: str):
             if _write_back(draft_id, **fields):
                 logger.info(f"Successfully processed OCR for {draft_id}")
 
+    except SoftTimeLimitExceeded:
+        # CELERY_TASK_SOFT_TIME_LIMIT (settings/prod.py): a scan that hangs (a stuck Gemini call, a pathological
+        # photo) is stopped and reported as failed (the screen offers Retry) instead of holding the worker forever.
+        logger.warning("OCR for %s took longer than the time limit and was stopped", draft_id)
+        try:
+            _write_back(draft_id, ocr_processing_error='OCR_PROCESSING_FAILED')
+        except Exception:
+            pass
     except Exception:
         logger.exception("Failed to process OCR for %s", draft_id)
         try:

@@ -28,7 +28,7 @@ import { Customer, SaleInvoiceSummary, SaleInvoice } from '@/types';
 import { salesApi } from '@/lib/apiClient';
 import { InvoicePreviewModal } from '@/components/billing/InvoicePreviewModal';
 import RecordCreditPaymentModal from '@/components/credit/RecordCreditPaymentModal';
-import { useCreditAccounts } from '@/hooks/useCredit';
+import { useCustomerCreditAccount } from '@/hooks/useCredit';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL!; // Required — set NEXT_PUBLIC_API_URL in .env
 
@@ -717,21 +717,19 @@ function InvoiceHistory({ customerId }: { customerId: string }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function CustomerDetailPage() {
-    const billingStore = useBillingStore();
     const router = useRouter();
 
     const { id } = useParams<{ id: string }>();
     const { data: customer, isLoading, isError } = useCustomerById(id);
     const outletId = useAuthStore((s) => s.user?.outlet?.id);
-    const { data: creditAccountsData } = useCreditAccounts();
+    // A family member's credit lives on their shared account, so look the credit account up under the account.
+    const creditOwnerId = customer ? ((customer as any)?.accountId || id) : undefined;
+    // only this customer's account is asked for (it downloaded every credit account of the outlet to find this one)
+    const { data: creditAccount } = useCustomerCreditAccount(creditOwnerId);
     const setCustomer = useBillingStore((s) => s.setCustomer);
     const [editOpen, setEditOpen] = useState(false);
     const [paymentOpen, setPaymentOpen] = useState(false);
 
-    const creditAccounts = Array.isArray(creditAccountsData) ? creditAccountsData : (creditAccountsData as any)?.data ?? [];
-    // A family member's credit lives on their shared account, so look the credit account up under the account.
-    const creditOwnerId = (customer as any)?.accountId || id;
-    const creditAccount = creditAccounts.find((a: any) => a.customer?.id === creditOwnerId);
 
     if (isLoading) {
         return (

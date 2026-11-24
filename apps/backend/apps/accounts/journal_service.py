@@ -79,12 +79,19 @@ def _resolve_system_ledger(outlet, name: str):
     if match:
         return match
 
-    # 2. Normalized alphanumeric match
+    # 2. Normalized alphanumeric match, done in SQL with the same rule as _normalize_ledger_name (upper-case,
+    #    keep only A-Z 0-9 %). It used to load every ledger of the outlet (thousands of customer/supplier
+    #    ledgers) into Python, several times per bill, while the bill held its locks.
     target_norm = _normalize_ledger_name(name)
     if target_norm:
-        for l in qs:
-            if _normalize_ledger_name(l.name) == target_norm:
-                return l
+        match = qs.annotate(
+            _norm=models.Func(
+                models.functions.Upper('name'), models.Value('[^A-Z0-9%]'), models.Value(''), models.Value('g'),
+                function='REGEXP_REPLACE', output_field=models.CharField(),
+            )
+        ).filter(_norm=target_norm).first()
+        if match:
+            return match
 
     # 3. Role-based alias heuristics
     name_upper = name.upper()

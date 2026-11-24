@@ -33,6 +33,11 @@ def _engine():
         return _ENGINE
 
 
+# The one RapidOCR engine of this process, shared with the scan reader (ocr_engine.extract_text_blocks): loading
+# its models takes time and memory, so it is loaded once per worker instead of once per scan.
+shared_ocr_engine = _engine
+
+
 _TRANSPOSE_CW = {90: 'ROTATE_270', 180: 'ROTATE_180', 270: 'ROTATE_90'}   # PIL turns counter-clockwise
 
 

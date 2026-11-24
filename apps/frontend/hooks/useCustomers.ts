@@ -12,7 +12,22 @@ export function useCustomerList(filters?: CustomerFilters) {
     const outletId = useOutletId();
     return useQuery({
         queryKey: ['customers', outletId, filters],
-        queryFn: () => customersApi.list(outletId, filters),
+        // the signal cancels a search the clerk has already typed past
+        queryFn: ({ signal }) => customersApi.list(outletId, filters, signal),
+        staleTime: 1000 * 60 * 3,
+        enabled: !!outletId,
+        // keep showing the current rows while the next search / filter loads (the table used to blank out),
+        // but never another outlet's rows
+        placeholderData: (previous, previousQuery) => (previousQuery?.queryKey[1] === outletId ? previous : undefined),
+    });
+}
+
+/** Counts and the total outstanding for the Customers page, in one small request (it was three full lists). */
+export function useCustomerSummary() {
+    const outletId = useOutletId();
+    return useQuery({
+        queryKey: ['customers', outletId, 'summary'],
+        queryFn: ({ signal }) => customersApi.getSummary(outletId, signal),
         staleTime: 1000 * 60 * 3,
         enabled: !!outletId,
     });

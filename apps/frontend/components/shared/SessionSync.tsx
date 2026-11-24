@@ -7,7 +7,7 @@ import { PERMISSIONS_STALE_EVENT, getSessionEpoch } from '@/lib/sessionEvents';
 import { applyOutletContext } from '@/lib/outletContext';
 
 const POLL_MS = 3 * 60 * 1000;      // refresh while the app stays open
-const MIN_GAP_MS = 20 * 1000;       // never hammer /auth/me
+const MIN_GAP_MS = 60 * 1000;       // never hammer /auth/me: switching windows refreshes at most once a minute
 export { PERMISSIONS_STALE_EVENT };
 
 /**
@@ -58,7 +58,8 @@ export function SessionSync() {
         } finally {
             inFlight.current = false;
             // Whatever the outcome, we asked: stop holding back access decisions on the cached user.
-            useAuthStore.getState().setPermissionsFresh(true);
+            // Only when it changes: setting the same value again still notified every subscriber of the store.
+            if (!useAuthStore.getState().permissionsFresh) useAuthStore.getState().setPermissionsFresh(true);
         }
     }, []);
 

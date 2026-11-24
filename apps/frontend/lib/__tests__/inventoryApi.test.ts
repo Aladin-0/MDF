@@ -55,6 +55,46 @@ describe('fetchAllStock', () => {
         expect(result.products).toHaveLength(2);
         expect(fetchMock).toHaveBeenCalledTimes(1);
     });
+
+    const pageNo = (url: unknown) => Number(/[?&]page=(\d+)/.exec(String(url))![1]);
+
+    it('keeps the server order even when later pages answer first, and never asks for more than 2 pages at once', async () => {
+        let inFlight = 0;
+        let maxInFlight = 0;
+        fetchMock.mockImplementation((url: string) => {
+            const n = pageNo(url);
+            inFlight += 1;
+            maxInFlight = Math.max(maxInFlight, inFlight);
+            const delay = n === 1 ? 0 : (7 - n) * 5;            // page 6 answers first, page 2 last
+            return new Promise((resolve) => setTimeout(() => { inFlight -= 1; resolve(page(n, 6)); }, delay));
+        });
+        const result = await fetchAllStock('o1', { expiringSoon: true });
+        expect(result.products.map((p: any) => p.id)).toEqual(
+            [1, 2, 3, 4, 5, 6].flatMap((n) => [`p${n}a`, `p${n}b`]),
+        );
+        expect(result.totalRecords).toBe(12);
+        expect(fetchMock).toHaveBeenCalledTimes(6);
+        expect(maxInFlight).toBeLessThanOrEqual(2);              // the server has few workers: one tab must not take them all
+        expect(new Set(fetchMock.mock.calls.map(([url]) => pageNo(url)))).toEqual(new Set([1, 2, 3, 4, 5, 6]));
+    });
+
+    it('cancels: the signal reaches the request, and no further page is asked for after leaving the tab', async () => {
+        const controller = new AbortController();
+        fetchMock.mockImplementation((url: string, init: RequestInit) => {
+            expect(init.signal).toBe(controller.signal);
+            if (pageNo(url) === 2) controller.abort();          // the user leaves while page 2 loads
+            return page(pageNo(url), 50);
+        });
+        await expect(fetchAllStock('o1', { lowStock: true }, controller.signal)).rejects.toThrow(/abort/i);
+        expect(fetchMock.mock.calls.length).toBeLessThanOrEqual(3);   // was: all 50 pages, one after another
+    });
+
+    it('reports a list longer than the safety limit as truncated', async () => {
+        fetchMock.mockImplementation((url: string) => page(pageNo(url), 150));
+        const result = await fetchAllStock('o1', { lowStock: true });
+        expect(fetchMock).toHaveBeenCalledTimes(100);
+        expect(result.truncated).toBe(true);
+    });
 });
 
 describe('stock valuation request', () => {

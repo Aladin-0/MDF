@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { purchasesApi, distributorsApi } from '@/lib/apiClient';
 import { CreatePurchasePayload, PaginatedResponse, PurchaseInvoiceFull, PurchaseOrderFilters } from '@/types';
 import { useOutletId } from '@/hooks/useOutletId';
+import { useDebounce } from '@/hooks/useDebounce';
 
 export function usePurchasesList(filters?: any) {
     const outletId = useOutletId();
@@ -130,12 +131,16 @@ export function useDistributorHistory(distributorId: string | null) {
     });
 }
 
+// Wait this long after the clerk stops typing the invoice number before asking the server (it asked on every key).
+const DUPLICATE_CHECK_DELAY_MS = 400;
+
 export function useCheckDuplicateInvoice(invoiceNo: string, partyLedgerId: string) {
     const outletId = useOutletId();
+    const settledInvoiceNo = useDebounce(invoiceNo, DUPLICATE_CHECK_DELAY_MS);
     return useQuery({
-        queryKey: ['check-invoice', outletId, invoiceNo, partyLedgerId],
-        queryFn: () => purchasesApi.checkInvoice(outletId!, invoiceNo, partyLedgerId),
-        enabled: !!outletId && !!invoiceNo && !!partyLedgerId && invoiceNo.length > 2,
+        queryKey: ['check-invoice', outletId, settledInvoiceNo, partyLedgerId],
+        queryFn: () => purchasesApi.checkInvoice(outletId!, settledInvoiceNo, partyLedgerId),
+        enabled: !!outletId && !!settledInvoiceNo && !!partyLedgerId && settledInvoiceNo.length > 2,
         staleTime: 1000 * 60,
     });
 }

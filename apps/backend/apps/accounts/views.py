@@ -4,13 +4,13 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from apps.core.permissions import (
-    IsAdminStaff, IsAuthenticated, effective_permissions,
+    IsAdminStaff, IsAuthenticated, IsManagerOrAbove, effective_permissions,
     can_assign_role, can_manage_staff_member, assert_outlet_access,
 )
 from apps.core.ratelimit import FailureLimiter, client_ip
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework import status
-from django.db.models import Q, Sum
+from django.db.models import Q, Sum, Count
 from django.core.exceptions import ValidationError
 from datetime import datetime
 from datetime import date
@@ -313,6 +313,9 @@ class StaffMeView(APIView):
 
 
 
+CUSTOMER_SEARCH_LIMIT = 50     # rows a customer search returns (it had no limit)
+
+
 class CustomerSearchView(APIView):
     """
     GET /api/v1/customers/search/?q=name&outletId=xxx
@@ -393,16 +396,29 @@ class CustomerSearchView(APIView):
         ).filter(
             Q(name__icontains=query_lower) | Q(phone__icontains=query_lower)
             | Q(account_holder__name__icontains=query_lower) | Q(account_holder__phone__icontains=query_lower)
-        ).select_related('account_holder').distinct()
+        ).select_related('account_holder').distinct()[:CUSTOMER_SEARCH_LIMIT]
+        customers = list(customers)
 
-        logger.info(f"Found {customers.count()} customers matching: {query}")
+        # Each row needs its account's Sundry Debtors ledger (id + balance). Fetch them for all rows in one query instead
+        # of two queries per row, picking the same ledger the per-row helpers pick:
+        #   account_ledger(c)       -> earliest created_at   (family_accounts.account_ledger)
+        #   c.outstanding_balance   -> lowest pk             (Customer.outstanding_balance uses an unordered .first())
+        from apps.accounts.models import Ledger
+        owner_ids = {c.account_holder_id or c.id for c in customers}
+        debtor_ledgers = {}
+        for led in Ledger.objects.filter(linked_customer_id__in=owner_ids, group__name='Sundry Debtors').only(
+                'id', 'linked_customer_id', 'created_at', 'current_balance'):
+            debtor_ledgers.setdefault(led.linked_customer_id, []).append(led)
+        account_ledger_of = {oid: min(ls, key=lambda l: l.created_at) for oid, ls in debtor_ledgers.items()}
+        balance_ledger_of = {oid: min(ls, key=lambda l: l.pk) for oid, ls in debtor_ledgers.items()}
 
         # Serialize customers
         results = []
-        from apps.accounts.family_accounts import account_ledger
         for customer in customers:
             owner = customer.financial_customer          # who owns the money: their family account, else themselves
-            owner_ledger = account_ledger(customer)
+            owner_ledger = account_ledger_of.get(owner.id)
+            balance_ledger = balance_ledger_of.get(owner.id)
+            outstanding = balance_ledger.current_balance if balance_ledger else owner.outstanding
             result = {
                 'id': str(customer.id),
                 'name': customer.name,
@@ -426,7 +442,7 @@ class CustomerSearchView(APIView):
                 'dlExpiry': customer.dl_expiry.isoformat() if customer.dl_expiry else None,
                 'customerType': customer.customer_type,
                 'stateCode': customer.state_code,
-                'outstanding': float(owner.outstanding_balance),
+                'outstanding': float(outstanding),
                 'totalPurchases': float(customer.total_purchases),
                 'isChronic': customer.is_chronic,
                 'isActive': customer.is_active,
@@ -748,6 +764,57 @@ class CustomerAccountView(APIView):
             return Response({'detail': str(err), 'code': 'FAMILY_ACCOUNT'}, status=status.HTTP_400_BAD_REQUEST)
         member.refresh_from_db()
         return Response(_member_row(member))
+
+
+class CustomerSummaryView(APIView):
+    """
+    GET /api/v1/customers/summary/?outletId=
+
+    The four numbers at the top of the Customers page, computed by the database:
+      totalCustomers  - active customers                       (= the list's total with no filter)
+      chronicCount    - active customers marked chronic        (= the list's total with isChronic=true)
+      withDuesCount   - active customers with outstanding > 0  (= the list's total with hasOutstanding=true)
+      totalOutstanding - what customers owe: each MONEY-OWNING account counted ONCE (family members are billed through
+                        their account, docs/FAMILY_ACCOUNTS.md), its Sundry Debtors ledger balance (or the stored
+                        outstanding when it has no ledger), positive balances only (an advance is not a due).
+    The page used to download three full pages of customers for the counts and added up the first page's balances,
+    so "Total Outstanding" was wrong for any shop with more than 50 customers (and counted a family once per member).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        from decimal import Decimal
+        outlet_id = request.query_params.get('outletId')
+        try:
+            outlet = Outlet.objects.get(id=outlet_id)
+        except (Outlet.DoesNotExist, ValueError, ValidationError):
+            return Response({'detail': f'Outlet {outlet_id} not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        active = Customer.objects.filter(outlet=outlet, is_active=True)
+        counts = active.aggregate(
+            total=Count('id'),
+            chronic=Count('id', filter=Q(is_chronic=True)),
+            dues=Count('id', filter=Q(outstanding__gt=0)),
+        )
+
+        # money-owning accounts: active customers who are not billed through someone else's account
+        owners = dict(active.filter(account_holder__isnull=True).values_list('id', 'outstanding'))
+        balance_of = {}
+        for cid, balance in (Ledger.objects.filter(linked_customer_id__in=owners.keys(), group__name='Sundry Debtors')
+                             .order_by('pk').values_list('linked_customer_id', 'current_balance')):
+            balance_of.setdefault(cid, balance)        # the same ledger Customer.outstanding_balance reads (lowest pk)
+        total_outstanding = Decimal('0')
+        for cid, stored in owners.items():
+            balance = balance_of.get(cid, stored) or Decimal('0')
+            if balance > 0:
+                total_outstanding += balance
+
+        return Response({
+            'totalCustomers': counts['total'],
+            'chronicCount': counts['chronic'],
+            'withDuesCount': counts['dues'],
+            'totalOutstanding': float(total_outstanding),
+        })
 
 
 class CustomerListView(APIView):
@@ -2351,26 +2418,26 @@ from apps.accounts.dashboard_service import DashboardService
 # IsAuthenticated (imported at the top of this module), so the four dashboard views below had no
 # outlet check and any logged-in user could read any outlet's KPIs.
 
+# The Accounts Dashboard (/dashboard/accounts/overview). Manager and above, like its menu entry (`view_accounts`):
+# these numbers are payables, receivables and cash/bank balances. The routes live in accounts/dashboard_urls.py
+# (they used to sit in accounts/urls.py, which was never mounted, so the page always showed zeros). The fourth view,
+# "audit alerts", was removed: the audit trail has one place, /admin/audit (super admin only, docs/AUDIT_TRAIL.md).
+
+
 class DashboardKPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsManagerOrAbove]
     def get(self, request):
         outlet_id = request.query_params.get('outletId')
         return Response(DashboardService.get_financial_health_kpis(outlet_id))
 
 class DashboardAgingView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsManagerOrAbove]
     def get(self, request):
         outlet_id = request.query_params.get('outletId')
         return Response(DashboardService.get_aging_summary(outlet_id))
 
 class DashboardUrgentActionsView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsManagerOrAbove]
     def get(self, request):
         outlet_id = request.query_params.get('outletId')
         return Response(DashboardService.get_urgent_actions(outlet_id))
-
-class DashboardAuditAlertsView(APIView):
-    permission_classes = [IsAuthenticated]
-    def get(self, request):
-        outlet_id = request.query_params.get('outletId')
-        return Response(DashboardService.get_audit_alerts(outlet_id))

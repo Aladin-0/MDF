@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useBillingStore } from '@/store/billingStore';
+import { useShallow } from 'zustand/react/shallow';
 import { useSaveBill } from '@/hooks/useSaveBill';
 import { useToast } from '@/hooks/use-toast';
 import { logger } from '@/lib/logger';
@@ -8,7 +9,7 @@ import { calculateLineMargin, calculateTotalMargin } from '@/lib/billingMarginUt
 
 export function useCheckout() {
     const router = useRouter();
-    const { drafts, activeDraftId, getDraftTotals, landingCostIncludeGst } = useBillingStore();
+    const { drafts, activeDraftId, getDraftTotals, landingCostIncludeGst } = useBillingStore(useShallow((s) => ({ drafts: s.drafts, activeDraftId: s.activeDraftId, getDraftTotals: s.getDraftTotals, landingCostIncludeGst: s.landingCostIncludeGst })));
     const { saveBill, isLoading } = useSaveBill();
     const { toast } = useToast();
     

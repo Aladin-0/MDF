@@ -449,9 +449,14 @@ def get_daily_snapshot_data(outlet_id, start_date_str, end_date_str=None):
     from apps.accounts.models import Partner, PartnerShareHistory
     
     # Get all partners ever
-    all_partners = Partner.objects.filter(outlet_id=outlet_id)
+    all_partners = list(Partner.objects.filter(outlet_id=outlet_id))
     for p in all_partners:
         partner_totals[p.id] = {'name': p.name, 'shareAmount': 0.0, 'current_percentage': 0.0}
+    # Every partner's share history, read ONCE (newest start first, the model's own order); it used to be one query
+    # per partner per day of the range.
+    history_by_partner = {}
+    for h in PartnerShareHistory.objects.filter(partner__in=all_partners).order_by('-start_date'):
+        history_by_partner.setdefault(h.partner_id, []).append(h)
         
     current_date = start_date
     while current_date <= end_date:
@@ -467,7 +472,8 @@ def get_daily_snapshot_data(outlet_id, start_date_str, end_date_str=None):
         
         # Outgoing COGS
         d_cogs = 0.0
-        d_sale_items = SaleItem.objects.filter(invoice__in=d_sales_qs)
+        # each line's batch read in the same query (it was one query per line sold)
+        d_sale_items = SaleItem.objects.filter(invoice__in=d_sales_qs).select_related('batch')
         for item in d_sale_items:
             pack_size = item.pack_size or 1
             total_loose = (item.qty_strips * pack_size) + item.qty_loose
@@ -476,7 +482,8 @@ def get_daily_snapshot_data(outlet_id, start_date_str, end_date_str=None):
                 
         # Returned COGS Reversal
         d_returns_cogs = 0.0
-        d_return_items = SalesReturnItem.objects.filter(sales_return__outlet_id=outlet_id, sales_return__return_date=current_date)
+        d_return_items = SalesReturnItem.objects.filter(
+            sales_return__outlet_id=outlet_id, sales_return__return_date=current_date).select_related('batch')
         for r_item in d_return_items:
             pack_size = r_item.batch.pack_size or 1
             total_returned_loose = (r_item.qty_returned_strips * pack_size) + r_item.qty_returned_loose
@@ -494,11 +501,13 @@ def get_daily_snapshot_data(outlet_id, start_date_str, end_date_str=None):
         
         # Look up partner percentages for this day from history
         for p in all_partners:
-            # Find history record valid on current_date
-            history = PartnerShareHistory.objects.filter(
-                partner=p,
-                start_date__lte=current_date
-            ).exclude(end_date__lt=current_date).first()
+            # Find history record valid on current_date: started on or before it and not ended before it
+            # (the newest such record, as `.first()` on the model's -start_date order gave)
+            history = next(
+                (h for h in history_by_partner.get(p.id, [])
+                 if h.start_date <= current_date and not (h.end_date is not None and h.end_date < current_date)),
+                None,
+            )
             
             percentage = float(history.profit_percentage) if history else float(p.profit_percentage)
             

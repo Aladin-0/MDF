@@ -237,8 +237,12 @@ def generate_invoice_number(outlet_id: str) -> str:
     """
 
     try:
-        # Lock the Outlet row to prevent concurrent invoice generation for the same outlet
-        outlet = Outlet.objects.select_for_update().get(id=outlet_id)
+        # Lock the Outlet row to prevent concurrent invoice generation for the same outlet.
+        # no_key=True (FOR NO KEY UPDATE): two bills of one outlet still queue here, so a number is never handed out
+        # twice, but the lock no longer conflicts with the key-share lock PostgreSQL takes when another transaction
+        # INSERTS a row pointing at this outlet. A plain FOR UPDATE made every purchase, receipt, return, new customer
+        # or stock-ledger row of the outlet wait until the bill being saved had committed.
+        outlet = Outlet.objects.select_for_update(no_key=True).get(id=outlet_id)
     except Outlet.DoesNotExist:
         raise
 

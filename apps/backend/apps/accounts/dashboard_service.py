@@ -6,18 +6,27 @@ from apps.billing.models import SaleInvoice
 from apps.purchases.models import PurchaseInvoice
 from apps.accounts.models import Voucher
 
+def _posted_purchases(outlet_id):
+    """Purchases that are real debts: POSTED (a scanned bill still awaiting review, SAVED, owes nothing yet)."""
+    return PurchaseInvoice.objects.filter(outlet_id=outlet_id, status='POSTED')
+
+
+def _live_sales(outlet_id):
+    """Sale invoices that still count: not cancelled."""
+    return SaleInvoice.objects.filter(outlet_id=outlet_id, is_cancelled=False)
+
+
 class DashboardService:
     @staticmethod
     def get_financial_health_kpis(outlet_id):
         # Total Payable: Sum of outstanding on PurchaseInvoices
-        total_payable = PurchaseInvoice.objects.filter(outlet_id=outlet_id).aggregate(
+        total_payable = _posted_purchases(outlet_id).aggregate(
             total=Sum('outstanding')
         )['total'] or Decimal('0.00')
 
         # Overdue Payable: Outstanding on PurchaseInvoices where due_date < today
         today = timezone.now().date()
-        overdue_payable = PurchaseInvoice.objects.filter(
-            outlet_id=outlet_id, 
+        overdue_payable = _posted_purchases(outlet_id).filter(
             due_date__lt=today,
             outstanding__gt=0
         ).aggregate(
@@ -25,14 +34,13 @@ class DashboardService:
         )['total'] or Decimal('0.00')
 
         # Total Receivable: Sum of amount_due on SaleInvoices
-        total_receivable = SaleInvoice.objects.filter(outlet_id=outlet_id).aggregate(
+        total_receivable = _live_sales(outlet_id).aggregate(
             total=Sum('amount_due')
         )['total'] or Decimal('0.00')
 
         # Overdue Receivable: Let's assume 30 days credit for customers by default if not set
         thirty_days_ago = today - timedelta(days=30)
-        overdue_receivable = SaleInvoice.objects.filter(
-            outlet_id=outlet_id, 
+        overdue_receivable = _live_sales(outlet_id).filter(
             invoice_date__lt=thirty_days_ago,
             amount_due__gt=0
         ).aggregate(
@@ -69,12 +77,13 @@ class DashboardService:
         
         def calculate_buckets(queryset, date_field, amount_field):
             buckets = {'0-7': 0, '8-15': 0, '16-30': 0, '31-60': 0, '60+': 0}
-            for item in queryset:
-                date_val = getattr(item, date_field)
+            for date_val, amount in queryset.values_list(date_field, amount_field):
                 if not date_val:
                     continue
+                if hasattr(date_val, 'date'):          # invoice_date is a date AND time: compare days
+                    date_val = date_val.date()
                 days_old = (today - date_val).days
-                amt = float(getattr(item, amount_field) or 0)
+                amt = float(amount or 0)
                 
                 if days_old <= 7:
                     buckets['0-7'] += amt
@@ -89,17 +98,11 @@ class DashboardService:
             return buckets
         
         # Payables based on due_date
-        payables_qs = PurchaseInvoice.objects.filter(
-            outlet_id=outlet_id, 
-            outstanding__gt=0
-        )
+        payables_qs = _posted_purchases(outlet_id).filter(outstanding__gt=0)
         payables_aging = calculate_buckets(payables_qs, 'due_date', 'outstanding')
         
         # Receivables based on invoice_date
-        receivables_qs = SaleInvoice.objects.filter(
-            outlet_id=outlet_id,
-            amount_due__gt=0
-        )
+        receivables_qs = _live_sales(outlet_id).filter(amount_due__gt=0)
         receivables_aging = calculate_buckets(receivables_qs, 'invoice_date', 'amount_due')
         
         return {
@@ -113,15 +116,13 @@ class DashboardService:
         thirty_days_ago = today - timedelta(days=30)
         
         # 8 distributor bills overdue today
-        overdue_distributor_bills = PurchaseInvoice.objects.filter(
-            outlet_id=outlet_id,
+        overdue_distributor_bills = _posted_purchases(outlet_id).filter(
             due_date__lt=today,
             outstanding__gt=0
         ).count()
         
         # 3 customer collections overdue > 30 days
-        overdue_customer_bills = SaleInvoice.objects.filter(
-            outlet_id=outlet_id,
+        overdue_customer_bills = _live_sales(outlet_id).filter(
             invoice_date__lt=thirty_days_ago,
             amount_due__gt=0
         ).count()

@@ -1,5 +1,7 @@
 'use client';
 
+import { useShownRows, REPORT_ROWS_STEP } from '@/hooks/useShownRows';
+import { ShowMoreRows } from '@/components/reports/ShowMoreRows';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { format, startOfMonth } from 'date-fns';
@@ -73,6 +75,8 @@ export default function GrossLossOnReturnPage() {
     });
 
     const rows = data?.rows ?? [];
+    // draw a long result in parts (totals below still use every row): see hooks/useShownRows
+    const { shown: shownRows, total: rowCount, showMore } = useShownRows(rows);
     const summary = data?.summary;
 
     const downloadExcel = async () => {
@@ -209,7 +213,7 @@ export default function GrossLossOnReturnPage() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {rows.map((row, index) => (
+                            {shownRows.map((row, index) => (
                                 <TableRow key={`${row.date}-${row.return_no ?? index}`}>
                                     <TableCell className="whitespace-nowrap">{row.date}</TableCell>
                                     {formatMode === 'detailed' ? (
@@ -236,6 +240,7 @@ export default function GrossLossOnReturnPage() {
                             </TableRow>
                         </TableFooter>
                     </Table>
+                    <ShowMoreRows shown={shownRows.length} total={rowCount} step={REPORT_ROWS_STEP} onShowMore={showMore} />
                 </div>
             )}
         </ReportPageLayout>

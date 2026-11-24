@@ -13,7 +13,7 @@ One place for the rules, so the page, its trends and its alerts always agree wit
   included) are under the outlet's minimum or `DEFAULT_MIN_QTY`; a product is expiring when any batch that still has
   stock expires within `EXPIRING_SOON_DAYS`, expired ones included.
 """
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 from decimal import Decimal
 
 from django.db.models import Count, Exists, ExpressionWrapper, F, FloatField, IntegerField, OuterRef, Q, Subquery, Sum, Value, Case, When
@@ -36,22 +36,32 @@ def previous_range(start, end):
     return prev_end - timedelta(days=days - 1), prev_end
 
 
+def _in_days(start, end):
+    """
+    Filter for invoice_date (a date AND time) falling on the days start..end, as a time range: [start 00:00, end+1
+    00:00). Same rows as `invoice_date__date__gte/lte`, but that form makes PostgreSQL turn every row's timestamp into
+    a date first, so the (outlet, invoice_date) index could not be used and each total read the outlet's whole history.
+    """
+    return {
+        'invoice_date__gte': datetime.combine(start, time.min),
+        'invoice_date__lt': datetime.combine(end + timedelta(days=1), time.min),
+    }
+
+
 def sales_queryset(outlet, start, end):
     """Real sales of the period: not a return, not cancelled."""
     return SaleInvoice.objects.filter(
         outlet=outlet,
         is_return=False,
         is_cancelled=False,
-        invoice_date__date__gte=start,
-        invoice_date__date__lte=end,
+        **_in_days(start, end),
     )
 
 
 def returns_total(outlet, start, end):
     """(amount, count) of sales returns in the period: legacy return invoices plus SalesReturn documents."""
     legacy = SaleInvoice.objects.filter(
-        outlet=outlet, is_return=True, is_cancelled=False,
-        invoice_date__date__gte=start, invoice_date__date__lte=end,
+        outlet=outlet, is_return=True, is_cancelled=False, **_in_days(start, end),
     ).aggregate(total=Sum('grand_total'), n=Count('id'))
     modern = SalesReturn.objects.filter(
         outlet=outlet, return_date__gte=start, return_date__lte=end,

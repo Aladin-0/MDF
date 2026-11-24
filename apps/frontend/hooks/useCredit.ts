@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { creditApi } from '@/lib/apiClient';
 import { RecordCreditPaymentPayload } from '@/types';
 import { useOutletId } from '@/hooks/useOutletId';
+import { computeCreditAging } from '@/lib/creditAging';
 
 export function useCreditAccounts(filters?: any) {
     const outletId = useOutletId();
@@ -25,13 +26,30 @@ export function useCreditTransactions(accountId: string) {
     });
 }
 
+/**
+ * The aging buckets, worked out from the SAME cached accounts list `useCreditAccounts()` loads (same query key, so
+ * one request serves both). It used to download the 500 accounts a second time.
+ */
 export function useCreditAgingSummary() {
     const outletId = useOutletId();
     return useQuery({
-        queryKey: ['credit', 'aging', outletId],
-        queryFn: () => creditApi.getAgingSummary(outletId!),
-        staleTime: 1000 * 60 * 5,
+        queryKey: ['credit', 'accounts', outletId, undefined],
+        queryFn: () => creditApi.getAccountsList(outletId!),
+        staleTime: 1000 * 60 * 2,
         enabled: !!outletId,
+        select: (accounts) => computeCreditAging(accounts),
+    });
+}
+
+/** The credit account of ONE customer (the customer page used to download every account of the outlet to find it). */
+export function useCustomerCreditAccount(customerId: string | undefined) {
+    const outletId = useOutletId();
+    return useQuery({
+        queryKey: ['credit', 'accounts', outletId, { customerId }],
+        queryFn: () => creditApi.getAccountsList(outletId!, { customerId }),
+        staleTime: 1000 * 60 * 2,
+        enabled: !!outletId && !!customerId,
+        select: (accounts: any[]) => accounts.find((a) => (a.customer?.id ?? a.customerId) === customerId),
     });
 }
 

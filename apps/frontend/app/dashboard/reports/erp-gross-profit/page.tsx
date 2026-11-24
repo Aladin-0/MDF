@@ -1,5 +1,7 @@
 'use client';
 
+import { useShownRows, REPORT_ROWS_STEP } from '@/hooks/useShownRows';
+import { ShowMoreRows } from '@/components/reports/ShowMoreRows';
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { format, startOfMonth, endOfMonth, subMonths, startOfYear } from 'date-fns';
@@ -163,6 +165,8 @@ export default function ErpGrossProfitPage() {
     };
 
     const rows = data?.rows || [];
+    // draw a long result in parts (totals below still use every row): see hooks/useShownRows
+    const { shown: shownRows, total: rowCount, showMore } = useShownRows(rows);
     const summary = data?.summary || {
         total_sales: 0,
         total_cogs: 0,
@@ -426,7 +430,7 @@ export default function ErpGrossProfitPage() {
                                 </TableHeader>
 
                                 <TableBody>
-                                    {rows.map((row: any, idx: number) => {
+                                    {shownRows.map((row: any, idx: number) => {
                                         const isReturn = Boolean(row.is_return);
                                         return (
                                             <TableRow
@@ -494,6 +498,7 @@ export default function ErpGrossProfitPage() {
                                 </TableFooter>
                             </Table>
                         </div>
+                        <ShowMoreRows shown={shownRows.length} total={rowCount} step={REPORT_ROWS_STEP} onShowMore={showMore} />
                     </div>
                 )}
             </div>

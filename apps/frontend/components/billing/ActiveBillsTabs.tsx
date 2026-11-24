@@ -1,13 +1,14 @@
 'use client';
 
 import { useBillingStore } from '@/store/billingStore';
+import { useShallow } from 'zustand/react/shallow';
 import { Plus, X, Calendar, CheckCircle2, AlertCircle, RefreshCw, Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useEffect } from 'react';
 import { format } from 'date-fns';
 
 export function ActiveBillsTabs() {
-    const { drafts, activeDraftId, switchDraft, closeDraft, createDraft, activeStaff, updateDraftHeader, setIsPinVerified } = useBillingStore();
+    const { drafts, activeDraftId, switchDraft, closeDraft, createDraft, activeStaff, updateDraftHeader, setIsPinVerified } = useBillingStore(useShallow((s) => ({ drafts: s.drafts, activeDraftId: s.activeDraftId, switchDraft: s.switchDraft, closeDraft: s.closeDraft, createDraft: s.createDraft, activeStaff: s.activeStaff, updateDraftHeader: s.updateDraftHeader, setIsPinVerified: s.setIsPinVerified })));
     const draftList = Object.values(drafts).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
     const activeDraft = activeDraftId ? drafts[activeDraftId] : null;
 

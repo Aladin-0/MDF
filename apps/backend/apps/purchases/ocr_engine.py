@@ -225,8 +225,9 @@ def extract_text_blocks(image_path: str) -> list[dict]:
     """
     import cv2
     try:
-        from rapidocr_onnxruntime import RapidOCR
-        engine = RapidOCR()
+        # the process-wide engine (it used to reload the OCR models for every scan)
+        from apps.purchases.orientation import shared_ocr_engine
+        engine = shared_ocr_engine()
         preprocessed = preprocess_image(image_path)
         results, _ = engine(preprocessed)
         if not results:

@@ -7,6 +7,7 @@
  * (Keyboard shortcuts such as Enter-to-next-cell and Ctrl+Enter are desktop-only and stay in the desktop component.)
  */
 import { createElement, useState, useEffect, useCallback, useRef } from 'react';
+import { useStableCallback } from '@/hooks/useStableCallback';
 import { useForm } from 'react-hook-form';
 import { useSearchParams } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -771,6 +772,13 @@ export function usePurchaseEntry({ onSuccess, invoiceToEdit }: UsePurchaseEntryO
         }
     };
 
+    // Same identity on every render (the latest logic still runs): the desktop grid's rows are memoised, and a new
+    // handler on every render re-drew all 30-60 rows whenever any cell or header field was typed in.
+    const stableItemChange = useStableCallback(handleItemChange);
+    const stableRemoveItem = useStableCallback(handleRemoveItem);
+    const stableSelectProduct = useStableCallback(handleSelectProduct);
+    const stableOpenAddProduct = useStableCallback(handleOpenAddProduct);
+
     return {
         activeDrawerRow,
         adjustmentSign,
@@ -794,11 +802,11 @@ export function usePurchaseEntry({ onSuccess, invoiceToEdit }: UsePurchaseEntryO
         goodsValue,
         gridContainerRef,
         handleAddItem,
-        handleItemChange,
-        handleOpenAddProduct,
+        handleItemChange: stableItemChange,
+        handleOpenAddProduct: stableOpenAddProduct,
         handleProductCreated,
-        handleRemoveItem,
-        handleSelectProduct,
+        handleRemoveItem: stableRemoveItem,
+        handleSelectProduct: stableSelectProduct,
         handleSubmit,
         hasDraft,
         igst,

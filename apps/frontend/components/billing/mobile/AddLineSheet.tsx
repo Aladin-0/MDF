@@ -7,6 +7,7 @@ import { AlertCircle, Check } from 'lucide-react';
 import { SheetShell } from './SheetShell';
 import { QtyStepper } from './QtyStepper';
 import { useBillingStore } from '@/store/billingStore';
+import { useShallow } from 'zustand/react/shallow';
 import { allowsLoose, wholePackWord } from '@/lib/packRules';
 import { batchStockUnits, defaultRateFor, quickAddLine } from '@/lib/cartLine';
 import { cn } from '@/lib/utils';
@@ -98,7 +99,7 @@ function useOptionalQueryClient(): QueryClient | null {
 }
 
 function AddLineBody({ product, onClose, onAdded }: AddLineSheetProps & { product: ProductSearchResult }) {
-    const { activeDraftId, drafts, addToCart } = useBillingStore();
+    const { activeDraftId, drafts, addToCart } = useBillingStore(useShallow((s) => ({ activeDraftId: s.activeDraftId, drafts: s.drafts, addToCart: s.addToCart })));
     const queryClient = useOptionalQueryClient();
     const outletId = useOutletId();
     const saleType = (activeDraftId && drafts?.[activeDraftId]?.saleType) || 'RETAIL';

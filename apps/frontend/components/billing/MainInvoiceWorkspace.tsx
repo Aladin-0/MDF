@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useBillingStore } from '@/store/billingStore';
+import { useShallow } from 'zustand/react/shallow';
 import { Search, Package, AlertTriangle, X, Loader2, FileText, Repeat, ArrowLeftRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -28,7 +29,7 @@ interface MainInvoiceWorkspaceProps {
 }
 
 export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = {}) {
-    const { drafts, activeDraftId, addToCart, removeFromCart, updateCartItem, getDraftTotals, showMarginInfo, activeStaff } = useBillingStore();
+    const { drafts, activeDraftId, addToCart, removeFromCart, updateCartItem, getDraftTotals, showMarginInfo, activeStaff } = useBillingStore(useShallow((s) => ({ drafts: s.drafts, activeDraftId: s.activeDraftId, addToCart: s.addToCart, removeFromCart: s.removeFromCart, updateCartItem: s.updateCartItem, getDraftTotals: s.getDraftTotals, showMarginInfo: s.showMarginInfo, activeStaff: s.activeStaff })));
     const setLandingCostIncludeGst = useBillingStore(state => state.setLandingCostIncludeGst);
     const landingCostIncludeGst = useBillingStore(state => state.landingCostIncludeGst);
     const outletId = useOutletId() as string;

@@ -3,7 +3,7 @@
 import { TopSummaryStrip } from '@/components/accounts/overview/TopSummaryStrip';
 import { AgingOverview } from '@/components/accounts/overview/AgingOverview';
 import { PriorityActionPanel } from '@/components/accounts/overview/PriorityActionPanel';
-import { AuditAndReconciliationWatch } from '@/components/accounts/overview/AuditAndReconciliationWatch';
+import { AuditTrailLink } from '@/components/accounts/overview/AuditTrailLink';
 import { QuickActionsBar } from '@/components/accounts/QuickActionsBar';
 
 export default function OverviewPage() {
@@ -19,7 +19,7 @@ export default function OverviewPage() {
                 </div>
                 <div className="space-y-6">
                     <PriorityActionPanel />
-                    <AuditAndReconciliationWatch />
+                    <AuditTrailLink />
                 </div>
             </div>
         </div>

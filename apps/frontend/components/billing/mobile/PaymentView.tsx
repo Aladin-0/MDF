@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Banknote, BookUser, CheckCircle2, ChevronDown, ChevronRight, CreditCard, Loader2, Smartphone, Split, WifiOff } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useBillingStore } from '@/store/billingStore';
+import { useShallow } from 'zustand/react/shallow';
 import type { useCheckout } from '@/hooks/useCheckout';
 import { cn } from '@/lib/utils';
 import { SheetShell } from './SheetShell';
@@ -50,7 +51,7 @@ interface PaymentViewProps {
  * (Wholesale bills and quotations never open this sheet: they save from the bottom bar.)
  */
 export function PaymentView({ open, onClose, checkout, onFix }: PaymentViewProps) {
-    const { drafts, activeDraftId, getDraftTotals, landingCostIncludeGst, setPayment } = useBillingStore();
+    const { drafts, activeDraftId, getDraftTotals, landingCostIncludeGst, setPayment } = useBillingStore(useShallow((s) => ({ drafts: s.drafts, activeDraftId: s.activeDraftId, getDraftTotals: s.getDraftTotals, landingCostIncludeGst: s.landingCostIncludeGst, setPayment: s.setPayment })));
     const draft = activeDraftId ? drafts[activeDraftId] : null;
     const totals = activeDraftId ? getDraftTotals(activeDraftId) : null;
     const grandTotal = totals?.grandTotal || 0;

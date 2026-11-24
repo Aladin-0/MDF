@@ -123,7 +123,8 @@ class LedgerService:
     @transaction.atomic
     def update_balance(ledger_id, debit, credit):
         """Update ledger current_balance after a voucher line. Dr increases asset, Cr decreases."""
-        ledger = Ledger.objects.select_for_update().get(id=ledger_id)
+        # Read the group in the same query (its nature is needed below); lock only the ledger row, not the group.
+        ledger = Ledger.objects.select_related('group').select_for_update(of=('self',)).get(id=ledger_id)
         debit = Decimal(str(debit))
         credit = Decimal(str(credit))
         # For asset/expense ledgers: Dr increases balance, Cr decreases

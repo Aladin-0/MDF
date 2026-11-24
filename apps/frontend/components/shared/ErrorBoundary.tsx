@@ -1,6 +1,7 @@
 'use client';
 
 import { Component, ErrorInfo, ReactNode } from 'react';
+import { discardPendingStorageWrites } from '@/lib/debouncedStorage';
 import { Button } from '@/components/ui/button';
 
 interface Props {
@@ -47,6 +48,7 @@ export class ErrorBoundary extends Component<Props, State> {
               <Button 
                 variant="outline" 
                 onClick={() => {
+                  discardPendingStorageWrites();   // or a delayed save could put the old drafts back after the wipe
                   localStorage.clear();
                   window.location.href = '/login';
                 }}

@@ -145,9 +145,38 @@ class RetryEinvoiceView(APIView):
             return Response({'detail': f'Sandbox API failed: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
 
 
+def _uuid_key(value):
+    """The canonical text of a UUID, or None when the value is not one."""
+    try:
+        return str(uuid.UUID(str(value)))
+    except (ValueError, TypeError, AttributeError):
+        return None
+
+
+def _prefetch_bill_rows(items_data, outlet):
+    """Every product and (this outlet's) batch named by a bill's lines, read in two queries, keyed by UUID text."""
+    product_ids = {k for k in (_uuid_key(i.get('productId')) for i in items_data if i.get('productId')) if k}
+    batch_ids = {k for k in (_uuid_key(i.get('batchId')) for i in items_data if i.get('batchId')) if k}
+    products = {str(p.id): p for p in MasterProduct.objects.filter(id__in=product_ids)} if product_ids else {}
+    batches = ({str(b.id): b for b in Batch.objects.filter(id__in=batch_ids, outlet=outlet).select_related('product')}
+               if batch_ids else {})
+    return products, batches
+
+
+def _lookup(rows_by_id, raw_id, fallback):
+    """A row from a _prefetch_bill_rows map (None if it does not exist); a value that is not a UUID goes to `fallback`
+    so it fails exactly as the old per-line query did."""
+    key = _uuid_key(raw_id)
+    if key is None:
+        return fallback()
+    return rows_by_id.get(key)
+
+
 def build_sale_response_payload(sale_invoice, message=None, revision_id=None):
     from decimal import Decimal
-    sale_items = sale_invoice.items.all()
+    # each line's batch, its product and its Schedule H record are read here for every line: load them in the same
+    # query (they used to cost 3 extra queries per line)
+    sale_items = list(sale_invoice.items.select_related('batch__product', 'schedule_h_register'))
     
     schedule_h_record = None
     for si in sale_items:
@@ -579,6 +608,12 @@ class SaleCreateView(APIView):
                             status=status.HTTP_400_BAD_REQUEST
                         )
 
+            # Read every product and batch this bill names ONCE. The checks below (GST slab, loss-sale) used to fetch
+            # them line by line, twice per line. Values that are not valid UUIDs are left to the old per-line lookups
+            # so they fail exactly as before.
+            products_by_id, batches_by_id = _prefetch_bill_rows(items_data, outlet)
+            slab_rates = {}     # the GST slab table, read once for the whole bill
+
             # Validate GST 2.0 Tax Rates for all items in cart
             raw_invoice_date = request.data.get('invoiceDate')
             for item_data in items_data:
@@ -586,9 +621,10 @@ class SaleCreateView(APIView):
                 product_id = item_data.get('productId')
                 batch_id = item_data.get('batchId')
                 if product_id:
-                    product_obj = MasterProduct.objects.filter(id=product_id).first()
+                    product_obj = _lookup(products_by_id, product_id, lambda: MasterProduct.objects.filter(id=product_id).first())
                 elif batch_id:
-                    batch_obj = Batch.objects.filter(id=batch_id, outlet=outlet).select_related('product').first()
+                    batch_obj = _lookup(batches_by_id, batch_id,
+                                        lambda: Batch.objects.filter(id=batch_id, outlet=outlet).select_related('product').first())
                     if batch_obj:
                         product_obj = batch_obj.product
 
@@ -603,7 +639,7 @@ class SaleCreateView(APIView):
                 except Exception:
                     dec_rate = Decimal('0')
 
-                is_valid, err_msg = TaxSlab.is_rate_active(dec_rate, transaction_date=raw_invoice_date)
+                is_valid, err_msg = TaxSlab.is_rate_active(dec_rate, transaction_date=raw_invoice_date, rates_cache=slab_rates)
                 if not is_valid:
                     prod_name = item_data.get('productName') or (product_obj.name if product_obj else 'Unknown Item')
                     return Response(
@@ -628,7 +664,8 @@ class SaleCreateView(APIView):
                 batch_id = item_data.get('batchId')
                 if not batch_id:
                     continue
-                batch_obj = Batch.objects.filter(id=batch_id, outlet=outlet).select_related('product').first()
+                batch_obj = _lookup(batches_by_id, batch_id,
+                                    lambda: Batch.objects.filter(id=batch_id, outlet=outlet).select_related('product').first())
                 if not batch_obj:
                     continue
 
@@ -916,17 +953,27 @@ class SaleCreateView(APIView):
                         # Get product details
                         from apps.billing.sale_services import validate_unit_integrity
                         if product_id:
-                            product = MasterProduct.objects.get(id=product_id)
+                            product = _lookup(products_by_id, product_id, lambda: MasterProduct.objects.get(id=product_id))
+                            if product is None:
+                                raise MasterProduct.DoesNotExist(f"Product {product_id} not found")
 
                         qty_loose_needed = item_data.get('qtyLoose', 0)
 
                         if batch_id:
                             try:
                                 # Lookup by id + outlet only — product is already linked on the batch
-                                # and using product= here would fail if frontend productId ever drifts
-                                batch = Batch.objects.get(id=batch_id, outlet=outlet)
+                                # and using product= here would fail if frontend productId ever drifts.
+                                # Re-read inside the transaction and LOCK the row (only the batch, not its product):
+                                # a revise, return or purchase changing the same batch at the same moment now waits
+                                # instead of one of the two stock changes being lost. FEFO lines were already locked.
+                                batch = (Batch.objects.select_related('product').select_for_update(of=('self',))
+                                         .get(id=batch_id, outlet=outlet))
                             except Batch.DoesNotExist:
                                 raise InsufficientStockError(f"Batch {batch_id} not found")
+                            if not product_id:
+                                # no productId sent: bill the batch's own product (this used to reuse the PREVIOUS
+                                # line's product, or crash on the first line)
+                                product = batch.product
 
                             # the batch is what the screen showed and what is deducted: judge loose on it
                             validate_unit_integrity(batch, qty_loose_needed)
@@ -1216,10 +1263,14 @@ class SaleCreateView(APIView):
                     si.cgst_amount = item_cgst
                     si.sgst_amount = item_sgst
                     si.igst_amount = item_igst
-                    si.save(update_fields=['taxable_amount', 'gst_amount', 'cgst_amount', 'sgst_amount', 'igst_amount'])
 
                     if gst_rate > max_gst_rate:
                         max_gst_rate = gst_rate
+
+                # the re-derived line GST, written in one statement (it used to be one UPDATE per line)
+                if sale_items:
+                    SaleItem.objects.bulk_update(
+                        sale_items, ['taxable_amount', 'gst_amount', 'cgst_amount', 'sgst_amount', 'igst_amount'])
 
                 # round_off absorbs any sub-rupee difference
                 raw_exact = server_taxable + server_cgst + server_sgst + server_igst
@@ -1774,7 +1825,9 @@ class SaleListView(APIView):
         total_pages = (total_records + page_size - 1) // page_size
         start_idx = (page - 1) * page_size
         end_idx = start_idx + page_size
-        paginated_invoices = invoices[start_idx:end_idx]
+        # Load each row's customer, family member, doctor and biller in the same query: they are read for every row
+        # below and used to cost up to 4 extra queries per invoice (800 on a 200-row page).
+        paginated_invoices = invoices.select_related('customer', 'patient', 'doctor', 'billed_by')[start_idx:end_idx]
 
         # ── Bulk fetch modified status for paginated sales ───────────────────
         sale_ids = [inv.id for inv in paginated_invoices]
@@ -1786,7 +1839,7 @@ class SaleListView(APIView):
             mod = sale_mod_info.get(str(invoice.id), {'isModified': False, 'revisionCount': 0})
             result = {
                 'id': str(invoice.id),
-                'outletId': str(invoice.outlet.id),
+                'outletId': str(invoice.outlet_id),
                 'invoiceNo': invoice.invoice_no,
                 'invoiceDate': invoice.invoice_date.isoformat(),
                 'saleType': invoice.sale_type,
@@ -2443,12 +2496,30 @@ class DashboardDailyView(APIView):
             if end < start:
                 start, end = end, start
 
+            # The same answer is shared for 60 s by everyone looking at this outlet and period (each open dashboard
+            # re-asks every few minutes; this is ~15 aggregate queries). The key carries the stock version, which every
+            # sale / return / purchase / adjustment bumps once it commits, so a new bill shows at once; changes that move
+            # no stock (a credit payment) show within the minute. Profit figures depend on who asks, so that is in the key.
+            can_see_rates = 'view_purchase_rates' in effective_permissions(request.user)
+            today = datetime.now().date()
+            cache_key = None
+            try:
+                from django.core.cache import cache
+                from apps.inventory.cache_utils import inventory_cache_version
+                cache_key = (f"dash:daily:v1:{outlet.id}:i{inventory_cache_version(outlet.id)}:{start}:{end}:"
+                             f"r{int(can_see_rates)}:{today}")
+                cached = cache.get(cache_key)
+                if cached is not None:
+                    return Response(cached, status=status.HTTP_200_OK)
+            except Exception:       # the cache being down must never break the dashboard
+                cache_key = None
+
             totals = ds.period_totals(outlet, start, end)
             prev_start, prev_end = ds.previous_range(start, end)
             previous = ds.trend_totals(ds.period_totals(outlet, prev_start, prev_end))
 
             gross_profit = margin_pct = None
-            if 'view_purchase_rates' in effective_permissions(request.user):
+            if can_see_rates:
                 gross_profit, margin_pct = ds.gross_margin(outlet, start, end)
 
             sales = ds.sales_queryset(outlet, start, end)
@@ -2473,8 +2544,13 @@ class DashboardDailyView(APIView):
                     'credit': totals['creditGiven'],
                 },
                 # alerts describe stock as it is today, whatever period is being looked at
-                'alerts': ds.stock_alerts(outlet, datetime.now().date()),
+                'alerts': ds.stock_alerts(outlet, today),
             }
+            if cache_key:
+                try:
+                    cache.set(cache_key, result, 60)
+                except Exception:
+                    pass
             return Response(result, status=status.HTTP_200_OK)
 
         except Exception as e:
@@ -2534,6 +2610,14 @@ class CreditAccountListView(APIView):
                 Q(customer__name__icontains=query_lower) |
                 Q(customer__phone__icontains=query_lower)
             )
+
+        # One customer's account (the customer page asked for every account of the outlet to find this one)
+        customer_param = request.query_params.get('customerId', '').strip()
+        if customer_param:
+            try:
+                accounts = accounts.filter(customer_id=uuid.UUID(customer_param))
+            except ValueError:
+                accounts = accounts.none()
 
         # Apply pagination
         total_records = accounts.count()

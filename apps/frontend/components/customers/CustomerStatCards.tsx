@@ -2,8 +2,7 @@
 
 import { Users, Heart, IndianRupee, RefreshCw } from 'lucide-react';
 import { Card } from '@/components/ui/card';
-import { useCustomerList, useRefillAlerts } from '@/hooks/useCustomers';
-import { useCreditAgingSummary } from '@/hooks/useCredit';
+import { useCustomerSummary, useRefillAlerts } from '@/hooks/useCustomers';
 import { formatCurrency } from '@/lib/gst';
 import { cn } from '@/lib/utils';
 
@@ -14,16 +13,14 @@ interface CustomerStatCardsProps {
 }
 
 export default function CustomerStatCards({ onFilterChronic, onFilterOutstanding, onShowRefills }: CustomerStatCardsProps) {
-    const { data: allData } = useCustomerList();
-    const { data: chronicData } = useCustomerList({ isChronic: true });
-    const { data: outstandingData } = useCustomerList({ hasOutstanding: true });
+    // Counted by the server over ALL customers. The total used to add up only the first page of 50 (and counted a
+    // family's balance once per member), so it was wrong for any real shop.
+    const { data: summary } = useCustomerSummary();
     const { data: refillAlerts } = useRefillAlerts();
 
-    const total = allData?.pagination?.totalRecords ?? allData?.data?.length ?? 0;
-    const chronicCount = chronicData?.pagination?.totalRecords ?? chronicData?.data?.length ?? 0;
-    const outstandingList = outstandingData?.data || [];
-    const outstandingCount = outstandingData?.pagination?.totalRecords ?? outstandingList.length;
-    const outstandingAmount = outstandingList.reduce((s: number, c: any) => s + (c.outstanding || 0), 0);
+    const total = summary?.totalCustomers ?? 0;
+    const outstandingCount = summary?.withDuesCount ?? 0;
+    const outstandingAmount = summary?.totalOutstanding ?? 0;
     const refillList = Array.isArray(refillAlerts) ? refillAlerts : (refillAlerts as any)?.data ?? [];
     const refillCount = refillList.length;
     const hasOverdue = refillList.some((a: any) => a.daysOverdue > 0);

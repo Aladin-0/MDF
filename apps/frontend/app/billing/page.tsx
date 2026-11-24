@@ -6,6 +6,7 @@ import { RightBillingRail } from '@/components/billing/RightBillingRail';
 import { ActiveBillsTabs } from '@/components/billing/ActiveBillsTabs';
 import { GlobalNavigation } from '@/components/layout/GlobalNavigation';
 import { useBillingStore } from '@/store/billingStore';
+import { useShallow } from 'zustand/react/shallow';
 import { StaffPinEntry } from '@/components/billing/StaffPinEntry';
 import { useAutosaveDraft } from '@/hooks/useAutosaveDraft';
 import { useLoadDrafts } from '@/hooks/useLoadDrafts';
@@ -19,7 +20,7 @@ import { MobileBilling } from '@/components/billing/mobile/MobileBilling';
 import { SuccessView } from '@/components/billing/mobile/SuccessView';
 
 export default function FullScreenBillingPage() {
-    const { isPinVerified, activeDraftId, lastInvoice, setLastInvoice, drafts, createDraft, switchDraft } = useBillingStore();
+    const { isPinVerified, activeDraftId, lastInvoice, setLastInvoice, drafts, createDraft, switchDraft } = useBillingStore(useShallow((s) => ({ isPinVerified: s.isPinVerified, activeDraftId: s.activeDraftId, lastInvoice: s.lastInvoice, setLastInvoice: s.setLastInvoice, drafts: s.drafts, createDraft: s.createDraft, switchDraft: s.switchDraft })));
     const hasHydrated = useBillingStore(state => state._hasHydrated);
     useAutosaveDraft();
     const draftsLoaded = useLoadDrafts();

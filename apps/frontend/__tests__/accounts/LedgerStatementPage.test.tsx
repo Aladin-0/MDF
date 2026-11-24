@@ -23,6 +23,10 @@ jest.mock('@/lib/apiClient', () => ({
 import { voucherApi } from '@/lib/apiClient';
 import LedgerStatementPage from '@/app/dashboard/accounts/ledgers/[id]/page';
 
+// Each test renders a 200-row ledger page several times: fine alone (~2 s), but over Jest's default 5 s when the
+// whole suite runs in parallel (the pager test already had 30 s for this reason). Same allowance for every test here.
+jest.setTimeout(30000);
+
 const get = voucherApi.getLedgerStatement as jest.Mock;
 
 const tx = (i: number, over: Record<string, unknown> = {}) => ({ date: '2026-11-09', voucherNo: `V-${i}`, voucherType: 'receipt', description: `entry ${i}`, debit: i, credit: 0, balance: i, sourceType: 'VOUCHER', sourceId: `s${i}`, journalEntryId: '', ...over });

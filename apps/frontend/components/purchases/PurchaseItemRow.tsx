@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { differenceInDays } from 'date-fns';
 import { X, AlertTriangle, ChevronDown, ChevronUp, Plus, Loader2, ImageIcon } from 'lucide-react';
@@ -88,7 +88,7 @@ export function formatStockQty(n: number | string | null | undefined): string {
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export function PurchaseItemRow({
+function PurchaseItemRowView({
     index, value, onChange, onRemove,
     onSelectProduct, onOpenAddProduct, outletId, errors, scanPages, scanPageSizes,
 }: Props) {
@@ -889,3 +889,10 @@ export function PurchaseItemRow({
         </>
     );
 }
+
+/**
+ * One line of the purchase grid. Memoised: a line re-renders only when its own values (or errors) change. Every line
+ * used to re-render on every key typed anywhere in the form, which made long invoices (30-60 lines) slow to type in.
+ * The handlers come from usePurchaseEntry with a fixed identity (useStableCallback) for exactly this reason.
+ */
+export const PurchaseItemRow = memo(PurchaseItemRowView);

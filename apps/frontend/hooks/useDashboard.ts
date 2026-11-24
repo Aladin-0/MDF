@@ -23,6 +23,8 @@ export function useDashboardKPI(dateRange?: DateRangeFilter) {
         enabled: !!outletId,
         placeholderData: keepPreviousData,
         staleTime: 1000 * 60 * 2,
-        refetchInterval: 1000 * 60 * 2,      // pauses while the tab is hidden (React Query's default)
+        // every 5 minutes while the tab is open (it was 2: ~30 requests an hour per open dashboard); pauses while the
+        // tab is hidden (React Query's default). Saving a bill refreshes it straight away anyway.
+        refetchInterval: 1000 * 60 * 5,
     });
 }

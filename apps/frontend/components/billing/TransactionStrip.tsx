@@ -1,12 +1,13 @@
 'use client';
 
 import { useBillingStore } from '@/store/billingStore';
+import { useShallow } from 'zustand/react/shallow';
 import { Calendar, Printer, Download, Settings, ChevronRight } from 'lucide-react';
 import { Switch } from '@/components/ui/switch'; // Assuming a switch component exists or I'll use native
 import { format } from 'date-fns';
 
 export function TransactionStrip() {
-    const { drafts, activeDraftId, setDraftDocumentMode, activeStaff } = useBillingStore();
+    const { drafts, activeDraftId, setDraftDocumentMode, activeStaff } = useBillingStore(useShallow((s) => ({ drafts: s.drafts, activeDraftId: s.activeDraftId, setDraftDocumentMode: s.setDraftDocumentMode, activeStaff: s.activeStaff })));
     
     if (!activeDraftId) return null;
     const activeDraft = drafts[activeDraftId];

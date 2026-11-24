@@ -5,6 +5,9 @@ from urllib3.util.retry import Retry
 from django.conf import settings
 from apps.core.models import SandboxConfiguration
 
+# (connect, read) seconds for one attempt of a Sandbox / NIC call
+SANDBOX_TIMEOUT = (5, 20)
+
 logger = logging.getLogger(__name__)
 
 class SandboxIntegrationError(Exception):
@@ -43,9 +46,16 @@ class SandboxAPIClient:
     def _build_session(self):
         """Configures the requests.Session with advanced retry logic."""
         session = requests.Session()
+        # The bill waits for the e-invoice (IRN) call, so its worst case must stay well under gunicorn's 120 s timeout.
+        # It used to retry 3 more times after a 30 s read timeout too (about 130 s), so the worker was killed mid-bill.
+        # Now: quick "busy" answers (429/5xx) and failed connections are still retried, but a server that is merely
+        # slow to answer is not waited on again (read=0); SANDBOX_TIMEOUT is the limit for one attempt.
         retry_strategy = Retry(
             total=3,
-            backoff_factor=1.5,
+            connect=2,
+            read=0,
+            status=2,
+            backoff_factor=1,
             status_forcelist=[429, 500, 502, 503, 504],
             allowed_methods=["HEAD", "GET", "PUT", "DELETE", "OPTIONS", "TRACE", "POST"]
         )
@@ -133,7 +143,7 @@ class SandboxAPIClient:
                 method=method,
                 url=url,
                 headers=req_headers,
-                timeout=kwargs.pop('timeout', 30),
+                timeout=kwargs.pop('timeout', SANDBOX_TIMEOUT),
                 **kwargs
             )
             
@@ -179,7 +189,7 @@ class SandboxAPIClient:
                 method=method,
                 url=url,
                 headers=req_headers,
-                timeout=kwargs.pop('timeout', 30),
+                timeout=kwargs.pop('timeout', SANDBOX_TIMEOUT),
                 **kwargs
             )
             response.raise_for_status()

@@ -1,0 +1,34 @@
+# Build context of the backend / celery image (docker/backend.Dockerfile, context apps/backend).
+# The repo-root .dockerignore does NOT apply here (it is a different build context), so without this file the
+# image carried a 200 MB virtualenv, a 35 MB production data dump, the .env file with secrets and stray uploads.
+# Patterns without a leading ** match the backend folder's top level only.
+
+# local Python environments and caches
+venv/
+.venv/
+**/__pycache__/
+**/*.pyc
+.pytest_cache/
+
+# secrets: the server passes them at run time (env_file / bind mount), they must never be baked into an image
+.env
+.env.*
+
+# data dumps, spreadsheets and photos lying around the backend folder (not used by the running code)
+*.json
+*.xls
+*.xlsx
+*.csv
+*.jpg
+*.png
+error.html
+purchase_invoices/
+media/
+staticfiles/
+logs/
+*.log
+*.dump
+*.sqlite3
+
+# the GST Excel templates ARE needed at run time (apps/reports/exports read resources/gst_templates)
+!resources/

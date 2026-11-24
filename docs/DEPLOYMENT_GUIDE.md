@@ -14,7 +14,7 @@ Server config files that must be used exactly as they are on the server (all in 
 
 | File | Why it must stay as-is |
 |---|---|
-| `docker-compose.yml` | Prod version: gunicorn, `settings.prod`, `npm run build && npm start`, postgres 15, plain `mediflow_*` volumes, only nginx published (8090). Differs from git on purpose. |
+| `docker-compose.yml` | Prod version: gunicorn (gthread, 3 workers x 4 threads), `settings.prod`, frontend built once in the image (`build.args.NEXT_PUBLIC_API_URL`) and started with `npm start`, postgres 15 with memory settings, redis with a 256 MB cap, log rotation, plain `mediflow_*` volumes, only nginx published (8090). Differs from git on purpose (Phase 4 changes of 2026-11-24, see §7). |
 | `.env` (root) | Postgres credentials, Django secret, domain/CORS, API URLs, `GEMINI_API_KEY`. |
 | `apps/backend/.env` | Backend env (bind-mounted read-only + `env_file`). |
 | `apps/frontend/.env.local` | Frontend env (bind-mounted read-only + `env_file`). |
@@ -68,7 +68,7 @@ It is the production config and it works. Differences vs the committed (dev) fil
 - `postgres:15-alpine` (git says 17)
 - backend runs `migrate && collectstatic && gunicorn ... --workers 3` with `DJANGO_SETTINGS_MODULE=mediflow.settings.prod` (git runs `runserver` + dev settings)
 - no source-code bind mounts; only bind-mounts `apps/backend/mediflow/settings/base.py` and `apps/backend/.env` (read-only)
-- frontend runs `npm run build && npm start` with `NODE_ENV=production`, mounts `apps/frontend/.env.local` read-only
+- frontend is BUILT in the image (compose passes `NEXT_PUBLIC_API_URL` as a build arg) and the container runs only `npm start` (since 2026-11-24; it used to rebuild on every start, ~40 s of blank site); it still mounts `apps/frontend/.env.local` read-only
 - no published ports for backend/frontend (only nginx 8090)
 - volumes are plain (`mediflow_postgres_data`, etc.), **not** `external`
 
@@ -181,7 +181,7 @@ Backend and celery share the same Dockerfile; frontend builds from repo root (`d
 docker compose up -d --no-deps backend celery frontend
 ```
 - `backend` start command auto-runs `migrate --noinput` then `collectstatic` then gunicorn → watch `docker logs mediflow_backend`.
-- `frontend` start command runs `npm run build && npm start` → ready in ~40 s; wait for `✓ Ready` in `docker logs mediflow_frontend`.
+- `frontend` start command is `npm start` (the build happens in Step 3) → ready in a few seconds; wait for `✓ Ready` in `docker logs mediflow_frontend`.
 - postgres/redis are NOT recreated (config unchanged) — their data and uptime are preserved.
 
 ### Step 5 — Restart MediFlow nginx (required)
@@ -193,7 +193,8 @@ docker restart mediflow_nginx
 ### Step 6 — Verify
 ```bash
 docker ps --format "{{.Names}} {{.Status}}" | grep -E "mediflow|saudapakka"
-for u in /login /api/schema/; do echo "$u $(curl -s -o /dev/null -w %{http_code} http://localhost:8090$u)"; done   # 200 200
+for u in /login /api/v1/health/; do echo "$u $(curl -s -o /dev/null -w %{http_code} http://localhost:8090$u)"; done   # 200 200
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8090/api/schema/    # 401 since 2026-11-24 (signed-in users only)
 docker logs --since 3m mediflow_celery | grep -E "ready|Connected"
 docker logs --since 5m mediflow_backend | grep -oE '" [0-9]{3} ' | sort | uniq -c       # no 5xx
 # saudapakka untouched:
@@ -242,8 +243,8 @@ print('active staff with an unusable password (could only ever log in via the ol
 
 - **Data migrations run automatically on boot.** 2026-11-03: `core.0015_activate_pharma_tax_slabs` re-activated the 12% and 28%
   tax slabs on the live DB (reverse: `migrate core 0014`). Always read new migrations in Step 0 and tell the user about data-changing ones.
-- Frontend rebuilds on **every** container start (production compose runs `npm run build` at start), so a frontend restart = ~40 s of
-  502/blank on the site. Backend restart is a few seconds. Pick a quiet time if possible.
+- Since 2026-11-24 the frontend is built in the image (Step 3) and a restart takes seconds. If the API address ever changes, change BOTH
+  `apps/frontend/.env.local` and `build.args.NEXT_PUBLIC_API_URL` in the server compose, then rebuild. Backend restart is a few seconds.
 - `requirements.txt` / Dockerfile changes are only applied by `docker compose build` (Step 3) — always build, don't just restart.
 - Frontend `.env.local` and backend `.env` are baked in via bind mounts/env_file on the server; changing them needs `up -d` (recreate), not just restart.
 - If incoming commits modify `docker-compose.yml`, `settings/base.py`, `nginx/nginx.conf` or add required env vars:

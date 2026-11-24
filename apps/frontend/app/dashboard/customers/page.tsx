@@ -9,8 +9,11 @@ import CustomerTable from '@/components/customers/CustomerTable';
 import CustomerGrid from '@/components/customers/CustomerGrid';
 import CustomerForm from '@/components/customers/CustomerForm';
 import RefillAlertsBanner from '@/components/customers/RefillAlertsBanner';
-import { useCustomerList } from '@/hooks/useCustomers';
+import { useCustomerSummary } from '@/hooks/useCustomers';
+import { useDebounce } from '@/hooks/useDebounce';
 import { Customer, CustomerFull, CustomerFilters } from '@/types';
+
+const SEARCH_DELAY_MS = 300;
 
 export default function CustomersPage() {
     // ── filter state ──────────────────────────────────────────────────────────
@@ -24,14 +27,15 @@ export default function CustomersPage() {
     const [formOpen, setFormOpen] = useState(false);
     const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
 
-    // ── counts for filter bar ─────────────────────────────────────────────────
-    const { data: allCustomers } = useCustomerList();
-    const { data: chronicCustomers } = useCustomerList({ isChronic: true });
-    const { data: outstandingCustomers } = useCustomerList({ hasOutstanding: true });
+    // ── counts for filter bar: one small request (it was three full lists of customers) ──
+    const { data: summary } = useCustomerSummary();
+
+    // the box shows every key at once; the list is asked for only once typing pauses (it was one request per key)
+    const settledSearch = useDebounce(searchQuery.trim(), SEARCH_DELAY_MS);
 
     // ── build filters object ──────────────────────────────────────────────────
     const filters: CustomerFilters = {
-        search: searchQuery || undefined,
+        search: settledSearch || undefined,
         isChronic: activeFilter === 'chronic' ? true : undefined,
         hasOutstanding: activeFilter === 'outstanding' ? true : undefined,
         sortBy: sortBy as CustomerFilters['sortBy'],
@@ -88,9 +92,9 @@ export default function CustomersPage() {
                 onSearchChange={setSearchQuery}
                 sortBy={sortBy}
                 onSortChange={setSortBy}
-                totalCount={allCustomers?.pagination?.totalRecords ?? allCustomers?.data?.length}
-                chronicCount={chronicCustomers?.pagination?.totalRecords ?? chronicCustomers?.data?.length}
-                outstandingCount={outstandingCustomers?.pagination?.totalRecords ?? outstandingCustomers?.data?.length}
+                totalCount={summary?.totalCustomers}
+                chronicCount={summary?.chronicCount}
+                outstandingCount={summary?.withDuesCount}
             />
 
             {/* List / Grid */}

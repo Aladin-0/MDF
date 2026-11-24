@@ -8,6 +8,8 @@ const withSerwist = require('@serwist/next').default({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     optimizeFonts: false,
+    // nginx compresses every response (gzip in nginx/nginx.conf); compressing in Node as well only spent CPU there
+    compress: false,
     distDir: process.env.PLAYWRIGHT_TEST ? '.next-test' : '.next',
     typescript: { ignoreBuildErrors: true },
     eslint: { ignoreDuringBuilds: true },

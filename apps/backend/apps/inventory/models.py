@@ -3,7 +3,8 @@ from apps.inventory.pack_rules import PACK_TYPE_LABELS
 from django.core.exceptions import ValidationError
 import uuid
 from django.conf import settings
-from django.contrib.postgres.indexes import GinIndex
+from django.contrib.postgres.indexes import GinIndex, OpClass
+from django.db.models.functions import Upper
 
 
 class OutletFilteredManager(models.Manager):
@@ -71,6 +72,12 @@ class MasterProduct(models.Model):
             GinIndex(fields=['name'], name='master_prod_name_trgm_gin', opclasses=['gin_trgm_ops']),
             GinIndex(fields=['composition'], name='master_prod_comp_trgm_gin', opclasses=['gin_trgm_ops']),
             GinIndex(fields=['manufacturer'], name='master_prod_mfg_trgm_gin', opclasses=['gin_trgm_ops']),
+            # Django turns `icontains` / `istartswith` into UPPER(col::text) LIKE UPPER(...), which the plain-column
+            # indexes above cannot serve: the medicine search was scanning the whole catalogue on every keystroke.
+            # These indexes are on exactly that expression (migration 0031).
+            GinIndex(OpClass(Upper('name'), name='gin_trgm_ops'), name='master_prod_uname_trgm_gin'),
+            GinIndex(OpClass(Upper('composition'), name='gin_trgm_ops'), name='master_prod_ucomp_trgm_gin'),
+            GinIndex(OpClass(Upper('manufacturer'), name='gin_trgm_ops'), name='master_prod_umfg_trgm_gin'),
         ]
 
     def __str__(self):
@@ -99,6 +106,30 @@ class OutletProductConfig(models.Model):
 
     def __str__(self):
         return f"{self.outlet.name} config for {self.product.name}"
+
+    # The minimum decides "low stock" on the inventory list, the medicine search and the home dashboard, all of which
+    # are cached under the outlet's inventory version. Changing it moves no stock, so nothing else bumped that version
+    # and the screens kept the old low-stock flags for up to 2 minutes. Bumped now, and again once the change commits
+    # (so a page cached in between by another request cannot keep the old answer).
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        _refresh_outlet_inventory(self.outlet_id)
+
+    def delete(self, *args, **kwargs):
+        outlet_id = self.outlet_id
+        result = super().delete(*args, **kwargs)
+        _refresh_outlet_inventory(outlet_id)
+        return result
+
+
+def _refresh_outlet_inventory(outlet_id):
+    from django.db import transaction
+    from apps.inventory.cache_utils import bump_inventory_cache
+    try:
+        bump_inventory_cache(outlet_id)
+        transaction.on_commit(lambda: bump_inventory_cache(outlet_id))
+    except Exception:
+        pass        # a cache that cannot be reached must never stop a settings change
 
 
 class MasterProductAlias(models.Model):
@@ -251,6 +282,9 @@ class StockLedger(models.Model):
             models.Index(fields=['outlet', 'product', 'txn_date']),
             models.Index(fields=['outlet', 'batch', 'txn_date']),
             models.Index(fields=['outlet', 'product', 'batch']),
+            # the Stock Ledger screen lists an outlet's movements newest first (and by date range): without this it
+            # read the outlet's whole history on every page (migration 0032)
+            models.Index(fields=['outlet', 'txn_date', 'created_at'], name='inv_sl_outlet_date_idx'),
         ]
 
     def __str__(self):

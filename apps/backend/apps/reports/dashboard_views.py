@@ -21,23 +21,45 @@ class GSTPeriodsView(APIView):
         if not outlet:
             return Response([])
 
-        # Fetch unique periods from snapshots
-        periods = GSTTransactionSnapshot.objects.filter(outlet=outlet).values_list('period', flat=True).distinct().order_by('-period')
-        
+        from django.core.cache import cache
+        from django.db.models import Count, Max
+
+        # Unique periods from snapshots, each with a fingerprint of its data (how many rows, when last changed)
+        fingerprints = {
+            row['period']: (row['n'], row['last'])
+            for row in GSTTransactionSnapshot.objects.filter(outlet=outlet).values('period').annotate(n=Count('id'), last=Max('updated_at'))
+        }
+        periods = sorted(fingerprints, reverse=True)       # same order as the old ORDER BY period DESC
+
         result = []
         for p in periods:
-            # Check status (draft if any blocking errors)
-            b1 = GSTR1Builder(outlet.gstin, p)
-            p1 = b1.generate_json()
-            b3 = GSTR3BBuilder(outlet.gstin, p)
-            p3 = b3.generate_json()
-            
-            b1_blocking = p1.get('_metadata', {}).get('blocking_errors', [])
-            b3_blocking = p3.get('_metadata', {}).get('blocking_errors', [])
-            
-            status = 'draft' if b1_blocking or b3_blocking else 'validated'
+            # Check status (draft if any blocking errors). Building both returns is the expensive part and this list
+            # used to build them for EVERY period ever on every visit. The answer is remembered per period while the
+            # period's snapshots are unchanged (closed months: built once), for at most 5 minutes because GSTR-3B also
+            # reads ITC deferrals and write-offs, which the fingerprint does not cover.
+            n, last = fingerprints[p]
+            key = f"gst:period-status:v1:{outlet.id}:{outlet.gstin}:{p}:{n}:{last.isoformat() if last else ''}"
+            status = None
+            try:
+                status = cache.get(key)
+            except Exception:
+                pass
+            if status is None:
+                b1 = GSTR1Builder(outlet.gstin, p)
+                p1 = b1.generate_json()
+                b3 = GSTR3BBuilder(outlet.gstin, p)
+                p3 = b3.generate_json()
+
+                b1_blocking = p1.get('_metadata', {}).get('blocking_errors', [])
+                b3_blocking = p3.get('_metadata', {}).get('blocking_errors', [])
+
+                status = 'draft' if b1_blocking or b3_blocking else 'validated'
+                try:
+                    cache.set(key, status, 300)
+                except Exception:
+                    pass
             result.append({"period": p, "status": status})
-            
+
         return Response(result)
 
 class GSTSummaryView(APIView):

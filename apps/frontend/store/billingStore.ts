@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { createDebouncedJSONStorage } from '../lib/debouncedStorage';
 import { v4 as uuidv4 } from 'uuid';
 import { calculateRowTotals } from '../lib/cartUtils';
 import { isControlledSchedule } from '../lib/scheduleRules';
@@ -745,6 +746,9 @@ export const useBillingStore = create<BillingState>()(
         }),
         {
             name: 'mediflow-billing-drafts',
+            // written once a burst of typing settles (and at once when the page is hidden or closed), not on every
+            // key: every change used to serialise all open bills into localStorage synchronously (lib/debouncedStorage)
+            storage: createDebouncedJSONStorage(() => localStorage),
             skipHydration: true,
             partialize: (state) => ({
                 drafts: state.drafts,

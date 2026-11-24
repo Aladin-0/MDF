@@ -7,6 +7,7 @@ import { NewCustomerModal } from './NewCustomerModal';
 import type { FamilyMember } from '@/types';
 import { useAuthStore } from '@/store/authStore';
 import { useBillingStore } from '@/store/billingStore';
+import { useShallow } from 'zustand/react/shallow';
 import { useSettingsStore } from '@/store/settingsStore';
 import { LedgerPicker } from './LedgerPicker';
 import { DoctorPicker } from './DoctorPicker';
@@ -23,18 +24,7 @@ interface BillingHeaderStripProps {
 
 export function BillingHeaderStrip({ customerRef, doctorRef, medicineSearchRef }: BillingHeaderStripProps = {}) {
     // Cleanly destructure all necessary state and actions from the store
-    const {
-        drafts,
-        activeDraftId,
-        setCustomer,
-        setCustomerLedger,
-        setPatient,
-        setDoctor,
-        setHospitalName,
-        setDraftDocumentMode,
-        setSaleType,
-        updateDraftHeader
-    } = useBillingStore();
+    const { drafts, activeDraftId, setCustomer, setCustomerLedger, setPatient, setDoctor, setHospitalName, setDraftDocumentMode, setSaleType, updateDraftHeader } = useBillingStore(useShallow((s) => ({ drafts: s.drafts, activeDraftId: s.activeDraftId, setCustomer: s.setCustomer, setCustomerLedger: s.setCustomerLedger, setPatient: s.setPatient, setDoctor: s.setDoctor, setHospitalName: s.setHospitalName, setDraftDocumentMode: s.setDraftDocumentMode, setSaleType: s.setSaleType, updateDraftHeader: s.updateDraftHeader })));
 
     const enableEwayBill = useSettingsStore(s => s.enableEwayBill);
 
@@ -45,7 +35,7 @@ export function BillingHeaderStrip({ customerRef, doctorRef, medicineSearchRef }
     const [menuOpen, setMenuOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
     const outletIdForFamily = useAuthStore((s) => s.user?.outlet?.id);
-    const { setWalkInName, startCounterBill } = useBillingStore();
+    const { setWalkInName, startCounterBill } = useBillingStore(useShallow((s) => ({ setWalkInName: s.setWalkInName, startCounterBill: s.startCounterBill })));
 
     useEffect(() => {
         const away = (e: MouseEvent) => { if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false); };

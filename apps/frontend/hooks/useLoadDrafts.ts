@@ -2,13 +2,14 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useBillingStore } from '@/store/billingStore';
+import { useShallow } from 'zustand/react/shallow';
 import { useAuthStore } from '@/store/authStore';
 import { salesApi } from '@/lib/apiClient';
 import { DraftBill, CartItem } from '@/types';
 
 export function useLoadDrafts() {
     const [isLoaded, setIsLoaded] = useState(false);
-    const { setDrafts, createDraft } = useBillingStore();
+    const { setDrafts, createDraft } = useBillingStore(useShallow((s) => ({ setDrafts: s.setDrafts, createDraft: s.createDraft })));
     const activeStaff = useBillingStore(state => state.activeStaff);
 
     const hasFetched = useRef(false);

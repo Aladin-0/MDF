@@ -9,6 +9,7 @@ import { BarcodeScanner } from './BarcodeScanner';
 import { useMedicineSearch } from '@/hooks/useMedicineSearch';
 import { useOutletId } from '@/hooks/useOutletId';
 import { useBillingStore } from '@/store/billingStore';
+import { useShallow } from 'zustand/react/shallow';
 import { usePermissions } from '@/hooks/usePermissions';
 import { cn } from '@/lib/utils';
 import { T } from './theme';
@@ -39,7 +40,7 @@ const iconBtn = cn('flex h-12 w-12 shrink-0 touch-manipulation items-center just
 export function MobileSearch({ open, onClose }: MobileSearchProps) {
     const outletId = useOutletId() as string;
     const { hasPermission } = usePermissions();
-    const { activeDraftId, drafts } = useBillingStore();
+    const { activeDraftId, drafts } = useBillingStore(useShallow((s) => ({ activeDraftId: s.activeDraftId, drafts: s.drafts })));
     const cart = (activeDraftId && drafts?.[activeDraftId]?.cart) || [];
     const canShortbook = hasPermission('create_bills') || hasPermission('create_purchases');
 

@@ -99,12 +99,6 @@ def normalize_billing_basis(raw, current):
 
 def rebuild_customer_ledger(outlet_id: str, customer_id: str, from_date: date):
     """Recalculate running_balance for a customer from a specific date."""
-    entries = LedgerEntry.objects.filter(
-        outlet_id=outlet_id, 
-        customer_id=customer_id, 
-        date__gte=from_date
-    ).order_by('date', 'created_at')
-    
     prev = LedgerEntry.objects.filter(
         outlet_id=outlet_id, 
         customer_id=customer_id, 
@@ -112,10 +106,21 @@ def rebuild_customer_ledger(outlet_id: str, customer_id: str, from_date: date):
     ).order_by('-date', '-created_at').first()
     
     running = prev.running_balance if prev else Decimal('0')
-    
-    for entry in entries:
-        running = running + entry.debit - entry.credit
-        LedgerEntry.objects.filter(pk=entry.pk).update(running_balance=running)
+
+    # One statement instead of one UPDATE per entry: balance = opening + cumulative (debit - credit) in date, then
+    # creation order (the old loop's order; `id` only breaks exact ties).
+    from django.db import connection
+    table = connection.ops.quote_name(LedgerEntry._meta.db_table)
+    with connection.cursor() as cur:
+        cur.execute(f'''
+            UPDATE {table} AS le
+               SET running_balance = %s + w.cum
+              FROM (SELECT id, SUM(debit - credit) OVER (ORDER BY date, created_at, id
+                                                         ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cum
+                      FROM {table}
+                     WHERE outlet_id = %s AND customer_id = %s AND date >= %s) AS w
+             WHERE le.id = w.id
+        ''', [running, str(outlet_id), str(customer_id), from_date])
 
 # ─── Who may modify a bill, and how ─────────────────────────────────────────────────────────
 # ONE place decides this. The modification-options endpoint, POST /revise/ and PUT /sales/<id>/ all

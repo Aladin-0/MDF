@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useGSTStore } from '@/store/gstStore';
 import { gstApi } from '@/lib/apiClient';
 import { Badge } from '@/components/ui/badge';
@@ -43,11 +43,21 @@ export default function SandboxPage() {
     const [showSyncConfirm, setShowSyncConfirm] = useState(false);
     const [syncing, setSyncing] = useState(false);
     const [polling, setPolling] = useState(false);
+    // the sync-status timer: kept in a ref so it can be stopped when the page closes (it kept asking the server every
+    // 3 s after the user had navigated away) and so a second start cannot run two timers
+    const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+    const stopPolling = () => {
+        if (pollTimer.current) clearInterval(pollTimer.current);
+        pollTimer.current = null;
+        setPolling(false);
+    };
 
     useEffect(() => {
         loadStatus();
         return () => {
             setOtp('');
+            if (pollTimer.current) clearInterval(pollTimer.current);
+            pollTimer.current = null;
         };
     }, []);
 
@@ -86,19 +96,15 @@ export default function SandboxPage() {
     };
 
     const startPolling = (p: string) => {
-        if (polling) return;
+        if (pollTimer.current) return;
         setPolling(true);
-        const interval = setInterval(async () => {
+        pollTimer.current = setInterval(async () => {
             try {
                 const data = await gstApi.getSandboxGstr2bStatus(p);
                 setSyncJob(data);
-                if (data.status !== 'IN_PROGRESS') {
-                    clearInterval(interval);
-                    setPolling(false);
-                }
+                if (data.status !== 'IN_PROGRESS') stopPolling();
             } catch (e) {
-                clearInterval(interval);
-                setPolling(false);
+                stopPolling();
             }
         }, 3000);
     };

@@ -65,7 +65,7 @@ describe('ExpiryTable', () => {
         wrap(<ExpiryTable onAdjustClick={jest.fn()} />);
         expect(await screen.findByText('3 batches expiring within 90 days')).toBeInTheDocument();
         expect(getStock).toHaveBeenCalledTimes(2);
-        expect(getStock).toHaveBeenNthCalledWith(1, 'o1', expect.objectContaining({ expiringSoon: true, page: 1, pageSize: 100 }));
+        expect(getStock).toHaveBeenNthCalledWith(1, 'o1', expect.objectContaining({ expiringSoon: true, page: 1, pageSize: 100 }), expect.any(AbortSignal));   // cancellable: leaving the tab stops the load
         const table = screen.getByRole('table');
         expect(within(table).getByText('EXP1')).toBeInTheDocument();
         expect(within(table).getByText('SOON75')).toBeInTheDocument();      // came from page 2

@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useBillingStore } from '@/store/billingStore';
+import { useShallow } from 'zustand/react/shallow';
 import { useMagicSubmit } from '@/hooks/useMagicSubmit';
 import { useAuthStore } from '@/store/authStore';
 import { cn } from '@/lib/utils';
@@ -20,7 +21,7 @@ import {
 
 export function RightBillingRail() {
     const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
-    const { drafts, activeDraftId, getDraftTotals, setDraftDocumentMode, setRevisionContext, showMarginInfo, toggleMarginInfo, activeStaff, landingCostIncludeGst } = useBillingStore();
+    const { drafts, activeDraftId, getDraftTotals, setDraftDocumentMode, setRevisionContext, showMarginInfo, toggleMarginInfo, activeStaff, landingCostIncludeGst } = useBillingStore(useShallow((s) => ({ drafts: s.drafts, activeDraftId: s.activeDraftId, getDraftTotals: s.getDraftTotals, setDraftDocumentMode: s.setDraftDocumentMode, setRevisionContext: s.setRevisionContext, showMarginInfo: s.showMarginInfo, toggleMarginInfo: s.toggleMarginInfo, activeStaff: s.activeStaff, landingCostIncludeGst: s.landingCostIncludeGst })));
     // Margins are for roles that may see purchase economics; unknown roles are hidden by default.
     const isCashier = !canViewBillingMargins(activeStaff?.role);
     const canViewMargins = !isCashier && showMarginInfo;

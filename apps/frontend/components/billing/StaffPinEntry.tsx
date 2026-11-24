@@ -6,6 +6,7 @@ import { Pill, Delete, CheckCircle2, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { staffApi } from '@/lib/apiClient'
 import { useBillingStore } from '@/store/billingStore'
+import { useShallow } from 'zustand/react/shallow'
 import { useAuthStore } from '@/store/authStore'
 import { useSettingsStore } from '@/store/settingsStore'
 
@@ -20,7 +21,7 @@ export function StaffPinEntry() {
     
     const user = useAuthStore(state => state.user)
     const selectedOutletId = useSettingsStore(state => state.selectedOutletId)
-    const { setActiveStaff } = useBillingStore()
+    const { setActiveStaff } = useBillingStore(useShallow((s) => ({ setActiveStaff: s.setActiveStaff })))
 
     const verifyPin = useCallback(async (pin: string) => {
         setIsLoading(true)

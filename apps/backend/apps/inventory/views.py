@@ -272,10 +272,13 @@ def serialize_product(product, total_stock=0, nearest_expiry="2099-12-31", is_lo
     }
 
 def serialize_batch(batch):
+    # Use the *_id columns: `batch.outlet.id` / `batch.product.id` each cost a query per batch
+    # (hundreds per medicine search). Callers that already hold the product attach it to the batch
+    # (see _attach_product) so batch_allows_loose' fallback to the product's pack type is free too.
     return {
         'id': str(batch.id),
-        'outletId': str(batch.outlet.id),
-        'outletProductId': str(batch.product.id),
+        'outletId': str(batch.outlet_id),
+        'outletProductId': str(batch.product_id),
         'batchNo': batch.batch_no,
         'mfgDate': batch.mfg_date.isoformat() if batch.mfg_date else None,
         'expiryDate': batch.expiry_date.isoformat() if batch.expiry_date else None,
@@ -295,6 +298,13 @@ def serialize_batch(batch):
         'isActive': batch.is_active,
         'createdAt': batch.created_at.isoformat(),
     }
+
+
+def _attach_product(batches, product):
+    """Give batches the product the caller already loaded, so reading `batch.product` runs no query."""
+    for b in batches:
+        b.product = product
+    return batches
 
 
 class ProductListView(APIView):
@@ -616,8 +626,8 @@ class ProductBatchesView(APIView):
             outlet=outlet, 
             is_active=True
         ).exclude(qty_strips=0, qty_loose=0).order_by('expiry_date')
-        
-        return Response([serialize_batch(b) for b in batches], status=status.HTTP_200_OK)
+
+        return Response([serialize_batch(b) for b in _attach_product(batches, product)], status=status.HTTP_200_OK)
 
 
 class InventoryExportExcelView(APIView):
@@ -816,7 +826,7 @@ def _assemble_search_results(products, outlet, today, is_purchase_context, price
     in_stock = []
     zero_stock = []
     for product in products:
-        batches = batches_by_product.get(product.id, [])
+        batches = _attach_product(batches_by_product.get(product.id, []), product)
         cfg = configs_by_product.get(product.id)
         outlet_min_qty = float(cfg.min_qty) if cfg else 0.0
         outlet_reorder_qty = float(cfg.reorder_qty) if cfg else 0.0
@@ -1384,7 +1394,7 @@ class InventoryListView(APIView):
 
         results = []
         for product in products_page:
-            pbs       = batches_map.get(product.id, [])
+            pbs       = _attach_product(batches_map.get(product.id, []), product)
             tot_stock = product.total_strips
             tot_loose = product.total_loose
             total_stock_fractional = tot_stock + (tot_loose / (product.pack_size or 1))

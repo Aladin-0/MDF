@@ -25,6 +25,7 @@ Keyboard-only helpers (Enter to the next cell, grid arrows, Ctrl+Enter, Ctrl+S) 
 - Scanning a bill starts on the Invoices tab ("Tap to Scan Invoice": camera, gallery, several pages); the result opens here for review. Nothing is saved until Save.
 
 ## Rules for changes
+0. The desktop grid's `PurchaseItemRow` is memoised and the hook returns its row handlers through `useStableCallback` (same identity every render, latest logic). Keep both, or every row re-renders on every key typed anywhere in the form (test: `components/purchases/__tests__/PurchaseRowRenders.test.tsx`).
 1. A purchase rule (a total, a validation, what is sent) goes in `usePurchaseEntry` / `lib/`, with a test in `lib/__tests__`; never in `PurchaseItemRow`, `PurchaseGridForm` or a phone component.
 2. Phone theme comes from `components/billing/mobile/theme.ts` (`T`) and `SheetShell`; targets >= 44px; numeric fields use `NumField` / `inputMode`.
 3. Test on a phone-size browser (390 and 360px) with EVERY write blocked: a catch-all that answers every non-GET to `/api/v1/` with a stand-in (let only login / token through), then the specific stand-ins (`POST /purchases/` records the payload).

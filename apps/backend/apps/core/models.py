@@ -458,12 +458,22 @@ class TaxSlab(models.Model):
         return [Decimal('0.00'), Decimal('5.00'), Decimal('12.00'), Decimal('18.00'), Decimal('28.00'), Decimal('40.00')]
 
     @classmethod
-    def is_rate_active(cls, rate, transaction_date=None) -> tuple[bool, str]:
+    def is_rate_active(cls, rate, transaction_date=None, rates_cache=None) -> tuple[bool, str]:
         """
         Validate whether a GST rate is allowed for a given transaction date.
         - Historical invoices before Sept 1, 2025: All standard legacy rates (12%, 28%) are permitted.
         - New transactions (on or after Sept 1, 2025 or current): Only active slabs (0%, 5%, 18%) are permitted.
+
+        `rates_cache`: pass the same empty dict for every line of one bill so the slab table is read once per bill
+        instead of once per line. It lives only as long as the caller keeps it (never across requests).
         """
+        def _rates(key, loader):
+            if rates_cache is None:
+                return loader()
+            if key not in rates_cache:
+                rates_cache[key] = loader()
+            return rates_cache[key]
+
         from datetime import date
         try:
             dec_rate = Decimal(str(rate))
@@ -491,13 +501,13 @@ class TaxSlab(models.Model):
 
         # Historical transactions before Sept 2025: accept standard legacy rates
         if target_date and target_date < gst2_cutoff:
-            all_known = cls.get_all_rates()
+            all_known = _rates('all', cls.get_all_rates)
             if any(abs(dec_rate - r) < Decimal('0.01') for r in all_known):
                 return True, ""
             return False, f"Rate {dec_rate}% was not a standard GST rate prior to Sept 2025."
 
         # Current and new transactions: must be an active slab
-        active_rates = cls.get_active_rates()
+        active_rates = _rates('active', cls.get_active_rates)
         if any(abs(dec_rate - r) < Decimal('0.01') for r in active_rates):
             return True, ""
 

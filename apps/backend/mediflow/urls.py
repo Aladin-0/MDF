@@ -39,6 +39,7 @@ urlpatterns = [
     path("api/v1/", include("apps.billing.urls")),
     path("api/v1/", include("apps.billing.accounts_urls")),
     path("api/v1/", include("apps.accounts.voucher_urls")),
+    path("api/v1/", include("apps.accounts.dashboard_urls")),     # Accounts Dashboard cards
 ]
 
 from django.conf import settings

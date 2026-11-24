@@ -1,12 +1,13 @@
 from django.urls import path
 from apps.accounts.views import (
-    CustomerListView, CustomerSearchView, CustomerDetailView, CustomerPurchaseHistoryView,
+    CustomerListView, CustomerSummaryView, CustomerSearchView, CustomerDetailView, CustomerPurchaseHistoryView,
     ChronicMedicinesView, RefillAlertsView, CustomerOutstandingInvoicesView, CustomerMembersView, CustomerAccountView,
 )
 from apps.billing.views import CustomerLedgerView
 
 urlpatterns = [
     path('', CustomerListView.as_view(), name='customer-list'),
+    path('summary/', CustomerSummaryView.as_view(), name='customer-summary'),
     path('search/', CustomerSearchView.as_view(), name='customer-search'),
     path('refill-alerts/', RefillAlertsView.as_view(), name='customer-refill-alerts'),
     path('<uuid:customer_id>/', CustomerDetailView.as_view(), name='customer-detail'),

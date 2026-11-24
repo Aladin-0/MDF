@@ -23,23 +23,46 @@ export interface FetchedStock {
 }
 
 /**
+ * Pages of the whole list fetched at the same time. Kept at 2: the server has only a few workers, and a tab that
+ * asked for many pages at once would make every other counter wait behind it.
+ */
+const PARALLEL_PAGES = 2;
+
+/**
  * Every product matching a query, page by page.
  *
  * The Expiring and Low Stock tabs asked for `pageSize: 500` in one request. The server clamps to
  * 100, so those tabs silently showed only the first 100 products while the banner counted them as
  * the total. Walking the pages gives the whole list.
+ *
+ * Page 1 says how many pages there are; the rest are fetched two at a time (they were fetched one after another)
+ * and kept in page order. `signal` cancels the request in flight as well as the pages not asked for yet, so
+ * leaving the tab stops the load instead of finishing it in the background.
  */
 export async function fetchAllStock(outletId: string, query: StockQuery, signal?: AbortSignal): Promise<FetchedStock> {
-    const products: ProductSearchResult[] = [];
-    let totalPages = 1;
-    let totalRecords = 0;
-    for (let page = 1; page <= totalPages && page <= MAX_PAGES; page += 1) {
+    const fetchPage = (page: number) => {
         if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-        const res = await inventoryApi.getStock(outletId, { ...query, page, pageSize: MAX_PAGE_SIZE });
-        products.push(...(res?.data ?? []));
-        totalPages = res?.pagination?.totalPages ?? 1;
-        totalRecords = res?.pagination?.totalRecords ?? products.length;
-    }
+        return inventoryApi.getStock(outletId, { ...query, page, pageSize: MAX_PAGE_SIZE }, signal);
+    };
+
+    const first = await fetchPage(1);
+    const totalPages: number = first?.pagination?.totalPages ?? 1;
+    const lastPage = Math.min(totalPages, MAX_PAGES);
+    const pages: ProductSearchResult[][] = [first?.data ?? []];
+
+    let next = 2;
+    const worker = async () => {
+        while (next <= lastPage) {
+            const page = next;
+            next += 1;
+            const res = await fetchPage(page);
+            pages[page - 1] = res?.data ?? [];
+        }
+    };
+    await Promise.all(Array.from({ length: Math.min(PARALLEL_PAGES, Math.max(0, lastPage - 1)) }, worker));
+
+    const products = pages.flat();
+    const totalRecords: number = first?.pagination?.totalRecords ?? products.length;
     return { products, totalRecords, truncated: totalPages > MAX_PAGES };
 }
 

@@ -2,6 +2,11 @@ import requests
 from django.core.cache import cache
 from apps.core.models import SandboxConfiguration
 
+# (connect, read) seconds. These calls had no timeout, so a GST server that never answered kept the request (or the
+# e-way bill thread) waiting forever.
+SANDBOX_TIMEOUT = (5, 20)
+
+
 class SandboxAuthService:
     SANDBOX_AUTH_URL = "https://api.sandbox.co.in/authenticate"
     NIC_AUTH_URL = "https://api.sandbox.co.in/gst/compliance/e-invoice/tax-payer/authenticate?force=true"
@@ -26,7 +31,7 @@ class SandboxAuthService:
             "x-api-version": "1.0"
         }
         
-        response = requests.post(SandboxAuthService.SANDBOX_AUTH_URL, headers=headers)
+        response = requests.post(SandboxAuthService.SANDBOX_AUTH_URL, headers=headers, timeout=SANDBOX_TIMEOUT)
         response.raise_for_status()
         token = response.json().get("access_token")
         
@@ -64,7 +69,7 @@ class SandboxAuthService:
             "gstin": gstin
         }
         
-        response = requests.post(SandboxAuthService.NIC_AUTH_URL, headers=headers, json=payload)
+        response = requests.post(SandboxAuthService.NIC_AUTH_URL, headers=headers, json=payload, timeout=SANDBOX_TIMEOUT)
         if response.status_code != 200:
             print(f"Sandbox NIC Auth Failed: {response.text}")
         response.raise_for_status()
@@ -106,7 +111,7 @@ class SandboxAuthService:
         }
         
         url = "https://api.sandbox.co.in/gst/compliance/e-way-bill/tax-payer/authenticate"
-        response = requests.post(url, headers=headers, json=payload)
+        response = requests.post(url, headers=headers, json=payload, timeout=SANDBOX_TIMEOUT)
         if response.status_code != 200:
             print(f"Sandbox NIC EWB Auth Failed: {response.text}")
         response.raise_for_status()

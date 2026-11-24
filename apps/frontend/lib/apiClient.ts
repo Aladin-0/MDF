@@ -1,3 +1,4 @@
+import { computeCreditAging } from '@/lib/creditAging';
 import {
     AuthResponse,
     ProductSearchResult,
@@ -380,7 +381,7 @@ const realInventoryApi = {
         const list: any[] = Array.isArray(data) ? data : (data.data || []);
         return list.find((p: any) => p.id === productId) || null;
     },
-    getStock: async (outletId: string, filters?: any) => {
+    getStock: async (outletId: string, filters?: any, signal?: AbortSignal) => {
         let url = `${API_URL}/inventory/?outletId=${outletId}`;
         if (filters?.search) url += `&search=${encodeURIComponent(filters.search)}`;
         if (filters?.scheduleType) url += `&scheduleType=${filters.scheduleType}`;
@@ -394,7 +395,8 @@ const realInventoryApi = {
         if (filters?.page) url += `&page=${filters.page}`;
         if (filters?.pageSize) url += `&pageSize=${filters.pageSize}`;
 
-        const response = await fetch(url, { headers: getHeaders() });
+        // `signal` lets a caller cancel the request (leaving the Expiring / Low Stock tab stops the load)
+        const response = await fetch(url, { headers: getHeaders(), signal });
         await assertOk(response);
         return response.json();
     },
@@ -633,6 +635,7 @@ const realCreditApi = {
         let url = `${API_URL}/credit/?outletId=${outletId}&pageSize=500`;
         if (filters?.status && filters.status !== 'all') url += `&status=${filters.status}`;
         if (filters?.search) url += `&search=${encodeURIComponent(filters.search)}`;
+        if (filters?.customerId) url += `&customerId=${encodeURIComponent(filters.customerId)}`;
         const response = await fetch(url, {
             headers: getHeaders(),
         });
@@ -693,47 +696,7 @@ const realCreditApi = {
         });
         await assertOk(response);
         const data = await response.json();
-        const accounts: any[] = data.data ?? [];
-
-        const today = new Date();
-        const result = {
-            current:     { count: 0, amount: 0 },
-            days30to60:  { count: 0, amount: 0 },
-            days60to90:  { count: 0, amount: 0 },
-            over90:      { count: 0, amount: 0 },
-            totalOverdue:      { count: 0, amount: 0 },
-            totalOutstanding:  { count: 0, amount: 0 },
-        };
-
-        for (const acc of accounts) {
-            const outstanding = acc.totalOutstanding ?? 0;
-            if (outstanding <= 0) continue;
-
-            let days = 0;
-            if (acc.lastTransactionDate) {
-                days = Math.floor(
-                    (today.getTime() - new Date(acc.lastTransactionDate).getTime()) /
-                    (1000 * 60 * 60 * 24)
-                );
-            }
-
-            const bucket =
-                days <= 30 ? 'current' :
-                days <= 60 ? 'days30to60' :
-                days <= 90 ? 'days60to90' :
-                'over90';
-
-            result[bucket].count++;
-            result[bucket].amount += outstanding;
-            result.totalOutstanding.count++;
-            result.totalOutstanding.amount += outstanding;
-            if (bucket !== 'current') {
-                result.totalOverdue.count++;
-                result.totalOverdue.amount += outstanding;
-            }
-        }
-
-        return result;
+        return computeCreditAging(data.data ?? []);
     },
     sendReminder: async (accountId: string, payload?: { channel?: string; message?: string }) => {
         const response = await fetch(`${API_URL}/credit/${accountId}/reminder/`, {
@@ -1023,8 +986,21 @@ const realDistributorsApi = {
     }
 };
 
+export interface CustomerSummary {
+    totalCustomers: number;
+    chronicCount: number;
+    withDuesCount: number;
+    totalOutstanding: number;
+}
+
 const realCustomersApi = {
-    list: async (outletId: string, filters?: any): Promise<any> => {
+    /** The Customers page's four numbers, computed by the server (each family account counted once). */
+    getSummary: async (outletId: string, signal?: AbortSignal): Promise<CustomerSummary> => {
+        const response = await fetch(`${API_URL}/customers/summary/?outletId=${outletId}`, { headers: getHeaders(), signal });
+        await assertOk(response);
+        return response.json();
+    },
+    list: async (outletId: string, filters?: any, signal?: AbortSignal): Promise<any> => {
         let url = `${API_URL}/customers/?outletId=${outletId}`;
         if (filters?.search) url += `&search=${encodeURIComponent(filters.search)}`;
         if (filters?.isChronic !== undefined) url += `&isChronic=${filters.isChronic}`;
@@ -1032,7 +1008,7 @@ const realCustomersApi = {
         if (filters?.page) url += `&page=${filters.page}`;
         if (filters?.pageSize) url += `&pageSize=${filters.pageSize}`;
 
-        const response = await fetch(url, { headers: getHeaders() });
+        const response = await fetch(url, { headers: getHeaders(), signal });
         await assertOk(response);
         const data = await response.json();
         // Return the full paginated response so callers can access pagination.totalRecords
@@ -1741,11 +1717,6 @@ const realAccountsApi = {
     },
     getDashboardUrgentActions: async (outletId: string) => {
         const response = await fetch(`${API_URL}/dashboard/urgent/?outletId=${outletId}`, { headers: getHeaders() });
-        await assertOk(response);
-        return response.json();
-    },
-    getDashboardAuditAlerts: async (outletId: string) => {
-        const response = await fetch(`${API_URL}/dashboard/audit-alerts/?outletId=${outletId}`, { headers: getHeaders() });
         await assertOk(response);
         return response.json();
     },

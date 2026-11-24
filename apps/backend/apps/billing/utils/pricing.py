@@ -47,20 +47,21 @@ def validate_sale_price(sale_rate: Decimal, batch: Batch, pharmacy_id) -> dict:
             'mrp': Decimal,
         }
     """
-    landing_cost = get_landing_cost_for_batch(batch, pharmacy_id)
     mrp = batch.mrp
 
     if mrp and sale_rate > (mrp + Decimal('0.005')):
         return {
             'valid': False, 'block': True,
             'message': f"Sale rate ₹{sale_rate} exceeds MRP ₹{mrp}. Cannot bill above MRP.",
-            'landing_cost': landing_cost, 'mrp': mrp
+            # only shown with the refusal; looking it up costs 2 queries, so it is no longer done for every line billed
+            'landing_cost': get_landing_cost_for_batch(batch, pharmacy_id), 'mrp': mrp
         }
 
+    # landing_cost is only ever read when the sale is blocked (every caller checks 'block' first)
     return {
         'valid': True, 'block': False,
         'message': '',
-        'landing_cost': landing_cost, 'mrp': mrp
+        'landing_cost': None, 'mrp': mrp
     }
 
 
