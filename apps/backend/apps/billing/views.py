@@ -27,7 +27,7 @@ from apps.billing.services import (
     ScheduleHViolationError,
     UnitIntegrityError,
 )
-from apps.billing.utils.pricing import validate_sale_price
+from apps.billing.utils.pricing import validate_sale_price, cost_floor_per_pack, cost_floors
 from apps.billing.utils.item_amounts import MAX_ROUND_OFF, resolve_item_amounts
 from apps.inventory.models import Batch, MasterProduct
 from apps.accounts.models import Staff, Customer, Ledger
@@ -652,22 +652,7 @@ class SaleCreateView(APIView):
                 if not batch_obj:
                     continue
 
-                if req_sale_type == 'WHOLESALE':
-                    if batch_obj.purchase_rate and batch_obj.purchase_rate > Decimal('0'):
-                        cost_floor = batch_obj.purchase_rate
-                    elif batch_obj.pts and batch_obj.pts > Decimal('0'):
-                        cost_floor = batch_obj.pts
-                    else:
-                        cost_floor = batch_obj.landing_rate or batch_obj.ptr or Decimal('0')
-                    floor_label = "purchase rate"
-                else:
-                    if batch_obj.landing_rate and batch_obj.landing_rate > Decimal('0'):
-                        cost_floor = batch_obj.landing_rate
-                    elif batch_obj.ptr and batch_obj.ptr > Decimal('0'):
-                        cost_floor = batch_obj.ptr
-                    else:
-                        cost_floor = batch_obj.purchase_rate or Decimal('0')
-                    floor_label = "landing cost"
+                cost_floor, floor_label = cost_floor_per_pack(batch_obj, req_sale_type)   # the one rule (utils/pricing.py)
 
                 if cost_floor > Decimal('0'):
                     pack_size = Decimal(str(batch_obj.pack_size or 1))
@@ -927,6 +912,7 @@ class SaleCreateView(APIView):
 
                 # Create SaleItems and deduct stock
                 sale_items = []
+                lifted_to_floor = []     # lines the bill discount took below cost, which were lifted back to their floor
                 for item_data in items_data:
                     batch_id = item_data.get('batchId')
                     product_id = item_data.get('productId')
@@ -1067,22 +1053,7 @@ class SaleCreateView(APIView):
                                 else:
                                     final_row_amt = (base_item_amt * disc_factor).quantize(Decimal('0.01'))
 
-                                if sale_type == 'WHOLESALE':
-                                    if batch.purchase_rate and batch.purchase_rate > Decimal('0'):
-                                        c_floor = batch.purchase_rate
-                                    elif batch.pts and batch.pts > Decimal('0'):
-                                        c_floor = batch.pts
-                                    else:
-                                        c_floor = batch.landing_rate or batch.ptr or Decimal('0')
-                                    floor_label = "purchase rate"
-                                else:
-                                    if batch.landing_rate and batch.landing_rate > Decimal('0'):
-                                        c_floor = batch.landing_rate
-                                    elif batch.ptr and batch.ptr > Decimal('0'):
-                                        c_floor = batch.ptr
-                                    else:
-                                        c_floor = batch.purchase_rate or Decimal('0')
-                                    floor_label = "landing cost"
+                                c_floor, floor_label = cost_floor_per_pack(batch, sale_type)   # the one rule (utils/pricing.py)
 
                                 if c_floor > Decimal('0'):
                                     # FIX: If cost floor already includes GST (toggle ON), do not multiply it again.
@@ -1091,6 +1062,15 @@ class SaleCreateView(APIView):
 
                                     # Smart Cap: If item was legal before bill discount, cap the final row amount to the floor
                                     if base_item_amt >= (line_cost_floor_inclusive - Decimal('0.005')) and final_row_amt < line_cost_floor_inclusive:
+                                        # remembered: if the bill then no longer adds up, the reason is this line, not tampering
+                                        lifted_to_floor.append({
+                                            'batchId': str(batch.id),
+                                            'productName': product.name if product else batch.batch_no,
+                                            'sent': float(final_row_amt),
+                                            'lineFloor': float(line_cost_floor_inclusive),
+                                            'costFloor': float(c_floor),
+                                            **cost_floors(batch),
+                                        })
                                         final_row_amt = line_cost_floor_inclusive
 
                                     # Tax-exclusive net selling rate per pack for UI response
@@ -1269,6 +1249,20 @@ class SaleCreateView(APIView):
                         f"rows={[(str(si.rate), si.qty_strips, str(si.total_amount)) for si in sale_items]}"
                     )
                     transaction.set_rollback(True)
+                    if lifted_to_floor:
+                        # Not tampering: the screen gave these lines more of the bill discount than their cost allows
+                        # (its copy of the cost was missing or out of date), so they were lifted back to their floor and
+                        # the lines no longer add up to the total it showed. Say that, and send the floors: the screen
+                        # corrects its own figures with them and re-spreads the discount (billingStore.applyCostFloors).
+                        names = ', '.join(
+                            f"{l['productName']} (at least ₹{l['lineFloor']:.2f}, the bill has ₹{l['sent']:.2f})" for l in lifted_to_floor[:3])
+                        more = f" and {len(lifted_to_floor) - 3} more" if len(lifted_to_floor) > 3 else ''
+                        return Response({
+                            'detail': f"The bill discount takes {names}{more} below cost. "
+                                      f"Check the total and collect again, or reduce the bill discount.",
+                            'code': 'DISCOUNT_BELOW_COST',
+                            'floors': lifted_to_floor,
+                        }, status=status.HTTP_400_BAD_REQUEST)
                     return Response({
                         'detail': f"Security Block: Invalid Round Off (₹{server_round_off}). "
                                   f"Sum of items does not match Grand Total.",
@@ -2858,6 +2852,7 @@ class SaleDetailView(APIView):
             purchase_rate = float(batch.purchase_rate or 0) if batch else 0.0
             ptr = float(batch.ptr or 0) if batch else 0.0
             pts = float(batch.pts or 0) if batch else 0.0
+            floors = cost_floors(batch) if batch else {'retailCostFloor': 0.0, 'wholesaleCostFloor': 0.0}
             items_list.append({
                 'batchId': str(item.batch_id) if item.batch_id else '',
                 'productId': str(item.batch.product_id) if item.batch and item.batch.product_id else '',
@@ -2888,6 +2883,7 @@ class SaleDetailView(APIView):
                 'landingRate': landing_rate,
                 'ptr': ptr,
                 'pts': pts,
+                **floors,     # the floors the server will hold an edit of this bill to
             })
 
         # Check if this sale has any returns against it

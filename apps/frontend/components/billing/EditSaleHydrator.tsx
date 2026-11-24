@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useBillingStore } from '@/store/billingStore';
+import { floorsOf } from '@/lib/billingMarginUtils';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 
@@ -208,6 +209,7 @@ export function EditSaleHydrator() {
                              mrp: mrp,
                              purchaseRate: Number(item.purchaseRate ?? item.purchase_rate ?? 0),
                              landingRate: Number(item.landingRate ?? item.landing_rate ?? item.purchaseRate ?? item.purchase_rate ?? 0),
+                             ...floorsOf(item),      // the floors the server will hold this edit to
                              ptr: ptr,
                              pts: pts,
                              // Pass pre-discount total so distributeSmartDiscounts has a clean base

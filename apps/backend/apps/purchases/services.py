@@ -10,6 +10,7 @@ from apps.accounts.models import Staff
 from apps.accounts.models import Ledger
 from apps.accounts.journal_service import post_purchase_invoice
 from apps.inventory.models import MasterProduct, Batch
+from apps.purchases.landing import landing_rate_per_pack, landing_includes_gst, for_batch as landing_for_batch
 from apps.purchases.models import PurchaseInvoice, PurchaseItem, Distributor
 from apps.billing.models import LedgerEntry, PaymentEntry, PaymentAllocation
 
@@ -367,36 +368,20 @@ def atomic_purchase_save(payload: Dict[str, Any], outlet_id: str, created_by_id:
             else:
                 gst_per_unit = Decimal('0.0000')
                 
-            discount_pct = Decimal(str(item_payload.get('discountPct', 0)))
-            cash_discount_pct = Decimal(str(item_payload.get('cashDiscountPct', 0)))
-            
-            # Base cost for the paid quantity
-            base_cost = purchase_rate_val * Decimal(qty_val)
-            after_trade = base_cost * (Decimal('1') - discount_pct / Decimal('100'))
-            after_cash = after_trade * (Decimal('1') - cash_discount_pct / Decimal('100'))
-            
-            # Effective total quantity including free items (in strips/packs)
-            free_qty_val = int(item_payload.get('freeQty', 0))
-            total_eff_qty = Decimal(qty_val + free_qty_val)
-            
-            base_rate = (after_cash / total_eff_qty).quantize(Decimal('0.0001')) if total_eff_qty > 0 else purchase_rate_val
-            
-            cess_pct = Decimal(str(item_payload.get('cess', 0)))
             freight_per_unit = Decimal(str(item_payload.get('freightPerUnit', 0)))
             other_cost_per_unit = Decimal(str(item_payload.get('otherCostPerUnit', 0)))
-            
-            outlet_settings = getattr(outlet, 'settings', None)
-            include_gst = False
-            if outlet_settings:
-                include_gst = not outlet_settings.gst_registered or outlet_settings.landing_cost_include_gst
-            
-            landing_rate = base_rate
-            if include_gst:
-                gst_rate_val = Decimal(str(item_payload.get('gstRate', 0)))
-                # CESS and GST are added to landing cost if ITC is not claimed
-                landing_rate += (base_rate * (gst_rate_val + cess_pct) / Decimal('100')).quantize(Decimal('0.0001'))
-                
-            landing_rate += freight_per_unit + other_cost_per_unit
+
+            # Landing cost of one pack: cost after discounts over paid + free packs, plus GST when the outlet counts
+            # it as a cost, plus freight. One rule (purchases/landing.py).
+            landing_rate = landing_rate_per_pack(
+                purchase_rate_val, qty_val, item_payload.get('freeQty', 0), item_payload.get('discountPct', 0),
+                item_payload.get('cashDiscountPct', 0), item_payload.get('gstRate', 0), item_payload.get('cess', 0),
+                freight_per_unit, other_cost_per_unit, include_gst=landing_includes_gst(outlet),
+            )
+            # ... and it goes on the BATCH, which is what billing sells from. It used to stay on the purchase line only,
+            # so the batch had no landing cost and billing held the sale to the supplier's PTR instead.
+            batch.landing_rate = landing_for_batch(landing_rate)
+            batch.save(update_fields=['landing_rate'])
 
             # Create PurchaseItem (denormalized snapshot)
             purchase_item = PurchaseItem(
@@ -1155,36 +1140,20 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
             else:
                 gst_per_unit = Decimal('0.0000')
                 
-            discount_pct = Decimal(str(item_payload.get('discountPct', 0)))
-            cash_discount_pct = Decimal(str(item_payload.get('cashDiscountPct', 0)))
-            
-            # Base cost for the paid quantity
-            base_cost = purchase_rate_val * Decimal(qty_val)
-            after_trade = base_cost * (Decimal('1') - discount_pct / Decimal('100'))
-            after_cash = after_trade * (Decimal('1') - cash_discount_pct / Decimal('100'))
-            
-            # Effective total quantity including free items (in strips/packs)
-            free_qty_val = int(item_payload.get('freeQty', 0))
-            total_eff_qty = Decimal(qty_val + free_qty_val)
-            
-            base_rate = (after_cash / total_eff_qty).quantize(Decimal('0.0001')) if total_eff_qty > 0 else purchase_rate_val
-            
-            cess_pct = Decimal(str(item_payload.get('cess', 0)))
             freight_per_unit = Decimal(str(item_payload.get('freightPerUnit', 0)))
             other_cost_per_unit = Decimal(str(item_payload.get('otherCostPerUnit', 0)))
-            
-            outlet_settings = getattr(outlet, 'settings', None)
-            include_gst = False
-            if outlet_settings:
-                include_gst = not outlet_settings.gst_registered or outlet_settings.landing_cost_include_gst
-            
-            landing_rate = base_rate
-            if include_gst:
-                gst_rate_val = Decimal(str(item_payload.get('gstRate', 0)))
-                # CESS and GST are added to landing cost if ITC is not claimed
-                landing_rate += (base_rate * (gst_rate_val + cess_pct) / Decimal('100')).quantize(Decimal('0.0001'))
-                
-            landing_rate += freight_per_unit + other_cost_per_unit
+
+            # Landing cost of one pack: cost after discounts over paid + free packs, plus GST when the outlet counts
+            # it as a cost, plus freight. One rule (purchases/landing.py).
+            landing_rate = landing_rate_per_pack(
+                purchase_rate_val, qty_val, item_payload.get('freeQty', 0), item_payload.get('discountPct', 0),
+                item_payload.get('cashDiscountPct', 0), item_payload.get('gstRate', 0), item_payload.get('cess', 0),
+                freight_per_unit, other_cost_per_unit, include_gst=landing_includes_gst(outlet),
+            )
+            # ... and it goes on the BATCH, which is what billing sells from. It used to stay on the purchase line only,
+            # so the batch had no landing cost and billing held the sale to the supplier's PTR instead.
+            batch.landing_rate = landing_for_batch(landing_rate)
+            batch.save(update_fields=['landing_rate'])
 
             purchase_item = PurchaseItem(
                 invoice=purchase_invoice,

@@ -1,5 +1,50 @@
 import { CartItem } from '../types';
 
+type SaleKind = 'RETAIL' | 'WHOLESALE';
+
+/**
+ * The least one pack of this line may sell for (before the GST adjustment).
+ *
+ * The SERVER decides it (`cost_floor_per_pack`, apps/billing/utils/pricing.py) and sends it with every batch as
+ * `retailCostFloor` / `wholesaleCostFloor`; a cart line carries those two numbers and this function just reads them.
+ *
+ * The screen used to work the floor out again from landing / PTR / purchase rate, in four copies, from fields the cart
+ * had already changed: a missing landing cost was filled with the purchase rate (so the PTR was never reached) and the
+ * line editor cleared the PTR on retail lines. For such a batch the screen's floor was below the server's, the screen
+ * gave the line more bill discount than allowed, and the bill was refused ("Security Block: Invalid Round Off").
+ * The old derivation below is only for a line that has no server floor yet (a bill left open across the upgrade).
+ */
+export function costFloorOf(item: Partial<CartItem> | Record<string, unknown>, saleType: SaleKind = 'RETAIL'): number {
+    const it = item as Record<string, unknown>;
+    const sent = saleType === 'WHOLESALE' ? it.wholesaleCostFloor : it.retailCostFloor;
+    if (sent !== undefined && sent !== null && sent !== '') {
+        const floor = Number(sent);
+        if (Number.isFinite(floor) && floor >= 0) return floor;
+    }
+
+    const rawLanding = Number(it.landingRate ?? it.landing_rate);
+    const rawPtr = Number(it.ptr);
+    const rawPts = Number(it.pts);
+    const rawPurchase = Number(it.purchaseRate ?? it.purchase_rate);
+    const first = (...values: number[]) => values.find((v) => !isNaN(v) && v > 0) ?? 0;
+    return saleType === 'WHOLESALE' ? first(rawPurchase, rawPts, rawLanding, rawPtr) : first(rawLanding, rawPtr, rawPurchase);
+}
+
+/**
+ * The two floors of a batch, to copy onto a cart line whenever the line takes (or changes) its batch.
+ * Only the floors the batch really has are returned: spreading the result over a line can add or replace a floor,
+ * never erase one (an editor that had no fresh batch data would otherwise wipe the floor the line already carried).
+ */
+export function floorsOf(batch: unknown): { retailCostFloor?: number; wholesaleCostFloor?: number } {
+    const b = (batch ?? {}) as Record<string, unknown>;
+    const floors: { retailCostFloor?: number; wholesaleCostFloor?: number } = {};
+    for (const key of ['retailCostFloor', 'wholesaleCostFloor'] as const) {
+        const v = b[key];
+        if (v !== undefined && v !== null && v !== '' && Number.isFinite(Number(v))) floors[key] = Number(v);
+    }
+    return floors;
+}
+
 /**
  * Returns the maximum flat bill discount (₹) this cart can absorb without
  * any item going below its cost floor. Use this to enforce a hard ceiling
@@ -30,22 +75,7 @@ export function getMaxAllowableBillDiscount(
         if (effectiveQty <= 0 && Number(item.freeQtyStrips || 0) > 0) continue;
         if (effectiveQty <= 0) continue;
 
-        const rawLanding = Number(item.landingRate ?? (item as any).landing_rate);
-        const rawPtr = Number(item.ptr);
-        const rawPts = Number(item.pts);
-        const rawPurchase = Number(item.purchaseRate ?? (item as any).purchase_rate);
-
-        let costFloor = 0;
-        if (saleType === 'WHOLESALE') {
-            costFloor = (!isNaN(rawPurchase) && rawPurchase > 0) ? rawPurchase
-                : ((!isNaN(rawPts) && rawPts > 0) ? rawPts
-                    : ((!isNaN(rawLanding) && rawLanding > 0) ? rawLanding
-                        : ((!isNaN(rawPtr) && rawPtr > 0) ? rawPtr : 0)));
-        } else {
-            costFloor = (!isNaN(rawLanding) && rawLanding > 0) ? rawLanding
-                : ((!isNaN(rawPtr) && rawPtr > 0) ? rawPtr
-                    : ((!isNaN(rawPurchase) && rawPurchase > 0) ? rawPurchase : 0));
-        }
+        const costFloor = costFloorOf(item, saleType);   // the server's figure (see costFloorOf)
 
         const gstRate = Number(item.gstRate ?? item.gstPct ?? 0);
         const taxMultiplier = 1 + (gstRate / 100);
@@ -124,30 +154,9 @@ export function calculateLineMargin(
             ? Number(item.totalQty)
             : (Number(item.qtyStrips || 0) + (Number(item.qtyLoose || 0) / packSize)));
 
-    // Cost floor: Force type coercion.
-    // If saleType === 'WHOLESALE', prioritize rawPurchase (fallback to rawPts > rawLanding > rawPtr).
-    // If saleType === 'RETAIL', prioritize rawLanding (fallback to rawPtr > rawPurchase).
+    // Cost floor: the server's figure (see costFloorOf)
     const rawLanding = Number(item.landingRate ?? (item as any).landing_rate);
-    const rawPtr = Number(item.ptr);
-    const rawPts = Number(item.pts);
-    const rawPurchase = Number(item.purchaseRate ?? (item as any).purchase_rate);
-
-    let costFloor = 0;
-    if (saleType === 'WHOLESALE') {
-        costFloor = (!isNaN(rawPurchase) && rawPurchase > 0)
-            ? rawPurchase
-            : ((!isNaN(rawPts) && rawPts > 0)
-                ? rawPts
-                : ((!isNaN(rawLanding) && rawLanding > 0)
-                    ? rawLanding
-                    : ((!isNaN(rawPtr) && rawPtr > 0) ? rawPtr : 0)));
-    } else {
-        costFloor = (!isNaN(rawLanding) && rawLanding > 0)
-            ? rawLanding
-            : ((!isNaN(rawPtr) && rawPtr > 0)
-                ? rawPtr
-                : ((!isNaN(rawPurchase) && rawPurchase > 0) ? rawPurchase : 0));
-    }
+    const costFloor = costFloorOf(item, saleType);
 
     const landingRate = (!isNaN(rawLanding) && rawLanding > 0)
         ? rawLanding
@@ -326,22 +335,7 @@ export function distributeSmartDiscounts(
                 ? Number(item.totalQty)
                 : (Number(item.qtyStrips || 0) + (Number(item.qtyLoose || 0) / packSize)));
 
-        const rawLanding = Number(item.landingRate ?? (item as any).landing_rate);
-        const rawPtr = Number(item.ptr);
-        const rawPts = Number(item.pts);
-        const rawPurchase = Number(item.purchaseRate ?? (item as any).purchase_rate);
-
-        let costFloor = 0;
-        if (saleType === 'WHOLESALE') {
-            costFloor = (!isNaN(rawPurchase) && rawPurchase > 0) ? rawPurchase
-                : ((!isNaN(rawPts) && rawPts > 0) ? rawPts
-                    : ((!isNaN(rawLanding) && rawLanding > 0) ? rawLanding
-                        : ((!isNaN(rawPtr) && rawPtr > 0) ? rawPtr : 0)));
-        } else {
-            costFloor = (!isNaN(rawLanding) && rawLanding > 0) ? rawLanding
-                : ((!isNaN(rawPtr) && rawPtr > 0) ? rawPtr
-                    : ((!isNaN(rawPurchase) && rawPurchase > 0) ? rawPurchase : 0));
-        }
+        const costFloor = costFloorOf(item, saleType);   // the server's figure (see costFloorOf)
 
         const gstRate = Number(item.gstRate ?? item.gstPct ?? 0);
         const taxMultiplier = 1 + (gstRate / 100);

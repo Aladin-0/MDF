@@ -12,6 +12,7 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Check, X, Trash2, Loader2, AlertTriangle } from 'lucide-react';
 import { calculateRowTotals } from '@/lib/cartUtils';
+import { floorsOf } from '@/lib/billingMarginUtils';
 import { allowsLoose } from '@/lib/packRules';
 
 interface InlineRowEditorProps {
@@ -70,6 +71,7 @@ export function InlineRowEditor({ item, saleType = 'RETAIL', onSave, onCancel, o
             mrp: item.mrp,
             purchaseRate: item.purchaseRate || 0,
             landingRate: item.landingRate ?? item.purchaseRate ?? 0,
+            ...floorsOf(item),               // the stand-in batch keeps the line's cost floors
             saleRate: item.rate,
             qtyStrips: 0,
             qtyLoose: 0,
@@ -151,6 +153,7 @@ export function InlineRowEditor({ item, saleType = 'RETAIL', onSave, onCancel, o
             saleRate: currentBaseRate,
             purchaseRate: currentBatch.purchaseRate,
             landingRate: currentBatch.landingRate ?? currentBatch.purchaseRate,
+            ...floorsOf(currentBatch),       // a different batch has different cost floors
             packSize: currentBatch.packSize,
             packUnit: currentBatch.packUnit,
             taxableAmount,

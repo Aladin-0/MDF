@@ -10,6 +10,7 @@ import { allowsLoose } from '@/lib/packRules';
 import { getExpiryStatus } from '@/utils/expiry';
 import { cn } from '@/lib/utils';
 import { SheetShell } from './SheetShell';
+import { floorsOf } from '@/lib/billingMarginUtils';
 import { T } from './theme';
 import { QtyStepper } from './QtyStepper';
 import {
@@ -126,6 +127,7 @@ function LineEditorBody({ item, onClose, onRemoved }: EditorProps) {
             saleRate: baseRate,
             purchaseRate: current.purchaseRate,
             landingRate: current.landingRate ?? current.purchaseRate,
+            ...floorsOf(current),            // a different batch has different cost floors
             packSize: current.packSize,
             packUnit: current.packUnit,
             taxableAmount: totals.taxableAmount,

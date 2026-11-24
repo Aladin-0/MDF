@@ -57,6 +57,19 @@ the coloured text in the Expiry cell). Do not turn the strip back into tiles.
 * Quick edit: batch fields change that batch, product fields change the product (and so every batch). A rejected save
   tells the user and puts the stored value back.
 
+## Landing cost (what a pack really cost)
+
+* **One rule, `apps/purchases/landing.py`:** cost after discounts, spread over paid + free packs, **+ GST when the outlet
+  counts GST as a cost** (Settings "landing cost includes GST", or the outlet is not GST registered), + freight / other cost.
+* **It lives on the batch** (`Batch.landing_rate`), because billing sells from the batch. Saving or editing a purchase
+  writes it there. It used to be kept on the purchase line only: every batch received through a purchase had no landing
+  cost, and billing held its sales to the supplier's PTR instead. `manage.py fill_batch_landing_cost` (dry run unless
+  `--apply`) fills old batches by the same rule and never overwrites a landing cost that is already there.
+* **The least a pack may sell for** (retail) is its landing cost; with none, its purchase rate; the PTR only if there is no
+  cost on record at all. The rule is `cost_floor_per_pack` (`apps/billing/utils/pricing.py`) and the billing screen receives
+  its answer with every batch (`retailCostFloor` / `wholesaleCostFloor`): never work a floor out on the screen.
+* An empty Landing in the batch editor still means "same as purchase rate".
+
 ## Editing batches and products (the old "Quick edit")
 
 Editing live inventory is risky, so it works like this. The old column-picker (choose a column, then edit that cell in

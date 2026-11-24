@@ -28,7 +28,7 @@ DEFAULT_MIN_QTY = 10          # packs: below this a product counts as low stock 
 EXPIRING_SOON_DAYS = 90
 
 from apps.purchases.models import PurchaseItem
-from apps.billing.utils.pricing import get_landing_cost_for_batch
+from apps.billing.utils.pricing import get_landing_cost_for_batch, cost_floors
 
 class BatchLandingCostView(APIView):
     """GET /api/v1/inventory/batches/{batch_id}/landing-cost/"""
@@ -286,6 +286,9 @@ def serialize_batch(batch):
         'pts': float(batch.pts) if batch.pts else 0.0,
         'purchaseRate': float(batch.purchase_rate),
         'landingRate': float(batch.landing_rate) if batch.landing_rate else None,
+        # The least a pack may sell for, worked out by the same function the sale check uses. The billing screen
+        # caps discounts with THESE, never with its own guess from landing / PTR / purchase rate.
+        **cost_floors(batch),
         'saleRate': float(batch.mrp),
         'qtyStrips': batch.qty_strips,
         'qtyLoose': batch.qty_loose,

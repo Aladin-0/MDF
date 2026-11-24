@@ -326,6 +326,10 @@ export interface Batch {
     ptr?: number;
     pts?: number;
     landingRate?: number;
+    /** The least a pack may sell for, decided by the server (retail: landing cost, else PTR, else purchase rate). */
+    retailCostFloor?: number;
+    /** The same for a wholesale bill (purchase rate, else PTS, else landing cost, else PTR). */
+    wholesaleCostFloor?: number;
     purchaseRate: number;
     saleRate: number;
     qtyStrips: number;
@@ -474,6 +478,10 @@ export interface CartItem {
     pts?: number;
     saleRate?: number;
     landingRate?: number;
+    /** The least a pack may sell for, decided by the server (retail: landing cost, else PTR, else purchase rate). */
+    retailCostFloor?: number;
+    /** The same for a wholesale bill (purchase rate, else PTS, else landing cost, else PTR). */
+    wholesaleCostFloor?: number;
     rate: number;
     hsn?: string;
     qtyStrips: number;
@@ -762,6 +770,10 @@ export interface SaleItemDetail {
     pts?: number;
     purchaseRate?: number;
     landingRate?: number;
+    /** The least a pack may sell for, decided by the server (retail: landing cost, else PTR, else purchase rate). */
+    retailCostFloor?: number;
+    /** The same for a wholesale bill (purchase rate, else PTS, else landing cost, else PTR). */
+    wholesaleCostFloor?: number;
     igstAmount?: number;
 }
 

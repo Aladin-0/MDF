@@ -7,6 +7,7 @@
  */
 import type { Batch, CartItem, ProductSearchResult } from '@/types';
 import { allowsLoose } from '@/lib/packRules';
+import { floorsOf } from '@/lib/billingMarginUtils';
 
 export const STOCK_BLOCK_MESSAGE = 'BLOCKED: Added quantity exceeds available stock.';
 
@@ -90,6 +91,7 @@ export function quickAddLine({ product, batch, qtyStrips, qtyLoose, discountPct,
         totalAmount: discountedRate * totalQtyFractional,
         purchaseRate: batch.purchaseRate,
         landingRate: batch.landingRate ?? batch.purchaseRate,
+        ...floorsOf(batch),              // the server's cost floors: what discounts are capped with
     } as CartItem;
 
     return { ok: true, item };

@@ -17,7 +17,7 @@ from apps.inventory.models import Batch, MasterProduct
 from apps.inventory.services import post_stock_ledger_entry
 from apps.inventory.pack_rules import allows_loose, batch_allows_loose
 from apps.billing.services import generate_invoice_number, schedule_h_validate, fefo_batch_select, schedule_cart_from_catalogue
-from apps.billing.utils.pricing import validate_sale_price
+from apps.billing.utils.pricing import validate_sale_price, cost_floor_per_pack
 from apps.billing.services import InsufficientStockError, ScheduleHViolationError, UnitIntegrityError
 from apps.billing.pricing_engine import calculate_line_item, TaxCalculatorService
 from apps.billing.credit_controls import (
@@ -368,22 +368,7 @@ def atomic_sale_save(
                     transaction.set_rollback(True)
                     raise ValidationError(f"{pricing_check['message']}")
 
-                if sale_invoice.sale_type == 'WHOLESALE':
-                    if batch.purchase_rate and batch.purchase_rate > Decimal('0'):
-                        c_floor = batch.purchase_rate
-                    elif batch.pts and batch.pts > Decimal('0'):
-                        c_floor = batch.pts
-                    else:
-                        c_floor = batch.landing_rate or batch.ptr or Decimal('0')
-                    floor_label = "purchase rate"
-                else:
-                    if batch.landing_rate and batch.landing_rate > Decimal('0'):
-                        c_floor = batch.landing_rate
-                    elif batch.ptr and batch.ptr > Decimal('0'):
-                        c_floor = batch.ptr
-                    else:
-                        c_floor = batch.purchase_rate or Decimal('0')
-                    floor_label = "landing cost"
+                c_floor, floor_label = cost_floor_per_pack(batch, sale_invoice.sale_type)   # the one rule (utils/pricing.py)
 
                 disc_factor = Decimal('1') - (sale_invoice.extra_discount_pct / Decimal('100')) if (sale_invoice.extra_discount_pct and sale_invoice.extra_discount_pct > Decimal('0')) else Decimal('1')
                 eff_qty = Decimal(str(alloc_billed)) + (Decimal(str(loose_to_deduct)) / Decimal(str(batch.pack_size or 1)))

@@ -65,13 +65,53 @@ def validate_sale_price(sale_rate: Decimal, batch: Batch, pharmacy_id) -> dict:
     }
 
 
+def cost_floor_per_pack(batch: Batch, sale_type: str = 'RETAIL'):
+    """
+    The least one pack of this batch may sell for (before the GST adjustment), and what to call it.
+
+    THE rule, in one place. Every sale path and the billing screen read it from here (the screen gets it as
+    `retailCostFloor` / `wholesaleCostFloor` on each batch, see `cost_floors`):
+      * RETAIL    : landing_rate, else purchase_rate, else ptr   ("landing cost")
+      * WHOLESALE : purchase_rate, else pts, else landing_rate, else ptr   ("purchase rate")
+
+    A retail sale is held to what the shop PAID. `landing_rate` is that figure (cost after discounts and free goods,
+    plus GST when the outlet counts it, plus freight: purchases/landing.py writes it on every purchase). A batch with
+    no landing cost falls back to its purchase rate ("an empty landing cost means the same as the purchase rate",
+    docs/INVENTORY.md). The PTR is only the last resort: it is the supplier's list price, and it used to be tried
+    BEFORE the purchase rate, so a batch bought 30 + 10 free at ₹19.49 (₹14.62 a pack) could not be sold under ₹19.49.
+
+    There used to be five copies of this rule and the screen had its own. The copies disagreed, the screen gave a line
+    more bill discount than the server allowed, and the bill was refused with "Security Block: Invalid Round Off".
+    """
+    zero = Decimal('0')
+    if (sale_type or 'RETAIL').upper() == 'WHOLESALE':
+        if batch.purchase_rate and batch.purchase_rate > zero:
+            return batch.purchase_rate, 'purchase rate'
+        if batch.pts and batch.pts > zero:
+            return batch.pts, 'purchase rate'
+        return (batch.landing_rate or batch.ptr or zero), 'purchase rate'
+    if batch.landing_rate and batch.landing_rate > zero:
+        return batch.landing_rate, 'landing cost'
+    if batch.purchase_rate and batch.purchase_rate > zero:
+        return batch.purchase_rate, 'landing cost'
+    return (batch.ptr or zero), 'landing cost'
+
+
+def cost_floors(batch: Batch) -> dict:
+    """What the billing screen needs to cap discounts exactly as the server will: both floors, per pack."""
+    return {
+        'retailCostFloor': float(cost_floor_per_pack(batch, 'RETAIL')[0]),
+        'wholesaleCostFloor': float(cost_floor_per_pack(batch, 'WHOLESALE')[0]),
+    }
+
+
 def line_cost_floor(batch: Batch, sale_type: str, qty_strips, qty_loose, gst_rate,
                     landing_cost_include_gst: bool = False) -> dict:
     """
     Minimum tax-inclusive amount a billed line may total without being a loss sale.
 
     Same rule the sale-create view enforces, exposed once so revisions cannot bypass it:
-      * RETAIL    : floor per pack = landing_rate, else ptr, else purchase_rate  ("landing cost")
+      * RETAIL    : floor per pack = landing_rate, else purchase_rate, else ptr  ("landing cost")
       * WHOLESALE : floor per pack = purchase_rate, else pts, else landing_rate/ptr ("purchase rate")
       * GST is added on top of the floor unless the outlet's landing cost already includes GST.
       * Only *billed* quantity counts; free-scheme quantity never inflates the floor.
@@ -80,22 +120,7 @@ def line_cost_floor(batch: Batch, sale_type: str, qty_strips, qty_loose, gst_rat
     is nothing to protect (no cost recorded, or a 100% free line).
     """
     zero = Decimal('0')
-    if (sale_type or 'RETAIL').upper() == 'WHOLESALE':
-        if batch.purchase_rate and batch.purchase_rate > zero:
-            cost_floor = batch.purchase_rate
-        elif batch.pts and batch.pts > zero:
-            cost_floor = batch.pts
-        else:
-            cost_floor = batch.landing_rate or batch.ptr or zero
-        label = 'purchase rate'
-    else:
-        if batch.landing_rate and batch.landing_rate > zero:
-            cost_floor = batch.landing_rate
-        elif batch.ptr and batch.ptr > zero:
-            cost_floor = batch.ptr
-        else:
-            cost_floor = batch.purchase_rate or zero
-        label = 'landing cost'
+    cost_floor, label = cost_floor_per_pack(batch, sale_type)
 
     pack_size = Decimal(str(batch.pack_size or 1))
     billed_qty = Decimal(str(qty_strips or 0)) + Decimal(str(qty_loose or 0)) / pack_size

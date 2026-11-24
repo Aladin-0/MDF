@@ -93,11 +93,15 @@ class LineCostFloorTests(SimpleTestCase):
         base.update(kw)
         return SimpleNamespace(**base)
 
-    def test_retail_floor_is_landing_cost_else_ptr_else_purchase_rate(self):
-        self.assertEqual(line_cost_floor(self._batch(landing_rate=D(90)), 'RETAIL', 1, 0, 0)['line_floor'], D('90.00'))
-        self.assertEqual(line_cost_floor(self._batch(ptr=D(85)), 'RETAIL', 1, 0, 0)['line_floor'], D('85.00'))
-        floor = line_cost_floor(self._batch(), 'RETAIL', 1, 0, 0)
+    def test_retail_floor_is_landing_cost_else_purchase_rate_else_ptr(self):
+        """
+        What the shop PAID comes first. The PTR is the supplier's list price: it used to be tried before the purchase
+        rate, so goods bought with free packs (30 + 10 at 19.49 = 14.62 a pack) could not be sold under 19.49.
+        """
+        self.assertEqual(line_cost_floor(self._batch(landing_rate=D(90), ptr=D(85)), 'RETAIL', 1, 0, 0)['line_floor'], D('90.00'))
+        floor = line_cost_floor(self._batch(ptr=D(85)), 'RETAIL', 1, 0, 0)      # no landing cost: the purchase rate, not the PTR
         self.assertEqual((floor['line_floor'], floor['label']), (D('80.00'), 'landing cost'))
+        self.assertEqual(line_cost_floor(self._batch(purchase_rate=D(0), ptr=D(85)), 'RETAIL', 1, 0, 0)['line_floor'], D('85.00'))   # no cost at all: PTR
 
     def test_wholesale_floor_is_the_purchase_rate(self):
         floor = line_cost_floor(self._batch(landing_rate=D(95)), 'WHOLESALE', 2, 0, 0)

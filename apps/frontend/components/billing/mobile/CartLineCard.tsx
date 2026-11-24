@@ -9,7 +9,7 @@ import { useBillingStore } from '@/store/billingStore';
 import { productsApi } from '@/lib/apiClient';
 import { useOutletId } from '@/hooks/useOutletId';
 import { calculateRowTotals, type RowTotals } from '@/lib/cartUtils';
-import { calculateLineMargin } from '@/lib/billingMarginUtils';
+import { calculateLineMargin, floorsOf } from '@/lib/billingMarginUtils';
 import { allowsLoose, wholePackWord } from '@/lib/packRules';
 import { getExpiryStatus, type ExpiryStatus } from '@/utils/expiry';
 import { cn } from '@/lib/utils';
@@ -49,6 +49,7 @@ export function batchFromItem(item: CartItem): Batch {
         pts: item.pts,
         purchaseRate: item.purchaseRate || 0,
         landingRate: item.landingRate ?? item.purchaseRate ?? 0,
+        ...floorsOf(item),                   // the stand-in batch keeps the line's cost floors
         saleRate: item.rate,
         qtyStrips: 1_000_000,
         qtyLoose: 0,

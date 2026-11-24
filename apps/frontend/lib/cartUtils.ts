@@ -1,5 +1,6 @@
 import { Batch, CartItem } from '@/types';
 import { bankersRound } from '@/utils/mathUtils';
+import { costFloorOf } from '@/lib/billingMarginUtils';
 
 export interface RowTotals {
     tQtyFractional: number;
@@ -115,28 +116,8 @@ export function calculateRowTotals(
         gstAmount = sellAmount - taxableAmount;
     }
     
-    // Cost rate per pack: strictly branch based on Retail vs Wholesale prioritization
-    const rawLanding = Number(currentBatch.landingRate ?? (currentBatch as any).landing_rate);
-    const rawPtr = Number(currentBatch.ptr ?? (currentBatch as any).ptr);
-    const rawPts = Number(currentBatch.pts ?? (currentBatch as any).pts);
-    const rawPurchase = Number(currentBatch.purchaseRate ?? (currentBatch as any).purchase_rate);
-
-    let costRate = 0;
-    if (saleType === 'WHOLESALE') {
-        costRate = (!isNaN(rawPurchase) && rawPurchase > 0)
-            ? rawPurchase
-            : ((!isNaN(rawPts) && rawPts > 0)
-                ? rawPts
-                : ((!isNaN(rawLanding) && rawLanding > 0)
-                    ? rawLanding
-                    : ((!isNaN(rawPtr) && rawPtr > 0) ? rawPtr : 0)));
-    } else {
-        costRate = (!isNaN(rawLanding) && rawLanding > 0)
-            ? rawLanding
-            : ((!isNaN(rawPtr) && rawPtr > 0)
-                ? rawPtr
-                : ((!isNaN(rawPurchase) && rawPurchase > 0) ? rawPurchase : 0));
-    }
+    // Cost rate per pack: the server's floor for this batch (one rule, see costFloorOf)
+    const costRate = costFloorOf(currentBatch as any, saleType);
     const totalCost = costRate * tQtyFractional;
     
     // Net unit selling price using unified formula: (Final Row Amount / Quantity)

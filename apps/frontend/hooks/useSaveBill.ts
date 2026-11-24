@@ -154,11 +154,18 @@ export function useSaveBill() {
                 editingSaleId: state.editingSaleId,
             });
 
-            const message =
+            let message =
                 err?.detail ??
                 err?.message ??
                 err?.error?.message ??
                 'Failed to save bill. Please try again.';
+            // The discount took some lines below cost: the server sent their real floors. Put them on the bill; the
+            // totals re-spread the discount at once, so the cashier only has to look at the new total and collect again.
+            if (err?.code === 'DISCOUNT_BELOW_COST' && Array.isArray(err.floors) && err.floors.length > 0) {
+                useBillingStore.getState().applyCostFloors(err.floors);
+                const names = err.floors.slice(0, 3).map((f: any) => f.productName).filter(Boolean).join(', ');
+                message = `The bill discount took ${names || 'some items'} below cost. The bill has been corrected: check the total and collect again.`;
+            }
             setError(message);
             throw err;
         } finally {

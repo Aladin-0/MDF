@@ -4,7 +4,7 @@ import { createDebouncedJSONStorage } from '../lib/debouncedStorage';
 import { v4 as uuidv4 } from 'uuid';
 import { calculateRowTotals } from '../lib/cartUtils';
 import { isControlledSchedule } from '../lib/scheduleRules';
-import { distributeSmartDiscounts } from '../lib/billingMarginUtils';
+import { distributeSmartDiscounts, floorsOf } from '../lib/billingMarginUtils';
 import { billCustomerFromLedger, ledgerAfterCustomerEdit, ledgerHasCustomer, patientAfterCustomerEdit, type SavedCustomer } from '../lib/billCustomer';
 import {
     CartItem,
@@ -60,6 +60,11 @@ interface BillingState {
     // Actions - Active Draft Setters (Helpers)
     setCustomer: (c: Customer | null) => void;
     setCustomerLedger: (l: Ledger | null) => void;
+    /**
+     * The server refused a bill because the discount took lines below cost, and sent those lines' real floors.
+     * Put them on the matching cart lines (every open bill): the totals then re-spread the discount correctly by themselves.
+     */
+    applyCostFloors: (floors: Array<{ batchId: string; retailCostFloor?: number; wholesaleCostFloor?: number }>) => void;
     /** A customer was edited: every open bill that carries them shows the saved details (the person billed for is kept). */
     applyCustomerEdit: (saved: SavedCustomer) => void;
     setDoctor: (d: Doctor | null) => void;
@@ -342,6 +347,24 @@ export const useBillingStore = create<BillingState>()(
         // Changing the customer also drops the patient: they belonged to the previous customer's account.
         if (activeId) get().updateDraftHeader(activeId, { customerLedger, patient: null, ...(customerLedger ? { walkInName: null } : {}) });
     },
+
+    applyCostFloors: (floors) => set((state) => {
+        const byBatch = new Map((floors || []).filter((f) => f && f.batchId).map((f) => [f.batchId, f]));
+        if (byBatch.size === 0) return state;
+        const drafts = { ...state.drafts };
+        for (const [id, draft] of Object.entries(state.drafts)) {
+            if (!draft.cart.some((item) => byBatch.has(item.batchId))) continue;
+            drafts[id] = {
+                ...draft,
+                cart: draft.cart.map((item) => {
+                    const f = byBatch.get(item.batchId);
+                    return f ? { ...item, ...floorsOf(f) } : item;
+                }),
+                updatedAt: new Date().toISOString(),
+            };
+        }
+        return { drafts };
+    }),
 
     applyCustomerEdit: (saved) => {
         // Not setCustomerLedger: that is "a different customer was picked" and drops the person the bill is for.
