@@ -149,34 +149,56 @@ def write_workbook(plan: Plan, path, result: dict | None = None) -> None:
     wb.save(path)
 
 
+SHEET_ONE = 'Please fill'
+
+
 def write_shop_form(plan, path) -> None:
     """
-    The short form for the shop: only what blocks billing, in plain words, yellow boxes to fill. Same sheet names and
-    columns as the full lists, so `read_answers` reads it back the same way (`--answers <this file>`).
-    It opens straight on a list of products (no instructions-only first sheet: a phone or a chat preview shows only the
-    first sheet, and the shop saw an empty file). The biggest list comes first; each sheet says what to write.
+    The short form for the shop: ONE sheet, the four lists one below the other, each with a heading and a yellow column.
+    A phone or a chat preview shows only the first sheet of a file, so lists on other sheets were never seen.
+    `read_answers` reads it back (`--answers <this file>`).
     """
     wb = Workbook()
-    wb.remove(wb.active)
-    note = ' Fill only the yellow column; leave it empty if you do not know. Send the file back as it is.'
-    _table(wb, SHEET_MRP, f'{plan.outlet.name}: write the MRP of ONE pack, from the box or label. These cannot be billed without it.' + note,
-           ['Product', 'Batch', 'Stock', 'Cost of one pack', 'Excel row', A_MRP],
-           [(i.row.name, i.row.batch, _stock_text(i.row), i.row.cost, i.row.line, None) for i in plan.of(P.MRP_MISSING)],
-           [44, 18, 12, 16, 10, 24], money=(4,), right=(3, 4, 5, 6))
-    _table(wb, SHEET_QTY, f'{plan.outlet.name}: count the LOOSE pieces on the shelf for each item (pieces that are not in a full box).' + note,
-           ['Product', 'Batch', 'Marg shows', 'Pieces in one box', 'Full boxes', 'It could mean (loose pieces)', 'Excel row', A_LOOSE, A_PACK],
-           [(i.row.name, i.row.batch, _stock_text(i.row), i.detail['pack_size'] if i.detail['pack_size'] > 1 else 'not set in Marg', i.detail['packs'],
-             ' or '.join(str(c) for c in i.detail['choices']) or 'cannot tell', i.row.line, None, None) for i in plan.of(P.QTY_UNCLEAR)],
-           [44, 18, 12, 16, 12, 22, 10, 24, 20], right=(3, 4, 5, 7, 8, 9))
-    _table(wb, SHEET_NEG, f'{plan.outlet.name}: Marg shows MINUS stock for these. How many are really on the shelf? Write 0 if none.' + note,
-           ['Product', 'Batch', 'Stock in Marg', 'Value in Marg', 'Excel row', A_COUNT],
-           [(i.row.name, i.row.batch, _stock_text(i.row), i.row.value, i.row.line, None) for i in plan.of(P.NEGATIVE_STOCK)],
-           [44, 18, 14, 14, 10, 24], money=(4,), right=(3, 4, 5, 6))
-    _table(wb, SHEET_COST, f'{plan.outlet.name}: the cost is higher than the MRP, so one is wrong. Write the right MRP and/or the right cost of ONE pack.' + note,
-           ['Product', 'Batch', 'Stock', 'Cost of one pack', 'MRP', 'Excel row', A_MRP, A_COST],
-           [(i.row.name, i.row.batch, _stock_text(i.row), i.detail['landing'], i.detail['mrp'], i.row.line, None, None) for i in plan.of(P.COST_ABOVE_MRP)],
-           [44, 18, 12, 16, 12, 10, 24, 24], money=(4, 5), right=(3, 4, 5, 6, 7, 8))
-    wb.active = 0
+    ws = wb.active
+    ws.title = SHEET_ONE
+    xl.title_block(ws, f'{plan.outlet.name}: please fill in the YELLOW boxes',
+                   f'Stock as in Marg on {plan.sheet.as_on:%d-%b-%Y}. There are 4 lists below, scroll down to see all of them.',
+                   'Leave a box empty if you do not know. Please send the file back as it is.')
+    sections = [
+        (f'1. MRP MISSING ({len(plan.of(P.MRP_MISSING))} items): write the MRP of ONE pack, from the box or label. These cannot be billed without it.',
+         ['Product', 'Batch', 'Stock', 'Cost of one pack', 'Excel row', A_MRP],
+         [(i.row.name, i.row.batch, _stock_text(i.row), float(i.row.cost), i.row.line, None) for i in plan.of(P.MRP_MISSING)]),
+        (f'2. LOOSE PIECES ({len(plan.of(P.QTY_UNCLEAR))} items): count the loose pieces on the shelf (pieces that are not in a full box).',
+         ['Product', 'Batch', 'Marg shows', 'Pieces in one box', 'Full boxes', 'It could mean (loose pieces)', A_LOOSE, A_PACK],
+         [(i.row.name, i.row.batch, _stock_text(i.row), i.detail['pack_size'] if i.detail['pack_size'] > 1 else 'not set in Marg', i.detail['packs'],
+           ' or '.join(str(c) for c in i.detail['choices']) or 'cannot tell', None, None) for i in plan.of(P.QTY_UNCLEAR)]),
+        (f'3. MINUS STOCK ({len(plan.of(P.NEGATIVE_STOCK))} items): Marg shows less than zero. How many are really on the shelf? Write 0 if none.',
+         ['Product', 'Batch', 'Stock in Marg', 'Value in Marg', A_COUNT],
+         [(i.row.name, i.row.batch, _stock_text(i.row), float(i.row.value), None) for i in plan.of(P.NEGATIVE_STOCK)]),
+        (f'4. COST HIGHER THAN MRP ({len(plan.of(P.COST_ABOVE_MRP))} items): one of the two is wrong. Write the right MRP and/or the right cost of ONE pack.',
+         ['Product', 'Batch', 'Stock', 'Cost of one pack', 'MRP', A_MRP, A_COST],
+         [(i.row.name, i.row.batch, _stock_text(i.row), float(i.detail['landing']), float(i.detail['mrp']), None, None) for i in plan.of(P.COST_ABOVE_MRP)]),
+    ]
+    head_fill, ask_head, ask_fill = PatternFill('solid', fgColor='DBEAFE'), PatternFill('solid', fgColor='B45309'), _FILL
+    r = 5
+    for title, headers, rows in sections:
+        ws.cell(row=r, column=1, value=title).font = Font(bold=True, size=12)
+        for col in range(1, 9):
+            ws.cell(row=r, column=col).fill = head_fill
+        xl.header(ws, r + 1, headers)
+        for col, h in enumerate(headers, start=1):
+            if h.startswith(ASK):
+                ws.cell(row=r + 1, column=col).fill = ask_head
+        for i, row in enumerate(rows, start=r + 2):
+            for col, v in enumerate(row, start=1):
+                ws.cell(row=i, column=col, value=xl.safe(v) if isinstance(v, str) else v)
+                if headers[col - 1].startswith(ASK):
+                    ws.cell(row=i, column=col).fill = ask_fill
+        r += 2 + len(rows) + 1          # one empty row between the lists
+    for col, w in enumerate([44, 18, 14, 16, 14, 26, 26, 22], start=1):
+        ws.column_dimensions[chr(64 + col)].width = w
+    ws.freeze_panes = 'B5'
+    ws.sheet_view.showGridLines = False
     wb.save(path)
 
 
@@ -206,22 +228,34 @@ def read_answers(path) -> Answers:
             if r and r[0]:
                 yield {h: r[i] for h, i in heads.items() if i < len(r)}
 
-    for title in (SHEET_MRP, SHEET_COST, SHEET_PIECE, SHEET_QTY):
+    def take(r):
+        key = batch_key(r['Product'], r.get('Batch') or '')
+        mrp, cost, loose, pack, count = (_number(r.get(h)) for h in (A_MRP, A_COST, A_LOOSE, A_PACK, A_COUNT))
+        if mrp:
+            a.mrp[key] = mrp
+        if cost:
+            a.cost[key] = cost
+        if pack and pack == pack.to_integral_value() and pack > 1:
+            a.pack_size[key[0]] = int(pack)
+        if loose is not None and loose == loose.to_integral_value():
+            a.loose[key] = int(loose)
+        if count is not None and count == count.to_integral_value():
+            a.stock[key] = int(count)
+
+    for title in (SHEET_MRP, SHEET_COST, SHEET_PIECE, SHEET_QTY, SHEET_NEG):
         for r in rows(title):
-            key = batch_key(r['Product'], r.get('Batch') or '')
-            mrp, cost, loose, pack = (_number(r.get(h)) for h in (A_MRP, A_COST, A_LOOSE, A_PACK))
-            if mrp:
-                a.mrp[key] = mrp
-            if cost:
-                a.cost[key] = cost
-            if pack and pack == pack.to_integral_value() and pack > 1:
-                a.pack_size[key[0]] = int(pack)
-            if loose is not None and loose == loose.to_integral_value():
-                a.loose[key] = int(loose)
-    for r in rows(SHEET_NEG):
-        n = _number(r.get(A_COUNT))
-        if n is not None and n == n.to_integral_value():
-            a.stock[batch_key(r['Product'], r.get('Batch') or '')] = int(n)
+            take(r)
+    if SHEET_ONE in wb.sheetnames:
+        # the one-sheet form: lists one below the other, each = a heading row, a 'Product' header row, rows, an empty row
+        heads = None
+        for row in wb[SHEET_ONE].iter_rows(min_row=5, values_only=True):
+            first = row[0] if row else None
+            if first in (None, ''):
+                heads = None
+            elif first == 'Product':
+                heads = {str(v): i for i, v in enumerate(row) if v}
+            elif heads:
+                take({h: row[i] for h, i in heads.items() if i < len(row)})
     for r in rows(SHEET_TAX):
         hsn, gst = str(r.get(A_HSN) or '').strip(), _number(r.get(A_GST))
         if hsn.endswith('.0'):

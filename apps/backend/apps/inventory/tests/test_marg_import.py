@@ -696,18 +696,21 @@ def test_the_short_shop_form_comes_back_and_loads(tmp_path):
     report.write_shop_form(P.build_plan(outlet, items, sheet), path)
 
     wb = load_workbook(path)
-    # opens on a product list (a phone shows only the first sheet): no instructions-only sheet
-    assert wb.sheetnames == [report.SHEET_MRP, report.SHEET_QTY, report.SHEET_NEG, report.SHEET_COST]
-    assert wb.active.title == report.SHEET_MRP and wb[report.SHEET_MRP]['A5'].value == 'WALKER BOOT'
+    # ONE sheet (a phone shows only the first): the four lists one below the other
+    assert wb.sheetnames == [report.SHEET_ONE]
+    ws = wb[report.SHEET_ONE]
+    col_a = [c.value for c in ws['A']]
 
-    def fill(title, header, value, row=5):
-        ws = wb[title]
-        ws.cell(row=row, column=[c.value for c in ws[4]].index(header) + 1, value=value)
-    fill(report.SHEET_QTY, report.A_LOOSE, 50)
-    fill(report.SHEET_NEG, report.A_COUNT, 3)            # BP APP: 3 really on the shelf
-    fill(report.SHEET_NEG, report.A_COUNT, 0, row=6)     # SCISSORS: none
-    fill(report.SHEET_MRP, report.A_MRP, 4500)
-    fill(report.SHEET_COST, report.A_COST, 650)
+    def fill(product, header, value):
+        r = col_a.index(product) + 1
+        hdr = next(i for i in range(r - 1, 0, -1) if col_a[i - 1] == 'Product')
+        ws.cell(row=r, column=[c.value for c in ws[hdr]].index(header) + 1, value=value)
+    assert any(str(v).startswith('1. MRP MISSING') for v in col_a) and any(str(v).startswith('3. MINUS STOCK') for v in col_a)
+    fill('ALERE STRIPS 100', report.A_LOOSE, 50)
+    fill('BP APP', report.A_COUNT, 3)            # 3 really on the shelf
+    fill('SCISSORS', report.A_COUNT, 0)          # none
+    fill('WALKER BOOT', report.A_MRP, 4500)
+    fill('COLOPLAST', report.A_COST, 650)
     wb.save(path)
 
     plan, _, _ = load(outlet, items, sheet, report.read_answers(path))
