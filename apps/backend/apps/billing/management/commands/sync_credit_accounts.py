@@ -9,13 +9,17 @@ from apps.billing.models import CreditAccount, CreditTransaction
 logger = logging.getLogger(__name__)
 
 
-def sync_all_credit_accounts():
+def sync_all_credit_accounts(outlet=None):
     """
-    Sync all customers and their linked Sundry Debtors ledgers into
-    CreditAccount and CreditTransaction tables.
+    Sync customers and their linked Sundry Debtors ledgers into CreditAccount and CreditTransaction tables.
     Returns (synced_accounts, total_tx_created).
+
+    `outlet`: only that outlet's customers. The Credit page calls it for the outlet it shows; it used to rebuild the
+    credit history of every customer of EVERY outlet (and one outlet's duplicate account made it fail for all).
     """
     customers = Customer.objects.all().select_related('outlet')
+    if outlet is not None:
+        customers = customers.filter(outlet=outlet)
     synced_accounts = 0
     total_tx_created = 0
 
@@ -40,12 +44,12 @@ def sync_all_credit_accounts():
 
             entries = []
 
-            # 1. Opening Balance
+            # 1. Opening Balance: Dr = the customer owes the shop, Cr = the shop owes the customer
             if ledger.opening_balance and ledger.opening_balance > 0:
                 entries.append({
                     'date': date(2026, 4, 1),
                     'created_at': datetime(2026, 4, 1, 0, 0, tzinfo=timezone.utc),
-                    'type': 'debit',
+                    'type': 'credit' if (ledger.balance_type or 'Dr').lower() == 'cr' else 'debit',
                     'amount': ledger.opening_balance,
                     'description': 'Opening Balance',
                 })

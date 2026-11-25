@@ -2568,7 +2568,7 @@ class CreditAccountListView(APIView):
         if not CreditAccount.objects.filter(outlet=outlet).exists():
             try:
                 from apps.billing.management.commands.sync_credit_accounts import sync_all_credit_accounts
-                sync_all_credit_accounts()
+                sync_all_credit_accounts(outlet=outlet)      # this outlet only: never another outlet's credit history
             except Exception as e:
                 logger.error(f"Error during auto-sync of credit accounts: {e}")
 

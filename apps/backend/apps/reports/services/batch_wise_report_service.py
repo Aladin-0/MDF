@@ -37,7 +37,7 @@ class BatchWiseReportService:
         today = timezone.now().date()
         
         # Base QuerySet: Batches for the outlet
-        qs = Batch.objects.filter(outlet_id=outlet_id).select_related('product')
+        qs = Batch.objects.filter(outlet_id=outlet_id).select_related('product', 'supplier')
         
         if product_id:
             qs = qs.filter(product_id=product_id)
@@ -252,7 +252,8 @@ class BatchWiseReportService:
                 'medicine_name': b.product.name if b.product else "Custom Product",
                 'batch_no': b.batch_no,
                 'manufacturer_name': b.product.manufacturer if b.product else None,
-                'supplier_name': getattr(b, 'supplier_name_annotated', None) or '',
+                # no purchase bill (opening stock): the supplier assigned to the batch, as the Expiry Manager shows it
+                'supplier_name': getattr(b, 'supplier_name_annotated', None) or (b.supplier.name if b.supplier_id else ''),
                 'purchase_invoice_no': getattr(b, 'purchase_invoice_no_annotated', None) or '',
                 'purchase_date': getattr(b, 'purchase_date_annotated', None) or (b.created_at.date().isoformat() if b.created_at else None),
                 'last_sale_date': getattr(b, 'last_sale_date_annotated', None),

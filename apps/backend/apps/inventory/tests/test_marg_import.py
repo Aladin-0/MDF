@@ -620,7 +620,7 @@ def test_the_daybook_becomes_bills_vouchers_and_journal(books):
     ]
     bk = BK.build_books(outlet, daybook)
     BK.purge_books(outlet)
-    done = BK.write_books(bk, BK.Ledgers(outlet), BK.History(outlet))
+    done = BK.write_books(bk, BK.Ledgers(outlet), BK.History(outlet, bk))
     dues = BK.settle(outlet)
     checked = BK.verify(bk)
     assert done['journal_entries'] == 10 and checked['sales'] == 3 and checked['sales_billed'] == D('2225.00')
@@ -634,10 +634,17 @@ def test_the_daybook_becomes_bills_vouchers_and_journal(books):
     assert r1.customer.phone == '9876500001' and r1.billed_by is not None
     item = r1.items.get()
     assert (item.batch.batch_no, item.batch.is_active, item.batch.qty_strips, item.batch_no, item.gst_rate, item.gst_amount) == (BK.HISTORY_BATCH, False, 0, 'HEAVY', D('5'), D('30.96'))
+    # profit reports need a cost. GLOVE BOX: Rs 2000 + 5% GST for 3 units (2 + 1 free), Rs 1000 for 1, Rs 500 for 1 (no GST)
+    # -> Rs 3500 / 5 = 700 before GST, Rs 3600 / 5 = 720 with it. KNEE CAP was never bought: its live batch's cost
+    glove = SaleInvoice.objects.get(outlet=outlet, invoice_no='R2').items.get().batch
+    assert (glove.purchase_rate, glove.landing_rate) == (D('700.00'), D('720.00'))
+    assert item.batch.purchase_rate == live_batch.purchase_rate and item.batch.purchase_rate > 0
     r2 = SaleInvoice.objects.get(outlet=outlet, invoice_no='R2')
     assert (r2.payment_mode, r2.credit_given, r2.amount_due, r2.customer.name) == ('credit', D('1050'), D('1050'), 'DR MEHTA')
     assert SalesReturn.objects.get(outlet=outlet).refund_mode == 'cash'
 
+    amount_only = PurchaseInvoice.objects.get(outlet=outlet, invoice_no='S-OLD')
+    assert amount_only.taxable_amount == D('1000') and amount_only.round_off == 0     # booked to no purchase ledger: goods value still shown
     p = PurchaseInvoice.objects.get(outlet=outlet, invoice_no='INV/9')
     assert (p.status, p.grand_total, p.gst_amount, p.distributor.name) == ('POSTED', D('2100'), D('100'), 'SHREE SURGICAL SUPPLIERS')
     assert p.items.get().free_qty == 1
@@ -658,7 +665,7 @@ def test_the_daybook_becomes_bills_vouchers_and_journal(books):
 
     # run again (the switch-over evening repeats it): the same books, nothing doubled
     BK.purge_books(outlet)
-    BK.write_books(bk, BK.Ledgers(outlet), BK.History(outlet))
+    BK.write_books(bk, BK.Ledgers(outlet), BK.History(outlet, bk))
     BK.settle(outlet)
     assert BK.verify(bk) == checked and Ledger.objects.get(outlet=outlet, name='DR MEHTA').current_balance == D('364350')
 

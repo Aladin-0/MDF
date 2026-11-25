@@ -194,6 +194,12 @@ class Books:
     fixes: list = field(default_factory=list)
     counts: Counter = field(default_factory=Counter)
     marg_totals: dict = field(default_factory=dict)
+    unit_cost: dict = field(default_factory=lambda: defaultdict(lambda: [ZERO, ZERO, ZERO]))   # item key -> [cost before GST, with GST, units bought]
+
+    def cost_of(self, name):
+        """(cost of one unit before GST, with GST) from what Marg's purchases paid on average, or None."""
+        c = self.unit_cost.get(name_key(name))
+        return (cents(c[0] / c[2]), cents(c[1] / c[2])) if c and c[2] else None
 
     def of(self, kind):
         return [f for f in self.fixes if f.kind == kind]
@@ -206,6 +212,17 @@ def build_books(outlet, vouchers) -> Books:
             raise ValueError(f'Unknown Marg voucher type "{v.kind}" ({v.number}).')
         books.counts[v.kind] += 1
         books.entries.append(journal_lines(v, books.fixes))
+    for v in vouchers:
+        if v.kind != 'Purchase':
+            continue
+        for it in v.items:
+            qty = abs(it.actual) or abs(it.billed)
+            if qty and it.amount:
+                rate, _ = item_rate(it)
+                c = books.unit_cost[name_key(it.name)]
+                c[0] += abs(it.amount)
+                c[1] += abs(it.amount) * (1 + rate / 100)
+                c[2] += qty
     sales = [v for v in vouchers if v.kind == 'Sales']
     books.marg_totals = {
         'sales_billed': sum((-a for v in sales for _, a in v.lines if a < 0), ZERO),
@@ -227,10 +244,15 @@ def _staff(outlet):
 
 
 class History:
-    """One switched-off, empty batch per product for the lines of old bills."""
+    """
+    One switched-off, empty batch per product for the lines of old bills. It carries the item's cost of ONE unit, because
+    every profit report reads the cost of a sale from its batch (a cost of 0 made the Gross Profit report show 100%):
+    what Marg's purchases paid on average, else the cost of the outlet's live batch of the item, else 0.
+    """
 
-    def __init__(self, outlet):
+    def __init__(self, outlet, books=None):
         self.outlet = outlet
+        self.books = books
         self.products = defaultdict(list)
         for p in MasterProduct.objects.all():
             self.products[name_key(p.name)].append(p)
@@ -250,9 +272,16 @@ class History:
     def batch(self, product):
         b = self.batches.get(product.id)
         if b is None:
+            cost = self.books.cost_of(product.name) if self.books else None
+            if cost is None:
+                live = Batch.objects.filter(outlet=self.outlet, product=product, is_active=True).exclude(batch_no=HISTORY_BATCH).order_by('-created_at').first()
+                if live:
+                    size = Decimal(live.pack_size or 1)
+                    cost = (cents(live.purchase_rate / size), cents((live.landing_rate or live.purchase_rate) / size))
+            ex, inc = cost or (ZERO, ZERO)
             b = self.batches[product.id] = Batch.objects.create(
                 outlet=self.outlet, product=product, batch_no=HISTORY_BATCH, expiry_date=rules.NO_EXPIRY, mrp=product.mrp or ZERO,
-                purchase_rate=ZERO, pack_size=1, pack_unit=product.pack_unit or 'piece', pack_type=product.pack_type or 'piece',
+                purchase_rate=ex, landing_rate=inc, pack_size=1, pack_unit=product.pack_unit or 'piece', pack_type=product.pack_type or 'piece',
                 qty_strips=0, qty_loose=0, is_active=False, is_opening_stock=False)
         return b
 
@@ -380,6 +409,11 @@ def write_books(books: Books, ledgers: Ledgers, history: History) -> dict:
             party = next((a for n, a in v.lines if norm(n) == norm(v.party)), ZERO)
             grand = party if party > 0 else sum((cr for l, dr, cr in jlines if cr and l.group.nature in ('asset', 'liability') and not tax_kind(l.name)), ZERO)
             taxable = sum((dr - cr for l, dr, cr in jlines if l.group.nature == 'expense' and l.name != 'Round Off'), ZERO)
+            goods = cents(sum((abs(it.amount) for it in v.items), ZERO))
+            if goods > taxable:
+                # Marg booked all or part of the bill to a ledger that is not a purchase ledger (its "SUSPENSE ACCOUNT"): the goods
+                # are still what was bought, so the purchase register and GST returns show their value (the journal stays as Marg's)
+                taxable = goods
             extra = sum((dr - cr for l, dr, cr in jlines if l.name == DIFF_LEDGER), ZERO)   # what Marg's bill holds beyond goods + tax
             inv = PurchaseInvoice(
                 outlet=outlet, distributor=supplier_for(v.party), invoice_no=v.number[:100], invoice_date=day, status='POSTED', godown='main',

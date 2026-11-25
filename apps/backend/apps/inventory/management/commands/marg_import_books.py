@@ -61,7 +61,7 @@ class Command(BaseCommand):
                 others = parties.others_fingerprint(outlet)
                 stock = parties.outlet_stock_fingerprint(outlet)
                 removed = B.purge_books(outlet)
-                done = B.write_books(books, B.Ledgers(outlet), B.History(outlet))
+                done = B.write_books(books, B.Ledgers(outlet), B.History(outlet, books))
                 dues = B.settle(outlet)
                 checked = B.verify(books)
                 if parties.others_fingerprint(outlet) != others:

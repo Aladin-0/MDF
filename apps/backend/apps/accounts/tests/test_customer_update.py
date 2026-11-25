@@ -196,3 +196,20 @@ def test_the_customers_list_and_page_show_how_many_bills_a_customer_has(shop):
     rows = client.get('/api/v1/customers/', {'outletId': str(outlet.id), 'search': 'BILL COUNT'}).json()['data']
     assert [r['totalVisits'] for r in rows] == [2]
     assert client.get(f'/api/v1/customers/{c.id}/', {'outletId': str(outlet.id)}).json()['totalVisits'] == 2
+
+
+def test_opening_the_credit_page_builds_credit_accounts_for_that_outlet_only(shop):
+    """It used to rebuild the credit history of every customer of EVERY outlet, and read every opening as money owed."""
+    from decimal import Decimal as Dec
+    from apps.accounts.models import Ledger, LedgerGroup
+    from apps.billing.models import CreditAccount, CreditTransaction
+    outlet, other, person, put, client = shop
+    owes = person('OWES US', '9876500021')
+    Ledger.objects.filter(linked_customer=owes).update(opening_balance=Dec('500'), balance_type='Dr', current_balance=Dec('500'))
+    advance = person('PAID AHEAD', '9876500022')
+    Ledger.objects.filter(linked_customer=advance).update(opening_balance=Dec('200'), balance_type='Cr', current_balance=Dec('-200'))
+    elsewhere = person('OTHER SHOP', '9876500023', out=other, ledger_name=None)
+    assert client.get('/api/v1/credit/', {'outletId': str(outlet.id)}).status_code == 200
+    assert not CreditAccount.objects.filter(customer=elsewhere).exists()
+    assert CreditTransaction.objects.get(customer=owes).type == 'debit'
+    assert CreditTransaction.objects.get(customer=advance).type == 'credit'
