@@ -5502,9 +5502,9 @@
     "semantic_hash": ""
   },
   "PROJECT_MAP.md": {
-    "mtime": 1795523804.6035638,
-    "seen": 1795523824.3912168,
-    "ast_hash": "4ba25a2c4b658f9d6fb7106e3e970d7e",
+    "mtime": 1795567343.020901,
+    "seen": 1795567452.8925009,
+    "ast_hash": "8af0b6fccf4362cada7d180d6bf648be",
     "semantic_hash": ""
   },
   "apps/backend/apps/reports/tests/tests_purchase_reports_db.py": {
@@ -5574,9 +5574,9 @@
     "semantic_hash": ""
   },
   "docs/DEPLOYMENT_GUIDE.md": {
-    "mtime": 1795519141.7091837,
-    "seen": 1795519158.859364,
-    "ast_hash": "36970694c452b86a3737cc935d203841",
+    "mtime": 1795524989.647439,
+    "seen": 1795562762.2261674,
+    "ast_hash": "630277943814830edd963f5aae4cbb07",
     "semantic_hash": ""
   },
   "apps/backend/apps/core/management/commands/dump_permission_matrix.py": {
@@ -7863,6 +7863,84 @@
     "mtime": 1795523844.5508215,
     "seen": 1795524405.84264,
     "ast_hash": "6af53b10688040bd23c5b4f6f523cef2",
+    "semantic_hash": ""
+  },
+  "apps/backend/apps/billing/tests/test_cost_floor_one_rule.py": {
+    "mtime": 1795523699.9420278,
+    "seen": 1795562762.2244253,
+    "ast_hash": "9974bed953ab6eab7f7135a206193c56",
+    "semantic_hash": ""
+  },
+  "apps/backend/apps/inventory/management/commands/marg_import_stock.py": {
+    "mtime": 1795567343.0169659,
+    "seen": 1795567452.891026,
+    "ast_hash": "0b2407ce84fcf69313a3d54df129f9c0",
+    "semantic_hash": ""
+  },
+  "apps/backend/apps/inventory/marg_import/__init__.py": {
+    "mtime": 1795567343.0136092,
+    "seen": 1795567452.8910341,
+    "ast_hash": "d6163380e75598c95f3f05acd8edbfff",
+    "semantic_hash": ""
+  },
+  "apps/backend/apps/inventory/marg_import/apply.py": {
+    "mtime": 1795567343.0126832,
+    "seen": 1795567452.8910353,
+    "ast_hash": "efd4996c31eb7095b682a5cc638541db",
+    "semantic_hash": ""
+  },
+  "apps/backend/apps/inventory/marg_import/files.py": {
+    "mtime": 1795567343.0135028,
+    "seen": 1795567452.8910382,
+    "ast_hash": "0c12cc2a79dbd74b62f8363ce98cb7e1",
+    "semantic_hash": ""
+  },
+  "apps/backend/apps/inventory/marg_import/plan.py": {
+    "mtime": 1795567343.014475,
+    "seen": 1795567452.891041,
+    "ast_hash": "ac79d2fd64c7fa93fb31ab7bd8fefa14",
+    "semantic_hash": ""
+  },
+  "apps/backend/apps/inventory/marg_import/report.py": {
+    "mtime": 1795567343.0147717,
+    "seen": 1795567452.8910425,
+    "ast_hash": "15acc6702d602bfce4fa21ef3c727c3a",
+    "semantic_hash": ""
+  },
+  "apps/backend/apps/inventory/marg_import/rules.py": {
+    "mtime": 1795567343.0151415,
+    "seen": 1795567452.891044,
+    "ast_hash": "42781057bfcbdcf98c4e360714d348fc",
+    "semantic_hash": ""
+  },
+  "apps/backend/apps/inventory/management/commands/marg_import_parties.py": {
+    "mtime": 1795567343.016769,
+    "seen": 1795567452.891024,
+    "ast_hash": "770b2d800559d56cee7340fd1c325bf7",
+    "semantic_hash": ""
+  },
+  "apps/backend/apps/inventory/marg_import/parties.py": {
+    "mtime": 1795567343.013901,
+    "seen": 1795567452.8910391,
+    "ast_hash": "3b9b8382652708c121b005899bef0ca8",
+    "semantic_hash": ""
+  },
+  "apps/backend/apps/inventory/management/commands/marg_import_books.py": {
+    "mtime": 1795567343.0165362,
+    "seen": 1795567452.8910215,
+    "ast_hash": "cdba75bf6e6b2a08ef925f92e3fe3564",
+    "semantic_hash": ""
+  },
+  "apps/backend/apps/inventory/marg_import/books.py": {
+    "mtime": 1795567343.0131457,
+    "seen": 1795567452.8910367,
+    "ast_hash": "dcac815ffe4770f354314c895d8f9491",
+    "semantic_hash": ""
+  },
+  "apps/backend/apps/inventory/tests/test_marg_import.py": {
+    "mtime": 1795567373.4484425,
+    "seen": 1795567452.8911147,
+    "ast_hash": "566a72905705be359fc7aefea063e926",
     "semantic_hash": ""
   },
   "package-lock.json": {
