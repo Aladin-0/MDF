@@ -660,6 +660,18 @@ def _date_or_none(value):
     return parsed or False
 
 
+def bill_counts(customer_ids) -> dict:
+    """
+    How many bills each customer has (cancelled bills and return bills not counted), counted from the bills themselves.
+    The page's "Total bills" used to read `totalVisits`, which no response sent (and `Customer.total_visits` is never
+    updated by billing), so every customer showed 0 bills.
+    """
+    from apps.billing.models import SaleInvoice
+    rows = (SaleInvoice.objects.filter(customer_id__in=list(customer_ids), is_cancelled=False, is_return=False)
+            .values('customer_id').annotate(n=Count('id')))
+    return {str(r['customer_id']): r['n'] for r in rows}
+
+
 def _customer_detail(customer):
     """One customer as GET and PUT /customers/<id>/ return it."""
     from apps.accounts.family_accounts import account_ledger
@@ -682,6 +694,7 @@ def _customer_detail(customer):
         'stateCode': customer.state_code,
         'outstanding': float(customer.outstanding_balance),
         'totalPurchases': float(customer.total_purchases),
+        'totalVisits': bill_counts([customer.id]).get(str(customer.id), 0),
         'isChronic': customer.is_chronic,
         'isActive': customer.is_active,
         'createdAt': customer.created_at.isoformat(),
@@ -900,6 +913,8 @@ class CustomerListView(APIView):
             ).only('linked_customer_id', 'current_balance')
         }
 
+        bills = bill_counts(c.id for c in customers_page)
+
         # Serialize customers
         results = []
         for customer in customers_page:
@@ -924,6 +939,7 @@ class CustomerListView(APIView):
                 'stateCode': customer.state_code,
                 'outstanding': outstanding,
                 'totalPurchases': float(customer.total_purchases),
+                'totalVisits': bills.get(cid, 0),
                 'isChronic': customer.is_chronic,
                 'isActive': customer.is_active,
                 'createdAt': customer.created_at.isoformat(),

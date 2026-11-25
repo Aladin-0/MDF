@@ -179,3 +179,20 @@ def test_the_outlet_defaults_to_the_users_own_and_other_outlets_stay_closed(shop
     theirs = person('Theirs', '9000000014', out=other)
     assert client.put(f'/api/v1/customers/{theirs.id}/', {'address': 'x'}, format='json').status_code == 404
     assert client.put(f'/api/v1/customers/{theirs.id}/', {'outletId': str(other.id), 'address': 'x'}, format='json').status_code == 403
+
+
+def test_the_customers_list_and_page_show_how_many_bills_a_customer_has(shop):
+    """"Total bills" read `totalVisits`, which no response sent: every customer showed 0 bills."""
+    from apps.billing.tests.factories import make_test_invoice
+    from apps.accounts.tests.factories import StaffFactory
+    outlet, other, person, put, client = shop
+    c = person('BILL COUNT', '9876500011')
+    staff = StaffFactory(outlet=outlet, role='admin')
+    make_test_invoice(outlet, staff, customer=c, paid=0)
+    make_test_invoice(outlet, staff, customer=c, paid=0)
+    cancelled = make_test_invoice(outlet, staff, customer=c, paid=0)
+    cancelled.is_cancelled = True
+    cancelled.save(update_fields=['is_cancelled'])
+    rows = client.get('/api/v1/customers/', {'outletId': str(outlet.id), 'search': 'BILL COUNT'}).json()['data']
+    assert [r['totalVisits'] for r in rows] == [2]
+    assert client.get(f'/api/v1/customers/{c.id}/', {'outletId': str(outlet.id)}).json()['totalVisits'] == 2
