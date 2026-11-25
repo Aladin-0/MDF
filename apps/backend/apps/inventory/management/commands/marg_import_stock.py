@@ -36,6 +36,7 @@ class Command(BaseCommand):
         parser.add_argument('--stock', required=True, help="Marg's stock report (.xls)")
         parser.add_argument('--answers', help='The Excel lists with the yellow columns filled in by the shop')
         parser.add_argument('--report', help='Write the Excel lists for the shop to this path')
+        parser.add_argument('--shop-form', help='Write the short form for the shop (only what blocks billing) to this path')
         parser.add_argument('--apply', action='store_true', help='Save. Without it everything is undone at the end')
         parser.add_argument('--confirm', help="With --apply: the outlet's exact name, typed by hand")
         parser.add_argument('--allow-open-issues', action='store_true',
@@ -60,6 +61,8 @@ class Command(BaseCommand):
             self._guard(outlet, plan, o)
         if o['report']:
             report.write_workbook(plan, o['report'])
+        if o['shop_form']:
+            report.write_shop_form(plan, o['shop_form'])
 
         w = self.stdout.write
         w(f"\nOutlet      : {outlet.name} ({outlet.id})")

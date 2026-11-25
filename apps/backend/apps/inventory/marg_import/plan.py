@@ -1,4 +1,5 @@
 """Work out what loading the files would change. Reads the catalogue; writes nothing."""
+import dataclasses
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date
@@ -30,6 +31,7 @@ class Answers:
     loose: dict = field(default_factory=dict)       # (product key, batch) -> int, loose pieces
     pack_size: dict = field(default_factory=dict)   # product key -> int, units in one pack
     tax: dict = field(default_factory=dict)         # product key -> (hsn or '', gst or None)
+    stock: dict = field(default_factory=dict)       # (product key, batch) -> int, whole packs counted on the shelf (rows Marg shows below zero)
 
 
 def batch_key(product_name, batch_text) -> tuple:
@@ -257,11 +259,14 @@ def build_plan(outlet, items, sheet: StockSheet, answers: Answers | None = None)
 
 
 def _plan_row(plan, pp, r, gst, answers):
-    if r.stock <= 0:
-        if r.stock < 0:
-            plan.issues.append(Issue(NEGATIVE_STOCK, r.name, r))
-        return
     bkey = batch_key(r.name, r.batch)
+    if r.stock <= 0:
+        counted = answers.stock.get(bkey)
+        if not counted:          # the shop has not counted it (or found none): nothing to shelve
+            if r.stock < 0 and counted is None:
+                plan.issues.append(Issue(NEGATIVE_STOCK, r.name, r))
+            return
+        r = dataclasses.replace(r, stock=Decimal(counted))      # Marg is wrong; the shop's count is the stock
     qty = rules.read_quantity(r.stock, pp.pack.size)
     loose = qty.loose
     if bkey in answers.loose and 0 <= answers.loose[bkey] < max(pp.pack.size, 1):

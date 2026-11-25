@@ -577,6 +577,10 @@ def test_journal_lines_correct_margs_export():
                                  IT('GEL HEATING BAG', '202.07', tax_class='LS-GST 18 %', alloc='GST LOCAL SALES 18 %')]), fixes)
     assert double.dropped == {1} and ('LOCAL SALES TAX PAID', D('201.96')) in double.lines and ('GST LOCAL SALES 18 %', D('202.07')) not in double.lines
     assert sum(a for _, a in double.lines) == 0
+    several = BK.journal_lines(V('Purchase', 'P2', 'ACME', [('ACME', '3419'), ('LOCAL PURCHASE TAX PAID', '-1732.40'), ('SGST PURCHASE TAX 2.5 %', '-70.80'), ('CGST PURCHASE TAX 2.5 %', '-70.80')],
+                                 [IT('BELT', '-1545', alloc='GST LOCAL PURCHASE 5 %'), IT('PAD', '-1000', tax_class='', alloc='GST LOCAL PURCHASE 5 %'),
+                                  IT('TAPE', '-732.50', tax_class='', alloc='GST LOCAL PURCHASE 5 %')]), fixes)
+    assert several.dropped == {1, 2} and sum(a for _, a in several.lines) == 0 and (BK.DIFF_LEDGER, D('1732.50')) not in several.lines
     odd = BK.journal_lines(V('Purchase', 'P1', 'ACME SURGICALS', [('ACME SURGICALS', '7655'), ('SGST PURCHASE TAX 2.5 %', '-174.13'), ('CGST PURCHASE TAX 2.5 %', '-174.13')],
                              [IT('WALKER', '-6965', alloc='GST LOCAL PURCHASE 5 %')]), fixes)
     assert (BK.DIFF_LEDGER, D('-341.74')) in odd.lines and fixes[-1].kind == 'difference'
@@ -672,3 +676,33 @@ def test_the_pl_opening_stock_is_margs_own_1_april_figure():
         ('KNEE CAP L', date(2026, 4, 1), None, D('2414.16')), ('OLD BELT', date(2026, 4, 1), None, D('500.00'))]
     assert checked['marg_opening_stock'] == D('2914.16') and done['marg_opening_rows'] == 2
     assert ledger_health.scan(outlet)['counts']['OK'] == 1        # the batch and its ledger still agree
+
+
+@pytest.mark.django_db
+def test_the_short_shop_form_comes_back_and_loads(tmp_path):
+    """The form sent to the shop: loose pieces, a count for a minus row, MRP and cost; filled in and read straight back."""
+    outlet = OutletFactory()
+    items = [item('WALKER BOOT'), item('ALERE STRIPS 100', conversion=100), item('BP APP'), item('COLOPLAST'), item('SCISSORS')]
+    sheet = sheet_of(line('WALKER BOOT', 1, '2527.5', 0, batch='5055'), line('ALERE STRIPS 100', '0.5', 900, 2100),
+                     line('BP APP', -8, 750, 2000), line('SCISSORS', -2, 100, 300), line('COLOPLAST', 1, '808.5', 715))
+    path = tmp_path / 'please_fill.xlsx'
+    report.write_shop_form(P.build_plan(outlet, items, sheet), path)
+
+    wb = load_workbook(path)
+    assert wb.sheetnames == ['Read me', report.SHEET_QTY, report.SHEET_NEG, report.SHEET_MRP, report.SHEET_COST]
+
+    def fill(title, header, value, row=5):
+        ws = wb[title]
+        ws.cell(row=row, column=[c.value for c in ws[4]].index(header) + 1, value=value)
+    fill(report.SHEET_QTY, report.A_LOOSE, 50)
+    fill(report.SHEET_NEG, report.A_COUNT, 3)            # BP APP: 3 really on the shelf
+    fill(report.SHEET_NEG, report.A_COUNT, 0, row=6)     # SCISSORS: none
+    fill(report.SHEET_MRP, report.A_MRP, 4500)
+    fill(report.SHEET_COST, report.A_COST, 650)
+    wb.save(path)
+
+    plan, _, _ = load(outlet, items, sheet, report.read_answers(path))
+    assert not plan.blocking and not plan.of(P.NEGATIVE_STOCK) and not plan.of(P.COST_ABOVE_MRP)
+    stock = {b.product.name: (b.qty_strips, b.qty_loose, b.mrp, b.landing_rate) for b in Batch.objects.filter(outlet=outlet)}
+    assert stock['BP APP'][:2] == (3, 0) and 'SCISSORS' not in stock
+    assert stock['ALERE STRIPS 100'][:2] == (0, 50) and stock['WALKER BOOT'][2] == D('4500') and stock['COLOPLAST'][3] == D('650')

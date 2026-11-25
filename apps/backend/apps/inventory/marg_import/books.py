@@ -21,6 +21,7 @@ empty "MARG-HISTORY" batch per product, so the live batches and their stock ledg
 """
 import re
 from collections import Counter, defaultdict
+from itertools import combinations
 from dataclasses import dataclass, field
 from datetime import datetime, time
 from decimal import ROUND_HALF_UP, Decimal
@@ -120,6 +121,21 @@ def journal_lines(v, fixes: list) -> Entry:
                 dropped.add(i)
                 gap -= it.alloc_amount
                 fixes.append(Fix('double', v.kind, v.number, abs(it.alloc_amount), f'{it.name}: kept on the tax-free ledger line, item copy dropped'))
+        # the same, with the plain line covering SEVERAL items together (two items = one "TAX PAID" line)
+        left = [(i, it) for i, it in alloc if i not in dropped and (it.alloc_amount > 0) == (gap > 0)]
+        for a in sorted(plain, key=abs, reverse=True):
+            if abs(gap) <= ROUNDING_LIMIT or len(left) > 14:
+                break
+            hit = next((combo for k in range(2, min(4, len(left)) + 1) for combo in combinations(left, k)
+                        if abs(sum(it.alloc_amount for _, it in combo) - a) <= ROUNDING_LIMIT), None)
+            if hit and abs(gap - sum(it.alloc_amount for _, it in hit)) < abs(gap):
+                for i, it in hit:
+                    lines.remove((it.alloc_ledger, it.alloc_amount))
+                    dropped.add(i)
+                    gap -= it.alloc_amount
+                    left.remove((i, it))
+                fixes.append(Fix('double', v.kind, v.number, abs(sum(it.alloc_amount for _, it in hit)),
+                                 f"{', '.join(it.name for _, it in hit)}: kept on the tax-free ledger line, item copies dropped"))
     if gap:
         if abs(gap) <= ROUNDING_LIMIT:
             lines.append(('Round Off', -gap))
