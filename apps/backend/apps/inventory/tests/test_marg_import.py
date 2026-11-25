@@ -696,7 +696,9 @@ def test_the_short_shop_form_comes_back_and_loads(tmp_path):
     report.write_shop_form(P.build_plan(outlet, items, sheet), path)
 
     wb = load_workbook(path)
-    assert wb.sheetnames == ['Read me', report.SHEET_QTY, report.SHEET_NEG, report.SHEET_MRP, report.SHEET_COST]
+    # opens on a product list (a phone shows only the first sheet): no instructions-only sheet
+    assert wb.sheetnames == [report.SHEET_MRP, report.SHEET_QTY, report.SHEET_NEG, report.SHEET_COST]
+    assert wb.active.title == report.SHEET_MRP and wb[report.SHEET_MRP]['A5'].value == 'WALKER BOOT'
 
     def fill(title, header, value, row=5):
         ws = wb[title]

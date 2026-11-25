@@ -153,43 +153,30 @@ def write_shop_form(plan, path) -> None:
     """
     The short form for the shop: only what blocks billing, in plain words, yellow boxes to fill. Same sheet names and
     columns as the full lists, so `read_answers` reads it back the same way (`--answers <this file>`).
+    It opens straight on a list of products (no instructions-only first sheet: a phone or a chat preview shows only the
+    first sheet, and the shop saw an empty file). The biggest list comes first; each sheet says what to write.
     """
     wb = Workbook()
-    ws = wb.active
-    ws.title = 'Read me'
-    lines = [
-        f'{plan.outlet.name}: please fill in the YELLOW boxes',
-        f'Stock as in Marg on {plan.sheet.as_on:%d-%b-%Y}. Fill only the yellow column(s) of each sheet; leave a box empty if you do not know.',
-        '',
-        f'Sheet "{SHEET_QTY}" ({len(plan.of(P.QTY_UNCLEAR))} items): count the LOOSE pieces on the shelf (pieces outside full boxes).',
-        f'Sheet "{SHEET_NEG}" ({len(plan.of(P.NEGATIVE_STOCK))} items): Marg shows minus stock. Count how many are really on the shelf (write 0 if none).',
-        f'Sheet "{SHEET_MRP}" ({len(plan.of(P.MRP_MISSING))} items): write the MRP of ONE pack, from the box or label. These cannot be billed without it.',
-        f'Sheet "{SHEET_COST}" ({len(plan.of(P.COST_ABOVE_MRP))} items): the cost is higher than the MRP, so one is wrong. Write the right MRP and/or cost of ONE pack.',
-        '',
-        'Please send the file back as it is (do not rename the sheets or columns).',
-    ]
-    for r, text in enumerate(lines, start=1):
-        c = ws.cell(row=r, column=1, value=text)
-        if r == 1:
-            c.font = Font(bold=True, size=14)
-    ws.column_dimensions['A'].width = 120
-    _table(wb, SHEET_QTY, 'Count the loose pieces on the shelf for each item (pieces that are not in a full box).',
+    wb.remove(wb.active)
+    note = ' Fill only the yellow column; leave it empty if you do not know. Send the file back as it is.'
+    _table(wb, SHEET_MRP, f'{plan.outlet.name}: write the MRP of ONE pack, from the box or label. These cannot be billed without it.' + note,
+           ['Product', 'Batch', 'Stock', 'Cost of one pack', 'Excel row', A_MRP],
+           [(i.row.name, i.row.batch, _stock_text(i.row), i.row.cost, i.row.line, None) for i in plan.of(P.MRP_MISSING)],
+           [44, 18, 12, 16, 10, 24], money=(4,), right=(3, 4, 5, 6))
+    _table(wb, SHEET_QTY, f'{plan.outlet.name}: count the LOOSE pieces on the shelf for each item (pieces that are not in a full box).' + note,
            ['Product', 'Batch', 'Marg shows', 'Pieces in one box', 'Full boxes', 'It could mean (loose pieces)', 'Excel row', A_LOOSE, A_PACK],
            [(i.row.name, i.row.batch, _stock_text(i.row), i.detail['pack_size'] if i.detail['pack_size'] > 1 else 'not set in Marg', i.detail['packs'],
              ' or '.join(str(c) for c in i.detail['choices']) or 'cannot tell', i.row.line, None, None) for i in plan.of(P.QTY_UNCLEAR)],
            [44, 18, 12, 16, 12, 22, 10, 24, 20], right=(3, 4, 5, 7, 8, 9))
-    _table(wb, SHEET_NEG, 'Marg shows minus stock for these. How many are really on the shelf? Write 0 if none.',
+    _table(wb, SHEET_NEG, f'{plan.outlet.name}: Marg shows MINUS stock for these. How many are really on the shelf? Write 0 if none.' + note,
            ['Product', 'Batch', 'Stock in Marg', 'Value in Marg', 'Excel row', A_COUNT],
            [(i.row.name, i.row.batch, _stock_text(i.row), i.row.value, i.row.line, None) for i in plan.of(P.NEGATIVE_STOCK)],
            [44, 18, 14, 14, 10, 24], money=(4,), right=(3, 4, 5, 6))
-    _table(wb, SHEET_MRP, 'Write the MRP of ONE pack, from the box or label.',
-           ['Product', 'Batch', 'Stock', 'Cost of one pack', 'Excel row', A_MRP],
-           [(i.row.name, i.row.batch, _stock_text(i.row), i.row.cost, i.row.line, None) for i in plan.of(P.MRP_MISSING)],
-           [44, 18, 12, 16, 10, 24], money=(4,), right=(3, 4, 5, 6))
-    _table(wb, SHEET_COST, 'The cost is higher than the MRP. Write the right MRP and/or the right cost of ONE pack.',
+    _table(wb, SHEET_COST, f'{plan.outlet.name}: the cost is higher than the MRP, so one is wrong. Write the right MRP and/or the right cost of ONE pack.' + note,
            ['Product', 'Batch', 'Stock', 'Cost of one pack', 'MRP', 'Excel row', A_MRP, A_COST],
            [(i.row.name, i.row.batch, _stock_text(i.row), i.detail['landing'], i.detail['mrp'], i.row.line, None, None) for i in plan.of(P.COST_ABOVE_MRP)],
            [44, 18, 12, 16, 12, 10, 24, 24], money=(4, 5), right=(3, 4, 5, 6, 7, 8))
+    wb.active = 0
     wb.save(path)
 
 
