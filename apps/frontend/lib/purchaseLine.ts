@@ -63,6 +63,16 @@ export const calcPTS = (ptr: number, stockistMargin = 5) =>
 export const isStartedLine = (it: Pick<PurchaseItemFormData, 'productId' | 'productName'>): boolean =>
     !!((it.productId && it.productId.trim()) || (it.productName && it.productName.trim()));
 
+/**
+ * Something must come in: paid packs, free packs, or both. A line the distributor gave entirely free (Qty 0, Free 3) is a real line;
+ * a line with neither is not. This is the one rule: the form schema, the phone's checks and the line sheet all use it.
+ */
+export const hasQuantity = (it: { qty?: unknown; freeQty?: unknown }): boolean => {
+    const paid = Number(it.qty) || 0;
+    const free = Number(it.freeQty) || 0;
+    return paid >= 0 && free >= 0 && paid + free > 0;
+};
+
 export type LineIssue = 'product' | 'batch' | 'expiry' | 'pkg' | 'qty' | 'rate' | 'mrp';
 
 const ISSUE_TEXT: Record<LineIssue, string> = {
@@ -70,7 +80,7 @@ const ISSUE_TEXT: Record<LineIssue, string> = {
     batch: 'Batch number needed',
     expiry: 'Expiry needed (MM/YY)',
     pkg: 'Pkg (units per pack) needed',
-    qty: 'Quantity needed',
+    qty: 'Quantity or free quantity needed',
     rate: 'Rate needed',
     mrp: 'MRP needed',
 };
@@ -84,7 +94,7 @@ export function lineIssues(it: PurchaseItemFormData): LineIssue[] {
     const exp = (it.expiryDate || '').trim();
     if (!exp || !/^\d{4}-\d{2}-\d{2}$/.test(finishExpiryInput(exp))) out.push('expiry');
     if (!parsePkg(it.pkg).ok) out.push('pkg');                 // blank, decimal or out of range: never silently 1
-    if (!(Number(it.qty) > 0)) out.push('qty');
+    if (!hasQuantity(it)) out.push('qty');          // qty 0 is fine when the line has free packs
     if (!(Number(it.purchaseRate) > 0)) out.push('rate');
     if (!(Number(it.mrp) > 0)) out.push('mrp');
     return out;

@@ -52,9 +52,9 @@ describe('PurchaseLineCard', () => {
     });
 
     it('an unfinished line lists what is missing, in plain words', () => {
-        show(goodLine({ batchNo: '', qty: 0 }));
+        show(goodLine({ batchNo: '', qty: 0, freeQty: 0 }));
         expect(screen.getByTestId('line-issues')).toHaveTextContent('Batch number needed');
-        expect(screen.getByTestId('line-issues')).toHaveTextContent('Quantity needed');
+        expect(screen.getByTestId('line-issues')).toHaveTextContent('Quantity or free quantity needed');
     });
 
     it('an expired batch is marked red with the word Expired; expiring soon is amber with its own words', () => {

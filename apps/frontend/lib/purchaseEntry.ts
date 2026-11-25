@@ -8,6 +8,7 @@ import { format, addDays, differenceInDays } from 'date-fns';
 import type { PurchaseItemFormData } from '@/types';
 import { normalizeExpiryDate } from '@/utils/payloadBuilders';
 import { parsePkg, pkgOrZero } from '@/lib/purchasePack';
+import { hasQuantity } from '@/lib/purchaseLine';
 
 export const normalizeExpiry = normalizeExpiryDate;
 
@@ -45,7 +46,7 @@ const itemSchema = z.object({
         return /^\d{4}-\d{2}-\d{2}$/.test(norm);
     }, 'Enter the expiry as MM/YY or MM/YYYY'),
     pkg: pkgField,
-    qty: safePositiveNumber('Enter the quantity'),
+    qty: safeNumber(0, 0),                       // 0 is allowed when the whole line is free (checked below with freeQty)
     freeQty: safeNumber(0, 0),
     purchaseRate: safePositiveNumber('Enter the purchase rate'),
     discountPct: safeNumber(0, 0),
@@ -56,6 +57,8 @@ const itemSchema = z.object({
     ptr: safeNumber(0, 0),
     pts: safeNumber(0, 0),
     saleRate: safeNumber(0, 0),
+}).superRefine((it, ctx) => {
+    if (!hasQuantity(it)) ctx.addIssue({ code: 'custom', path: ['qty'], message: 'Enter the quantity or the free quantity' });
 });
 
 export const schema = z.object({

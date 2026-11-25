@@ -97,7 +97,7 @@ describe('PurchaseLineSheet: filling the line', () => {
     });
 
     it('a required box is only called wrong once the clerk has been in it, and then says what to do', () => {
-        open(goodLine({ batchNo: '', qty: 0, purchaseRate: 0, mrp: 0 }));
+        open(goodLine({ batchNo: '', qty: 0, freeQty: 0, purchaseRate: 0, mrp: 0 }));
         expect(screen.queryByText('Enter the batch number')).not.toBeInTheDocument();
         fireEvent.blur(screen.getByTestId('line-batch'));
         expect(screen.getByText('Enter the batch number')).toBeInTheDocument();
@@ -106,7 +106,7 @@ describe('PurchaseLineSheet: filling the line', () => {
         fireEvent.blur(screen.getByTestId('line-qty'));
         fireEvent.blur(screen.getByTestId('line-rate'));
         fireEvent.blur(screen.getByTestId('line-mrp'));
-        for (const t of ['Enter the quantity', 'Enter the purchase rate', 'Enter the MRP']) expect(screen.getByText(t)).toBeInTheDocument();
+        for (const t of ['Enter the quantity or the free quantity', 'Enter the purchase rate', 'Enter the MRP']) expect(screen.getByText(t)).toBeInTheDocument();
     });
 
     it('the header shows the AMOUNT and the landing cost floor while the fields scroll', () => {

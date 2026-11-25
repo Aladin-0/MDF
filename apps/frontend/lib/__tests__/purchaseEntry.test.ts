@@ -121,7 +121,7 @@ describe('error messages say what to do', () => {
     });
     it('a medicine with nothing filled in', () => {
         const m = issues({ ...base, items: [{ ...emptyItem(), productName: 'Dol' }] }).join(' | ');
-        for (const t of ['Pick the medicine from the list', 'Enter the batch number', 'Enter the expiry (MM/YY)', 'Enter the quantity', 'Enter the purchase rate', 'Enter the MRP']) expect(m).toContain(t);
+        for (const t of ['Pick the medicine from the list', 'Enter the batch number', 'Enter the expiry (MM/YY)', 'Enter the quantity or the free quantity', 'Enter the purchase rate', 'Enter the MRP']) expect(m).toContain(t);
     });
     it('no medicine at all', () => expect(issues({ ...base, items: [] })).toContain('items: Add at least one medicine'));
     it('none of them is a bare "required" or "must be > 0"', () => {
@@ -142,3 +142,19 @@ describe('today and the default due date are asked for when used, not frozen at 
     });
 });
 
+
+describe('a line the distributor gave entirely free (Qty 0, Free 3)', () => {
+    const base = { partyLedgerId: 'l', purchaseType: 'credit', invoiceNo: 'I', invoiceDate: '2026-11-01', freight: 0, invoiceDiscount: 0 };
+    const item = (extra: any) => ({ ...emptyItem(), productId: 'p', productName: 'X', batchNo: 'B', expiryDate: '2027-12-01', pkg: 10, purchaseRate: 74.97, mrp: 98, ...extra });
+    const qtyMessages = (extra: any) => { const r = schema.safeParse({ ...base, items: [item(extra)] }); return r.success ? [] : r.error.issues.filter((i) => i.path.join('.') === 'items.0.qty').map((i) => i.message); };
+
+    it('is accepted', () => expect(qtyMessages({ qty: 0, freeQty: 3 })).toEqual([]));
+    it('a paid line is still accepted', () => expect(qtyMessages({ qty: 10, freeQty: 0 })).toEqual([]));
+    it('a line with neither paid nor free packs says what to enter', () => expect(qtyMessages({ qty: 0, freeQty: 0 })).toEqual(['Enter the quantity or the free quantity']));
+    it('a blank quantity box counts as 0', () => expect(qtyMessages({ qty: '', freeQty: '' })).toEqual(['Enter the quantity or the free quantity']));
+    it('costs nothing: no goods value, no GST', () => {
+        const t = computePurchaseTotals({ items: [item({ qty: 0, freeQty: 3, gstRate: 5 })] as any, invoiceDiscount: 0, freight: 0, isInterstate: false, ledgerAdjustment: 0, adjustmentSign: 1 } as any);
+        expect(t.goodsValue).toBe(0);
+        expect(t.totalGST).toBe(0);
+    });
+});

@@ -17,7 +17,7 @@ import { calculateLandingRate } from '@/lib/purchase-calculations';
 import { fmt, effectivePkg, lineAmount } from '@/lib/purchaseEntry';
 import { parsePkg, pkgNote } from '@/lib/purchasePack';
 import { gstRateChoices } from '@/lib/gstRates';
-import { calcPTR, calcPTS, finishExpiryInput, formatExpiryForDisplay, getExpiryStatus, lineIssues, maskExpiryInput } from '@/lib/purchaseLine';
+import { calcPTR, calcPTS, finishExpiryInput, formatExpiryForDisplay, getExpiryStatus, hasQuantity, lineIssues, maskExpiryInput } from '@/lib/purchaseLine';
 import { formatStockQty } from '../PurchaseItemRow';
 
 
@@ -258,11 +258,11 @@ export function PurchaseLineSheet({ entry, index, onClose }: PurchaseLineSheetPr
                     <Section title="Quantity">
                         <div className="grid grid-cols-2 gap-3">
                             <NumField label="Qty" mode="numeric" value={value.qty} onChange={(n) => set('qty', n)} onBlur={touch('qty')} testId="line-qty" placeholder="Qty"
-                                error={touched.qty && !(value.qty > 0)} errorText="Enter the quantity" />
+                                error={touched.qty && !hasQuantity(value)} errorText="Enter the quantity or the free quantity" />
                             <NumField label="Free" mode="numeric" value={value.freeQty} onChange={(n) => set('freeQty', n)} testId="line-free" placeholder="Free" />
                         </div>
                         <p data-testid="line-units" className={cn('min-h-5 text-sm font-bold text-slate-900', T.money)}>
-                            {units > 0 ? `= ${units} units${value.freeQty > 0 ? ` + ${value.freeQty * effectivePkg(value.pkg)} free` : ''}` : ''}
+                            {units > 0 ? `= ${units} units${value.freeQty > 0 ? ` + ${value.freeQty * effectivePkg(value.pkg)} free` : ''}` : (value.freeQty > 0 && effectivePkg(value.pkg) > 0 ? `= ${value.freeQty * effectivePkg(value.pkg)} free units` : '')}
                         </p>
                     </Section>
 

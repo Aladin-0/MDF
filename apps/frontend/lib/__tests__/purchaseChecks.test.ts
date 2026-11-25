@@ -31,10 +31,10 @@ describe('getPurchaseChecks', () => {
     });
 
     it('each unfinished line says its first missing thing and opens that line', () => {
-        const rows = getPurchaseChecks({ ...ok, items: [good, { ...good, productName: 'LOSAR', batchNo: '' }, { ...good, productName: 'CALPOL', qty: 0 }] });
+        const rows = getPurchaseChecks({ ...ok, items: [good, { ...good, productName: 'LOSAR', batchNo: '' }, { ...good, productName: 'CALPOL', qty: 0, freeQty: 0 }] });
         expect(rows).toEqual([
             { id: 'line-1', reason: 'LOSAR: Batch number needed', fix: { type: 'line', index: 1 } },
-            { id: 'line-2', reason: 'CALPOL: Quantity needed', fix: { type: 'line', index: 2 } },
+            { id: 'line-2', reason: 'CALPOL: Quantity or free quantity needed', fix: { type: 'line', index: 2 } },
         ]);
     });
 

@@ -62,6 +62,9 @@ describe('lines', () => {
     it('lists what is missing, in filling order', () => {
         expect(lineIssues({ ...emptyItem(), productName: 'Dol' })).toEqual(['product', 'batch', 'expiry', 'pkg', 'qty', 'rate', 'mrp']);   // the desktop column order
         expect(lineIssues({ ...full, batchNo: '', qty: 0 })).toEqual(['batch', 'qty']);
+        expect(lineIssues({ ...full, qty: 0, freeQty: 3 })).toEqual([]);          // the distributor gave the whole line free
+        expect(lineIssues({ ...full, qty: 0, freeQty: 0 })).toEqual(['qty']);
+        expect(lineIssues({ ...full, qty: 0, freeQty: -1 })).toEqual(['qty']);
     });
     it('an expiry that cannot be read is an issue; stored ISO and typed MM/YY are fine', () => {
         expect(lineIssues({ ...full, expiryDate: '13/27' })).toEqual(['expiry']);

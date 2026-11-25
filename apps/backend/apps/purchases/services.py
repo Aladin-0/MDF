@@ -29,6 +29,24 @@ class PurchaseServiceError(Exception):
         self.item_index = item_index
 
 
+def check_line_quantities(items_payload):
+    """
+    Something must come in on every line: paid packs, free packs, or both. A line the distributor gave entirely free
+    (qty 0, free 3) is valid; negative figures, or a line with neither, are refused. The screen enforces the same rule
+    (`hasQuantity` in lib/purchaseLine.ts).
+    """
+    for idx, line in enumerate(items_payload or []):
+        try:
+            paid = int(line.get('qty', 0) or 0)
+            free = int(line.get('freeQty', 0) or 0)
+        except (TypeError, ValueError):
+            raise PurchaseServiceError(f"Item {idx + 1}: quantity must be a whole number.", code='INVALID_QTY', item_index=idx)
+        if paid < 0 or free < 0:
+            raise PurchaseServiceError("Quantities cannot be negative.", code='INVALID_QTY', item_index=idx)
+        if paid + free <= 0:
+            raise PurchaseServiceError(f"Item {idx + 1}: enter the quantity or the free quantity.", code='INVALID_QTY', item_index=idx)
+
+
 def _line_label(idx, item_payload, master_product):
     name = (master_product.name if master_product else None) or item_payload.get('customProductName') or 'medicine'
     return f"Item {idx + 1} ({name})"
@@ -230,6 +248,7 @@ def atomic_purchase_save(payload: Dict[str, Any], outlet_id: str, created_by_id:
         items_payload = payload.get('items', [])
         if not items_payload:
             raise PurchaseServiceError("Purchase must have at least one item")
+        check_line_quantities(items_payload)
 
         for idx, item_payload in enumerate(items_payload):
             # Get or fallback MasterProduct
@@ -813,9 +832,7 @@ def atomic_purchase_update(purchase_id: str, payload: Dict[str, Any], outlet_id:
         if not items_in_payload:
             # An empty list used to delete every line, zero all the batches and keep the grand total.
             raise PurchaseServiceError("Purchase must have at least one item.")
-        for _line in items_in_payload:
-            if int(_line.get('qty', 0) or 0) < 0 or int(_line.get('freeQty', 0) or 0) < 0:
-                raise PurchaseServiceError("Quantities cannot be negative.")
+        check_line_quantities(items_in_payload)
 
         from apps.audit.core.registry import SnapshotBuilderRegistry
         old_snapshot = SnapshotBuilderRegistry.build_snapshot(purchase_invoice)
