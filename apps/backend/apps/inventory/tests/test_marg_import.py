@@ -696,21 +696,22 @@ def test_the_short_shop_form_comes_back_and_loads(tmp_path):
     report.write_shop_form(P.build_plan(outlet, items, sheet), path)
 
     wb = load_workbook(path)
-    # ONE sheet (a phone shows only the first): the four lists one below the other
+    # ONE sheet, ONE table: a question per row, one yellow answer box, a hidden code saying what the answer is
     assert wb.sheetnames == [report.SHEET_ONE]
     ws = wb[report.SHEET_ONE]
-    col_a = [c.value for c in ws['A']]
+    heads = [c.value for c in ws[4]]
+    assert heads == ['No.', 'Product', 'Batch', 'What is wrong', 'Please write', report.ANSWER, report.CODE]
+    assert ws.column_dimensions['G'].hidden and ws['B5'].value.endswith('(example)')
+    rows = {(r[1], r[6]): i for i, r in enumerate(ws.iter_rows(min_row=1, values_only=True), start=1)}
 
-    def fill(product, header, value):
-        r = col_a.index(product) + 1
-        hdr = next(i for i in range(r - 1, 0, -1) if col_a[i - 1] == 'Product')
-        ws.cell(row=r, column=[c.value for c in ws[hdr]].index(header) + 1, value=value)
-    assert any(str(v).startswith('1. MRP MISSING') for v in col_a) and any(str(v).startswith('3. MINUS STOCK') for v in col_a)
-    fill('ALERE STRIPS 100', report.A_LOOSE, 50)
-    fill('BP APP', report.A_COUNT, 3)            # 3 really on the shelf
-    fill('SCISSORS', report.A_COUNT, 0)          # none
-    fill('WALKER BOOT', report.A_MRP, 4500)
-    fill('COLOPLAST', report.A_COST, 650)
+    def fill(product, code, value):
+        ws.cell(row=rows[(product, code)], column=6, value=value)
+    fill('ALERE STRIPS 100', 'LOOSE', 50)
+    fill('BP APP', 'COUNT', 3)                  # 3 really on the shelf
+    fill('SCISSORS', 'COUNT', 0)                # none
+    fill('WALKER BOOT', 'MRP', 4500)
+    fill('COLOPLAST', 'COST', 650)
+    ws['F5'] = 99999                            # somebody writes in the example row: ignored
     wb.save(path)
 
     plan, _, _ = load(outlet, items, sheet, report.read_answers(path))
