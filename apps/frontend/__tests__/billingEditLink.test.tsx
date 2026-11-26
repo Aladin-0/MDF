@@ -8,6 +8,7 @@ import { useIsPhone } from '../hooks/useIsPhone';
 jest.mock('../hooks/useIsPhone', () => ({ useIsPhone: jest.fn() }));
 jest.mock('../hooks/useAutosaveDraft', () => ({ useAutosaveDraft: () => undefined }));
 jest.mock('../hooks/useLoadDrafts', () => ({ useLoadDrafts: () => true }));
+jest.mock('../hooks/useSyncBillingSettings', () => ({ useSyncBillingSettings: () => undefined }));
 jest.mock('../hooks/useEnterNavigation', () => ({ useEnterNavigation: () => undefined }));
 jest.mock('../components/billing/StaffPinEntry', () => ({ StaffPinEntry: () => <div data-testid="pin" /> }));
 jest.mock('../components/billing/BillSuccessScreen', () => ({ BillSuccessScreen: () => <div data-testid="desktop-success" /> }));

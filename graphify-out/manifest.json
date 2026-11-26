@@ -1038,9 +1038,9 @@
     "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
   },
   "apps/backend/apps/billing/models.py": {
-    "mtime": 1793981209.7831,
-    "seen": 1795607534.2623482,
-    "ast_hash": "8863805f072ea952e9e688e048f93dcf",
+    "mtime": 1795694061.399649,
+    "seen": 1795694696.1527247,
+    "ast_hash": "dd196fb9c0b44b65208d80307c81dc56",
     "semantic_hash": ""
   },
   "apps/backend/apps/billing/payment_services.py": {
@@ -1074,9 +1074,9 @@
     "semantic_hash": ""
   },
   "apps/backend/apps/billing/sale_update_service.py": {
-    "mtime": 1795606497.5735888,
-    "seen": 1795607534.2623568,
-    "ast_hash": "0558e506efcfa85128069076df665ef7",
+    "mtime": 1795694216.7424147,
+    "seen": 1795694696.1527367,
+    "ast_hash": "aeeb9eb10f7bdb678fae056f948296aa",
     "semantic_hash": ""
   },
   "apps/backend/apps/billing/serializers.py": {
@@ -1308,9 +1308,9 @@
     "semantic_hash": ""
   },
   "apps/backend/apps/billing/views.py": {
-    "mtime": 1795606497.5755906,
-    "seen": 1795607534.2624233,
-    "ast_hash": "f4af63fb63cd1afd07bba8f689c2a1e5",
+    "mtime": 1795694061.4026403,
+    "seen": 1795694696.1528955,
+    "ast_hash": "aa8871fc44aa64aa87f92b1d0511f57f",
     "semantic_hash": ""
   },
   "apps/backend/apps/compliance/services/__init__.py": {
@@ -2880,9 +2880,9 @@
     "semantic_hash": ""
   },
   "apps/frontend/app/billing/page.tsx": {
-    "mtime": 1795606497.5856001,
-    "seen": 1795607534.2630506,
-    "ast_hash": "b1a9a4397c4f5f0b9d6480c81763c580",
+    "mtime": 1795689186.5447636,
+    "seen": 1795690767.7015092,
+    "ast_hash": "94a374899001bdb3a6e81ac58e8ddc2e",
     "semantic_hash": ""
   },
   "apps/frontend/app/dashboard/accounts/audit/page.tsx": {
@@ -3048,9 +3048,9 @@
     "semantic_hash": ""
   },
   "apps/frontend/app/dashboard/customers/[id]/page.tsx": {
-    "mtime": 1795606497.586601,
-    "seen": 1795607534.263094,
-    "ast_hash": "eb377effba4e39eb0720127e1460cf18",
+    "mtime": 1795690498.4279914,
+    "seen": 1795690767.7015662,
+    "ast_hash": "509c3c137bc69ec603de89ab27d1c5cc",
     "semantic_hash": ""
   },
   "apps/frontend/app/dashboard/customers/page.tsx": {
@@ -3582,15 +3582,15 @@
     "semantic_hash": "5786e855e697687bd387b95677dfd113"
   },
   "apps/frontend/components/billing/EditSaleHydrator.tsx": {
-    "mtime": 1795606497.589604,
-    "seen": 1795607534.2632778,
-    "ast_hash": "f550b24ac56fb779f0f64a6e4e335c5c",
+    "mtime": 1795694866.3827097,
+    "seen": 1795694949.711041,
+    "ast_hash": "2bf844ebc9ed73b27a28e96b38ce9b40",
     "semantic_hash": ""
   },
   "apps/frontend/components/billing/InlineRowEditor.tsx": {
-    "mtime": 1795606497.5906048,
-    "seen": 1795607534.263282,
-    "ast_hash": "91dbb713ea43e6dc3bc348b908591944",
+    "mtime": 1795689186.541021,
+    "seen": 1795690767.701794,
+    "ast_hash": "3c85dc29fff456889687a68b0b4d4900",
     "semantic_hash": ""
   },
   "apps/frontend/components/billing/InvoicePreviewModal.tsx": {
@@ -3624,9 +3624,9 @@
     "semantic_hash": ""
   },
   "apps/frontend/components/billing/MainInvoiceWorkspace.tsx": {
-    "mtime": 1795606497.5906048,
-    "seen": 1795607534.263294,
-    "ast_hash": "1c2786de4dd434db299f39c9e6309b38",
+    "mtime": 1795693567.9020994,
+    "seen": 1795694696.1544385,
+    "ast_hash": "cccf5ac8d9cbbf365c199248478fb919",
     "semantic_hash": ""
   },
   "apps/frontend/components/billing/PaymentBreakdownCell.tsx": {
@@ -3642,9 +3642,9 @@
     "semantic_hash": "884b98428b2818e0e9b87e2a1f25368d"
   },
   "apps/frontend/components/billing/RightBillingRail.tsx": {
-    "mtime": 1795606497.591606,
-    "seen": 1795607534.2632995,
-    "ast_hash": "852a4e6cca97618cb8292d7a94fb24a2",
+    "mtime": 1795693567.9033186,
+    "seen": 1795694696.1544464,
+    "ast_hash": "78ba01aa36d8854f2078c9d1f97f7a4c",
     "semantic_hash": ""
   },
   "apps/frontend/components/billing/StaffPinEntry.tsx": {
@@ -3900,9 +3900,9 @@
     "semantic_hash": "9da6bca2151c52744e3f0febd8c79227"
   },
   "apps/frontend/components/print/ManavataA4Invoice.tsx": {
-    "mtime": 1793981422.51036,
-    "seen": 1795607534.2636304,
-    "ast_hash": "2a5a4acff3bb1c9375f2fea52875da9c",
+    "mtime": 1795689186.5532598,
+    "seen": 1795690767.7021708,
+    "ast_hash": "0b5d2af2f317ff53c89ad3ca2144e1cf",
     "semantic_hash": ""
   },
   "apps/frontend/components/print/__tests__/ManavataA4Invoice.test.tsx": {
@@ -4086,9 +4086,9 @@
     "semantic_hash": ""
   },
   "apps/frontend/components/sales/QuotationsList.tsx": {
-    "mtime": 1794502630.6303155,
-    "seen": 1795607534.2637327,
-    "ast_hash": "b3648ea7778976d71e53c57f5afa3b55",
+    "mtime": 1795690498.4277773,
+    "seen": 1795690767.7023277,
+    "ast_hash": "db96caa9b938c85c35700bbdd4c65ba2",
     "semantic_hash": ""
   },
   "apps/frontend/components/sales/SalesList.tsx": {
@@ -4530,15 +4530,15 @@
     "semantic_hash": "cc57ed32d1106b62af82008e21ccdd3f"
   },
   "apps/frontend/hooks/useAutosaveDraft.ts": {
-    "mtime": 1784196563.4447298,
-    "seen": 1795607534.2638783,
-    "ast_hash": "b2ed6950e2e8eae3c9461d39d172a667",
-    "semantic_hash": "b2ed6950e2e8eae3c9461d39d172a667"
+    "mtime": 1795693567.9008489,
+    "seen": 1795694696.1551473,
+    "ast_hash": "e4ac4c80f56d5f321c306e0e4c014c66",
+    "semantic_hash": ""
   },
   "apps/frontend/hooks/useCheckout.ts": {
-    "mtime": 1795606497.5976114,
-    "seen": 1795607534.263883,
-    "ast_hash": "ef943fca979a5f8ad2414426932f1a72",
+    "mtime": 1795693567.900508,
+    "seen": 1795694696.1551535,
+    "ast_hash": "bdde5ff31f9265cd472dc21eaeffdef2",
     "semantic_hash": ""
   },
   "apps/frontend/hooks/useCredit.ts": {
@@ -4668,9 +4668,9 @@
     "semantic_hash": "61aa850b20fd6eefc504853f31aec74b"
   },
   "apps/frontend/hooks/useSaveBill.ts": {
-    "mtime": 1795606497.5986125,
-    "seen": 1795607534.263937,
-    "ast_hash": "52e1abe3c09d0c13c067679561e6aa4f",
+    "mtime": 1795693567.9009318,
+    "seen": 1795694696.1552134,
+    "ast_hash": "51d3bc5199b1acef6ee70b0c218dc5ad",
     "semantic_hash": ""
   },
   "apps/frontend/hooks/useStaff.ts": {
@@ -4716,15 +4716,15 @@
     "semantic_hash": "b56dd40d8d3c456b5ea487b70a409ece"
   },
   "apps/frontend/lib/billingMarginUtils.ts": {
-    "mtime": 1795606497.5996134,
-    "seen": 1795607534.2639997,
-    "ast_hash": "a1ca64e216ca3e4cdf2edeba6a2fc2a2",
+    "mtime": 1795691740.229561,
+    "seen": 1795692260.70949,
+    "ast_hash": "d0a019587e676e2c87d21f17310291e5",
     "semantic_hash": ""
   },
   "apps/frontend/lib/cartUtils.ts": {
-    "mtime": 1795606497.6006143,
-    "seen": 1795607534.2640023,
-    "ast_hash": "38c33ea22fce32c58e4622aa5d85934c",
+    "mtime": 1795691740.2307386,
+    "seen": 1795692260.7094955,
+    "ast_hash": "777ad4ea0c21a48e9ff43dd7c184d92f",
     "semantic_hash": ""
   },
   "apps/frontend/lib/export.ts": {
@@ -4926,9 +4926,9 @@
     "semantic_hash": "c53e8eba1bc3fc68c8adaec0b007a999"
   },
   "apps/frontend/store/billingStore.ts": {
-    "mtime": 1795606497.6016152,
-    "seen": 1795607534.2640932,
-    "ast_hash": "6d66f17ca5d037887a9f60da6000c915",
+    "mtime": 1795693567.8999248,
+    "seen": 1795694696.155448,
+    "ast_hash": "31ad21be4a1561e22d0aae8ddfd2f447",
     "semantic_hash": ""
   },
   "apps/frontend/store/gstStore.ts": {
@@ -5208,9 +5208,9 @@
     "semantic_hash": "b8ba289506238b65bc4c7e096ae38b5f"
   },
   "apps/frontend/types/index.ts": {
-    "mtime": 1795606497.6016152,
-    "seen": 1795607534.2641585,
-    "ast_hash": "477d19ef9e1dcd7a78442b80b2380b6a",
+    "mtime": 1795694866.3834753,
+    "seen": 1795694949.7128377,
+    "ast_hash": "52341334215a129e136539cfc8d1f837",
     "semantic_hash": ""
   },
   "apps/frontend/utils/expiry.ts": {
@@ -5226,9 +5226,9 @@
     "semantic_hash": "0fe7cdcb2d8afde3a8d506523454f522"
   },
   "apps/frontend/utils/payloadBuilders.ts": {
-    "mtime": 1794585836.3731065,
-    "seen": 1795607534.2641625,
-    "ast_hash": "a2a1c94f459a1c811cf6b1e1ff0e27d0",
+    "mtime": 1795695279.4824526,
+    "seen": 1795695842.6471176,
+    "ast_hash": "685766d1ba8ef188aba175ed3304156a",
     "semantic_hash": ""
   },
   "apps/frontend/utils/productUtils.ts": {
@@ -5334,10 +5334,10 @@
     "semantic_hash": "ce123c7fcf7bd19aee641458dfeb3cdf"
   },
   "docs/API_REFERENCE.md": {
-    "mtime": 1776418379.990692,
-    "seen": 1795607534.2641914,
-    "ast_hash": "0a82c97683dbb38a5a328166f621c36f",
-    "semantic_hash": "0a82c97683dbb38a5a328166f621c36f"
+    "mtime": 1795694873.1819084,
+    "seen": 1795694949.7129557,
+    "ast_hash": "3ba044b416a4ac0d9ef75943d1996660",
+    "semantic_hash": ""
   },
   "docs/BUSINESS_FLOW_MATRIX.md": {
     "mtime": 1788113724.733856,
@@ -5388,10 +5388,10 @@
     "semantic_hash": "52758c7412157819640fdea065789054"
   },
   "docs/MODEL_FIELDS.md": {
-    "mtime": 1776418379.9908192,
-    "seen": 1795607534.264218,
-    "ast_hash": "d390586cc0600dc22470f76fc9458114",
-    "semantic_hash": "d390586cc0600dc22470f76fc9458114"
+    "mtime": 1795694061.4035952,
+    "seen": 1795694696.155619,
+    "ast_hash": "55a9bc1a6cb91b85309ba3bc463a1043",
+    "semantic_hash": ""
   },
   "docs/NAMING_CONVENTIONS.md": {
     "mtime": 1788113724.7358558,
@@ -5502,9 +5502,9 @@
     "semantic_hash": ""
   },
   "PROJECT_MAP.md": {
-    "mtime": 1795606497.5683403,
-    "seen": 1795607534.2641861,
-    "ast_hash": "8af0b6fccf4362cada7d180d6bf648be",
+    "mtime": 1795695806.7443953,
+    "seen": 1795695842.647158,
+    "ast_hash": "b78f4a738b2a72a01535430f58d30173",
     "semantic_hash": ""
   },
   "apps/backend/apps/reports/tests/tests_purchase_reports_db.py": {
@@ -5514,9 +5514,9 @@
     "semantic_hash": ""
   },
   "apps/backend/apps/billing/utils/item_amounts.py": {
-    "mtime": 1793712622.3326945,
-    "seen": 1795607534.2624204,
-    "ast_hash": "e75aaa67bbcdb67a6edc372b7eba96a6",
+    "mtime": 1795694061.400064,
+    "seen": 1795694696.1528869,
+    "ast_hash": "ccf6eb659aef5d84df63c2a07fde34fe",
     "semantic_hash": ""
   },
   "apps/frontend/__tests__/billingPayloadContract.test.ts": {
@@ -5574,9 +5574,9 @@
     "semantic_hash": ""
   },
   "docs/DEPLOYMENT_GUIDE.md": {
-    "mtime": 1795606497.6026163,
-    "seen": 1795607534.2642019,
-    "ast_hash": "3e8072f3d9c2bbaa0ddd58c07d722b0a",
+    "mtime": 1795607983.623458,
+    "seen": 1795690767.7030978,
+    "ast_hash": "19eac8e0c58abffce6fc6b9110ba24f5",
     "semantic_hash": ""
   },
   "apps/backend/apps/core/management/commands/dump_permission_matrix.py": {
@@ -6546,9 +6546,9 @@
     "semantic_hash": ""
   },
   "apps/frontend/components/billing/mobile/CartLineCard.tsx": {
-    "mtime": 1795606497.5926068,
-    "seen": 1795607534.2633276,
-    "ast_hash": "a4c38448127229e9a4bbe70b4a8ba3e0",
+    "mtime": 1795689159.6579914,
+    "seen": 1795690767.701841,
+    "ast_hash": "538828b8a0bbdd5ad92cd5d479fbbb2f",
     "semantic_hash": ""
   },
   "apps/frontend/components/billing/mobile/CartList.test.tsx": {
@@ -6558,9 +6558,9 @@
     "semantic_hash": ""
   },
   "apps/frontend/components/billing/mobile/CartList.tsx": {
-    "mtime": 1794569627.87156,
-    "seen": 1795607534.2633307,
-    "ast_hash": "56b1ec544b2310b1b6755d8261f79a46",
+    "mtime": 1795693567.9011986,
+    "seen": 1795694696.1544752,
+    "ast_hash": "fb76ea775d6a742cf65e73218b1ba21e",
     "semantic_hash": ""
   },
   "apps/frontend/components/billing/mobile/CustomerSheet.test.tsx": {
@@ -6588,15 +6588,15 @@
     "semantic_hash": ""
   },
   "apps/frontend/components/billing/mobile/LineEditorSheet.test.tsx": {
-    "mtime": 1794566212.8539493,
-    "seen": 1795607534.2633376,
-    "ast_hash": "5e23fa2ad09d348e7875788ec6933d98",
+    "mtime": 1795689312.530542,
+    "seen": 1795690767.701855,
+    "ast_hash": "9f8b804a9d7ab0faa5efc9fe6e9aa56a",
     "semantic_hash": ""
   },
   "apps/frontend/components/billing/mobile/LineEditorSheet.tsx": {
-    "mtime": 1795606497.5926068,
-    "seen": 1795607534.263339,
-    "ast_hash": "f316fe0fc185adf28e4b01557d2fa11e",
+    "mtime": 1795689186.539854,
+    "seen": 1795690767.7018566,
+    "ast_hash": "43a11efd5f6ad96a25e70c28aebfcdad",
     "semantic_hash": ""
   },
   "apps/frontend/components/billing/mobile/MobileBanners.test.tsx": {
@@ -6672,15 +6672,15 @@
     "semantic_hash": ""
   },
   "apps/frontend/components/billing/mobile/PaymentView.test.tsx": {
-    "mtime": 1794572247.8638577,
-    "seen": 1795607534.2634501,
-    "ast_hash": "4ab1f033363cb94befe4f6a4254bd390",
+    "mtime": 1795692912.645075,
+    "seen": 1795692974.5855155,
+    "ast_hash": "01e10a74bd7c14d9105c56a29a6863a7",
     "semantic_hash": ""
   },
   "apps/frontend/components/billing/mobile/PaymentView.tsx": {
-    "mtime": 1795606497.5936077,
-    "seen": 1795607534.263451,
-    "ast_hash": "b582b59a7ec4d74566aaaceebe305142",
+    "mtime": 1795692897.5929072,
+    "seen": 1795692974.5855165,
+    "ast_hash": "2bb9d18b694b0a6bbec14dbc6f11e0f5",
     "semantic_hash": ""
   },
   "apps/frontend/components/billing/mobile/QtyStepper.test.tsx": {
@@ -6750,21 +6750,21 @@
     "semantic_hash": ""
   },
   "apps/frontend/components/billing/mobile/SummaryBar.tsx": {
-    "mtime": 1794569667.2626677,
-    "seen": 1795607534.263469,
-    "ast_hash": "021a6bf597383fe28c4535c4e5981f1a",
+    "mtime": 1795692897.5924885,
+    "seen": 1795692974.58553,
+    "ast_hash": "d7b2f3c4e2fd778edf6e47fa701ede3f",
     "semantic_hash": ""
   },
   "apps/frontend/components/billing/mobile/TotalsSheet.test.tsx": {
-    "mtime": 1794566249.8771346,
-    "seen": 1795607534.2634704,
-    "ast_hash": "98427f94f3120ba78e1cef67c5e6fd78",
+    "mtime": 1795694020.7222974,
+    "seen": 1795694696.1546388,
+    "ast_hash": "a59e09812121ced9111ab9797eb4c58c",
     "semantic_hash": ""
   },
   "apps/frontend/components/billing/mobile/TotalsSheet.tsx": {
-    "mtime": 1794569688.315437,
-    "seen": 1795607534.2634718,
-    "ast_hash": "35e4073cc648363890b99c64d26103ec",
+    "mtime": 1795693567.9039195,
+    "seen": 1795694696.1546412,
+    "ast_hash": "fd9828fde6df03d0c612b70adaa9d518",
     "semantic_hash": ""
   },
   "apps/frontend/components/billing/mobile/collectState.test.ts": {
@@ -6774,9 +6774,9 @@
     "semantic_hash": ""
   },
   "apps/frontend/components/billing/mobile/collectState.ts": {
-    "mtime": 1794572212.2716637,
-    "seen": 1795607534.2634747,
-    "ast_hash": "fac074fcfb47704dfa192df452507221",
+    "mtime": 1795693567.9010818,
+    "seen": 1795694696.154645,
+    "ast_hash": "a7b7a63dde9331d87210e3226652c958",
     "semantic_hash": ""
   },
   "apps/frontend/hooks/useBackToClose.ts": {
@@ -6804,9 +6804,9 @@
     "semantic_hash": ""
   },
   "apps/frontend/lib/__tests__/cartLine.test.ts": {
-    "mtime": 1794568180.2767074,
-    "seen": 1795607534.2639549,
-    "ast_hash": "34d00eca8ebc50c6c0c959bc015cdfb9",
+    "mtime": 1795689259.0840077,
+    "seen": 1795690767.7026958,
+    "ast_hash": "f5c123b45fe511d7301a66516ede9310",
     "semantic_hash": ""
   },
   "apps/frontend/lib/__tests__/scheduleRules.test.ts": {
@@ -6816,9 +6816,9 @@
     "semantic_hash": ""
   },
   "apps/frontend/lib/cartLine.ts": {
-    "mtime": 1795606497.5996134,
-    "seen": 1795607534.2640011,
-    "ast_hash": "d75cb26218e1ff9b0c95b12ec6c9228a",
+    "mtime": 1795691447.8118134,
+    "seen": 1795692260.709493,
+    "ast_hash": "623f7a41f4b4d8309f2a4ff03d9ec8df",
     "semantic_hash": ""
   },
   "apps/frontend/lib/scheduleRules.ts": {
@@ -6828,9 +6828,9 @@
     "semantic_hash": ""
   },
   "docs/MOBILE_BILLING_DESIGN.md": {
-    "mtime": 1795606497.6026163,
-    "seen": 1795607534.2642143,
-    "ast_hash": "794c8b3bf518111f42096f223e28b873",
+    "mtime": 1795692912.6454518,
+    "seen": 1795692974.5861235,
+    "ast_hash": "be84f80927697e8e3a107d7a2833fe6a",
     "semantic_hash": ""
   },
   "apps/frontend/__tests__/billingTotalsConsistency.test.ts": {
@@ -6846,9 +6846,9 @@
     "semantic_hash": ""
   },
   "apps/frontend/__tests__/billingEditLink.test.tsx": {
-    "mtime": 1794572861.624933,
-    "seen": 1795607534.2630136,
-    "ast_hash": "0e384b1b4ca825219a807a2c89e6a2e3",
+    "mtime": 1795689259.0842454,
+    "seen": 1795690767.7014625,
+    "ast_hash": "735594da5ec86702be4579240950d27c",
     "semantic_hash": ""
   },
   "apps/frontend/components/purchases/__tests__/NewPurchaseFormUX.test.tsx": {
@@ -7014,9 +7014,9 @@
     "semantic_hash": ""
   },
   "docs/MOBILE_PURCHASE_DESIGN.md": {
-    "mtime": 1795606497.6026163,
-    "seen": 1795607534.264217,
-    "ast_hash": "49a4e4e25c36f00b560eb6ae9993a44a",
+    "mtime": 1795607540.6836648,
+    "seen": 1795690767.7031195,
+    "ast_hash": "ca0d473a6c13a127a02c750a5615fa75",
     "semantic_hash": ""
   },
   "apps/frontend/components/purchases/LeavePurchaseDialog.tsx": {
@@ -7158,9 +7158,9 @@
     "semantic_hash": ""
   },
   "apps/frontend/__tests__/billingNewBillAfterSave.test.tsx": {
-    "mtime": 1794648970.725718,
-    "seen": 1795607534.263017,
-    "ast_hash": "cf4984f415e1c375bfbe5687a2308fc9",
+    "mtime": 1795689259.0843086,
+    "seen": 1795690767.7014666,
+    "ast_hash": "3a896d9a618a49ddd16fa644cfa210d0",
     "semantic_hash": ""
   },
   "apps/frontend/__tests__/pwaManifest.test.ts": {
@@ -7911,6 +7911,60 @@
     "mtime": 1795606497.5805955,
     "seen": 1795607534.2626743,
     "ast_hash": "f3a0cfeea3043498fbdd2f7b9cf6a17e",
+    "semantic_hash": ""
+  },
+  "apps/backend/apps/purchases/tests/test_purchase_free_only_line.py": {
+    "mtime": 1795607124.3819792,
+    "seen": 1795690767.7012794,
+    "ast_hash": "9d1758e84cf3e19f0032956a232c7d95",
+    "semantic_hash": ""
+  },
+  "apps/frontend/__tests__/billingDiscount.test.tsx": {
+    "mtime": 1795695279.4827414,
+    "seen": 1795695842.6451507,
+    "ast_hash": "ed375557a446874b7e149fb90ceac803",
+    "semantic_hash": ""
+  },
+  "apps/frontend/components/billing/BillDiscountShortfall.tsx": {
+    "mtime": 1795692912.6448925,
+    "seen": 1795692974.5853796,
+    "ast_hash": "36a9a7911fff9be65e052bc88631babe",
+    "semantic_hash": ""
+  },
+  "apps/frontend/hooks/useSyncBillingSettings.ts": {
+    "mtime": 1795689186.544586,
+    "seen": 1795690767.7026744,
+    "ast_hash": "b89209a21ab337f470aadea727316d28",
+    "semantic_hash": ""
+  },
+  "apps/frontend/__tests__/billDiscountExact.test.ts": {
+    "mtime": 1795692897.5931284,
+    "seen": 1795692974.5851896,
+    "ast_hash": "b65fc119d29bfa061abfe91aaa1f2ed5",
+    "semantic_hash": ""
+  },
+  "apps/frontend/__tests__/billDiscountTyping.test.tsx": {
+    "mtime": 1795692897.5930734,
+    "seen": 1795692974.5851917,
+    "ast_hash": "810ca9d76932310641e892fe86e59116",
+    "semantic_hash": ""
+  },
+  "apps/backend/apps/billing/migrations/0031_saleinvoice_extra_discount_rupees.py": {
+    "mtime": 1795694061.3997672,
+    "seen": 1795694696.152719,
+    "ast_hash": "6fe076a2a6d8446cc10dbee1b8320979",
+    "semantic_hash": ""
+  },
+  "apps/frontend/__tests__/billDiscountRupee.test.tsx": {
+    "mtime": 1795694866.3828907,
+    "seen": 1795694949.7106311,
+    "ast_hash": "2392cdeb7d9077e1388e412397f7176b",
+    "semantic_hash": ""
+  },
+  "apps/frontend/lib/billDiscount.ts": {
+    "mtime": 1795693567.8855844,
+    "seen": 1795694696.155305,
+    "ast_hash": "d16c7dcf2eeaeef2ebf9a05d2b278d3b",
     "semantic_hash": ""
   },
   "package-lock.json": {

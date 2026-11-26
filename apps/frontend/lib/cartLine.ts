@@ -7,9 +7,10 @@
  */
 import type { Batch, CartItem, ProductSearchResult } from '@/types';
 import { allowsLoose } from '@/lib/packRules';
-import { floorsOf } from '@/lib/billingMarginUtils';
+import { floorsOf, lineNetAmount } from '@/lib/billingMarginUtils';
 
 export const STOCK_BLOCK_MESSAGE = 'BLOCKED: Added quantity exceeds available stock.';
+export const BAD_DISCOUNT_MESSAGE = 'Discount must be between 0 and 100%.';
 
 export type SaleType = 'RETAIL' | 'WHOLESALE';
 
@@ -26,6 +27,7 @@ export function batchStockUnits(batch: Pick<Batch, 'qtyStrips' | 'qtyLoose' | 'p
 export type QuickAddResult =
     | { ok: true; item: CartItem }
     | { ok: false; reason: 'no_qty' }
+    | { ok: false; reason: 'bad_discount'; message: string }
     | { ok: false; reason: 'exceeds_stock'; message: string };
 
 interface QuickAddInput {
@@ -36,6 +38,17 @@ interface QuickAddInput {
     qtyLoose: string | number;
     discountPct: string | number;
     saleType: SaleType;
+}
+
+/** The amount the line being typed will have: the same rule as the line itself. 0 while the discount typed is not usable. */
+export function quickAddPreview({ product, batch, qtyStrips, qtyLoose, discountPct, saleType }: QuickAddInput): number {
+    const dPct = parseFloat(String(discountPct)) || 0;
+    if (dPct < 0 || dPct > 100) return 0;
+    const saleRate = defaultRateFor(batch, saleType);
+    return lineNetAmount({
+        saleRate, rate: saleRate * (1 - dPct / 100), discountPct: dPct, gstRate: product.gstRate, packSize: batch.packSize,
+        qtyStrips: parseInt(String(qtyStrips)) || 0, qtyLoose: allowsLoose(batch) ? parseInt(String(qtyLoose)) || 0 : 0,
+    }, saleType);
 }
 
 /**
@@ -54,11 +67,15 @@ export function quickAddLine({ product, batch, qtyStrips, qtyLoose, discountPct,
     if (totalQtyLoose > batchStockUnits(batch)) return { ok: false, reason: 'exceeds_stock', message: STOCK_BLOCK_MESSAGE };
 
     const dPct = parseFloat(String(discountPct)) || 0;
+    // 150% made a negative price (and -5% one above the MRP); both used to go into the bill
+    if (dPct < 0 || dPct > 100) return { ok: false, reason: 'bad_discount', message: BAD_DISCOUNT_MESSAGE };
     const defaultRate = defaultRateFor(batch, saleType);
     const discountedRate = defaultRate * (1 - (dPct / 100));
 
-    const taxableAmount = (discountedRate * totalQtyFractional) / (1 + product.gstRate / 100);
-    const gstAmount = (discountedRate * totalQtyFractional) - taxableAmount;
+    // wholesale rates are tax-exclusive: GST goes on top
+    const totalAmount = discountedRate * totalQtyFractional * (saleType === 'WHOLESALE' ? 1 + product.gstRate / 100 : 1);
+    const taxableAmount = totalAmount / (1 + product.gstRate / 100);
+    const gstAmount = totalAmount - taxableAmount;
 
     const item = {
         batchId: batch.id,
@@ -88,7 +105,7 @@ export function quickAddLine({ product, batch, qtyStrips, qtyLoose, discountPct,
         gstRate: product.gstRate,
         taxableAmount,
         gstAmount,
-        totalAmount: discountedRate * totalQtyFractional,
+        totalAmount,
         purchaseRate: batch.purchaseRate,
         landingRate: batch.landingRate ?? batch.purchaseRate,
         ...floorsOf(batch),              // the server's cost floors: what discounts are capped with

@@ -149,16 +149,19 @@ export const ManavataA4Invoice = forwardRef<HTMLDivElement, InvoicePreviewProps>
 
         const freeQty = Number(item.f_qty ?? item.freeQtyStrips ?? 0);
         const mrp = Number(item.mrp ?? 0);
-        const ptr = Number(item.ptr ?? item.rate ?? 0);
+        // A retail bill prints the price it was sold at (a reprint also carries the batch's PTR, the supplier's price)
+        const ptr = Number((isWholesale ? item.ptr ?? item.rate : item.rate ?? item.ptr) ?? 0);
         const pts = Number(item.pts ?? 0);
         const gstPct = Number(item.gstRate ?? item.gstPct ?? 0);
-        const discountFactor = item.discountPct > 0 ? (1 - item.discountPct / 100) : 1;
-        
-        const taxable = (ptr * qty * discountFactor) / (1 + gstPct / 100);
-        const gstAmount = (ptr * qty * discountFactor) - taxable;
-        const amount = ptr * qty * discountFactor;
-        
-        return { qty, qtyStrips, qtyLoose, freeQty, mrp, ptr, pts, gstPct, discountFactor, taxable, gstAmount, amount, disc: item.discountPct || 0 };
+
+        // Print what was SAVED (the thermal slip does the same). `rate` is already the price after the line discount:
+        // multiplying by the discount again printed 162 for a line billed at 180.
+        const net = Number(item.rate ?? item.ptr ?? 0) * qty * (isWholesale ? 1 + gstPct / 100 : 1);
+        const amount = Number((item as any).totalAmount ?? net);
+        const taxable = Number((item as any).taxableAmount ?? amount / (1 + gstPct / 100));
+        const gstAmount = amount - taxable;
+
+        return { qty, qtyStrips, qtyLoose, freeQty, mrp, ptr, pts, gstPct, taxable, gstAmount, amount, disc: Number(Number(item.discountPct || 0).toFixed(2)) };
     };
 
     const renderCell = (item: CartItem & any, columnId: string, idx: number) => {

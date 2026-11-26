@@ -12,7 +12,8 @@ from apps.accounts.models import Staff, Customer, Ledger, JournalEntry
 from apps.accounts.services import LedgerService
 from apps.accounts.journal_service import _get_ledger, _create_lines_and_update_balances, post_sale_invoice
 from apps.billing.services import validate_sale_price, fefo_batch_select, schedule_h_validate, schedule_cart_from_catalogue
-from apps.billing.utils.item_amounts import resolve_item_amounts, split_amounts, MAX_ROUND_OFF
+from apps.billing.utils.item_amounts import (resolve_item_amounts, split_amounts, MAX_ROUND_OFF, bill_discount_rupees,
+                                            line_amounts_before_bill_discount)
 from apps.billing.utils.pricing import line_cost_floor
 
 class SaleServiceError(Exception):
@@ -282,10 +283,49 @@ def check_correction_scope(user, invoice: SaleInvoice, payload: dict, action: st
     if qty_changed:
         need('can_correct_quantities', 'item quantities')
     price_changed = any(old[b]['prices'] != new[b]['prices'] for b in old if b in new)
-    if 'extraDiscountPct' in payload and _money(payload.get('extraDiscountPct')) != _money(invoice.extra_discount_pct):
+    if _bill_discount_changed(invoice, payload):
         price_changed = True
     if price_changed:
         need('can_correct_rates_discounts', 'rates or discounts')
+
+
+def _bill_discount_changed(invoice: SaleInvoice, payload: dict) -> bool:
+    """
+    Does this edit change the whole-bill discount?
+
+    A percentage discount: when the percentage differs. A rupee discount is the same discount while the rupees are the
+    same: its percentage moves whenever quantities do. The percentage sent must then still be the one those rupees make of
+    the lines sent, so that nothing more can be given away under an unchanged rupee figure.
+    """
+    pct_sent = 'extraDiscountPct' in payload
+    if 'extraDiscountRupees' in payload:
+        rupees = bill_discount_rupees(payload.get('extraDiscountRupees'))
+        if rupees != invoice.extra_discount_rupees:      # other rupees, or switched between rupees and percentage
+            return True
+        if rupees is not None:
+            if not pct_sent:
+                return False
+            # compared in money (a paisa is a large percentage of a tiny bill); rupees above the bill give the whole bill
+            total = _lines_before_bill_discount(invoice, payload)
+            given_by_pct = Decimal(str(payload.get('extraDiscountPct') or 0)) * total / 100
+            return abs(given_by_pct - min(rupees, total)) > max(Decimal('0.05'), total / 10000)
+    return pct_sent and _money(payload.get('extraDiscountPct')) != _money(invoice.extra_discount_pct)
+
+
+def _lines_before_bill_discount(invoice: SaleInvoice, payload: dict) -> Decimal:
+    """What the lines sent add up to before the bill discount."""
+    rows = payload.get('items') or []
+    ids = [str(r.get('batchId') or r.get('batch_id')) for r in rows if r.get('batchId') or r.get('batch_id')]
+    packs = {str(pk): size or 1 for pk, size in Batch.objects.filter(id__in=ids, outlet_id=invoice.outlet_id).values_list('id', 'pack_size')}
+    packs.update({str(i.batch_id): i.pack_size or 1 for i in invoice.items.all()})   # a billed line keeps its own pack size
+    total = Decimal('0')
+    for r in rows:
+        pack = Decimal(str(packs.get(str(r.get('batchId') or r.get('batch_id')), 1)))
+        qty = Decimal(str(r.get('qtyStrips') or 0)) + Decimal(str(r.get('qtyLoose') or 0)) / pack
+        amount, _sent = line_amounts_before_bill_discount(
+            r, r.get('rate') or 0, qty, Decimal(str(r.get('gstRate') or 0)), payload.get('saleType', invoice.sale_type))
+        total += amount
+    return total
 
 
 def revision_state_block(invoice: SaleInvoice, action: str):
@@ -907,6 +947,7 @@ def atomic_sale_update(sale_id: str, payload: Dict[str, Any], outlet_id: str, up
         sale_invoice.subtotal = Decimal(str(payload.get('subtotal', 0)))
         sale_invoice.discount_amount = Decimal(str(payload.get('discountAmount', 0)))
         sale_invoice.extra_discount_pct = extra_discount_pct
+        sale_invoice.extra_discount_rupees = bill_discount_rupees(payload.get('extraDiscountRupees'))
         sale_invoice.payment_mode = payload.get('paymentMode', 'cash')
         sale_invoice.cash_paid = cash_paid_val
         sale_invoice.upi_paid = upi_paid_val

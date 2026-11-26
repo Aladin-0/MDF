@@ -1,7 +1,8 @@
 import { pkgOrZero } from '@/lib/purchasePack';
 import { bankersRound } from './mathUtils';
-import { distributeSmartDiscounts } from '../lib/billingMarginUtils';
+import { distributeSmartDiscounts, lineNetAmount, toPaise } from '../lib/billingMarginUtils';
 import { useBillingStore } from '../store/billingStore';
+import { billDiscountPctOf } from '../lib/billDiscount';
 
 export function buildScheduleHPayload(customer: any, doctor: any, draft: any): any {
     if (draft?.scheduleHData) {
@@ -37,7 +38,7 @@ export function buildSalePayload(draft: any, scheduleHData: any, totals: any, ac
     const customerLedger = draft.customerLedger;
     const doctor = draft.doctor;
     const cart = draft.cart;
-    const extraDiscountPct = draft.extraDiscountPct || 0;
+    const extraDiscountPct = billDiscountPctOf(draft);
 
     const partyLedgerId = (customerLedger && customerLedger.id !== 'mock' && !customerLedger.isMock) ? customerLedger.id : undefined;
     const customerId = (customer && customer.id !== 'mock') ? customer.id : undefined;
@@ -98,8 +99,7 @@ export function buildSalePayload(draft: any, scheduleHData: any, totals: any, ac
         vehicleType: draft.vehicleType || "R",
         items: cart.map((item: any, idx: number) => {
             const gstRate = item.gstPct ?? item.gstRate ?? 0;
-            // net rate x quantity; wholesale rates are tax-exclusive, so GST is added on top (exactly as getDraftTotals does)
-            const rawTotal = item.rate * item.totalQty * (draft.saleType === 'WHOLESALE' ? 1 + gstRate / 100 : 1);
+            const rawTotal = lineNetAmount(item, draft.saleType || 'RETAIL');   // the same figure getDraftTotals adds up
             const discountFactor = extraDiscountPct > 0 ? 1 - extraDiscountPct / 100 : 1;
             const key = item.batchId || `item-${idx}`;
             const alloc = smartAllocations.get(key);
@@ -123,7 +123,8 @@ export function buildSalePayload(draft: any, scheduleHData: any, totals: any, ac
                 applied_ptr: item.ptr,
                 applied_pts: item.pts,
                 packSize: item.packSize || 1,
-                rate: item.rate,
+                // a quotation line keeps 2 decimals and refuses more; a bill takes the exact rate
+                rate: draft.documentMode === 'quotation' ? toPaise(item.rate) : item.rate,
                 discountPct: item.discountPct,
                 gstRate: gstRate,
                 scheduleType: item.scheduleType || 'OTC',
@@ -143,7 +144,8 @@ export function buildSalePayload(draft: any, scheduleHData: any, totals: any, ac
         igst: bankersRound(finalIgst),
         roundOff: bankersRound(totals.roundOff),
         grandTotal: bankersRound(totals.grandTotal),
-        extraDiscountPct,
+        extraDiscountPct: Number(extraDiscountPct.toFixed(6)),
+        extraDiscountRupees: draft.extraDiscountRupees || null,     // saved on the bill: a rupee discount comes back as rupees
         paymentMode: draft.payment.method,
         cashPaid: draft.payment.method === 'cash' ? (draft.payment.cashTendered || totals.grandTotal) : getPaid('cash'),
         upiPaid: getPaid('upi'),

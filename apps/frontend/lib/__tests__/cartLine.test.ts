@@ -9,14 +9,16 @@ const product = (over: any = {}): any => ({
     packUnit: 'tablet', packType: 'strip', hsnCode: '3004', ...over,
 });
 
-// The formulas exactly as the billing screen used to compute them inline (the oracle this module must keep matching)
+// The formulas exactly as the billing screen used to compute them inline (the oracle this module must keep matching), with one
+// correction: the old screen left GST out of a WHOLESALE line (its rates are tax-exclusive), so the bill discount dropped it.
 function oldInline(p: any, b: any, s: number, l: number, dPct: number, saleType: string) {
     const eff = (b.packType === 'strip' && b.packSize > 1) ? l : 0;
     const frac = s + eff / b.packSize;
     const rate = saleType === 'WHOLESALE' ? (b.pts || b.ptr || b.mrp) : b.mrp;
     const disc = rate * (1 - dPct / 100);
-    const taxable = (disc * frac) / (1 + p.gstRate / 100);
-    return { eff, frac, rate, total: disc * frac, taxable, gst: disc * frac - taxable };
+    const total = disc * frac * (saleType === 'WHOLESALE' ? 1 + p.gstRate / 100 : 1);
+    const taxable = total / (1 + p.gstRate / 100);
+    return { eff, frac, rate, total, taxable, gst: total - taxable };
 }
 
 describe('quickAddLine', () => {
@@ -29,7 +31,7 @@ describe('quickAddLine', () => {
 
     it.each([
         ['RETAIL', 2, 3, 0], ['RETAIL', 1, 0, 10], ['RETAIL', 3, 9, 7.5], ['WHOLESALE', 5, 0, 5], ['WHOLESALE', 2, 4, 0],
-    ])('%s %i strips + %i loose at %s%% matches the old inline maths', (saleType, s, l, d) => {
+    ])('%s %i strips + %i loose at %s%% matches the expected maths', (saleType, s, l, d) => {
         const p = product(), b = batch();
         const r: any = quickAddLine({ product: p, batch: b, qtyStrips: String(s), qtyLoose: String(l), discountPct: String(d), saleType: saleType as any });
         const o = oldInline(p, b, s, l, d, saleType);

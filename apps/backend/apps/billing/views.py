@@ -28,7 +28,7 @@ from apps.billing.services import (
     UnitIntegrityError,
 )
 from apps.billing.utils.pricing import validate_sale_price, cost_floor_per_pack, cost_floors
-from apps.billing.utils.item_amounts import MAX_ROUND_OFF, resolve_item_amounts
+from apps.billing.utils.item_amounts import MAX_ROUND_OFF, resolve_item_amounts, line_amounts_before_bill_discount, bill_discount_rupees
 from apps.inventory.models import Batch, MasterProduct
 from apps.accounts.models import Staff, Customer, Ledger
 from apps.accounts.journal_service import post_sale_invoice, _get_ledger
@@ -248,6 +248,7 @@ def build_sale_response_payload(sale_invoice, message=None, revision_id=None):
         'subtotal': float(sale_invoice.subtotal),
         'discountAmount': float(sale_invoice.discount_amount),
         'extraDiscountPct': float(sale_invoice.extra_discount_pct),
+        'extraDiscountRupees': float(sale_invoice.extra_discount_rupees) if sale_invoice.extra_discount_rupees is not None else None,
         'extraDiscountAmount': float(
             (sale_invoice.subtotal - sale_invoice.discount_amount)
             * sale_invoice.extra_discount_pct / Decimal('100')
@@ -677,20 +678,8 @@ class SaleCreateView(APIView):
                         cost_tax_multiplier = Decimal('1') if landing_cost_include_gst else tax_multiplier
                         line_cost_floor_inclusive = (cost_floor * cost_tax_multiplier * billed_qty).quantize(Decimal('0.01'))
 
-                        rate_val = Decimal(str(item_data.get('rate', batch_obj.mrp)))
-                        disc_pct = Decimal(str(item_data.get('discountPct', 0)))
-                        rate_discounted = rate_val * (Decimal('1') - disc_pct / Decimal('100'))
-
-                        if req_sale_type == 'WHOLESALE':
-                            base_row_amount = (rate_discounted * billed_qty * tax_multiplier).quantize(Decimal('0.01'))
-                        else:
-                            base_row_amount = (rate_discounted * billed_qty).quantize(Decimal('0.01'))
-
-                        client_total = Decimal(str(item_data.get('totalAmount', 0))) if item_data.get('totalAmount') is not None else Decimal('0')
-                        if client_total <= Decimal('0'):
-                            taxable_amt = Decimal(str(item_data.get('taxableAmount', 0)))
-                            gst_amt = Decimal(str(item_data.get('gstAmount', 0)))
-                            client_total = taxable_amt + gst_amt
+                        base_row_amount, client_total = line_amounts_before_bill_discount(
+                            item_data, item_data.get('rate', batch_obj.mrp), billed_qty, gst_rate, req_sale_type)
 
                         # If client already applied smart-capping / extra discount, respect client total to prevent double-discounting
                         if client_total > Decimal('0') and client_total < (base_row_amount - Decimal('0.01')):
@@ -868,6 +857,7 @@ class SaleCreateView(APIView):
                     subtotal=Decimal(str(request.data.get('subtotal', 0))),
                     discount_amount=Decimal(str(request.data.get('discountAmount', 0))),
                     extra_discount_pct=extra_discount_pct,
+                    extra_discount_rupees=bill_discount_rupees(request.data.get('extraDiscountRupees')),
                     # Placeholder GST values — overwritten by server re-derivation below
                     taxable_amount=Decimal('0'),
                     cgst_amount=Decimal('0'),
@@ -1029,26 +1019,17 @@ class SaleCreateView(APIView):
                                 gst_rate = Decimal(str(item_data.get('gstRate', getattr(product, 'gst_rate', Decimal('0')) or Decimal('0'))))
                                 tax_multiplier = Decimal('1') + (gst_rate / Decimal('100'))
 
-                                p_rate = Decimal(str(item_data.get('rate', batch.mrp)))
-                                d_pct = Decimal(str(item_data.get('discountPct', 0)))
-                                rate_discounted = p_rate * (Decimal('1') - d_pct / Decimal('100'))
-
-                                if sale_type == 'WHOLESALE':
-                                    base_item_amt = (rate_discounted * billed_qty * tax_multiplier).quantize(Decimal('0.01'))
-                                else:
-                                    base_item_amt = (rate_discounted * billed_qty).quantize(Decimal('0.01'))
-
-                                client_item_amt = Decimal(str(item_data.get('totalAmount', 0))) if item_data.get('totalAmount') is not None else Decimal('0')
-                                if client_item_amt <= Decimal('0'):
-                                    tax_amt = Decimal(str(item_data.get('taxableAmount', 0)))
-                                    g_amt = Decimal(str(item_data.get('gstAmount', 0)))
-                                    client_item_amt = tax_amt + g_amt
+                                base_item_amt, client_item_amt = line_amounts_before_bill_discount(
+                                    item_data, item_data.get('rate', batch.mrp), billed_qty, gst_rate, sale_type)
 
                                 # If the client already applied smart-capping / extra discount, respect its total to
                                 # prevent double-discounting. A client total describes the WHOLE line, so it can only
                                 # stand in for a single allocation; a FEFO line split over batches is priced per batch.
+                                # Without a bill discount, a total within a paisa of the server's own is the same line rounded
+                                # the other way: keep the screen's figure, so the saved bill is the one the customer saw.
+                                same_line = extra_discount_pct <= 0 and abs(client_item_amt - base_item_amt) <= Decimal('0.01')
                                 if (len(batch_allocations) == 1 and client_item_amt > Decimal('0')
-                                        and client_item_amt < (base_item_amt - Decimal('0.01'))):
+                                        and (same_line or client_item_amt < (base_item_amt - Decimal('0.01')))):
                                     final_row_amt = client_item_amt
                                 else:
                                     final_row_amt = (base_item_amt * disc_factor).quantize(Decimal('0.01'))
@@ -2941,6 +2922,7 @@ class SaleDetailView(APIView):
             'subtotal': float(invoice.subtotal),
             'discountAmount': float(invoice.discount_amount),
             'extraDiscountPct': float(invoice.extra_discount_pct or 0.0),
+            'extraDiscountRupees': float(invoice.extra_discount_rupees) if invoice.extra_discount_rupees is not None else None,
             'taxableAmount': float(invoice.taxable_amount),
             'cgstAmount': float(invoice.cgst_amount),
             'sgstAmount': float(invoice.sgst_amount),

@@ -9,7 +9,7 @@ import { useBillingStore } from '@/store/billingStore';
 import { productsApi } from '@/lib/apiClient';
 import { useOutletId } from '@/hooks/useOutletId';
 import { calculateRowTotals, type RowTotals } from '@/lib/cartUtils';
-import { calculateLineMargin, floorsOf } from '@/lib/billingMarginUtils';
+import { calculateLineMargin, floorsOf, lineNetAmount } from '@/lib/billingMarginUtils';
 import { allowsLoose, wholePackWord } from '@/lib/packRules';
 import { getExpiryStatus, type ExpiryStatus } from '@/utils/expiry';
 import { cn } from '@/lib/utils';
@@ -83,12 +83,12 @@ export function lineBaseRate(item: CartItem, batch: Batch, saleType: SaleType, s
 }
 
 /** Totals for a line with these inputs, using calculateRowTotals exactly as InlineRowEditor does. */
-export function computeLine(item: CartItem, batch: Batch, inputs: LineInputs, saleType: SaleType, sameBatch = true) {
+export function computeLine(item: CartItem, batch: Batch, inputs: LineInputs, saleType: SaleType, sameBatch = true, landingCostIncludeGst = false) {
     const hasLoose = allowsLoose(batch);
     const looseRaw = hasLoose ? String(inputs.qtyLoose) : '0';
     const baseRate = lineBaseRate(item, batch, saleType, sameBatch, inputs.ptr, inputs.pts);
     const totals = calculateRowTotals(
-        batch, String(inputs.qtyStrips), looseRaw, inputs.discountType, inputs.discountValue, item.gstRate, baseRate, saleType,
+        batch, String(inputs.qtyStrips), looseRaw, inputs.discountType, inputs.discountValue, item.gstRate, baseRate, saleType, landingCostIncludeGst,
     );
     return { totals, baseRate, hasLoose };
 }
@@ -239,7 +239,7 @@ export function CartLineCard({ item, showMargin, extraDiscountPct = 0, landingCo
                         {item.composition && <span className="mt-0.5 block truncate text-sm text-slate-600">{item.composition}</span>}
                     </span>
                     <span className={cn('shrink-0 text-xl font-black tabular-nums', isLoss ? 'text-red-700' : 'text-slate-900')} data-testid="line-amount">
-                        ₹{item.totalAmount.toFixed(2)}
+                        ₹{lineNetAmount(item, saleType).toFixed(2)}
                     </span>
                 </span>
                 <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">

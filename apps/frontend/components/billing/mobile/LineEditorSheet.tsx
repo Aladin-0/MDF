@@ -42,6 +42,7 @@ function LineEditorBody({ item, onClose, onRemoved }: EditorProps) {
     const activeDraftId = useBillingStore((s) => s.activeDraftId);
     const saleType = useBillingStore((s) => (s.activeDraftId ? s.drafts[s.activeDraftId]?.saleType : undefined)) || 'RETAIL';
     const role = useBillingStore((s) => s.activeStaff?.role);
+    const landingCostIncludeGst = useBillingStore((s) => s.landingCostIncludeGst);
     const { updateCartItem, removeFromCart, addToCart } = useBillingStore.getState();
     const showMargin = canViewBillingMargins(role);
     const { batches, isFetching } = useLineBatches(item);
@@ -70,7 +71,7 @@ function LineEditorBody({ item, onClose, onRemoved }: EditorProps) {
     const { totals, baseRate, hasLoose } = computeLine(
         item, current,
         { qtyStrips, qtyLoose, discountType, discountValue, ptr, pts, freeQtyStrips: freeStrips, freeQtyLoose: freeLoose },
-        saleType, sameBatch,
+        saleType, sameBatch, landingCostIncludeGst,
     );
     const stockUnits = current.qtyStrips * current.packSize + current.qtyLoose;
     const costPerPack = totals.tQtyFractional > 0 ? totals.totalCost / totals.tQtyFractional : 0;

@@ -42,6 +42,8 @@ Mock mode is active when `NEXT_PUBLIC_USE_MOCK=true`.
 | `list(outletId, filters?)` | `outletId: string` | `PaginatedResponse<SaleInvoice>` | Returns `mockSalesInvoices` sorted by date |
 | `getById(id)` | `id: string` | `SaleInvoice \| null` | Finds by ID in mock list |
 
+Bill discount fields (create, update, revise; returned by create and `getById`): `extraDiscountPct` (percent, always sent) and `extraDiscountRupees` (the rupees as typed, or `null` for a percent discount). The rupees are only remembered, so that modifying the bill keeps them; the bill is priced from its lines and the percent.
+
 ---
 
 ## inventoryApi

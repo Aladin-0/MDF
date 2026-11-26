@@ -528,7 +528,8 @@ export interface PaymentSplit {
 export interface BillTotals {
     subtotal: number;
     discountAmount: number;
-    extraDiscountAmount: number;
+    extraDiscountAmount: number;   // what the bill discount really takes off
+    extraDiscountShortfall?: number; // asked for but not given: it would take items below cost
     preExtraNet: number;        // Net payable before the global bill discount is applied
     taxableAmount: number;
     cgstAmount: number;
@@ -576,7 +577,8 @@ export interface DraftBill {
     prescriptionImageUrl: string | null;
     cart: CartItem[];
     payment: PaymentSplit;
-    extraDiscountPct: number;
+    extraDiscountPct: number;        // bill discount typed as a percent (read the effective one through lib/billDiscount)
+    extraDiscountRupees?: number;    // bill discount typed in rupees: while set, it IS the discount
     status: DraftStatus;
     saveStatus?: 'saving' | 'saved' | 'error' | 'offline';
     isSavedOnServer?: boolean;
@@ -619,6 +621,8 @@ export interface SaleInvoice {
     prescriptionNo?: string;
     subtotal: number;
     discountAmount: number;
+    extraDiscountPct?: number;
+    extraDiscountRupees?: number | null;   // bill discount typed in rupees; null = typed as a percent
     taxableAmount: number;
     cgstAmount: number;
     sgstAmount: number;

@@ -11,7 +11,7 @@ path's row-level tamper check with a misleading "Security Block" error.
 ``resolve_item_amounts`` derives whatever is missing from what *was* sent, deterministically,
 using exact Decimals (banker's rounding to paise, the same rule the POS uses).
 """
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, Optional
 
 CENT = Decimal('0.01')
@@ -43,6 +43,47 @@ def _price_from_rate(item_data: Dict[str, Any], gst_rate: Decimal, pack_size: An
     if (sale_type or 'RETAIL').upper() == 'WHOLESALE':
         amount *= Decimal('1') + gst_rate / HUNDRED
     return amount.quantize(CENT)
+
+
+def bill_discount_rupees(value: Any) -> Optional[Decimal]:
+    """
+    The rupee bill discount as typed, to remember on the bill. ``None`` for a percentage discount, and for anything that
+    cannot be such a figure. No money is worked out from it here: the bill is priced from its lines and the percentage.
+    """
+    try:
+        amount = Decimal(str(value))
+        if not amount.is_finite() or amount >= Decimal('1e10'):
+            return None
+        amount = amount.quantize(CENT)
+    except (InvalidOperation, ValueError, TypeError):
+        return None
+    return amount if amount > 0 else None
+
+
+def line_amounts_before_bill_discount(item_data: Dict[str, Any], rate: Any, billed_qty: Decimal,
+                                      gst_rate: Decimal, sale_type: str = 'RETAIL'):
+    """
+    ``(line amount before the bill discount, amount the client sent or 0)`` for a row being billed.
+
+    THE meaning of a row (the billing screen, saved bills and quotations all use it): when the row carries its amount
+    (``totalAmount``, or taxable + GST), ``rate`` is the price AFTER the line discount and ``discountPct`` only says how
+    big that discount was. It must not be applied again: doing so stored 98.01 for a Rs 99 line (1% off 100) and refused
+    every bigger line discount ("Invalid Round Off", or a false "Loss Sale Prevented").
+
+    A row with NO amount (bare API clients) keeps the older meaning: priced as rate x qty x (1 - discount%).
+    Wholesale rates are tax-exclusive, so GST is added on top.
+    """
+    sent = _to_decimal(item_data.get('totalAmount')) or Decimal('0')
+    if sent <= 0:
+        sent = ((_to_decimal(item_data.get('taxableAmount')) or Decimal('0'))
+                + (_to_decimal(item_data.get('gstAmount')) or Decimal('0')))
+
+    amount = Decimal(str(rate)) * billed_qty
+    if sent <= 0:
+        amount *= Decimal('1') - (_to_decimal(item_data.get('discountPct')) or Decimal('0')) / HUNDRED
+    if (sale_type or 'RETAIL').upper() == 'WHOLESALE':
+        amount *= Decimal('1') + gst_rate / HUNDRED
+    return amount.quantize(CENT), sent
 
 
 def resolve_item_amounts(item_data: Dict[str, Any], default_gst_rate: Any = 0,

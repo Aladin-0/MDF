@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { T } from './theme';
 import { CartLineCard } from './CartLineCard';
 import { LineEditorSheet } from './LineEditorSheet';
+import { billDiscountPctOf } from '@/lib/billDiscount';
 
 /**
  * The bill as a list of cards (phone). Scrolls inside its parent; the bottom padding clears the pinned SummaryBar.
@@ -31,9 +32,12 @@ export function CartList() {
     }, [editingBatchId, editingItem]);
 
     const showMargin = canViewBillingMargins(activeStaff?.role) && showMarginInfo;
+    const getDraftTotals = useBillingStore((s) => s.getDraftTotals);
+    // the bottom bar grows by the "discount was cut" note: leave room for it so the last card can be scrolled clear
+    const discountCut = !!draft && (getDraftTotals(draft.id).extraDiscountShortfall ?? 0) > 0;
 
     return (
-        <div className={cn('min-h-0 flex-1 overflow-y-auto overscroll-contain pb-48', T.page)} data-testid="mobile-cart-list">
+        <div className={cn('min-h-0 flex-1 overflow-y-auto overscroll-contain', discountCut ? 'pb-64' : 'pb-48', T.page)} data-testid="mobile-cart-list">
             {draft && cart.length > 0 ? (
                 <>
                     <div className={cn('flex items-center justify-between border-y border-slate-300 px-4 py-2', T.band)}>
@@ -50,7 +54,7 @@ export function CartList() {
                                 draftId={draft.id}
                                 saleType={draft.saleType || 'RETAIL'}
                                 showMargin={showMargin}
-                                extraDiscountPct={draft.extraDiscountPct || 0}
+                                extraDiscountPct={billDiscountPctOf(draft)}
                                 landingCostIncludeGst={landingCostIncludeGst}
                                 onEdit={setEditingBatchId}
                             />

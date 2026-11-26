@@ -6,6 +6,7 @@ import { logger } from '@/lib/logger';
 import { useAuthStore } from '@/store/authStore';
 import { salesApi } from '@/lib/apiClient';
 import { DraftBill } from '@/types';
+import { billDiscountPctOf } from '@/lib/billDiscount';
 
 // Debounce interval in ms
 const AUTOSAVE_DELAY = 2000;
@@ -51,7 +52,7 @@ export function useAutosaveDraft() {
             draft_status: draft.status === 'held' ? 'held' : 'draft',
             subtotal: toTwoDecimals(totals.subtotal),
             discount_amount: toTwoDecimals(totals.discountAmount),
-            extra_discount_pct: toTwoDecimals(draft.extraDiscountPct),
+            extra_discount_pct: toTwoDecimals(billDiscountPctOf(draft)),
             taxable_amount: toTwoDecimals(totals.taxableAmount),
             cgst_amount: toTwoDecimals(totals.cgstAmount),
             sgst_amount: toTwoDecimals(totals.sgstAmount),

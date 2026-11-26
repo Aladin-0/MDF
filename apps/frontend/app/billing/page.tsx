@@ -10,6 +10,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { StaffPinEntry } from '@/components/billing/StaffPinEntry';
 import { useAutosaveDraft } from '@/hooks/useAutosaveDraft';
 import { useLoadDrafts } from '@/hooks/useLoadDrafts';
+import { useSyncBillingSettings } from '@/hooks/useSyncBillingSettings';
 import { BillSuccessScreen } from '@/components/billing/BillSuccessScreen';
 import { InvoicePreviewModal } from '@/components/billing/InvoicePreviewModal';
 import { useState, useEffect, Suspense, useRef } from 'react';
@@ -23,6 +24,7 @@ export default function FullScreenBillingPage() {
     const { isPinVerified, activeDraftId, lastInvoice, setLastInvoice, drafts, createDraft, switchDraft } = useBillingStore(useShallow((s) => ({ isPinVerified: s.isPinVerified, activeDraftId: s.activeDraftId, lastInvoice: s.lastInvoice, setLastInvoice: s.setLastInvoice, drafts: s.drafts, createDraft: s.createDraft, switchDraft: s.switchDraft })));
     const hasHydrated = useBillingStore(state => state._hasHydrated);
     useAutosaveDraft();
+    useSyncBillingSettings();
     const draftsLoaded = useLoadDrafts();
     const [showInvoicePreview, setShowInvoicePreview] = useState(false);
     const toggleMarginInfo = useBillingStore(s => s.toggleMarginInfo);

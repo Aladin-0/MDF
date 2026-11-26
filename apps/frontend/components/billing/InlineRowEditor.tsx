@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import { Check, X, Trash2, Loader2, AlertTriangle } from 'lucide-react';
 import { calculateRowTotals } from '@/lib/cartUtils';
 import { floorsOf } from '@/lib/billingMarginUtils';
+import { useBillingStore } from '@/store/billingStore';
 import { allowsLoose } from '@/lib/packRules';
 
 interface InlineRowEditorProps {
@@ -27,6 +28,7 @@ interface InlineRowEditorProps {
 
 export function InlineRowEditor({ item, saleType = 'RETAIL', onSave, onCancel, onRemove, showMargin = false }: InlineRowEditorProps) {
     const outletId = useOutletId();
+    const landingCostIncludeGst = useBillingStore((s) => s.landingCostIncludeGst);
 
     const [qtyStrips, setQtyStrips] = useState(item.qtyStrips.toString());
     const [qtyLoose, setQtyLoose] = useState(item.qtyLoose.toString());
@@ -119,7 +121,8 @@ export function InlineRowEditor({ item, saleType = 'RETAIL', onSave, onCancel, o
         discountValue,
         item.gstRate,
         currentBaseRate,
-        saleType
+        saleType,
+        landingCostIncludeGst
     );
 
     const commitSave = () => {

@@ -41,7 +41,6 @@ export function useSaveBill() {
             const doctor = draft.doctor;
             const scheduleHData = draft.scheduleHData;
             const totals = state.getDraftTotals(activeDraftId);
-            const extraDiscountPct = draft.extraDiscountPct || 0;
             const activeStaff = state.activeStaff;
     
 

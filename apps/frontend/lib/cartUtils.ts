@@ -1,6 +1,6 @@
 import { Batch, CartItem } from '@/types';
 import { bankersRound } from '@/utils/mathUtils';
-import { costFloorOf } from '@/lib/billingMarginUtils';
+import { costFloorOf, toPaise } from '@/lib/billingMarginUtils';
 
 export interface RowTotals {
     tQtyFractional: number;
@@ -37,7 +37,8 @@ export function calculateRowTotals(
     discountValueRaw: string,
     gstRate: number,
     historicalBaseRate?: number,
-    saleType?: 'RETAIL' | 'WHOLESALE'
+    saleType?: 'RETAIL' | 'WHOLESALE',
+    landingCostIncludeGst?: boolean
 ): RowTotals;
 
 export function calculateRowTotals(
@@ -48,7 +49,8 @@ export function calculateRowTotals(
     discountValueRawParam?: string,
     gstRateParam?: number,
     historicalBaseRateParam?: number,
-    saleTypeParam: 'RETAIL' | 'WHOLESALE' = 'RETAIL'
+    saleTypeParam: 'RETAIL' | 'WHOLESALE' = 'RETAIL',
+    landingCostIncludeGst: boolean = false
 ): RowTotals {
     let currentBatch: Batch;
     let qtyStripsRaw: string;
@@ -120,9 +122,9 @@ export function calculateRowTotals(
     const costRate = costFloorOf(currentBatch as any, saleType);
     const totalCost = costRate * tQtyFractional;
     
-    // Net unit selling price using unified formula: (Final Row Amount / Quantity)
-    const netUnitSellingPrice = tQtyFractional > 0 ? (sellAmount / tQtyFractional) : 0;
-    const isNegativeMargin = costRate > 0 && tQtyFractional > 0 && (netUnitSellingPrice < (costRate - 0.005));
+    // The same floor checkout and the server hold the line to: GST on top of the cost unless the outlet's cost includes it.
+    const lineFloor = Math.round(costRate * (landingCostIncludeGst ? 1 : 1 + gstRate / 100) * tQtyFractional * 100) / 100;
+    const isNegativeMargin = costRate > 0 && tQtyFractional > 0 && (sellAmount < lineFloor - 0.005);
     
     const marginAmount = sellAmount - totalCost;
     const marginPct = sellAmount > 0 ? (marginAmount / sellAmount) * 100 : 0;
@@ -136,11 +138,11 @@ export function calculateRowTotals(
 
     const isValid = !isDiscountInvalid && !isQtyZero && !isNegativeMargin;
 
-    const roundedSellAmount = bankersRound(sellAmount);
+    const roundedSellAmount = toPaise(sellAmount);   // the same rounding as the cart line (lineNetAmount)
     return {
         tQtyFractional,
         tQtyLoose,
-        rate: bankersRound(rate),
+        rate,                                   // NOT rounded: rate x quantity must give sellAmount (Rs 100 off 3 packs stays Rs 100)
         sellAmount: roundedSellAmount,
         totalAmount: roundedSellAmount,
         dPct,

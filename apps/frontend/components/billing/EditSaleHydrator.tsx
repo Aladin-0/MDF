@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useBillingStore } from '@/store/billingStore';
-import { floorsOf } from '@/lib/billingMarginUtils';
+import { floorsOf, savedLinePrices } from '@/lib/billingMarginUtils';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 
@@ -94,7 +94,10 @@ export function EditSaleHydrator() {
                 }
 
                 // FIX 1: Read both camelCase and snake_case to prevent UI hallucination
-                store.setExtraDiscountPct(Number(fullInvoice.extraDiscountPct ?? fullInvoice.extra_discount_pct ?? 0));
+                // A discount typed in rupees comes back as those rupees; a percent as a percent.
+                const savedRupees = Number(fullInvoice.extraDiscountRupees ?? 0);
+                if (savedRupees > 0) store.setExtraDiscountRupees(savedRupees);
+                else store.setExtraDiscountPct(Number(fullInvoice.extraDiscountPct ?? fullInvoice.extra_discount_pct ?? 0));
 
                 const method = (fullInvoice.paymentMode || 'cash') as any;
                 store.setPayment({
@@ -164,27 +167,27 @@ export function EditSaleHydrator() {
                          const ptr = Number(item.ptr ?? 0);
                          const pts = Number(item.pts ?? 0);
                          
-                         // FIX 2: Always force the base rate to be MRP (or PTR/PTS) before any discounts. 
-                         // This prevents the "Double Discount" trap.
+                         // The rate saved on the bill is the price AFTER the line discount (what the counter sent as `rate`).
+                         // The price before it (`saleRate`) is worked back from the discount %. Reading the saved rate as
+                         // the pre-discount price took the discount off a second time.
                          const isWholesale = fullInvoice.saleType === 'WHOLESALE';
-                         // Use the base rate SAVED on the bill (what the counter sent as `rate`), falling back to the
-                         // current MRP/PTS only if it is missing. Always using MRP changed a hand-typed rate back to MRP on
-                         // every re-save, which the server now (correctly) refuses for staff who may not change rates.
-                         const savedRate = Number(item.rate ?? 0);
-                         const baseRate = savedRate > 0 ? savedRate : (isWholesale ? (pts || ptr || mrp) : mrp);
-                         
                          const discountPct = Number(item.discountPct ?? item.discount_pct ?? 0);
                          const gstRate = Number(item.gstRate ?? item.gst_rate ?? 0);
-                         const taxMultiplier = 1 + (gstRate / 100);
-                         
-                         // CRITICAL FIX: The DB stores item.totalAmount AFTER extraDiscountPct was applied.
-                         // distributeSmartDiscounts() uses item.totalAmount as its base and then applies
-                         // extraDiscountPct AGAIN => double discount (e.g. ₹358 bill loads as ₹306).
-                         // Solution: always pass the PRE-DISCOUNT base amount (baseRate × qty ± GST).
-                         const baseRateAfterItemDisc = baseRate * (1 - discountPct / 100);
-                         const preTotalAmount = isWholesale
-                             ? baseRateAfterItemDisc * totalQtyFractional * taxMultiplier
-                             : baseRateAfterItemDisc * totalQtyFractional;
+                         const listPrice = isWholesale ? (pts || ptr || mrp) : mrp;
+                         // Keep the saved rate (a hand-typed rate must come back as typed); only if it is missing, price
+                         // the line from the batch's list price.
+                         const prices = savedLinePrices({ rate: Number(item.rate ?? 0), discountPct, mrp, listPrice });
+                         let netRate = prices.rate;
+                         // The server keeps 2 decimals of the rate. Without a bill discount (in either form: Rs 5 off a very
+                         // large bill is saved as 0.00%) the saved line total is exact:
+                         // use it to restore the unrounded rate (Rs 100 off 3 packs must come back as 935, not 935.01).
+                         const savedTotal = Number(item.totalAmount ?? item.total_amount ?? 0);
+                         const extraPct = Number(fullInvoice.extraDiscountPct ?? fullInvoice.extra_discount_pct ?? 0);
+                         if (!(extraPct > 0) && !(savedRupees > 0) && savedTotal > 0 && totalQtyFractional > 0) {
+                             const exact = savedTotal / totalQtyFractional / (isWholesale ? 1 + gstRate / 100 : 1);
+                             if (Math.abs(exact - netRate) <= 0.005) netRate = exact;
+                         }
+                         const saleRate = prices.saleRate;
                          
                          store.addToCart(targetDraftId, {
                              ...item,
@@ -202,8 +205,8 @@ export function EditSaleHydrator() {
                              cgstRate: Number(item.cgstRate ?? item.cgst_rate ?? 0),
                              sgstRate: Number(item.sgstRate ?? item.sgst_rate ?? 0),
                              
-                             saleRate: baseRate,
-                             rate: baseRate, // The math engine MUST use the pre-discount baseRate
+                             saleRate: saleRate,      // before the line discount (the line editor starts from this)
+                             rate: netRate,           // after it: what the totals, the payload and the server read
                              totalQty: totalQtyFractional,
                              saleMode: item.saleMode ?? item.sale_mode ?? 'mixed',
                              mrp: mrp,
@@ -212,8 +215,6 @@ export function EditSaleHydrator() {
                              ...floorsOf(item),      // the floors the server will hold this edit to
                              ptr: ptr,
                              pts: pts,
-                             // Pass pre-discount total so distributeSmartDiscounts has a clean base
-                             totalAmount: preTotalAmount,
                          });
                      });
                 }

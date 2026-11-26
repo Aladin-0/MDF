@@ -78,7 +78,7 @@ describe('LineEditorSheet: fields', () => {
     });
 
     it('discount value resets to 0 when the % / Rs toggle changes, and numbers use the decimal keypad', async () => {
-        seed([baseItem({ discountPct: 10, totalAmount: 180 })]);
+        seed([baseItem({ discountPct: 10, rate: 90, totalAmount: 180 })]);   // `rate` is the price after the discount
         renderEditor();
         await batchesLoaded();
         const field = screen.getByTestId('editor-discount');
@@ -203,7 +203,7 @@ describe('LineEditorSheet: margin visibility', () => {
 
 describe('LineEditorSheet: remove with undo', () => {
     it('Remove deletes the line, shows "Removed NAME", and Undo puts the same line back', async () => {
-        seed([baseItem({ discountPct: 10, totalAmount: 180 })]);
+        seed([baseItem({ discountPct: 10, rate: 90, totalAmount: 180 })]);
         renderEditor();
         await batchesLoaded();
         fireEvent.click(screen.getByRole('button', { name: /Remove/ }));

@@ -1,5 +1,6 @@
 import { calculateLineMargin } from '@/lib/billingMarginUtils';
 import type { DraftBill } from '@/types';
+import { billDiscountPctOf } from '@/lib/billDiscount';
 
 /** Where tapping a failing check should take the cashier. 'local' = a field on the payment screen itself. */
 export type FixTarget = 'doctor' | 'customer' | 'cart' | 'local';
@@ -51,7 +52,7 @@ export function formatINR(value: number): string {
 
 export function countLossLines(draft: DraftBill | null | undefined, landingCostIncludeGst = false): number {
     if (!draft) return 0;
-    const pct = draft.extraDiscountPct || 0;
+    const pct = billDiscountPctOf(draft);
     const type = draft.saleType || 'RETAIL';
     return draft.cart.filter((item) => calculateLineMargin(item, pct, type, landingCostIncludeGst).isLossSale).length;
 }

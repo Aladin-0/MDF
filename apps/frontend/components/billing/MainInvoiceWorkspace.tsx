@@ -12,17 +12,17 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { poApi } from '@/lib/poApi';
 import { looksLikeBarcode, SEARCH_TIPS } from '@/lib/searchSyntax';
 import { getExpiryStatus } from '@/utils/expiry';
-import { calculateLineMargin, calculateTotalMargin } from '@/lib/billingMarginUtils';
+import { calculateLineMargin, calculateTotalMargin, lineNetAmount } from '@/lib/billingMarginUtils';
 import { canViewBillingMargins } from '@/lib/access';
 import { allowsLoose, wholePackWord } from '@/lib/packRules';
-import { quickAddLine } from '@/lib/cartLine';
+import { quickAddLine, quickAddPreview } from '@/lib/cartLine';
 import { useMedicineSearch } from '@/hooks/useMedicineSearch';
-import { useOutletSettings } from '@/hooks/useOutletSettings';
 import { Batch, ProductSearchResult, BillTotals } from '@/types';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { InlineRowEditor } from './InlineRowEditor';
 import { useGridNavigation } from '@/hooks/useGridNavigation';
+import { billDiscountPctOf } from '@/lib/billDiscount';
 
 interface MainInvoiceWorkspaceProps {
     searchRef?: React.RefObject<HTMLElement>;
@@ -30,17 +30,9 @@ interface MainInvoiceWorkspaceProps {
 
 export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = {}) {
     const { drafts, activeDraftId, addToCart, removeFromCart, updateCartItem, getDraftTotals, showMarginInfo, activeStaff } = useBillingStore(useShallow((s) => ({ drafts: s.drafts, activeDraftId: s.activeDraftId, addToCart: s.addToCart, removeFromCart: s.removeFromCart, updateCartItem: s.updateCartItem, getDraftTotals: s.getDraftTotals, showMarginInfo: s.showMarginInfo, activeStaff: s.activeStaff })));
-    const setLandingCostIncludeGst = useBillingStore(state => state.setLandingCostIncludeGst);
     const landingCostIncludeGst = useBillingStore(state => state.landingCostIncludeGst);
     const outletId = useOutletId() as string;
     const { hasPermission } = usePermissions();
-    const { data: outletSettings } = useOutletSettings();
-
-    useEffect(() => {
-        if (outletSettings) {
-            setLandingCostIncludeGst(Boolean(outletSettings.landingCostIncludeGst ?? (outletSettings as any).landing_cost_include_gst));
-        }
-    }, [outletSettings, setLandingCostIncludeGst]);
 
     // Margins are for roles that may see purchase economics; unknown roles are hidden by default.
     const isCashier = !canViewBillingMargins(activeStaff?.role);
@@ -157,7 +149,7 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
         requiresDoctorDetails: false,
     };
     const totals = (typeof getDraftTotals === 'function' ? getDraftTotals(activeDraftId) : null) || fallbackTotals;
-    const marginData = calculateTotalMargin(activeDraft.cart, totals.grandTotal, totals.extraDiscountAmount, activeDraft.extraDiscountPct || 0, saleType, landingCostIncludeGst);
+    const marginData = calculateTotalMargin(activeDraft.cart, totals.grandTotal, totals.extraDiscountAmount, billDiscountPctOf(activeDraft), saleType, landingCostIncludeGst);
 
     // --- Editor Handlers ---
     const handleSaveEdit = (oldBatchId: string, updatedItem: any) => {
@@ -463,15 +455,7 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                                     </div>
                                     <div className="font-bold text-3xl text-slate-900 flex items-center justify-end gap-2">
                                         <span className="text-sm text-slate-500 uppercase tracking-widest mt-1">Total:</span> 
-                                        ₹{(() => {
-                                            const s = parseInt(qtyStrips) || 0;
-                                            const l = parseInt(qtyLoose) || 0;
-                                            const d = parseFloat(discountPct) || 0;
-                                            const effectiveL = allowsLoose(quickAddBatch) ? l : 0;
-                                            const tQtyFractional = s + (effectiveL / quickAddBatch.packSize);
-                                            const rate = Number(quickAddBatch.pts) > 0 ? Number(quickAddBatch.pts) : (Number(quickAddBatch.ptr) > 0 ? Number(quickAddBatch.ptr) : Number(quickAddBatch.mrp));
-                                            return ((rate * (1 - d/100)) * tQtyFractional).toFixed(2);
-                                        })()}
+                                        ₹{quickAddPreview({ product: quickAddProduct, batch: quickAddBatch, qtyStrips, qtyLoose, discountPct, saleType }).toFixed(2)}
                                     </div>
                                 </>
                             ) : (
@@ -480,15 +464,7 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                                         MRP: ₹{quickAddBatch.mrp || '0.00'}
                                     </div>
                                     <div className="font-bold text-2xl text-slate-800">
-                                        ₹{(() => {
-                                            const s = parseInt(qtyStrips) || 0;
-                                            const l = parseInt(qtyLoose) || 0;
-                                            const d = parseFloat(discountPct) || 0;
-                                            const effectiveL = allowsLoose(quickAddBatch) ? l : 0;
-                                            const tQtyFractional = s + (effectiveL / quickAddBatch.packSize);
-                                            const rate = Number(quickAddBatch.mrp) || 0;
-                                            return ((rate * (1 - d/100)) * tQtyFractional).toFixed(2);
-                                        })()}
+                                        ₹{quickAddPreview({ product: quickAddProduct, batch: quickAddBatch, qtyStrips, qtyLoose, discountPct, saleType }).toFixed(2)}
                                     </div>
                                 </>
                             )}
@@ -860,7 +836,7 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                                     );
                                 }
 
-                                const lineMargin = calculateLineMargin(item, activeDraft?.extraDiscountPct || 0, saleType, landingCostIncludeGst);
+                                const lineMargin = calculateLineMargin(item, billDiscountPctOf(activeDraft), saleType, landingCostIncludeGst);
 
                                 return (
                                     <tr 
@@ -990,7 +966,7 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                                             </>
                                         )}
                                         <td className="px-2 py-1.5 text-[11px] font-bold text-slate-500 text-right border-r border-slate-100">
-                                            {item.discountPct > 0 ? <span className="text-emerald-600">{item.discountPct}%</span> : '-'}
+                                            {item.discountPct > 0 ? <span className="text-emerald-600">{Number(item.discountPct.toFixed(2))}%</span> : '-'}
                                         </td>
                                         {saleType === 'WHOLESALE' && (
                                             <td className="px-2 py-1.5 text-[11px] font-bold text-slate-500 text-right border-r border-slate-100">
@@ -1007,7 +983,7 @@ export function MainInvoiceWorkspace({ searchRef }: MainInvoiceWorkspaceProps = 
                                             title={lineMargin.isLossSale ? `Rate is below ${activeDraft?.saleType === 'WHOLESALE' ? 'Purchase Rate' : 'Landing Cost'} (₹${(item.landingRate ?? lineMargin.costFloor).toFixed(2)})` : undefined}
                                         >
                                             <div className="flex flex-col items-end">
-                                                <span>₹{item.totalAmount.toFixed(2)}</span>
+                                                <span>₹{lineNetAmount(item, saleType).toFixed(2)}</span>
                                                 {lineMargin.isLossSale && (
                                                     <span 
                                                         className="text-[9px] font-bold text-red-600 bg-red-100 px-1 py-0.5 rounded flex items-center gap-0.5 mt-0.5"

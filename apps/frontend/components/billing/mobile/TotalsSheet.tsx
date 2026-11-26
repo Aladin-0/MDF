@@ -8,7 +8,9 @@ import { canViewBillingMargins } from '@/lib/access';
 import { calculateTotalMargin } from '@/lib/billingMarginUtils';
 import { cn } from '@/lib/utils';
 import { SheetShell } from './SheetShell';
+import { BillDiscountShortfall } from '../BillDiscountShortfall';
 import { T } from './theme';
+import { billDiscountPctOf } from '@/lib/billDiscount';
 
 const money = (n: number | undefined) => `₹ ${(n ?? 0).toFixed(2)}`;
 
@@ -30,6 +32,7 @@ export function TotalsSheet({ open, onClose }: { open: boolean; onClose: () => v
     const activeDraftId = useBillingStore((s) => s.activeDraftId);
     const getDraftTotals = useBillingStore((s) => s.getDraftTotals);
     const setExtraDiscountPct = useBillingStore((s) => s.setExtraDiscountPct);
+    const setExtraDiscountRupees = useBillingStore((s) => s.setExtraDiscountRupees);
     const showMarginInfo = useBillingStore((s) => s.showMarginInfo);
     const toggleMarginInfo = useBillingStore((s) => s.toggleMarginInfo);
     const activeStaff = useBillingStore((s) => s.activeStaff);
@@ -45,11 +48,11 @@ export function TotalsSheet({ open, onClose }: { open: boolean; onClose: () => v
     const totals = draft && activeDraftId ? getDraftTotals(activeDraftId) : null;
     const cart = draft?.cart ?? [];
     const saleType = draft?.saleType || 'RETAIL';
-    const extraDiscountPct = draft?.extraDiscountPct || 0;
+    const extraDiscountPct = billDiscountPctOf(draft);
 
     const marginData = useMemo(() => {
         if (!draft || !totals) return null;
-        return calculateTotalMargin(draft.cart, totals.grandTotal, totals.extraDiscountAmount, draft.extraDiscountPct || 0, saleType, landingCostIncludeGst);
+        return calculateTotalMargin(draft.cart, totals.grandTotal, totals.extraDiscountAmount, billDiscountPctOf(draft), saleType, landingCostIncludeGst);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [draft, totals?.grandTotal, totals?.extraDiscountAmount, saleType, landingCostIncludeGst]);
 
@@ -67,14 +70,15 @@ export function TotalsSheet({ open, onClose }: { open: boolean; onClose: () => v
         setExtraDiscountPct(Number(Math.min(100, Math.max(0, parseFloat(raw) || 0)).toFixed(2)));
     };
     const commitAmt = (raw: string) => {
-        const v = Math.max(0, parseFloat(raw) || 0);
-        // % against the bill BEFORE the bill discount, 6 decimals, so Rs -> % -> Rs is exact to the paisa (same as the desktop rail)
-        const base = totals.preExtraNet;
-        setExtraDiscountPct(base > 0 ? Number(Math.min(100, (v / base) * 100).toFixed(6)) : 0);
+        // the rupees themselves are kept on the bill (see lib/billDiscount): they do not change when the bill does
+        setExtraDiscountRupees(Math.max(0, parseFloat(raw) || 0));
     };
 
-    const pctShown = pctFocused ? pctDraft : (extraDiscountPct === 0 ? '' : String(parseFloat(extraDiscountPct.toFixed(2))));
-    const amtShown = amtFocused ? amtDraft : (totals.extraDiscountAmount === 0 ? '' : totals.extraDiscountAmount.toFixed(2));
+    const pctText = extraDiscountPct === 0 ? '' : String(parseFloat(extraDiscountPct.toFixed(2)));
+    const typedRupees = draft.extraDiscountRupees || 0;
+    const amtText = typedRupees ? typedRupees.toFixed(2) : (totals.extraDiscountAmount === 0 ? '' : totals.extraDiscountAmount.toFixed(2));
+    const pctShown = pctFocused ? pctDraft : pctText;
+    const amtShown = amtFocused ? amtDraft : amtText;
     const roundOff = totals.roundOff ?? 0;
     const inputCls = cn('h-12 w-full touch-manipulation px-2 text-center text-base font-bold tabular-nums', T.input);
 
@@ -110,7 +114,7 @@ export function TotalsSheet({ open, onClose }: { open: boolean; onClose: () => v
                                 className={inputCls}
                                 onFocus={(e) => {
                                     setPctFocused(true);
-                                    setPctDraft(extraDiscountPct === 0 ? '' : String(extraDiscountPct));
+                                    setPctDraft(pctText);
                                     e.target.select();
                                 }}
                                 onChange={(e) => {
@@ -119,7 +123,6 @@ export function TotalsSheet({ open, onClose }: { open: boolean; onClose: () => v
                                 }}
                                 onBlur={() => {
                                     setPctFocused(false);
-                                    commitPct(pctDraft);
                                 }}
                             />
                         </div>
@@ -135,7 +138,7 @@ export function TotalsSheet({ open, onClose }: { open: boolean; onClose: () => v
                                 className={inputCls}
                                 onFocus={(e) => {
                                     setAmtFocused(true);
-                                    setAmtDraft(totals.extraDiscountAmount === 0 ? '' : totals.extraDiscountAmount.toFixed(2));
+                                    setAmtDraft(amtText);
                                     e.target.select();
                                 }}
                                 onChange={(e) => {
@@ -144,13 +147,13 @@ export function TotalsSheet({ open, onClose }: { open: boolean; onClose: () => v
                                 }}
                                 onBlur={() => {
                                     setAmtFocused(false);
-                                    commitAmt(amtDraft);
                                 }}
                             />
                         </div>
                     </div>
                 </div>
 
+                <BillDiscountShortfall totals={totals} className="my-2" />
                 <Row label="Gross taxable amount" value={money(totals.taxableAmount)} testId="totals-taxable" />
                 {isInterstate ? (
                     <Row label="IGST" hint="Inter-state supply" value={money((totals.cgst ?? 0) + (totals.sgst ?? 0))} testId="totals-igst" />

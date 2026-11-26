@@ -29,6 +29,7 @@ import { salesApi } from '@/lib/apiClient';
 import { InvoicePreviewModal } from '@/components/billing/InvoicePreviewModal';
 import RecordCreditPaymentModal from '@/components/credit/RecordCreditPaymentModal';
 import { useCustomerCreditAccount } from '@/hooks/useCredit';
+import { savedLinePrices } from '@/lib/billingMarginUtils';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL!; // Required — set NEXT_PUBLIC_API_URL in .env
 
@@ -237,9 +238,11 @@ function InvoiceHistory({ customerId }: { customerId: string }) {
             if (invoice.items) {
                 invoice.items.forEach((item: any) => {
                     const mrp         = Number(item.mrp     || item.rate || 0);
-                    const rate        = Number(item.rate    || 0);
-                    const saleRate    = Number(item.saleRate|| item.rate || 0);
                     const discountPct = Number(item.discountPct || item.discount_pct || 0);
+                    // `rate` is after the line discount; `saleRate` (what the line editor starts from) is before it
+                    const { rate, saleRate } = savedLinePrices({
+                        rate: Number(item.rate || 0), discountPct, mrp, listPrice: Number(item.saleRate || 0) || mrp,
+                    });
                     const gstRate     = Number(item.gstRate || item.gst_rate || 0);
                     const qtyStrips   = Number(item.qtyStrips || item.qty_strips || 0);
                     const qtyLoose    = Number(item.qtyLoose  || item.qty_loose  || 0);

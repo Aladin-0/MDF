@@ -11,6 +11,7 @@ import { canViewBillingMargins } from '@/lib/access';
 import { useCheckout } from '@/hooks/useCheckout';
 import { useToast } from '@/hooks/use-toast';
 import { RevisionReasonModal } from './RevisionReasonModal';
+import { BillDiscountShortfall } from './BillDiscountShortfall';
 import { Eye, EyeOff, TrendingUp, Truck, AlertTriangle } from 'lucide-react';
 import {
     Dialog,
@@ -18,6 +19,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { billDiscountPctOf } from '@/lib/billDiscount';
 
 export function RightBillingRail() {
     const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
@@ -69,8 +71,10 @@ export function RightBillingRail() {
 
     const cart = activeDraft.cart;
     const totals = getDraftTotals(activeDraftId);
-    const extraDiscountPct = activeDraft.extraDiscountPct || 0;
-    const { updateDraftHeader } = useBillingStore.getState();
+    const extraDiscountPct = billDiscountPctOf(activeDraft);
+    const typedRupees = activeDraft.extraDiscountRupees || 0;
+    const pctText = extraDiscountPct === 0 ? '' : String(parseFloat(extraDiscountPct.toFixed(2)));
+    const amtText = typedRupees ? typedRupees.toFixed(2) : (totals.extraDiscountAmount === 0 ? '' : totals.extraDiscountAmount.toFixed(2));
 
     const outletState = outlet?.state || outlet?.stateCode || '';
     const customerState = activeDraft?.customerLedger?.state || activeDraft?.customerLedger?.stateCode || activeDraft?.customer?.state || activeDraft?.customer?.stateCode || '';
@@ -89,7 +93,7 @@ export function RightBillingRail() {
             activeDraft.cart,
             totals.grandTotal,
             totals.extraDiscountAmount,
-            activeDraft.extraDiscountPct || 0,
+            billDiscountPctOf(activeDraft),
             activeDraft.saleType || 'RETAIL',
             landingCostIncludeGst
         );
@@ -99,20 +103,12 @@ export function RightBillingRail() {
 
 
     const commitPct = (raw: string) => {
-        const v = Number(Math.min(100, Math.max(0, parseFloat(raw) || 0)).toFixed(2));
-        updateDraftHeader(activeDraftId, { extraDiscountPct: v });
+        useBillingStore.getState().setExtraDiscountPct(Number(Math.min(100, Math.max(0, parseFloat(raw) || 0)).toFixed(2)));
     };
 
     const commitAmt = (raw: string) => {
-        const v = Math.max(0, parseFloat(raw) || 0);
-        // Use preExtraNet (value before the global bill discount) as the base.
-        // IMPORTANT: store 6 decimal places of % precision here so that the
-        // round-trip  ₹ → % → ₹  is lossless to within <₹0.01.
-        // Example: 3432 / 5140 * 100 = 66.770428... stored as 66.7704
-        //          When rendered: 66.7704% of 5140 = ₹3432.00 ✓
-        const base = totals.preExtraNet;
-        const pct = base > 0 ? Number(Math.min(100, (v / base) * 100).toFixed(6)) : 0;
-        updateDraftHeader(activeDraftId, { extraDiscountPct: pct });
+        // the rupees themselves are kept on the bill (see lib/billDiscount): they do not change when the bill does
+        useBillingStore.getState().setExtraDiscountRupees(Math.max(0, parseFloat(raw) || 0));
     };
 
     const totalStrips = cart.reduce((sum, item) => sum + item.qtyStrips, 0);
@@ -181,11 +177,11 @@ export function RightBillingRail() {
                                     <input
                                         inputMode="decimal"
                                         placeholder="0"
-                                        value={pctFocused ? pctDraft : (extraDiscountPct === 0 ? '' : String(parseFloat(extraDiscountPct.toFixed(2))))}
+                                        value={pctFocused ? pctDraft : pctText}
                                         className="w-14 h-7 text-center text-xs border border-blue-200 rounded px-1 text-blue-700 bg-blue-50 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-300 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none pr-3"
                                         onFocus={(e) => {
                                             setPctFocused(true);
-                                            setPctDraft(extraDiscountPct === 0 ? '' : String(extraDiscountPct));
+                                            setPctDraft(pctText);
                                             e.target.select();
                                         }}
                                         onChange={(e) => {
@@ -194,10 +190,9 @@ export function RightBillingRail() {
                                         }}
                                         onBlur={() => {
                                             setPctFocused(false);
-                                            commitPct(pctDraft);
                                         }}
                                         onKeyDown={(e) => {
-                                            if (e.key === 'Enter') { commitPct(pctDraft); (e.target as HTMLInputElement).blur(); }
+                                            if (e.key === 'Enter') { (e.target as HTMLInputElement).blur(); }
                                             if (e.key === 'Escape') { setPctDraft(''); setPctFocused(false); }
                                         }}
                                     />
@@ -209,11 +204,11 @@ export function RightBillingRail() {
                                     <input
                                         inputMode="decimal"
                                         placeholder="0.00"
-                                        value={amtFocused ? amtDraft : (totals.extraDiscountAmount === 0 ? '' : totals.extraDiscountAmount.toFixed(2))}
+                                        value={amtFocused ? amtDraft : amtText}
                                         className="w-20 h-7 text-center text-xs border border-blue-200 rounded px-1 text-blue-700 bg-blue-50 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-300 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none pl-3"
                                         onFocus={(e) => {
                                             setAmtFocused(true);
-                                            setAmtDraft(totals.extraDiscountAmount === 0 ? '' : totals.extraDiscountAmount.toFixed(2));
+                                            setAmtDraft(amtText);
                                             e.target.select();
                                         }}
                                         onChange={(e) => {
@@ -222,10 +217,9 @@ export function RightBillingRail() {
                                         }}
                                         onBlur={() => {
                                             setAmtFocused(false);
-                                            commitAmt(amtDraft);
                                         }}
                                         onKeyDown={(e) => {
-                                            if (e.key === 'Enter') { commitAmt(amtDraft); (e.target as HTMLInputElement).blur(); }
+                                            if (e.key === 'Enter') { (e.target as HTMLInputElement).blur(); }
                                             if (e.key === 'Escape') { setAmtDraft(''); setAmtFocused(false); }
                                         }}
                                     />
@@ -234,6 +228,7 @@ export function RightBillingRail() {
                         </div>
                         <span>- ₹ {(totals.extraDiscountAmount ?? 0).toFixed(2)}</span>
                     </div>
+                    <BillDiscountShortfall totals={totals} />
                     <div className="flex justify-between text-slate-800">
                         <span>Gross Amount</span>
                         <span>₹ {(totals.taxableAmount ?? 0).toFixed(2)}</span>
@@ -311,6 +306,8 @@ export function RightBillingRail() {
                     </div>
                     <span className="font-black text-3xl sm:text-4xl lg:text-5xl tracking-tight text-white" data-testid="grand-total-amount">₹ {totals.grandTotal.toFixed(2)}</span>
                 </div>
+                {/* Below lg the summary above is hidden (it opens as a popup): say a cut discount beside the total too */}
+                <BillDiscountShortfall totals={totals} tone="dark" className="lg:hidden" />
                 
                 {(canViewMargins && marginData && cart.length > 0) && (
                     <div className="hidden lg:flex flex-col mb-4 bg-slate-800/90 p-3 rounded-lg border border-slate-700/80 shadow-sm">
@@ -669,11 +666,11 @@ export function RightBillingRail() {
                                     <input
                                         inputMode="decimal"
                                         placeholder="0"
-                                        value={pctFocused ? pctDraft : (extraDiscountPct === 0 ? '' : String(parseFloat(extraDiscountPct.toFixed(2))))}
+                                        value={pctFocused ? pctDraft : pctText}
                                         className="w-full h-10 text-center text-base font-bold border border-blue-300 rounded-md px-2 text-blue-700 bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none pr-6"
                                         onFocus={(e) => {
                                             setPctFocused(true);
-                                            setPctDraft(extraDiscountPct === 0 ? '' : String(extraDiscountPct));
+                                            setPctDraft(pctText);
                                             e.target.select();
                                         }}
                                         onChange={(e) => {
@@ -682,10 +679,9 @@ export function RightBillingRail() {
                                         }}
                                         onBlur={() => {
                                             setPctFocused(false);
-                                            commitPct(pctDraft);
                                         }}
                                         onKeyDown={(e) => {
-                                            if (e.key === 'Enter') { commitPct(pctDraft); (e.target as HTMLInputElement).blur(); }
+                                            if (e.key === 'Enter') { (e.target as HTMLInputElement).blur(); }
                                             if (e.key === 'Escape') { setPctDraft(''); setPctFocused(false); }
                                         }}
                                     />
@@ -700,11 +696,11 @@ export function RightBillingRail() {
                                     <input
                                         inputMode="decimal"
                                         placeholder="0.00"
-                                        value={amtFocused ? amtDraft : (totals.extraDiscountAmount === 0 ? '' : totals.extraDiscountAmount.toFixed(2))}
+                                        value={amtFocused ? amtDraft : amtText}
                                         className="w-full h-10 text-center text-base font-bold border border-blue-300 rounded-md px-2 pl-6 text-blue-700 bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                         onFocus={(e) => {
                                             setAmtFocused(true);
-                                            setAmtDraft(totals.extraDiscountAmount === 0 ? '' : totals.extraDiscountAmount.toFixed(2));
+                                            setAmtDraft(amtText);
                                             e.target.select();
                                         }}
                                         onChange={(e) => {
@@ -713,15 +709,15 @@ export function RightBillingRail() {
                                         }}
                                         onBlur={() => {
                                             setAmtFocused(false);
-                                            commitAmt(amtDraft);
                                         }}
                                         onKeyDown={(e) => {
-                                            if (e.key === 'Enter') { commitAmt(amtDraft); (e.target as HTMLInputElement).blur(); }
+                                            if (e.key === 'Enter') { (e.target as HTMLInputElement).blur(); }
                                             if (e.key === 'Escape') { setAmtDraft(''); setAmtFocused(false); }
                                         }}
                                     />
                                 </div>
                             </div>
+                            <BillDiscountShortfall totals={totals} />
                         </div>
                         {isInterstate ? (
                             <div className="flex justify-between">

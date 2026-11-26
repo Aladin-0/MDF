@@ -80,6 +80,15 @@ describe('PaymentView: one tap on how the customer pays saves the bill', () => {
         expect(screen.queryByTestId('payment-collect-button')).not.toBeInTheDocument();   // no second "Collect" step
     });
 
+    it('says on the payment screen that the bill discount was cut', () => {
+        const normal = (useBillingStore as any).getState().getDraftTotals;
+        (useBillingStore as any).setState({ getDraftTotals: () => ({ grandTotal: 1000, itemCount: 1, extraDiscountAmount: 97.27, extraDiscountShortfall: 345.39 }) });
+        seed();
+        render(<Harness />);
+        expect(screen.getByTestId('bill-discount-shortfall')).toHaveTextContent('Discount asked ₹442.66, given ₹97.27');
+        (useBillingStore as any).setState({ getDraftTotals: normal });
+    });
+
     it.each(['cash', 'upi', 'card'] as const)('tapping %s saves right away with that method', (mode) => {
         seed();
         const handleCheckout = jest.fn();

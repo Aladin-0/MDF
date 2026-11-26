@@ -87,25 +87,29 @@ describe('TotalsSheet: bill discount % and Rs are linked', () => {
         expect(screen.getByTestId('totals-net-payable')).toHaveTextContent('₹ 900.00');
     });
 
-    it('typing Rs is converted to % against the bill before the discount, at 6 decimals', () => {
+    it('typing Rs keeps those rupees on the bill and the % box follows', () => {
         seed();
         open();
         fireEvent.focus(amt());
         fireEvent.change(amt(), { target: { value: '250' } });
         fireEvent.blur(amt());
-        expect(draft().extraDiscountPct).toBe(25);
+        expect(draft().extraDiscountRupees).toBe(250);
+        expect(draft().extraDiscountPct).toBe(0);                 // not turned into a percent: that made it grow with the bill
+        expect(amt().value).toBe('250.00');
         expect(pct().value).toBe('25');
         expect(screen.getByTestId('totals-net-payable')).toHaveTextContent('₹ 750.00');
 
-        // an amount that is not a round % keeps six decimals so Rs -> % -> Rs is exact
         fireEvent.focus(amt());
         fireEvent.change(amt(), { target: { value: '333' } });
         fireEvent.blur(amt());
-        expect(draft().extraDiscountPct).toBe(33.3);
-        fireEvent.focus(amt());
-        fireEvent.change(amt(), { target: { value: '1' } });
-        fireEvent.blur(amt());
-        expect(draft().extraDiscountPct).toBe(0.1);
+        expect(draft().extraDiscountRupees).toBe(333);
+        expect(pct().value).toBe('33.3');
+        // typing a percent afterwards replaces the rupees
+        fireEvent.focus(pct());
+        fireEvent.change(pct(), { target: { value: '10' } });
+        fireEvent.blur(pct());
+        expect(draft().extraDiscountRupees).toBeUndefined();
+        expect(amt().value).toBe('100.00');
     });
 
     it('the % is clamped to 0..100', () => {

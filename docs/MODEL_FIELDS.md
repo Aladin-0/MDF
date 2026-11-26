@@ -185,6 +185,7 @@
 | subtotal | DecimalField | Yes | | |
 | discount_amount | DecimalField | No | 0 | |
 | extra_discount_pct | DecimalField | No | 0 | |
+| extra_discount_rupees | DecimalField | Yes | | Bill discount typed in rupees; empty = typed as a percentage |
 | taxable_amount | DecimalField | Yes | | |
 | cgst_amount | DecimalField | No | 0 | |
 | sgst_amount | DecimalField | No | 0 | |

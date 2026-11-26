@@ -4,7 +4,7 @@ import { createDebouncedJSONStorage } from '../lib/debouncedStorage';
 import { v4 as uuidv4 } from 'uuid';
 import { calculateRowTotals } from '../lib/cartUtils';
 import { isControlledSchedule } from '../lib/scheduleRules';
-import { distributeSmartDiscounts, floorsOf } from '../lib/billingMarginUtils';
+import { distributeSmartDiscounts, floorsOf, lineNetAmount, toPaise } from '../lib/billingMarginUtils';
 import { billCustomerFromLedger, ledgerAfterCustomerEdit, ledgerHasCustomer, patientAfterCustomerEdit, type SavedCustomer } from '../lib/billCustomer';
 import {
     CartItem,
@@ -20,6 +20,7 @@ import {
     DraftBill,
     DraftStatus
 } from '../types';
+import { billDiscountPctOf } from '../lib/billDiscount';
 
 interface BillingState {
     drafts: Record<string, DraftBill>;
@@ -71,7 +72,10 @@ interface BillingState {
     setHospitalName: (name: string | null) => void;
     setPayment: (payment: Partial<PaymentSplit>) => void;
     setScheduleHData: (data: ScheduleHData | null) => void;
+    /** The bill discount typed as a percent (replaces a rupee one). */
     setExtraDiscountPct: (pct: number) => void;
+    /** The bill discount typed in rupees (replaces a percent one): stays that many rupees however the bill changes. */
+    setExtraDiscountRupees: (rupees: number) => void;
 
     // Actions - Cart Management (Scoped to Active Draft)
     addToCart: (draftId: string | null | undefined, item: CartItem) => void;
@@ -124,6 +128,13 @@ const initialPayment: PaymentSplit = {
     amount: 0,
     cashTendered: 0,
     cashReturned: 0
+};
+
+/** The line's stored money fields, always re-derived from its price and quantity (one rule: lineNetAmount). */
+const withLineAmounts = (item: CartItem, saleType: 'RETAIL' | 'WHOLESALE' = 'RETAIL'): CartItem => {
+    const totalAmount = lineNetAmount(item, saleType);
+    const taxableAmount = totalAmount / (1 + Number(item.gstPct ?? item.gstRate ?? 0) / 100);
+    return { ...item, totalAmount, taxableAmount, gstAmount: totalAmount - taxableAmount };
 };
 
 const createEmptyDraft = (id: string, localSessionId?: string): DraftBill => ({
@@ -241,10 +252,12 @@ export const useBillingStore = create<BillingState>()(
     updateDraftHeader: (id, updates) => set((state) => {
         const draft = state.drafts[id];
         if (!draft) return state;
+        // whoever sets a percent (a loaded quotation, a repeated order) replaces a rupee discount typed before
+        const discount = 'extraDiscountPct' in updates && !('extraDiscountRupees' in updates) ? { extraDiscountRupees: undefined } : {};
         return {
             drafts: {
                 ...state.drafts,
-                [id]: { ...draft, ...updates, updatedAt: new Date().toISOString() }
+                [id]: { ...draft, ...updates, ...discount, updatedAt: new Date().toISOString() }
             }
         };
     }),
@@ -424,6 +437,12 @@ export const useBillingStore = create<BillingState>()(
         if (activeId) get().updateDraftHeader(activeId, { extraDiscountPct: Math.max(0, Math.min(100, pct)) });
     },
 
+    setExtraDiscountRupees: (rupees) => {
+        const activeId = get().activeDraftId;
+        const typed = rupees > 0 ? toPaise(rupees) : undefined;
+        if (activeId) get().updateDraftHeader(activeId, { extraDiscountPct: 0, extraDiscountRupees: typed });
+    },
+
     // --- Cart Management (Scoped to Active Draft) ---
 
     addToCart: (draftId, item) => set((state) => {
@@ -445,18 +464,16 @@ export const useBillingStore = create<BillingState>()(
                 totalQty: old.totalQty + item.totalQty,
                 freeQtyStrips: (old.freeQtyStrips || 0) + (item.freeQtyStrips || 0),
                 freeQtyLoose: (old.freeQtyLoose || 0) + (item.freeQtyLoose || 0),
-                totalAmount: old.totalAmount + item.totalAmount,
-                taxableAmount: old.taxableAmount + item.taxableAmount,
-                gstAmount: old.gstAmount + item.gstAmount,
             };
+            newCart[existingIndex] = withLineAmounts(newCart[existingIndex], draft.saleType);
         } else {
-            newCart = [...newCart, { 
-                ...item, 
-                freeQtyStrips: item.freeQtyStrips ?? 0, 
-                freeQtyLoose: item.freeQtyLoose ?? 0, 
+            newCart = [...newCart, withLineAmounts({
+                ...item,
+                freeQtyStrips: item.freeQtyStrips ?? 0,
+                freeQtyLoose: item.freeQtyLoose ?? 0,
                 tradeDiscountAmount: item.tradeDiscountAmount ?? 0,
                 gstPct: item.gstPct ?? item.gstRate
-            }];
+            }, draft.saleType)];
         }
 
         return {
@@ -495,7 +512,7 @@ export const useBillingStore = create<BillingState>()(
                 [id]: {
                     ...draft,
                     cart: draft.cart.map((item) =>
-                        item.batchId === batchId ? { ...item, ...updates } : item
+                        item.batchId === batchId ? withLineAmounts({ ...item, ...updates }, draft.saleType) : item
                     ),
                     updatedAt: new Date().toISOString()
                 }
@@ -516,7 +533,7 @@ export const useBillingStore = create<BillingState>()(
                     cart: draft.cart.map((item) => {
                         if (item.batchId === batchId) {
                             const discountedRate = (item.saleRate ?? item.mrp) * (1 - discountPct / 100);
-                            return { ...item, discountPct, rate: discountedRate };
+                            return withLineAmounts({ ...item, discountPct, rate: discountedRate }, draft.saleType);
                         }
                         return item;
                     }),
@@ -551,6 +568,7 @@ export const useBillingStore = create<BillingState>()(
                     prescriptionNo: null,
                     prescriptionImageUrl: null,
                     extraDiscountPct: 0,
+                    extraDiscountRupees: undefined,
                     invoiceDate: undefined,
                     editingSaleId: undefined,
                     editingSaleUpdatedAt: undefined,
@@ -579,7 +597,7 @@ export const useBillingStore = create<BillingState>()(
             hasScheduleH: false, requiresDoctorDetails: false
         };
 
-        const extraDiscPct = draft.extraDiscountPct || 0;
+        const extraDiscPct = billDiscountPctOf(draft);
         const discountFactor = extraDiscPct > 0 ? 1 - extraDiscPct / 100 : 1;
         const smartAllocations = extraDiscPct > 0
             ? distributeSmartDiscounts(draft.cart, extraDiscPct, draft.saleType || 'RETAIL', get().landingCostIncludeGst)
@@ -596,21 +614,13 @@ export const useBillingStore = create<BillingState>()(
         let requiresDoctorDetails = false;
 
         draft.cart.forEach((item, idx) => {
-            // 1. Determine the effective rate (may already include item-level discount via item.rate)
-            const effectiveRate = item.rate || (draft.saleType === 'WHOLESALE' ? (item.pts || item.ptr || item.mrp) : item.mrp) || 0;
             const totalQty = item.totalQty || 0;
             totalQtyCount += totalQty;
 
             const gstDecimal = (item.gstPct ?? item.gstRate ?? 0) / 100;
 
-            // Pre-extra-discount values (item's effective rate, no global bill discount)
-            let rowPreExtraNet = 0;
-            if (draft.saleType === 'WHOLESALE') {
-                const rowTaxablePre = totalQty * effectiveRate;
-                rowPreExtraNet = rowTaxablePre + rowTaxablePre * gstDecimal;
-            } else {
-                rowPreExtraNet = totalQty * effectiveRate;
-            }
+            // Pre-extra-discount value of the line (after its own discount, GST included)
+            const rowPreExtraNet = lineNetAmount(item, draft.saleType || 'RETAIL');
             preExtraNet += rowPreExtraNet;
 
             // Post-extra-discount values (with smart capping & dynamic redistribution)
@@ -625,14 +635,8 @@ export const useBillingStore = create<BillingState>()(
                 rowNetPayable = alloc.finalRowAmount;
                 rowTaxable = alloc.finalTaxable;
                 rowTotalGst = Math.max(0, alloc.finalRowAmount - alloc.finalTaxable);
-            } else if (draft.saleType === 'WHOLESALE') {
-                // Exclusive Tax fallback
-                rowTaxable = totalQty * effectiveRate * discountFactor;
-                rowTotalGst = rowTaxable * gstDecimal;
-                rowNetPayable = rowTaxable + rowTotalGst;
             } else {
-                // Inclusive Tax fallback
-                rowNetPayable = totalQty * effectiveRate * discountFactor;
+                rowNetPayable = rowPreExtraNet * discountFactor;
                 rowTaxable = rowNetPayable / (1 + gstDecimal);
                 rowTotalGst = rowNetPayable - rowTaxable;
             }
@@ -657,12 +661,18 @@ export const useBillingStore = create<BillingState>()(
         // extraDiscountAmount: saving from the global bill-level extra discount %
         const extraDiscountAmount = Math.max(0, preExtraNet - netPayable);
 
+        // The part of the bill discount that was NOT given because it would take items below cost. Compared to the paisa
+        // (the split gives every paisa), so any real cut is reported.
+        const askedRupees = draft.cart.length === 0 ? 0 : (draft.extraDiscountRupees || toPaise(preExtraNet * (extraDiscPct / 100)));
+        const extraDiscountShortfall = Math.max(0, toPaise(askedRupees - toPaise(extraDiscountAmount)));
+
         // Legacy alias kept for backward compatibility
         const discountAmount = itemDiscountAmount;
 
         const exactTotal = totalTaxableValue + totalCgst + totalSgst;
-        const grandTotal = draft.saleType === 'WHOLESALE' ? exactTotal : Math.round(exactTotal);
-        const roundOff = grandTotal - exactTotal;
+        // to the paisa first: adding the lines up leaves noise that rounded Rs 2156.50 down to 2156
+        const grandTotal = draft.saleType === 'WHOLESALE' ? toPaise(exactTotal) : Math.round(toPaise(exactTotal));
+        const roundOff = toPaise(grandTotal - exactTotal);
 
         const amountPaid = draft.payment.amount || 0;
         const amountDue = grandTotal - amountPaid;
@@ -671,6 +681,7 @@ export const useBillingStore = create<BillingState>()(
             subtotal: totalTaxableValue,
             discountAmount,
             extraDiscountAmount,
+            extraDiscountShortfall,
             preExtraNet,
             taxableAmount: totalTaxableValue,
             cgstAmount: totalCgst,

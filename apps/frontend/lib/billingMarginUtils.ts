@@ -46,6 +46,69 @@ export function floorsOf(batch: unknown): { retailCostFloor?: number; wholesaleC
 }
 
 /**
+ * Money to the paisa, half upwards. Computer arithmetic is cleaned off first: 37.125 is held as 37.12499999999999 and
+ * Rs 2156.50 as 2156.4999999999995, which rounded DOWN (a bill one rupee short of what the cashier works out).
+ */
+export const toPaise = (n: number) => Math.round(Number((n * 100).toFixed(6))) / 100;
+
+/** Billed packs of a line: strips + loose / pack size, else totalQty. Free goods are not billed. */
+export function billedQtyOf(item: Partial<CartItem>): number {
+    const packSize = Number(item.packSize) > 0 ? Number(item.packSize) : 1;
+    const strips = Number(item.qtyStrips || 0);
+    const loose = Number(item.qtyLoose || 0);
+    if (strips > 0 || loose > 0) return strips + loose / packSize;
+    return Number(item.totalQty) > 0 ? Number(item.totalQty) : 0;
+}
+
+/**
+ * What a line costs the customer BEFORE the bill discount (GST included). THE rule, in one place.
+ *
+ * `rate` is the price AFTER the line discount; `saleRate` the price before it; `discountPct` only says how big it was.
+ * So the amount is rate x billed quantity, plus GST for wholesale (its rates are tax-exclusive). The server prices a line
+ * the same way (billing/utils/item_amounts.py).
+ *
+ * The stored `item.totalAmount` is NOT read: quick-add wrote it without GST for wholesale, editing a saved bill wrote it
+ * discounted twice, and re-adding a batch summed two different rates. The bill discount was then worked out on that.
+ */
+export function lineNetAmount(item: Partial<CartItem>, saleType: SaleKind = 'RETAIL'): number {
+    const discPct = Number(item.discountPct || 0);
+    const listPrice = Number(item.saleRate || 0)
+        || (saleType === 'WHOLESALE' ? Number(item.pts || item.ptr || item.mrp || 0) : Number(item.mrp || 0));
+    let rate = Number(item.rate || 0);
+    if (!(rate > 0)) {
+        if (discPct >= 100) return 0;
+        rate = listPrice * (1 - discPct / 100);
+    }
+    if (!(rate > 0)) return toPaise(Number(item.totalAmount) || 0);      // no price on the line at all: nothing to work it out from
+    const gstRate = Number(item.gstPct ?? item.gstRate ?? 0);
+    return toPaise(rate * billedQtyOf(item) * (saleType === 'WHOLESALE' ? 1 + gstRate / 100 : 1));
+}
+
+/**
+ * The price before the line discount of a line that was saved with only its net rate and discount %.
+ * The batch's list price when it explains the rate (so 33.33% off 100 comes back as 100, not 99.99), else worked back.
+ */
+export function listPriceBeforeDiscount(netRate: number, discountPct: number, listPrice: number): number {
+    if (!(discountPct > 0)) return netRate > 0 ? netRate : listPrice;
+    if (discountPct >= 100 || !(netRate > 0)) return listPrice;
+    if (listPrice > 0 && Math.abs(listPrice * (1 - discountPct / 100) - netRate) <= 0.011) return listPrice;
+    return toPaise(netRate / (1 - discountPct / 100));
+}
+
+/**
+ * The two prices of a line read back from a saved bill or quotation: `rate` (after the line discount) and `saleRate`
+ * (before it). Retail quotations used to be stored with the MRP as their rate beside the discount %; such a rate is the
+ * price BEFORE the discount (a discounted price can never equal the MRP).
+ */
+export function savedLinePrices(
+    { rate, discountPct, mrp, listPrice }: { rate: number; discountPct: number; mrp: number; listPrice: number },
+): { rate: number; saleRate: number } {
+    if (!(rate > 0)) return { rate: discountPct >= 100 ? 0 : listPrice * (1 - discountPct / 100), saleRate: listPrice };
+    if (discountPct > 0 && mrp > 0 && Math.abs(rate - mrp) <= 0.005) return { rate: rate * (1 - discountPct / 100), saleRate: rate };
+    return { rate, saleRate: listPriceBeforeDiscount(rate, discountPct, listPrice) };
+}
+
+/**
  * Returns the maximum flat bill discount (₹) this cart can absorb without
  * any item going below its cost floor. Use this to enforce a hard ceiling
  * on the "Extra Discount" input field in the UI, preventing impossible discounts
@@ -82,18 +145,9 @@ export function getMaxAllowableBillDiscount(
 
         // FIX: If cost floor already includes GST (toggle ON), do not multiply it again.
         const costTaxMultiplier = landingCostIncludeGst ? 1 : taxMultiplier;
-        const lineCostFloor = costFloor > 0 ? Math.round(costFloor * costTaxMultiplier * effectiveQty * 100) / 100 : 0;
+        const lineCostFloor = costFloor > 0 ? toPaise(costFloor * costTaxMultiplier * effectiveQty) : 0;
 
-        let baseAmount = Number(item.totalAmount);
-        if (isNaN(baseAmount) || baseAmount <= 0) {
-            const baseRate = Number(item.rate || item.saleRate || item.mrp || 0);
-            const discPct = Number(item.discountPct || 0);
-            const rateDiscounted = baseRate * (1 - discPct / 100);
-            baseAmount = saleType === 'WHOLESALE'
-                ? rateDiscounted * effectiveQty * taxMultiplier
-                : rateDiscounted * effectiveQty;
-        }
-        baseAmount = Math.round(baseAmount * 100) / 100;
+        const baseAmount = lineNetAmount(item, saleType);
 
         totalBase = Math.round((totalBase + baseAmount) * 100) / 100;
         totalHeadroom = Math.round((totalHeadroom + Math.max(0, baseAmount - lineCostFloor)) * 100) / 100;
@@ -165,16 +219,7 @@ export function calculateLineMargin(
     const lineLandingCost = Math.round(costFloor * effectivePackQty * 100) / 100;
 
     // Base selling amount for this line (after item-level discount)
-    let baseSellingAmount = Number(item.totalAmount);
-    if (isNaN(baseSellingAmount) || baseSellingAmount <= 0) {
-        if (effectivePackQty > 0) {
-            const baseRate = Number(item.rate || item.saleRate || item.mrp || 0);
-            const discPct = Number(item.discountPct || 0);
-            baseSellingAmount = baseRate * effectivePackQty * (1 - discPct / 100);
-        } else {
-            baseSellingAmount = 0;
-        }
-    }
+    const baseSellingAmount = effectivePackQty > 0 ? lineNetAmount(item, saleType) : 0;
 
     // Apply extra discount % (bill-level) proportionally
     const discountFactor = extraDiscountPct > 0 ? (1 - extraDiscountPct / 100) : 1;
@@ -342,21 +387,9 @@ export function distributeSmartDiscounts(
 
         // FIX: If cost floor already includes GST (toggle ON), do not multiply it again.
         const costTaxMultiplier = landingCostIncludeGst ? 1 : taxMultiplier;
-        const lineCostFloor = Math.round(costFloor * costTaxMultiplier * effectiveQty * 100) / 100;
+        const lineCostFloor = toPaise(costFloor * costTaxMultiplier * effectiveQty);
 
-        let baseAmount = Number(item.totalAmount);
-        if (isNaN(baseAmount) || baseAmount <= 0) {
-            // `rate` is already the NET price (after the line discount): discounting it again was the 305 -> 269.64 double discount.
-            // Only the pre-discount prices (saleRate / mrp) still need the line discount applied.
-            const netRate = Number(item.rate || 0);
-            const preDiscountRate = Number(item.saleRate || item.mrp || 0);
-            const discPct = Number(item.discountPct || 0);
-            const baseRateDiscounted = netRate > 0 ? netRate : preDiscountRate * (1 - discPct / 100);
-            baseAmount = (saleType === 'WHOLESALE')
-                ? baseRateDiscounted * effectiveQty * taxMultiplier
-                : baseRateDiscounted * effectiveQty;
-        }
-        baseAmount = Math.round(baseAmount * 100) / 100;
+        const baseAmount = lineNetAmount(item, saleType);
 
         const isIllegalBase = costFloor > 0 && effectiveQty > 0 && (baseAmount < lineCostFloor - 0.005);
         const headroom = isIllegalBase ? 0 : Math.max(0, Math.round((baseAmount - lineCostFloor) * 100) / 100);
@@ -394,7 +427,7 @@ export function distributeSmartDiscounts(
         return allocations;
     }
 
-    const targetBillDiscount = Math.round((totalBaseAmount * (extraDiscountPct / 100)) * 100) / 100;
+    const targetBillDiscount = toPaise(totalBaseAmount * (extraDiscountPct / 100));
 
     // ── EDGE CASE: Impossible / Excess Discount (Max Discount Ceiling) ────────
     // If the requested flat discount exceeds the total available profit headroom,
@@ -436,6 +469,17 @@ export function distributeSmartDiscounts(
         }
 
         if (distributedThisLoop <= 0.005) break;
+    }
+
+    // The last paise: a share smaller than half a paisa rounds to nothing in the passes above, so Rs 100 over three equal
+    // lines gave 33.33 three times and the cashier saw Rs 99.99. Whatever is left goes to the lines with the most room.
+    let paiseLeft = Math.round(remainingToDistribute * 100);
+    for (const it of [...items].sort((a, b) => (b.headroom - b.discount) - (a.headroom - a.discount))) {
+        if (paiseLeft <= 0) break;
+        const add = Math.min(paiseLeft, Math.round((it.headroom - it.discount) * 100));
+        if (add <= 0) continue;
+        it.discount = Math.round((it.discount * 100) + add) / 100;
+        paiseLeft -= add;
     }
 
     // Final allocation mapping

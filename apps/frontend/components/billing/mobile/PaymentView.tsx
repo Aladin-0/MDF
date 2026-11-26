@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 import { SheetShell } from './SheetShell';
 import { T } from './theme';
 import { formatINR, getCheckRows } from './collectState';
+import { BillDiscountShortfall } from '../BillDiscountShortfall';
 
 type Tender = 'cash' | 'upi' | 'card' | 'credit';
 type FixTarget = 'doctor' | 'customer' | 'cart';
@@ -178,6 +179,7 @@ export function PaymentView({ open, onClose, checkout, onFix }: PaymentViewProps
                     <p className="text-xs font-bold uppercase tracking-widest text-slate-300">Net payable</p>
                     <p className={cn(T.money, 'mt-0.5 text-4xl font-black leading-tight tracking-tight text-white')}>{money(grandTotal)}</p>
                 </div>
+                {totals && <BillDiscountShortfall totals={totals} tone="dark" />}
 
                 {rows.length > 0 && (
                     <ul className="flex flex-col gap-2" aria-label="Checks">

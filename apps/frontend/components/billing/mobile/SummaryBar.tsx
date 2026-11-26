@@ -5,6 +5,7 @@ import { AlertTriangle, ChevronUp, Loader2 } from 'lucide-react';
 import { useBillingStore } from '@/store/billingStore';
 import { cn } from '@/lib/utils';
 import { T } from './theme';
+import { BillDiscountShortfall } from '../BillDiscountShortfall';
 
 interface SummaryBarProps {
     /** Main button text, follows the mode: "Collect ₹1,038", "Save quotation", "Save changes" */
@@ -90,6 +91,7 @@ export function SummaryBar({ label, disabledReason, submitting, onCollect, onOpe
                     <ChevronUp className="h-5 w-5 text-slate-300" aria-hidden />
                 </span>
             </button>
+            {totals && <BillDiscountShortfall totals={totals} tone="dark" className="mb-1 mt-1" />}
             {disabledReason && !submitting && (
                 <p data-testid="checkout-disabled-reason" role="status" className="mb-1.5 mt-1 flex items-center gap-1.5 text-sm font-semibold text-amber-300">
                     <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />

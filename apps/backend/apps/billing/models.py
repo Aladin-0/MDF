@@ -46,6 +46,9 @@ class SaleInvoice(models.Model):
     discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     extra_discount_pct = models.DecimalField(max_digits=5, decimal_places=2, default=0,
                                              help_text='Cart-level extra discount percentage')
+    extra_discount_rupees = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True,
+                                                help_text='Bill discount as typed in rupees; empty = typed as a percentage. '
+                                                          'Kept so that modifying the bill keeps those rupees.')
     taxable_amount = models.DecimalField(max_digits=12, decimal_places=2)
 
     # GST (CGST + SGST for intrastate, IGST for interstate)

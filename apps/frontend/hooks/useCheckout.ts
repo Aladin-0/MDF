@@ -6,6 +6,7 @@ import { useSaveBill } from '@/hooks/useSaveBill';
 import { useToast } from '@/hooks/use-toast';
 import { logger } from '@/lib/logger';
 import { calculateLineMargin, calculateTotalMargin } from '@/lib/billingMarginUtils';
+import { billDiscountPctOf } from '@/lib/billDiscount';
 
 export function useCheckout() {
     const router = useRouter();
@@ -64,7 +65,7 @@ export function useCheckout() {
     const isSplitCreditInvalid = paymentMethod === 'split' && (Number(splitBreakdown.credit) || 0) > 0 && !hasCustomer;
 
     // Loss-Sale Prevention: Check line-item margins and overall bill margin
-    const extraDiscPct = draft?.extraDiscountPct || 0;
+    const extraDiscPct = billDiscountPctOf(draft);
     const saleType = draft?.saleType || 'RETAIL';
     const marginData = draft ? calculateTotalMargin(draft.cart, totals?.grandTotal, totals?.extraDiscountAmount, extraDiscPct, saleType, landingCostIncludeGst) : null;
     const hasLossItem = draft ? draft.cart.some(item => calculateLineMargin(item, extraDiscPct, saleType, landingCostIncludeGst).isLossSale) : false;

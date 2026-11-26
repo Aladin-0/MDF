@@ -14,6 +14,7 @@ import { Quotation } from '@/types';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { InvoicePreviewModal } from '@/components/billing/InvoicePreviewModal';
+import { savedLinePrices } from '@/lib/billingMarginUtils';
 
 const fmt = (n: number | undefined) =>
     '₹' + (n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -116,9 +117,11 @@ export default function QuotationsList() {
                 fullQ.items.forEach((item: any) => {
                     // DRF decimal fields come back as strings ("0.00") — coerce everything to Number
                     const mrp         = Number(item.mrp     || item.rate || 0);
-                    const rate        = Number(item.rate    || 0);
-                    const saleRate    = Number(item.saleRate|| item.rate || 0);
                     const discountPct = Number(item.discountPct || item.discount_pct || 0);
+                    // `rate` is after the line discount; `saleRate` (what the line editor starts from) is before it
+                    const { rate, saleRate } = savedLinePrices({
+                        rate: Number(item.rate || 0), discountPct, mrp, listPrice: Number(item.saleRate || 0) || mrp,
+                    });
                     const gstRate     = Number(item.gstRate || item.gst_rate || 0);
                     const qtyStrips   = Number(item.qtyStrips || item.qty_strips || 0);
                     const qtyLoose    = Number(item.qtyLoose  || item.qty_loose  || 0);
@@ -247,9 +250,11 @@ export default function QuotationsList() {
             if (fullQ.items) {
                 fullQ.items.forEach((item: any) => {
                     const mrp         = Number(item.mrp     || item.rate || 0);
-                    const rate        = Number(item.rate    || 0);
-                    const saleRate    = Number(item.saleRate|| item.rate || 0);
                     const discountPct = Number(item.discountPct || item.discount_pct || 0);
+                    // `rate` is after the line discount; `saleRate` (what the line editor starts from) is before it
+                    const { rate, saleRate } = savedLinePrices({
+                        rate: Number(item.rate || 0), discountPct, mrp, listPrice: Number(item.saleRate || 0) || mrp,
+                    });
                     const gstRate     = Number(item.gstRate || item.gst_rate || 0);
                     const qtyStrips   = Number(item.qtyStrips || item.qty_strips || 0);
                     const qtyLoose    = Number(item.qtyLoose  || item.qty_loose  || 0);
