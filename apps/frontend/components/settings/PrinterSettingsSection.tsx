@@ -11,6 +11,7 @@ import { SettingsSectionHeader } from './SettingsSectionHeader';
 import { SettingsToggleRow } from './SettingsToggleRow';
 import { useOutletSettings } from '@/hooks/useOutletSettings';
 import { PrintSettingsConfig } from '@/types';
+import { A4_RETAIL_COLUMNS, A4_WHOLESALE_COLUMNS } from '@/lib/printColumns';
 
 interface PrinterSettingsSectionProps {
     onDirty: () => void;
@@ -20,38 +21,14 @@ interface PrinterSettingsSectionProps {
 
 const DEFAULT_RETAIL: PrintSettingsConfig = {
     template: 'A4',
-    columns: [
-        { id: "sn", label: "SN", isVisible: true, order: 1, width: "5%" },
-        { id: "productName", label: "Item Name & Company", isVisible: true, order: 2, width: "31%" },
-        { id: "batch", label: "Batch", isVisible: true, order: 3, width: "11%" },
-        { id: "exp", label: "Exp", isVisible: true, order: 4, width: "8%" },
-        { id: "qty", label: "Qty", isVisible: true, order: 5, width: "8%" },
-        { id: "mrp", label: "MRP", isVisible: true, order: 6, width: "9%" },
-        { id: "ptr", label: "Rate", isVisible: true, order: 7, width: "9%" },
-        { id: "disc", label: "Disc", isVisible: true, order: 8, width: "7%" },
-        { id: "amount", label: "Amount(₹)", isVisible: true, order: 9, width: "12%" }
-    ],
+    columns: A4_RETAIL_COLUMNS,
     header: { showLogo: true, showDrugLicense: true, showGstin: true, customText: "" },
     footer: { bankDetails: "", terms: "1. Goods once sold will not be taken back." }
 };
 
 const DEFAULT_WHOLESALE: PrintSettingsConfig = {
     template: 'A4',
-    columns: [
-        { id: "sn", label: "SN", isVisible: true, order: 1, width: "4%" },
-        { id: "productName", label: "Item Name & Details", isVisible: true, order: 2, width: "22%" },
-        { id: "hsn", label: "HSN", isVisible: true, order: 3, width: "6%" },
-        { id: "batch", label: "Batch", isVisible: true, order: 4, width: "8%" },
-        { id: "exp", label: "Exp", isVisible: true, order: 5, width: "6%" },
-        { id: "b_qty", label: "B-Qty", isVisible: true, order: 6, width: "5%" },
-        { id: "f_qty", label: "F-Qty", isVisible: true, order: 7, width: "5%" },
-        { id: "mrp", label: "MRP", isVisible: true, order: 8, width: "7%" },
-        { id: "ptr", label: "PTR", isVisible: true, order: 9, width: "7%" },
-        { id: "disc", label: "Disc", isVisible: true, order: 10, width: "5%" },
-        { id: "gst", label: "GST", isVisible: true, order: 11, width: "5%" },
-        { id: "taxable", label: "Taxable", isVisible: true, order: 12, width: "8%" },
-        { id: "amount", label: "Amount(₹)", isVisible: true, order: 13, width: "12%" }
-    ],
+    columns: A4_WHOLESALE_COLUMNS,
     header: { showLogo: true, showDrugLicense: true, showGstin: true, customText: "" },
     footer: { bankDetails: "", terms: "1. Goods once sold will not be taken back." }
 };
@@ -115,7 +92,7 @@ export function PrinterSettingsSection({ onDirty, onSaved, discardKey }: Printer
         if (direction === 'up' && index === 0) return;
         if (direction === 'down' && index === activeConfig.columns.length - 1) return;
         
-        const newColumns = [...activeConfig.columns];
+        const newColumns = activeConfig.columns.map(c => ({ ...c }));
         const swapIndex = direction === 'up' ? index - 1 : index + 1;
         const temp = newColumns[index];
         newColumns[index] = newColumns[swapIndex];

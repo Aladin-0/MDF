@@ -4,6 +4,8 @@ import { format } from 'date-fns';
 import { SaleInvoice, PrintSettingsConfig, CartItem, Outlet } from '@/types';
 import { useAuthStore } from '@/store/authStore';
 import { useSettingsStore } from '@/store/settingsStore';
+import { a4Columns } from '@/lib/printColumns';
+import { toPaise } from '@/lib/billingMarginUtils';
 
 interface InvoicePreviewProps {
     invoice: SaleInvoice;
@@ -99,40 +101,7 @@ export const ManavataA4Invoice = forwardRef<HTMLDivElement, InvoicePreviewProps>
     
     const isQuotation = !!invoice.quotationNo || invoice.invoiceNo?.startsWith('QT-');
 
-    // Dynamic Columns Support
-    const defaultRetailColumns = [
-        { id: "sn", label: "SN", isVisible: true, order: 1, width: "5%" },
-        { id: "productName", label: "Item Name & Company", isVisible: true, order: 2, width: "31%" },
-        { id: "batch", label: "Batch", isVisible: true, order: 3, width: "11%" },
-        { id: "exp", label: "Exp", isVisible: true, order: 4, width: "8%" },
-        { id: "qty", label: "Qty", isVisible: true, order: 5, width: "8%" },
-        { id: "mrp", label: "MRP", isVisible: true, order: 6, width: "9%" },
-        { id: "ptr", label: "Rate", isVisible: true, order: 7, width: "9%" },
-        { id: "disc", label: "Disc", isVisible: true, order: 8, width: "7%" },
-        { id: "amount", label: "Amount(₹)", isVisible: true, order: 9, width: "12%" }
-    ];
-
-    const defaultWholesaleColumns = [
-        { id: "sn", label: "SN", isVisible: true, order: 1, width: "4%" },
-        { id: "productName", label: "Item Name & Details", isVisible: true, order: 2, width: "22%" },
-        { id: "hsn", label: "HSN", isVisible: true, order: 3, width: "6%" },
-        { id: "batch", label: "Batch", isVisible: true, order: 4, width: "8%" },
-        { id: "exp", label: "Exp", isVisible: true, order: 5, width: "6%" },
-        { id: "b_qty", label: "B-Qty", isVisible: true, order: 6, width: "5%" },
-        { id: "f_qty", label: "F-Qty", isVisible: true, order: 7, width: "5%" },
-        { id: "mrp", label: "MRP", isVisible: true, order: 8, width: "7%" },
-        { id: "ptr", label: "PTR", isVisible: true, order: 9, width: "7%" },
-        { id: "disc", label: "Disc", isVisible: true, order: 10, width: "5%" },
-        { id: "gst", label: "GST", isVisible: true, order: 11, width: "5%" },
-        { id: "taxable", label: "Taxable", isVisible: true, order: 12, width: "8%" },
-        { id: "amount", label: "Amount(₹)", isVisible: true, order: 13, width: "12%" }
-    ];
-
-    const defaultActiveColumns = isWholesale ? defaultWholesaleColumns : defaultRetailColumns;
-    const activeColumns = (activeConfig.columns && activeConfig.columns.length > 0) 
-        ? activeConfig.columns 
-        : defaultActiveColumns;
-    const sortedColumns = [...activeColumns].filter(c => c.isVisible).sort((a, b) => a.order - b.order);
+    const sortedColumns = a4Columns(activeConfig.columns, isWholesale);
 
     const calculateRowMath = (item: CartItem & { b_qty?: number, f_qty?: number, rate?: number }) => {
         // Calculate true fractional quantity (Strips + Loose/PackSize) to ensure math aligns with Pack-based MRP
@@ -220,21 +189,44 @@ export const ManavataA4Invoice = forwardRef<HTMLDivElement, InvoicePreviewProps>
             const rateStr = gstPct.toFixed(2);
             if (!summary[rateStr]) summary[rateStr] = { taxable: 0, sgst: 0, cgst: 0 };
             
+            // split to the paisa as the server books it: CGST rounded down, SGST the rest (halving both printed
+            // 14.29 + 14.29 for a tax of 28.57)
+            const gstPaise = Math.round(rowGst * 100);
+            const cgst = Math.floor(gstPaise / 2) / 100;
+            const sgst = (gstPaise - Math.floor(gstPaise / 2)) / 100;
+
             summary[rateStr].taxable += rowTaxable;
-            summary[rateStr].sgst += rowGst / 2;
-            summary[rateStr].cgst += rowGst / 2;
+            summary[rateStr].sgst += sgst;
+            summary[rateStr].cgst += cgst;
 
             totalTaxable += rowTaxable;
-            totalSgst += rowGst / 2;
-            totalCgst += rowGst / 2;
+            totalSgst += sgst;
+            totalCgst += cgst;
         });
         return { summary, totalTaxable, totalSgst, totalCgst };
     }, [items]);
 
     const totalQty = items.reduce((sum, item) => sum + (item.totalQty || item.qtyStrips || 0), 0);
-    const derivedDiscount = invoice.subtotal > 0 ? Math.max(0, invoice.subtotal - invoice.grandTotal) : 0;
-    const discountAmt = (invoice.discountAmount > 0) ? invoice.discountAmount : derivedDiscount;
-    const totalGst = totalSgst + totalCgst + (invoice.igstAmount || 0);
+    const totalGst = totalSgst + totalCgst;          // the rows' whole tax (an inter-state IGST figure is the same money)
+
+    // The totals box is worked out from the printed lines, so it adds up. It used to print `invoice.subtotal` (the value
+    // before GST) beside a discount measured from MRP: 571.43 - 339.00 over a grand total of 600.00.
+    //   retail:    MRP total - discount (+/- rupee rounding) = grand total
+    //   wholesale: taxable amount + GST (+/- rounding)       = grand total   (its rates are before GST; MRP is no basis)
+    const rows = items.map((item) => calculateRowMath(item));
+    const linesTotal = toPaise(rows.reduce((sum, r) => sum + r.amount, 0));
+    const mrpTotal = toPaise(rows.reduce((sum, r) => sum + toPaise(r.mrp * r.qty), 0));
+    const grandTotal = Number(invoice.grandTotal ?? linesTotal);
+    // What the grand total differs from its lines by: up to Rs 1 is rounding. Some older bills kept the bill discount off
+    // their lines (a larger shortfall is that discount); anything larger the other way is shown as an adjustment.
+    const gap = items.length === 0 ? 0 : toPaise(grandTotal - linesTotal);
+    const unlistedDiscount = gap < -1 ? -gap : 0;
+    const adjustment = gap > 1 ? gap : 0;
+    const roundOff = Math.abs(gap) <= 1 ? gap : 0;
+    const atMrp = !isWholesale && mrpTotal > linesTotal;
+    const beforeDiscount = items.length === 0 ? Number(invoice.subtotal ?? grandTotal) : (atMrp ? mrpTotal : linesTotal);
+    const discountAmt = isWholesale || items.length === 0 ? 0 : toPaise(beforeDiscount - linesTotal + unlistedDiscount);
+    const signed = (n: number) => `${n < 0 ? '-' : '+'}₹${fmtAmt(Math.abs(n))}`;
 
     const fillerRowsCount = Math.max(0, 5 - items.length);
     const fillerRows = Array.from({ length: fillerRowsCount });
@@ -550,15 +542,48 @@ export const ManavataA4Invoice = forwardRef<HTMLDivElement, InvoicePreviewProps>
                     <div className="w-[28%] flex flex-col bg-white">
                         
                         <div className="bg-gray-100 flex flex-col border-b border-gray-300">
-                            <div className="p-1.5 space-y-1">
+                            <div className="p-1.5 space-y-1" data-testid="invoice-totals">
+                                {isWholesale ? (
+                                <>
                                 <div className="flex justify-between items-center text-gray-600 text-[0.68rem]">
-                                    <span>Subtotal ({items.length} Items, {totalQty} Qty)</span>
-                                    <span className="font-semibold text-gray-900">₹{fmtAmt(invoice.subtotal)}</span>
+                                    <span>Taxable Amount</span>
+                                    <span className="font-semibold text-gray-900">₹{fmtAmt(totalTaxable)}</span>
+                                </div>
+                                <div className="flex justify-between items-center text-gray-600 text-[0.68rem]">
+                                    <span>GST</span>
+                                    <span className="font-semibold text-gray-900">+₹{fmtAmt(totalGst)}</span>
+                                </div>
+                                </>
+                                ) : (
+                                <>
+                                <div className="flex justify-between items-center text-gray-600 text-[0.68rem]">
+                                    <span>{atMrp ? 'MRP Total' : 'Subtotal'} ({items.length} Items, {totalQty} Qty)</span>
+                                    <span className="font-semibold text-gray-900">₹{fmtAmt(beforeDiscount)}</span>
                                 </div>
                                 <div className="flex justify-between items-center text-gray-600 text-[0.68rem]">
                                     <span>Discount Savings</span>
                                     <span className="font-bold">-₹{fmtAmt(discountAmt)}</span>
                                 </div>
+                                </>
+                                )}
+                                {isWholesale && unlistedDiscount > 0 && (
+                                <div className="flex justify-between items-center text-gray-600 text-[0.68rem]">
+                                    <span>Bill Discount</span>
+                                    <span className="font-bold">-₹{fmtAmt(unlistedDiscount)}</span>
+                                </div>
+                                )}
+                                {adjustment > 0 && (
+                                <div className="flex justify-between items-center text-gray-600 text-[0.68rem]">
+                                    <span>Adjustment</span>
+                                    <span className="font-semibold text-gray-900">{signed(adjustment)}</span>
+                                </div>
+                                )}
+                                {Math.abs(roundOff) >= 0.005 && (
+                                <div className="flex justify-between items-center text-gray-600 text-[0.68rem]">
+                                    <span>Round Off</span>
+                                    <span className="font-semibold text-gray-900">{signed(roundOff)}</span>
+                                </div>
+                                )}
                             </div>
                             <div className="bg-gray-800 text-white px-2 py-1 flex justify-between items-center shadow-inner">
                                 <span className="font-bold uppercase tracking-wide text-[0.72rem]">Grand Total</span>

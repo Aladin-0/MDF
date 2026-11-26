@@ -3900,9 +3900,9 @@
     "semantic_hash": "9da6bca2151c52744e3f0febd8c79227"
   },
   "apps/frontend/components/print/ManavataA4Invoice.tsx": {
-    "mtime": 1795689186.5532598,
-    "seen": 1795690767.7021708,
-    "ast_hash": "0b5d2af2f317ff53c89ad3ca2144e1cf",
+    "mtime": 1795696904.5981286,
+    "seen": 1795696982.060375,
+    "ast_hash": "33ff50c222195d0da1fd2cf9441c4105",
     "semantic_hash": ""
   },
   "apps/frontend/components/print/__tests__/ManavataA4Invoice.test.tsx": {
@@ -4146,9 +4146,9 @@
     "semantic_hash": ""
   },
   "apps/frontend/components/settings/PrinterSettingsSection.tsx": {
-    "mtime": 1794502526.2074308,
-    "seen": 1795607534.263747,
-    "ast_hash": "ff4bf01d7d4380b0531351831b575125",
+    "mtime": 1795696631.1410966,
+    "seen": 1795696744.1791813,
+    "ast_hash": "a0fe1801a863d728c02bc189703f433f",
     "semantic_hash": ""
   },
   "apps/frontend/components/settings/SettingsSectionHeader.tsx": {
@@ -5502,9 +5502,9 @@
     "semantic_hash": ""
   },
   "PROJECT_MAP.md": {
-    "mtime": 1795695806.7443953,
-    "seen": 1795695842.647158,
-    "ast_hash": "b78f4a738b2a72a01535430f58d30173",
+    "mtime": 1795696655.7214606,
+    "seen": 1795696744.179786,
+    "ast_hash": "e9f8bacfe13ffb7982f52509d1a9fe5e",
     "semantic_hash": ""
   },
   "apps/backend/apps/reports/tests/tests_purchase_reports_db.py": {
@@ -5574,9 +5574,9 @@
     "semantic_hash": ""
   },
   "docs/DEPLOYMENT_GUIDE.md": {
-    "mtime": 1795607983.623458,
-    "seen": 1795690767.7030978,
-    "ast_hash": "19eac8e0c58abffce6fc6b9110ba24f5",
+    "mtime": 1795696112.8689303,
+    "seen": 1795696744.1798086,
+    "ast_hash": "bcd0db829066efe655cfd2027bde9dfd",
     "semantic_hash": ""
   },
   "apps/backend/apps/core/management/commands/dump_permission_matrix.py": {
@@ -7965,6 +7965,30 @@
     "mtime": 1795693567.8855844,
     "seen": 1795694696.155305,
     "ast_hash": "d16c7dcf2eeaeef2ebf9a05d2b278d3b",
+    "semantic_hash": ""
+  },
+  "apps/backend/apps/billing/tests/test_line_discount_once.py": {
+    "mtime": 1795692357.5287151,
+    "seen": 1795696744.1775455,
+    "ast_hash": "c09b3202960bf727c0f14f9e25db50fd",
+    "semantic_hash": ""
+  },
+  "apps/backend/apps/billing/tests/test_rupee_bill_discount.py": {
+    "mtime": 1795694216.7425907,
+    "seen": 1795696744.1775723,
+    "ast_hash": "a8f2bcd1a939f81f681e4ab7eb8adfd2",
+    "semantic_hash": ""
+  },
+  "apps/frontend/components/print/__tests__/ManavataA4Layout.test.tsx": {
+    "mtime": 1795696904.5969086,
+    "seen": 1795696982.0603802,
+    "ast_hash": "1da9696e5ce726efa34730a81bbda5dd",
+    "semantic_hash": ""
+  },
+  "apps/frontend/lib/printColumns.ts": {
+    "mtime": 1795696631.1232076,
+    "seen": 1795696744.1795707,
+    "ast_hash": "05ac9826bad06dbd81645eca3aca4915",
     "semantic_hash": ""
   },
   "package-lock.json": {

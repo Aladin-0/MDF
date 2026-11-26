@@ -1,123 +1,123 @@
 # Graph Report - MDF  (2026-11-26)
 
 ## Corpus Check
-- 1326 files · ~872,662 words
+- 1330 files · ~875,013 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 21 file(s) not represented in the graph (top: (none) 14, .Dockerfile 2, .legacy 1)
 
 ## Summary
-- 10063 nodes · 34131 edges · 368 communities (221 shown, 147 thin omitted)
-- Extraction: 87% EXTRACTED · 13% INFERRED · 0% AMBIGUOUS · INFERRED: 4298 edges (avg confidence: 0.94)
+- 10115 nodes · 34303 edges · 387 communities (233 shown, 154 thin omitted)
+- Extraction: 87% EXTRACTED · 13% INFERRED · 0% AMBIGUOUS · INFERRED: 4330 edges (avg confidence: 0.94)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `2352a6af`
+- Built from commit: `e5e31d3a`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
-- Outlet
-- dump_permission_matrix.py
+- po_views.py
+- formatCurrency
 - formatCurrency
 - ExpiryManagerPage.test.tsx
 - productDetail.ts
 - sale_update_service.py
 - StaffTable.tsx
-- poApi.ts
-- DateRangeFilter
-- .post
+- MainInvoiceWorkspace.tsx
+- apiClient.ts
+- atomic_purchase_save
 - recorder.py
 - Command
 - pins.py
-- inventory/views.py
+- IsAuthenticated
 - django_db
 - settingsStore.ts
 - MobileSearch.test.tsx
 - PurchasesList.tsx
 - frontend/package.json
-- CartLineCard.tsx
+- ledger_export.py
 - POError
-- BatchFactory
-- AlertsRow.tsx
+- stockLedger.ts
+- dashboard.ts
 - devDependencies
 - gemini_ocr.py
 - ActivityEvent
 - 5.2 billing
 - @tanstack/react-query
-- clean_units.py
+- re
 - package.json
 - .data
 - PartyChips.tsx
-- create_sale_snapshots
+- SandboxGstProvider
 - log_activity
 - PaymentView.tsx
 - check_outlet_access
-- .put
+- .patch
 - GSTR1Builder
-- Batch
+- BatchFactory
 - staffPermissions.ts
 - commands (40)
-- .stock
+- MasterProductFactory
 - books.py
 - frontend/types/index.ts
-- EditBatchModal.tsx
+- useSettingsStore
 - BatchGrid.tsx
 - docs (46)
 - workflows (47)
-- ledger_views.py
-- PartyChips.tsx
+- ledger_health.py
+- useBillingStore
 - get_audit_context
 - test_gst_rate_never_blocks.py
 - GST Phase 4B Integration Blueprint
 - PinTests
 - toast.tsx
 - _ScanTestBase
-- Staff
+- effective_permissions
 - PacketBTests
-- PurchaseLineSheet.tsx
+- PurchaseItemRow.tsx
 - parse_skips.js
-- DocumentRevisionV2LegacyAdapterSerializer
+- DocumentRevision
 - Backend requirements.txt
 - StockLedgerPage.test.tsx
 - get_latest_log
 - SaleEditMigrationTests
 - BillingPage
-- react
+- useToast
 - expiry.py
 - FakePoBackend
 - Batch model
 - MediFlow API Reference
 - taxpayer_auth.py
 - docs (72)
-- ewaybill.py
+- SandboxAPIClient
 - fakePoBackend.ts
-- apiClient.ts
-- A.5 accounts: ledgers, vouchers, notes, accounting reports (`accounts/voucher_urls.py`, mounted at `/api/v1/` with NO sub-prefix; docstrings in views wrongly say `/api/v1/accounts/...`)
+- Dashboard home & modules
+- ExpiryManagerPage.test.tsx
 - Button
-- .patch
+- AlertTables.test.tsx
 - 7.1 Backend / infra variables
 - ocr_engine.py
 - frontend (81)
 - AuditAPITests
 - zod
-- next
+- vouchers/page.tsx
 - BaseErpReportView
-- po_views.py
+- po_errors
 - ErpExcelService
-- SaleReturnItemsGrid.tsx
+- react
 - OCRFlowTest
 - MasterProductAlias
 - 5.4 reports
 - expiryManager.ts
-- billing/views.py
+- Outlet
 - PurchaseInvoiceDocument.tsx
 - MobilePurchase.tsx
 - ExportButton.tsx
 - e2e (97)
-- mediflow/urls.py
+- SandboxConfiguration
 - report.py
 - gst/views.py
-- create_receipt_payment
+- purchaseLine.ts
 - ProductEditTests
 - @playwright/test
 - LoginTests
@@ -127,42 +127,42 @@
 - shortcuts.ts
 - frontend (109)
 - ManavataA4Invoice.tsx
-- SaleInvoice
-- Gap
+- Batch
+- PurchaseOrder
 - ShortbookItem
 - FreeOnlyLineTests
-- billing/tests/conftest.py
+- attendance/views.py
 - DefinitionApiTests
 - frontend (117)
 - ProductPage.test.tsx
 - Mobile billing: UX design (phone, 360-430px)
 - OutletSettingsView
-- journal_service.py
+- Staff
 - access.ts
-- useBillingStore
+- billingMarginUtils.ts
 - has_bill_revision_permission
 - ref_testing_library_react
 - .claude/CLAUDE.md
 - BaseGstProvider
-- SummaryTests
+- test_line_discount_once.py
 - test_orientation.py
 - parse_skips.js
 - AuditJWTAuthentication
 - DiffEngine
-- purchases/tasks.py
+- RemoveStockDialog.tsx
 - IsAuthenticated
-- RISKS / GAPS (report only)
-- voucher_views.py
-- IsSuperAdmin
+- lib/inventory.ts
+- test_rupee_bill_discount.py
+- api.py
 - docker-compose.yml (138)
 - docs (139)
-- ImmutabilityTests
+- make_staff
 - docs (141)
 - docs (142)
 - cn
-- EditBatchModal.test.tsx
+- @testing-library/user-event
 - PROJECT_MAP — MediFlow / MDF (pharmacy ERP + billing)
-- AuditConfig
+- gst/views.py
 - D
 - audit.ts
 - AddToShortbook.test.tsx
@@ -170,7 +170,8 @@
 - expire_overdue
 - normalize_gstr2b_record
 - OOXMLInjector
-- PROJECT_MAP — MediFlow / MDF (pharmacy ERP + billing)
+- quantity_to_pack_display
+- customers/[id]/page.tsx
 - parties.py
 - PurchaseDetailModal.test.tsx
 - BatchGrid.test.tsx
@@ -179,7 +180,7 @@
 - get_policy
 - public (162)
 - fixtures (163)
-- GlobalShortcuts.tsx
+- PurchasesHub.test.tsx
 - docker-compose.yml (165)
 - docs (166)
 - docs (167)
@@ -201,22 +202,22 @@
 - AddNewProductDrawer.test.tsx
 - training_data.py
 - plan.py
-- voucher_serializers.py
+- DoctorSheet.tsx
 - sw.ts
-- 4.1 accounts / attendance / audit / core / gst
+- MiddlewareTests
 - docker-compose.yml (189)
 - docker-compose.yml (190)
 - docs (191)
-- ScanRowStrip.tsx
-- C1. File roles (what is live vs dormant)
+- ExpiryList.tsx
+- calculate_line_item
 - CustomerSerializer
 - DoctorSerializer
-- inventory/tests/conftest.py
+- A.3 accounts: staff (`accounts/staff_urls.py`, prefix `/api/v1/staff/`)
 - 0004_outlet_state_code.py
 - tests (198)
 - OutletFilteredManager
-- PurchaseLineCard.tsx
-- NumField.tsx
+- PurchaseItemFormData
+- PurchaseLineSheet.tsx
 - 0017_taxslab_40_percent.py
 - Customer
 - docker-compose.yml (204)
@@ -224,9 +225,10 @@
 - docker-compose.yml (206)
 - docs (207)
 - docs (208)
-- GlobalModalManager.tsx
+- Plan
 - jest.config.js
 - axios
+- landing_rate_per_pack
 - accounts (213)
 - 0012_migrate_pack_sizes.py
 - middleware.ts
@@ -236,7 +238,7 @@
 - StockTable.test.tsx
 - 0016_staff_can_edit_purchase_returns_and_more.py
 - Audit / activity tracking: review of the feature
-- CanAccessPurchases
+- A.10 gst (`gst/urls.py`, prefix `/api/v1/gst/`; ALL use DRF `IsAuthenticated`, outlet = `request.user.outlet`; `reports/gst_urls.py` also mounted at the same prefix: periods/, summary/, reconciliation/, export/... belong to the reports fragment)
 - ui (223)
 - docker-compose.yml (224)
 - 0017_staff_can_modify_paid_purchases_and_more.py
@@ -245,47 +247,47 @@
 - BillingConfig
 - CoreConfig
 - 0009_populate_opening_qty.py
-- @testing-library/user-event
+- PurchaseLineSheet.test.tsx
 - PurchasesConfig
 - OutletSettingsPrintEngineTests
 - ReviseIntegrityTests
 - MiddlewareTests
-- app/layout.tsx
+- AuditJWTAuthentication
 - SaleInvoiceSerializer
 - line_insights
 - InventoryConfig
-- EditProductModal.fields.test.tsx
+- GstTaxpayerAuth
 - types (241)
 - docker-compose.yml (242)
 - docker-compose.yml (243)
 - docs (244)
 - AddNewProductDrawer.test.tsx
-- payloadSchemas.ts
+- suggestions.py
 - po_services.py
-- payloadBuilders.ts
-- A.2 accounts: customers (`accounts/customer_urls.py`, prefix `/api/v1/customers/`)
+- billDiscountRupee.test.tsx
+- dates.ts
 - SensitiveFieldsTests
-- reports/page.tsx
-- CLAUDE.md
+- AuditContextPermission
+- safe_record
 - PurchaseInvoiceFull
 - lib (254)
-- TotalsSheet.test.tsx
-- AuditPage.test.tsx
-- StockAdjustmentModal.test.tsx
+- SaleReviseAPITests
+- debouncedStorage.ts
+- billingDiscount.test.tsx
 - frontend (258)
-- billing/models.py
+- erp_views.py
 - docker-compose.yml (260)
 - creditAging.ts
 - constants (262)
-- constants/index.ts
+- GSTExportService
 - accounts (264)
-- Logger
+- ProductSearchResult
 - LoginPage
-- scripts
-- Command
+- Stock Ledger (`/dashboard/stockledger`) and ledger health
+- line_cost_floor
 - .get
-- LegacyLog
-- Command
+- others_fingerprint
+- BarcodeScanner.tsx
 - PartnerSerializer
 - SheetShell
 - MediFlow (MDF) — Production Deployment Guide
@@ -294,19 +296,35 @@
 - PurchaseInvoiceAuditSerializer
 - AccountsConfig
 - GrossLossOnReturnExportView
+- test_constraints.py
+- .get
+- AuditContextMiddleware
+- bill
+- 1.1 Run, build, test
+- RuleTests
 - purchases (287)
+- TestSaleModificationOptionsView
 - files.py
+- low_stock_candidates
+- Command
 - types (292)
 - scripts (293)
+- Command
 - OutletFilteredManager
+- SaleInvoiceAuditSerializer
+- SalesReturnAuditSerializer
+- test_bottle_purchase_and_billing
+- Command
+- _get_requested_outlet_ids
+- Command
+- Command
+- WebcamCapture
 - frontend (308)
 - frontend (309)
 - DebitNoteAuditSerializer
-- sale_update_service.py
-- ChainDashboardTests
+- StockLedger
 - 0017_po_renumber_duplicates.py
 - 0019_po_normalise_old_statuses.py
-- 0006_migrate_billrevisions.py
 - dev-health-check.sh (347)
 - .as_user
 - docs (415)
@@ -314,19 +332,17 @@
 
 ## God Nodes (most connected - your core abstractions)
 1. `cn()` - 566 edges
-2. `react` - 382 edges
+2. `react` - 383 edges
 3. `Button` - 359 edges
 4. `Outlet` - 287 edges
 5. `lucide-react` - 258 edges
-6. `Batch` - 222 edges
+6. `Batch` - 224 edges
 7. `useOutletId()` - 198 edges
-8. `SaleInvoice` - 182 edges
+8. `SaleInvoice` - 187 edges
 9. `Input` - 180 edges
 10. `useAuthStore` - 163 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `E. Integrity and privacy` --references--> `ActivityLog`  [INFERRED]
-  docs/AUDIT_FEATURE_REPORT.md → apps/backend/apps/audit/models.py
 - `BillRevision (l.786) `billing_billrevision`` --references--> `DocumentRevisionV2`  [INFERRED]
   PROJECT_MAP.md → apps/backend/apps/audit/models.py
 - `6. Decisions I need from you` --references--> `ActivityEvent`  [INFERRED]
@@ -335,6 +351,8 @@
   docs/AUDIT_TRAIL.md → apps/backend/apps/audit/permissions.py
 - `Known limits` --references--> `log_activity()`  [INFERRED]
   docs/AUDIT_TRAIL.md → apps/backend/apps/audit/services.py
+- `H.5 Infra / build / CI` --references--> `create_audit_log_async()`  [INFERRED]
+  PROJECT_MAP.md → apps/backend/apps/audit/tasks.py
 
 ## Import Cycles
 - 2-file cycle: `apps/backend/apps/purchases/po_services.py -> apps/backend/apps/purchases/services.py -> apps/backend/apps/purchases/po_services.py`
@@ -345,95 +363,95 @@
 - **GST Dashboard UI component and API flow** — docs_plans_gst_dashboard_b2_plan_gstdashboard, docs_plans_gst_dashboard_b2_plan_validation_panel, docs_plans_gst_dashboard_b2_plan_reconciliation_widget, docs_plans_gst_dashboard_b2_plan_gst_api_contracts, docs_plans_gst_dashboard_b2_plan_export_actions [EXTRACTED 1.00]
 - **GST snapshot population from Sale, SalesReturn and Purchase items** — docs_phase2_snapshot_mapping_rules_saleitem_mapping, docs_phase2_snapshot_mapping_rules_salesreturnitem_mapping, docs_phase2_snapshot_mapping_rules_purchaseitem_mapping, docs_phase2_snapshot_mapping_rules_gst_transaction_snapshot [EXTRACTED 1.00]
 
-## Communities (368 total, 147 thin omitted)
+## Communities (387 total, 154 thin omitted)
 
-### Community 0 - "Outlet"
+### Community 0 - "po_views.py"
 Cohesion: 0.02
-Nodes (92): Command, seed_outlet_ledgers(), JournalLine, Meta, Ledger, Meta, LedgerGroup, Meta (+84 more)
+Nodes (89): Partner, Meta, PaymentAllocation, Meta, PaymentEntry, Meta, default_print_settings_wholesale(), CanAccessPurchases (+81 more)
 
-### Community 1 - "dump_permission_matrix.py"
-Cohesion: 0.13
-Nodes (3): Command, build_permission_matrix(), _User
+### Community 1 - "formatCurrency"
+Cohesion: 0.05
+Nodes (75): AttendancePage(), DailyReportPage(), metadata, ExpiryReportPage(), SalesSummaryPage(), StockValuationPage(), StaffPage(), SmartCheckInAction() (+67 more)
 
 ### Community 2 - "formatCurrency"
 Cohesion: 0.03
-Nodes (145): LoginForm(), LoginPage(), metadata, ExpensesPage(), OverviewPage(), PayablesPage(), ReceivablesPage(), CustomerDetailPage() (+137 more)
+Nodes (139): LoginForm(), LoginPage(), ExpensesPage(), OverviewPage(), PayablesPage(), ReceivablesPage(), DiffRow(), VoucherRevisionsPage() (+131 more)
 
 ### Community 3 - "ExpiryManagerPage.test.tsx"
-Cohesion: 0.11
-Nodes (13): ExpiryManagerPage(), mockToast, renderPage(), ROWS, table(), tick(), mockToast, getSearch() (+5 more)
+Cohesion: 0.20
+Nodes (7): mockToast, getSearch(), listeners, navigationMock, router, routerPush, setUrl()
 
 ### Community 4 - "productDetail.ts"
-Cohesion: 0.29
-Nodes (11): BatchState, batchState(), computeMetrics(), describePack(), DetailBatch, DetailProduct, hasStock(), batch() (+3 more)
+Cohesion: 0.15
+Nodes (21): BatchGridProps, SaveResult, ProductBatchTableProps, Fact(), ProductHeader(), ProductHeaderProps, ProductSummaryProps, pluralize() (+13 more)
 
 ### Community 5 - "sale_update_service.py"
-Cohesion: 0.13
-Nodes (32): books(), IT(), item(), L(), line(), load(), marg_files(), run_phase2() (+24 more)
+Cohesion: 0.15
+Nodes (28): IT(), item(), line(), load(), marg_files(), run_phase2(), sheet_of(), test_a_real_load_refuses_a_live_outlet_and_unanswered_lists() (+20 more)
 
 ### Community 6 - "StaffTable.tsx"
-Cohesion: 0.12
-Nodes (15): 1. What the research says, 2. What you will get, 3.2 What gets tracked (by risk), 3.3 Suspicious behaviour (explainable rules, no black box), 3.4 Screens, 3.5 Integrity and retention, 3.6 Fixes folded in (from the report), 3. Design (+7 more)
+Cohesion: 0.11
+Nodes (17): flags(), 1. What the research says, 2. What you will get, 3.1 One store, one vocabulary, 3.2 What gets tracked (by risk), 3.3 Suspicious behaviour (explainable rules, no black box), 3.4 Screens, 3.5 Integrity and retention (+9 more)
 
-### Community 7 - "poApi.ts"
+### Community 7 - "MainInvoiceWorkspace.tsx"
 Cohesion: 0.07
-Nodes (29): fmt(), PublicPurchaseOrderPage(), STATUS_NOTE, Props, RowsProps, calls, push, routeParams (+21 more)
+Nodes (53): InlineRowEditor(), MainInvoiceWorkspace(), MainInvoiceWorkspaceProps, AddLineBody(), AddLineSheet(), AddLineSheetProps, batchStockWording(), describeInBill() (+45 more)
 
-### Community 8 - "DateRangeFilter"
-Cohesion: 0.06
-Nodes (49): SalesSummaryPage(), columnHelper, GSTR1Page(), InvoiceRow, GSTR2APage(), GSTR2AWarningRow, col31, col4 (+41 more)
+### Community 8 - "apiClient.ts"
+Cohesion: 0.05
+Nodes (59): QuotationsPage(), columnHelper, GSTR1Page(), InvoiceRow, GSTR2APage(), GSTR2AWarningRow, col31, col4 (+51 more)
 
-### Community 9 - ".post"
-Cohesion: 0.06
-Nodes (23): customer_for_ledger(), ScheduleHRegister, Meta, validate_unit_integrity(), fefo_batch_select(), generate_invoice_number(), InsufficientStockError, schedule_h_validate() (+15 more)
+### Community 9 - "atomic_purchase_save"
+Cohesion: 0.05
+Nodes (13): landing_includes_gst(), atomic_purchase_save(), atomic_purchase_update(), _line_label(), _line_pkg(), parse_purchase_expiry(), rebuild_distributor_ledger(), _same_batch_same_pack() (+5 more)
 
 ### Community 10 - "recorder.py"
-Cohesion: 0.04
-Nodes (34): Command, get_audit_context(), _actor(), after_commit(), _go(), client_ip(), device_label(), inside_network() (+26 more)
+Cohesion: 0.05
+Nodes (31): Command, client_ip(), device_label(), inside_network(), _is_private(), is_sensitive(), _jsonable(), _label() (+23 more)
 
 ### Community 12 - "pins.py"
-Cohesion: 0.09
-Nodes (16): hashed_pin_fields(), _mac(), make_receipt(), pin_matches(), set_pin(), _slow_check(), staff_with_pin(), _tag() (+8 more)
+Cohesion: 0.18
+Nodes (8): hashed_pin_fields(), _mac(), make_receipt(), pin_matches(), set_pin(), _slow_check(), staff_with_pin(), _tag()
 
-### Community 13 - "inventory/views.py"
-Cohesion: 0.03
-Nodes (51): OutletProductConfig, Meta, _refresh_outlet_inventory(), allows_loose(), batch_allows_loose(), fold_loose_into_packs(), normalize_pack_type(), pack_errors() (+43 more)
+### Community 13 - "IsAuthenticated"
+Cohesion: 0.02
+Nodes (88): PartnerShareHistory, Meta, pin_blocked_response(), PurchaseItemAuditSerializer, Meta, TaxSlab, Meta, CanEditSalesInvoice (+80 more)
 
 ### Community 14 - "django_db"
 Cohesion: 0.01
-Nodes (170): Migration, Migration, Migration, Migration, Migration, Migration, Migration, Migration (+162 more)
+Nodes (184): Migration, Migration, Migration, Migration, Migration, Migration, Migration, Migration (+176 more)
 
 ### Community 15 - "settingsStore.ts"
-Cohesion: 0.10
-Nodes (33): Providers(), loading(), THEME_OPTION, SessionSync(), authApi, applyOutletContext(), switchOutlet(), queryClient (+25 more)
+Cohesion: 0.08
+Nodes (38): Providers(), loading(), THEME_OPTION, SessionSync(), authApi, applyOutletContext(), switchOutlet(), queryClient (+30 more)
 
 ### Community 16 - "MobileSearch.test.tsx"
-Cohesion: 0.06
-Nodes (23): batch(), original, product(), setup(), sub, subOther, renderCard(), seed() (+15 more)
+Cohesion: 0.10
+Nodes (17): batch(), original, product(), setup(), sub, subOther, batch(), original (+9 more)
 
 ### Community 17 - "PurchasesList.tsx"
 Cohesion: 0.05
-Nodes (54): build_product_matcher(), match(), _catalog_index(), learn_distributor_alias(), is_own_name(), _product_context(), _product_payload(), alias_key() (+46 more)
+Nodes (57): build_product_matcher(), match(), _catalog_index(), _distributor_records(), learn_distributor_alias(), is_own_name(), _product_context(), _product_payload() (+49 more)
 
 ### Community 18 - "frontend/package.json"
 Cohesion: 0.04
-Nodes (78): dependencies, class-variance-authority@^0.7.1, clsx@^2.1.1, cmdk@^1.1.1, date-fns@^4.1.0, dexie@^4.3.0, fuse.js@^7.5.0, @hookform/resolvers@^5.2.2 (+70 more)
+Nodes (76): dependencies, class-variance-authority@^0.7.1, clsx@^2.1.1, cmdk@^1.1.1, date-fns@^4.1.0, dexie@^4.3.0, fuse.js@^7.5.0, @hookform/resolvers@^5.2.2 (+68 more)
 
-### Community 19 - "CartLineCard.tsx"
-Cohesion: 0.07
-Nodes (32): _actor_names(), apply_filters(), _d(), entity_ref(), _err(), event_json(), FilterError, flag_json() (+24 more)
+### Community 19 - "ledger_export.py"
+Cohesion: 0.12
+Nodes (18): build_workbook(), build_workbook(), build_workbook(), _d(), filters_text(), packs_words(), _s(), signed_words() (+10 more)
 
 ### Community 20 - "POError"
-Cohesion: 0.13
-Nodes (11): get_distributor(), POError, shortbook_add(), suggest_distributor(), _get_outlet(), po_errors(), PurchaseOrderSettingsView, _settings_json() (+3 more)
+Cohesion: 0.18
+Nodes (9): create_po(), get_distributor(), POError, shortbook_add(), suggest_distributor(), _get_outlet(), _outlet_id(), _serialize_shortbook() (+1 more)
 
-### Community 21 - "BatchFactory"
-Cohesion: 0.13
-Nodes (18): CustomerFactory, Meta, test_sale_create_api(), test_sale_create_flat_discount_reconciliation_with_smart_capping(), test_sale_create_invalid_payload(), test_sale_create_prevents_loss_sale_below_ptr(), test_sale_create_prevents_loss_sale_when_base_item_under_cost(), test_sale_create_pure_free_quantity_scheme_item() (+10 more)
+### Community 21 - "stockLedger.ts"
+Cohesion: 0.06
+Nodes (55): BatchCardPanel(), Fact(), Props, STATE_BADGE, STATE_LABEL, Props, Balance(), EventBadge() (+47 more)
 
-### Community 22 - "AlertsRow.tsx"
-Cohesion: 0.29
-Nodes (10): AlertCard(), AlertCardProps, AlertCardSkeleton(), AlertItem, TONE, AlertsRow(), AlertsRowProps, expiryStatus() (+2 more)
+### Community 22 - "dashboard.ts"
+Cohesion: 0.10
+Nodes (35): AlertCardSkeleton(), AlertItem, AlertsRow(), AlertsRowProps, expiryStatus(), plural(), ChartTooltip(), HourlySalesChart() (+27 more)
 
 ### Community 23 - "devDependencies"
 Cohesion: 0.05
@@ -441,91 +459,91 @@ Nodes (37): devDependencies, autoprefixer@10.4.19, eslint@8.57.0, eslint-config-
 
 ### Community 24 - "gemini_ocr.py"
 Cohesion: 0.04
-Nodes (79): auto_rotate_enabled(), build_prompt(), call_gemini(), check_line_math(), check_row_alignment(), _clean_box(), extract_invoice(), _extract_with_verification() (+71 more)
+Nodes (76): build_prompt(), call_gemini(), check_line_math(), check_row_alignment(), _clean_box(), extract_invoice(), _extract_with_verification(), fallback_model() (+68 more)
 
 ### Community 25 - "ActivityEvent"
 Cohesion: 0.12
-Nodes (27): _cfg(), _count_today(), dry_run(), evaluate_event(), FlagSpec, _local_day(), _name(), _policy_for() (+19 more)
+Nodes (27): _rules_view(), Command, rule_setting(), _cfg(), _count_today(), dry_run(), evaluate_event(), FlagSpec (+19 more)
 
 ### Community 26 - "5.2 billing"
-Cohesion: 0.04
-Nodes (38): DraftInvoice, Meta, DraftInvoiceItem, Meta, DraftInvoiceItemSerializer, Meta, DraftInvoiceSerializer, Meta (+30 more)
+Cohesion: 0.10
+Nodes (22): batch_no(), payment(), 5.2 billing, BillRevision (l.786) `billing_billrevision`, CreditAccount (l.326) `billing_creditaccount`, CreditTransaction (l.370) `billing_credittransaction`, DraftInvoice (l.846) `billing_draftinvoice`, DraftInvoiceItem (l.893) `billing_draftinvoiceitem` (+14 more)
 
 ### Community 27 - "@tanstack/react-query"
-Cohesion: 0.02
-Nodes (262): count, InventoryPage(), InventoryView(), ProductInventoryPage(), ConsolidatedPurchaseBookPage(), FormatMode, GrossLossOnReturnPage(), GrossLossReport (+254 more)
+Cohesion: 0.05
+Nodes (122): ConsolidatedPurchaseBookPage(), FormatMode, GrossLossOnReturnPage(), GrossLossReport, GrossLossRow, percent(), rupees(), ErpGrossProfitPage() (+114 more)
 
-### Community 28 - "clean_units.py"
-Cohesion: 0.48
-Nodes (5): extract_brand(), infer_from_name(), main(), resolve_unit(), web_search_unit()
+### Community 28 - "re"
+Cohesion: 0.06
+Nodes (24): dosage_form(), looks_like_barcode(), parse_query(), ParsedQuery, salt_set(), strengths(), L(), _clean_item() (+16 more)
 
 ### Community 29 - "package.json"
-Cohesion: 0.07
-Nodes (33): author, bugs, url, dependencies, @radix-ui/react-alert-dialog@^1.1.15, description, devDependencies, @testing-library/react@^16.3.2 (+25 more)
+Cohesion: 0.06
+Nodes (38): author, bugs, url, dependencies, @radix-ui/react-alert-dialog@^1.1.15, description, devDependencies, @testing-library/react@^16.3.2 (+30 more)
 
 ### Community 30 - ".data"
-Cohesion: 0.14
-Nodes (7): AccessTests, at(), DashboardBase, MarginTests, SalesTotalsTests, TopSellerTests, TrendTests
+Cohesion: 0.09
+Nodes (11): AccessTests, AlertTests, at(), DashboardBase, MarginTests, SalesTotalsTests, TopSellerTests, TrendTests (+3 more)
 
 ### Community 31 - "PartyChips.tsx"
-Cohesion: 0.07
-Nodes (31): annotated_batches(), build_rows(), _count(), _date(), expiry_queryset(), ExpiryFilters, ExpiryParamError, _first_posted_purchase() (+23 more)
+Cohesion: 0.08
+Nodes (27): annotated_batches(), build_rows(), _count(), _date(), expiry_queryset(), ExpiryFilters, ExpiryParamError, _first_posted_purchase() (+19 more)
 
-### Community 32 - "create_sale_snapshots"
-Cohesion: 0.12
-Nodes (14): create_purchase_return_snapshots(), create_purchase_snapshots(), create_sale_snapshots(), create_sales_return_snapshots(), _determine_interstate(), _get_local_date(), _get_state_code(), Command (+6 more)
+### Community 32 - "SandboxGstProvider"
+Cohesion: 0.16
+Nodes (6): Command, SandboxGstProvider, SandboxAuthError, 11.5 reports & infrastructure — detail, H.1 Security / data exposure, H.5 Infra / build / CI
 
 ### Community 33 - "log_activity"
-Cohesion: 0.05
-Nodes (8): AuditContextMiddleware, ActivityLogSerializer, Meta, log_activity(), AuditLogTests, dummy_get_response(), AsyncLoggingTests, BillingRevisionTests
+Cohesion: 0.06
+Nodes (7): ActivityLogSerializer, Meta, log_activity(), AuditLogTests, dummy_get_response(), AsyncLoggingTests, BillingRevisionTests
 
 ### Community 34 - "PaymentView.tsx"
-Cohesion: 0.07
-Nodes (28): CheckoutFlags, CheckRow, CollectState, countLossLines(), FixTarget, formatINR(), getCheckRows(), getCollectState() (+20 more)
+Cohesion: 0.09
+Nodes (24): CheckoutFlags, CheckRow, CollectState, countLossLines(), FixTarget, formatINR(), getCheckRows(), getCollectState() (+16 more)
 
 ### Community 35 - "check_outlet_access"
-Cohesion: 0.08
-Nodes (11): CanEditSaleReturns, CanManagePartners, CanManageProducts, CanViewPurchaseRates, CanVoidRecords, check_outlet_access(), _get_requested_outlet_id(), _get_requested_outlet_ids() (+3 more)
+Cohesion: 0.13
+Nodes (3): check_outlet_access(), _is_admin(), _same_organization()
 
-### Community 36 - ".put"
-Cohesion: 0.14
-Nodes (6): BatchEditBase, FreshnessTests, PermissionTests, StockSafetyTests, ValidationTests, WarningTests
+### Community 36 - ".patch"
+Cohesion: 0.07
+Nodes (10): RoleEscalationTests, inventory_cache_version(), _key(), AuditTests, BatchEditBase, FreshnessTests, PermissionTests, StockSafetyTests (+2 more)
 
 ### Community 37 - "GSTR1Builder"
-Cohesion: 0.06
-Nodes (24): ExportBlockedException, GSTExportService, Rule37Adjustment, Meta, get_current_outlet(), GSTExportView, GSTPeriodsView, GSTReconciliationView (+16 more)
+Cohesion: 0.08
+Nodes (11): get_current_outlet(), format_gst_date(), GSTR1Builder, GSTR1ValidationConfig, GSTR1Validator, GSTR3BValidator, check_decimals(), is_zero() (+3 more)
 
-### Community 38 - "Batch"
-Cohesion: 0.02
-Nodes (81): atomic_debit_note_update(), _recompute_invoice_outstanding(), DebitNote, Meta, DebitNoteItem, Meta, DebitNoteService, LedgerFactory (+73 more)
+### Community 38 - "BatchFactory"
+Cohesion: 0.05
+Nodes (50): LedgerFactory, Meta, LedgerGroupFactory, Meta, OrganizationFactory, Meta, OutletFactory, Meta (+42 more)
 
 ### Community 39 - "staffPermissions.ts"
-Cohesion: 0.22
-Nodes (17): D(), make_invoice(), make_note(), params(), test_bill_amount_is_the_invoice_value_not_net_of_ledger_adjustment(), test_date_range_is_inclusive_and_falls_back_to_created_at_when_invoice_date_missing(), test_excel_exports_download_with_matching_totals(), test_less_returns_default_depends_on_the_book_but_explicit_value_wins() (+9 more)
+Cohesion: 0.23
+Nodes (16): D(), make_invoice(), make_note(), params(), test_bill_amount_is_the_invoice_value_not_net_of_ledger_adjustment(), test_date_range_is_inclusive_and_falls_back_to_created_at_when_invoice_date_missing(), test_excel_exports_download_with_matching_totals(), test_less_returns_default_depends_on_the_book_but_explicit_value_wins() (+8 more)
 
 ### Community 40 - "commands (40)"
-Cohesion: 0.09
-Nodes (12): _build_pack_lookup(), _clean_salt(), _date(), _dec(), _gstin(), _hsn(), _int(), _marg_drug_type() (+4 more)
+Cohesion: 0.10
+Nodes (14): _build_pack_lookup(), _clean_salt(), Command, _date(), _dec(), _gstin(), _hsn(), _int() (+6 more)
 
-### Community 41 - ".stock"
-Cohesion: 0.16
-Nodes (8): MasterProductFactory, Meta, AdjustmentTests, ExpiryTests, InventoryListBase, LowStockTests, PayloadTests, RepairCommandTests
+### Community 41 - "MasterProductFactory"
+Cohesion: 0.08
+Nodes (28): CustomerFactory, Meta, batch_a(), batch_b(), batch_c(), default_outlet(), product_a_pack10(), product_b_inclusive() (+20 more)
 
 ### Community 42 - "books.py"
-Cohesion: 0.10
-Nodes (21): Books, build_books(), cents(), Entry, Fix, History, item_rate(), _items() (+13 more)
+Cohesion: 0.09
+Nodes (22): ImportRefused, Books, build_books(), cents(), Entry, Fix, History, item_rate() (+14 more)
 
 ### Community 43 - "frontend/types/index.ts"
 Cohesion: 0.03
-Nodes (79): BillAdjustmentModalProps, Props, PaymentMixCardProps, StatCardsRowProps, ReportSummaryCardsProps, mapAuthUser(), AuthState, AgingBucket (+71 more)
+Nodes (76): BillAdjustmentModalProps, Props, ReportSummaryCardsProps, mapAuthUser(), AuthState, AgingBucket, ApiError, ApiResponse (+68 more)
 
-### Community 44 - "EditBatchModal.tsx"
-Cohesion: 0.17
-Nodes (24): EditBatchDialog(), EditBatchModalProps, Field(), ToastAction, BatchFormField, BatchFormValues, buildBatchPatch(), buildUndoPatch() (+16 more)
+### Community 44 - "useSettingsStore"
+Cohesion: 0.08
+Nodes (42): InvoiceSkeleton(), PastInvoicePage(), SECTION_IDS, SettingsPage(), SettingsPageContent(), AttendanceSettingsSection(), AttendanceSettingsSectionProps, BillingPricingSettingsSection() (+34 more)
 
 ### Community 45 - "BatchGrid.tsx"
-Cohesion: 0.16
-Nodes (24): BatchGrid(), BatchGridProps, COLUMNS, ColumnSpec, GridBatchRow, optionsFor(), selectValue(), SHOW_AS_MONEY (+16 more)
+Cohesion: 0.10
+Nodes (43): BatchGrid(), COLUMNS, ColumnSpec, GridBatchRow, optionsFor(), selectValue(), SHOW_AS_MONEY, was() (+35 more)
 
 ### Community 46 - "docs (46)"
 Cohesion: 0.13
@@ -535,69 +553,69 @@ Nodes (24): distributorsApi, Marg Data Import guide, Manavata Pharma outlet, SAI
 Cohesion: 0.07
 Nodes (28): BASE_URL, CI, jobs, test, name, on, pull_request, push (+20 more)
 
-### Community 48 - "ledger_views.py"
-Cohesion: 0.03
-Nodes (47): pin_blocked_response(), MethodPermissionMixin, _packs(), trace(), bump_inventory_cache(), confirms_identity(), _d(), filters_text() (+39 more)
+### Community 48 - "ledger_health.py"
+Cohesion: 0.10
+Nodes (19): annotated_batches(), _book(), classify(), classify_batch(), _describe(), Gap, packs(), recompute_running() (+11 more)
 
-### Community 49 - "PartyChips.tsx"
-Cohesion: 0.11
-Nodes (21): BillingForSheet(), billingForState(), clean(), inr(), Props, relationOf(), owner, priya (+13 more)
+### Community 49 - "useBillingStore"
+Cohesion: 0.09
+Nodes (30): FullScreenBillingPage(), ActiveBillsTabs(), BillingHeaderStrip(), BillSuccessScreen(), EditBillCustomer(), EditSaleHydrator(), get, replace (+22 more)
 
 ### Community 50 - "get_audit_context"
-Cohesion: 0.08
-Nodes (20): AuditJWTAuthentication, AuditContext, get_audit_context(), reset_audit_context(), set_audit_context(), AuditContextMiddleware, AuditContextPermission, AuditContextTests (+12 more)
+Cohesion: 0.22
+Nodes (4): AuditContext, get_audit_context(), reset_audit_context(), set_audit_context()
 
 ### Community 51 - "test_gst_rate_never_blocks.py"
-Cohesion: 0.18
-Nodes (11): bill(), line(), make_world(), q2(), test_40_percent_is_a_known_standard_rate(), test_a_40_percent_product_in_stock_can_be_sold(), test_an_impossible_rate_is_still_refused(), test_no_rate_is_refused_for_not_being_a_current_slab() (+3 more)
+Cohesion: 0.22
+Nodes (9): bill(), line(), make_world(), q2(), test_40_percent_is_a_known_standard_rate(), test_a_40_percent_product_in_stock_can_be_sold(), test_an_impossible_rate_is_still_refused(), test_no_rate_is_refused_for_not_being_a_current_slab() (+1 more)
 
 ### Community 52 - "GST Phase 4B Integration Blueprint"
 Cohesion: 0.24
 Nodes (11): GST Phase 4B Integration Blueprint, GSTR2BFetchService (planned), GSTR2BReconciliationService (planned), GstReconciliationMatch model (planned), IMS (Invoice Management System) Phase 4C, GSTR-2B reconciliation precedes IMS and filing, GST Sandbox Deferred Plan, Kept sandbox foundation (models and services) (+3 more)
 
 ### Community 54 - "toast.tsx"
-Cohesion: 0.33
-Nodes (9): Toast, ToastActionElement, ToastClose, ToastDescription, ToastProps, ToastTitle, toastVariants, ToastViewport (+1 more)
+Cohesion: 0.15
+Nodes (15): metadata, RootLayout(), viewport, ErrorBoundary, Props, State, Toast, ToastActionElement (+7 more)
 
 ### Community 55 - "_ScanTestBase"
-Cohesion: 0.19
-Nodes (3): ScanPhotoCleanupTest, _ScanTestBase, StaleDraftCleanupTest
+Cohesion: 0.17
+Nodes (4): _jpeg(), ScanPhotoCleanupTest, _ScanTestBase, StaleDraftCleanupTest
 
-### Community 56 - "Staff"
-Cohesion: 0.03
-Nodes (16): Staff, Meta, AccessControlBase, EffectivePermissionsMatchTheApi, PermissionMatrixFixtureTests, make_purchase(), StaffPinAuthTests, TestSaleModificationOptionsView (+8 more)
+### Community 56 - "effective_permissions"
+Cohesion: 0.10
+Nodes (7): EffectivePermissionsMatchTheApi, PermissionMatrixFixtureTests, Command, build_permission_matrix(), _User, canonical_role(), effective_permissions()
 
 ### Community 57 - "PacketBTests"
-Cohesion: 0.11
+Cohesion: 0.09
 Nodes (3): DeadlockRegressionTests, patched_sfu(), PacketBTests
 
-### Community 58 - "PurchaseLineSheet.tsx"
-Cohesion: 0.12
-Nodes (36): PurchaseLineSheet(), cellInputCls(), formatStockQty(), ItemFieldError, normName(), PURCHASE_ITEM_COLS, PurchaseItemRowView(), GST_RATES (+28 more)
+### Community 58 - "PurchaseItemRow.tsx"
+Cohesion: 0.15
+Nodes (23): cellInputCls(), formatStockQty(), ItemFieldError, normName(), PURCHASE_ITEM_COLS, PurchaseItemRowView(), rowStripStyle(), ScanRowBox (+15 more)
 
 ### Community 59 - "parse_skips.js"
 Cohesion: 0.20
 Nodes (8): allFiles, files, fs, glob, jsFiles, path, skipList, testDir
 
-### Community 60 - "DocumentRevisionV2LegacyAdapterSerializer"
-Cohesion: 0.13
-Nodes (8): DebitNoteRevisionDetailView, is_v2_read_enabled(), DocumentRevisionV2LegacyAdapterSerializer, Meta, DocumentRevisionSerializer, Meta, CanViewAuditHistory, A.8 audit (`audit/urls.py`, prefix `/api/v1/audit/`)
+### Community 60 - "DocumentRevision"
+Cohesion: 0.07
+Nodes (15): AuditService, DebitNoteRevisionDetailView, is_v2_read_enabled(), DocumentRevision, Meta, ActivityEventLegacyAdapterSerializer, Meta, DocumentRevisionV2LegacyAdapterSerializer (+7 more)
 
 ### Community 61 - "Backend requirements.txt"
 Cohesion: 0.18
 Nodes (11): Backend requirements.txt, Celery + Redis task queue, cryptography (Fernet), Django 5.0.3, Django REST Framework + SimpleJWT, OCR stack (rapidocr-onnxruntime, opencv, rapidfuzz, google-genai, pydantic), PostgreSQL driver psycopg2-binary, WeasyPrint / ReportLab PDF generation (+3 more)
 
 ### Community 62 - "StockLedgerPage.test.tsx"
-Cohesion: 0.11
-Nodes (14): StockLedgerPage(), card(), entry(), healthMock, ledgerMock, mockListeners, mockRouter, mockToast (+6 more)
+Cohesion: 0.07
+Nodes (40): StockLedgerPage(), Props, card(), entry(), healthMock, ledgerMock, mockListeners, mockRouter (+32 more)
 
 ### Community 63 - "get_latest_log"
-Cohesion: 0.08
-Nodes (8): count_logs(), _events(), get_latest_log(), make_batch(), make_product(), AuthEventTests, ChangesDiffTests, SignalCRUDTests
+Cohesion: 0.07
+Nodes (9): count_logs(), _events(), get_latest_log(), LegacyLog, make_batch(), make_product(), AuthEventTests, ChangesDiffTests (+1 more)
 
-### Community 66 - "react"
-Cohesion: 0.02
-Nodes (251): LEDGER_NAME_COLORS, LedgersPage(), handleLedgerSaved(), handleSync(), load(), NATURE_COLORS, EditPurchaseReturnContent(), EditPurchaseReturnPage() (+243 more)
+### Community 66 - "useToast"
+Cohesion: 0.03
+Nodes (128): count, InventoryPage(), InventoryView(), ProductInventoryPage(), SalesPage(), StockLedgerView(), AddFamilyMemberDialog(), FAMILY_RELATIONS (+120 more)
 
 ### Community 67 - "expiry.py"
 Cohesion: 0.15
@@ -612,152 +630,164 @@ Cohesion: 0.23
 Nodes (12): Batch expiry status (ACTIVE / NEAR_EXPIRY / EXPIRED), MediFlow API Reference, authApi, dashboardApi, inventoryApi, Mock API layer (lib/mockApi.ts, NEXT_PUBLIC_USE_MOCK), Mock data IDs reference (staff, products, distributors, purchases), purchasesApi (+4 more)
 
 ### Community 71 - "taxpayer_auth.py"
-Cohesion: 0.06
-Nodes (22): GSTR3BValidationConfig, Command, Command, get_active_provider(), SandboxGstProvider, fetch_sandbox_access_token(), get_sandbox_access_token(), get_sandbox_credentials() (+14 more)
+Cohesion: 0.10
+Nodes (12): Command, get_active_provider(), fetch_sandbox_access_token(), get_sandbox_access_token(), get_sandbox_credentials(), get_taxpayer_auth_for_outlet(), get_taxpayer_session_token(), request_gst_otp() (+4 more)
 
 ### Community 72 - "docs (72)"
 Cohesion: 0.12
 Nodes (22): MediFlow Stage-by-Stage Changelog, billingStore (Zustand), lib/gst.ts GST calculation helper, lib/offline-db.ts Dexie IndexedDB, Stage 1 Project Scaffold and Auth, Stage 2 Dashboard Layout and Navigation, Stage 3 KPI Dashboard and Charts, Stage 4 Billing POS (+14 more)
 
-### Community 73 - "ewaybill.py"
-Cohesion: 0.07
-Nodes (19): SandboxAuthService, _get_fernet(), SandboxConfiguration, Meta, SandboxAPIClient, SandboxIntegrationError, cancel_einvoice(), generate_irn_payload() (+11 more)
+### Community 73 - "SandboxAPIClient"
+Cohesion: 0.11
+Nodes (9): SandboxAPIClient, SandboxIntegrationError, cancel_einvoice(), generate_irn_payload(), get_irn_by_document_details(), _quantize(), request_einvoice(), fetch_eway_bill_pdf() (+1 more)
 
 ### Community 74 - "fakePoBackend.ts"
 Cohesion: 0.17
 Nodes (10): DISTRIBUTORS, LABEL, Line, ME, PO, PRODUCTS, SB, SB_LABEL (+2 more)
 
-### Community 75 - "apiClient.ts"
-Cohesion: 0.02
-Nodes (170): DetailRow(), formatINR(), getInvoiceStatus(), getPeriodStart(), InvoiceHistory(), InvoiceItemsExpanded(), PeriodFilter, StatCard() (+162 more)
+### Community 75 - "Dashboard home & modules"
+Cohesion: 0.06
+Nodes (64): CreditPage(), CustomersPage(), AgingSummaryCards(), BulkReminderModal(), BulkReminderModalProps, CreditAccountsList(), CreditAccountsListProps, FILTERS (+56 more)
 
-### Community 76 - "A.5 accounts: ledgers, vouchers, notes, accounting reports (`accounts/voucher_urls.py`, mounted at `/api/v1/` with NO sub-prefix; docstrings in views wrongly say `/api/v1/accounts/...`)"
-Cohesion: 0.12
-Nodes (9): DebitNoteSerializer, Meta, LedgerGroupSerializer, Meta, DebitNoteListView, get_outlet_id(), LedgerGroupListView, assert_outlet_access() (+1 more)
+### Community 76 - "ExpiryManagerPage.test.tsx"
+Cohesion: 0.11
+Nodes (22): ExpiryManagerPage(), mockToast, renderPage(), ROWS, table(), tick(), AssignSupplierDialog(), Props (+14 more)
 
 ### Community 77 - "Button"
-Cohesion: 0.04
-Nodes (140): InvoiceSkeleton(), PastInvoicePage(), INR(), LEDGER_SORT_OPTIONS, LedgerStatementPage(), handleRowClick(), SourceType, txColor() (+132 more)
+Cohesion: 0.05
+Nodes (110): INR(), LEDGER_SORT_OPTIONS, LedgerStatementPage(), handleRowClick(), SourceType, txColor(), txIcon(), txTypeLabel() (+102 more)
+
+### Community 78 - "AlertTables.test.tsx"
+Cohesion: 0.11
+Nodes (22): CardProps, count, InventoryStatCards(), StatCard(), batch(), getStock, inDays(), mockAllowed (+14 more)
 
 ### Community 79 - "7.1 Backend / infra variables"
 Cohesion: 0.16
-Nodes (13): FormControl, FormDescription, FormFieldContext, FormFieldContextValue, FormItem, FormItemContext, FormItemContextValue, FormMessage (+5 more)
+Nodes (14): FormControl, FormDescription, FormFieldContext, FormFieldContextValue, FormItem, FormItemContext, FormItemContextValue, FormLabel (+6 more)
 
 ### Community 80 - "ocr_engine.py"
-Cohesion: 0.05
-Nodes (31): _calculate_confidence(), _clean_item(), _clean_name(), _deskew(), detect_column_map(), _distributor_records(), extract_line_items(), extract_text_blocks() (+23 more)
+Cohesion: 0.07
+Nodes (17): _calculate_confidence(), _clean_name(), _deskew(), detect_column_map(), extract_text_blocks(), match_distributor(), _normalise_date(), OCRProviderError (+9 more)
 
 ### Community 81 - "frontend (81)"
 Cohesion: 0.10
 Nodes (19): compilerOptions, allowJs, baseUrl, esModuleInterop, incremental, isolatedModules, jsx, lib (+11 more)
 
 ### Community 83 - "zod"
-Cohesion: 0.07
-Nodes (21): ManualAttendanceFormValues, manualAttendanceSchema, LoginFormValues, loginSchema, ScheduleHData, scheduleHSchema, CreditPaymentFormData, creditPaymentSchema (+13 more)
+Cohesion: 0.05
+Nodes (31): ManualAttendanceFormValues, manualAttendanceSchema, LoginFormValues, loginSchema, ScheduleHData, scheduleHSchema, CreditPaymentFormData, creditPaymentSchema (+23 more)
 
-### Community 84 - "next"
-Cohesion: 0.06
-Nodes (60): AdminLayout(), BillingLayout(), DashboardLayout(), calYearForFyMonth(), DataRow(), firstDayOfFyMonth(), firstDayOfMonth(), fmt() (+52 more)
+### Community 84 - "vouchers/page.tsx"
+Cohesion: 0.13
+Nodes (29): AdminLayout(), BillingLayout(), INR(), STATUS_BADGE, TYPE_COLORS, VoucherListPage(), DashboardLayout(), LedgerDrilldown() (+21 more)
 
 ### Community 85 - "BaseErpReportView"
-Cohesion: 0.03
-Nodes (37): DailyCashReportView, DailySnapshotExportView, DailySnapshotView, FixedMonthlyExpenseView, BaseErpReportView, ConsolidatedSalesBookExportView, ConsolidatedSalesBookView, GrossLossOnReturnView (+29 more)
+Cohesion: 0.05
+Nodes (19): BaseErpReportView, ConsolidatedSalesBookExportView, ConsolidatedSalesBookView, GrossLossOnReturnView, GrossProfitReportExportView, GrossProfitReportView, PurchaseBookView, PurchaseReturnBookExportView (+11 more)
 
-### Community 86 - "po_views.py"
-Cohesion: 0.09
-Nodes (19): CanCancelPurchaseOrders, CanSendPurchaseOrders, allowed_actions(), _fail(), _filtered(), _get_po(), _m(), _outlet_id() (+11 more)
+### Community 86 - "po_errors"
+Cohesion: 0.19
+Nodes (9): outlet_settings(), allowed_actions(), _fail(), _get_po(), po_errors(), wrapper(), serialize_detail(), _settings_json() (+1 more)
 
 ### Community 87 - "ErpExcelService"
-Cohesion: 0.11
-Nodes (5): GrossLossOnReturnExportView, ErpExcelService, GrossLossOnReturnReportTests, PurchaseExcelTests, C.1 Marg-style ERP reports (`R/services/erp_report_service.py`, `R/services/erp_excel_service.py`, views `R/erp_views.py`)
+Cohesion: 0.16
+Nodes (3): ErpExcelService, PurchaseExcelTests, C.1 Marg-style ERP reports (`R/services/erp_report_service.py`, `R/services/erp_excel_service.py`, views `R/erp_views.py`)
 
-### Community 88 - "SaleReturnItemsGrid.tsx"
-Cohesion: 0.14
-Nodes (14): NewCreditNoteContent(), handleSelectInvoice(), NewCreditNotePage(), formatExpiryDate(), RowProductSearch(), SaleReturnItemsGrid(), SaleReturnItemsGridProps, calcItemTotal() (+6 more)
+### Community 88 - "react"
+Cohesion: 0.03
+Nodes (126): metadata, NAV_LINKS, LEDGER_NAME_COLORS, LedgersPage(), handleLedgerSaved(), handleSync(), load(), NATURE_COLORS (+118 more)
 
 ### Community 89 - "OCRFlowTest"
-Cohesion: 0.11
-Nodes (7): default_storage_exists(), _fake_call(), _gemini_payload(), _jpeg(), OCRFlowTest, ReviewFindingsTest, TrainingDataTest
+Cohesion: 0.09
+Nodes (8): default_storage_exists(), _fake_call(), _gemini_payload(), _jpeg(), MultiPageScanTest, OCRFlowTest, ReviewFindingsTest, TrainingDataTest
 
 ### Community 90 - "MasterProductAlias"
 Cohesion: 0.14
 Nodes (5): MasterProductAlias, Meta, Command, ScanTrainingSample, Meta
 
 ### Community 91 - "5.4 reports"
-Cohesion: 0.11
-Nodes (17): DailyCashReport, Meta, FixedMonthlyExpense, Meta, 5.3 inventory & purchases, 5.4 reports, 5. Data models, B2. purchases/models.py (+9 more)
+Cohesion: 0.13
+Nodes (15): DailyCashReport, Meta, FixedMonthlyExpense, Meta, 5.4 reports, DailyCashReport (models.py:207, table `reports_dailycashreport`), DeferredITCEntry (models.py:134, table `reports_deferreditcentry`), FixedMonthlyExpense (models.py:176, table `reports_fixedmonthlyexpense`) (+7 more)
 
 ### Community 92 - "expiryManager.ts"
-Cohesion: 0.05
-Nodes (94): ExpiryManagerView(), AssignSupplierDialog(), Props, chip(), DateRange(), DistributorOption, DistributorPicker(), ExpiryFilterBar() (+86 more)
+Cohesion: 0.07
+Nodes (58): ExpiryManagerView(), chip(), DateRange(), DistributorOption, DistributorPicker(), ExpiryFilterBar(), MonthPicker(), Props (+50 more)
 
-### Community 93 - "billing/views.py"
-Cohesion: 0.04
-Nodes (54): LoginView, sync_all_credit_accounts(), BillRevision, Meta, ReturnServiceError, QuotationConvertView, QuotationDetailView, SalesView (+46 more)
+### Community 93 - "Outlet"
+Cohesion: 0.02
+Nodes (93): SalesReturnItemAuditSerializer, Meta, convert_dict_to_camel_case(), snake_to_camel(), Command, sync_all_credit_accounts(), BillRevision, Meta (+85 more)
 
 ### Community 94 - "PurchaseInvoiceDocument.tsx"
-Cohesion: 0.20
-Nodes (19): dmy(), Kv(), Letterhead, money(), PURCHASE_PAPER_WIDTH_PX, PurchaseInvoiceDocument(), expiryShort(), MODE_WORDS (+11 more)
+Cohesion: 0.19
+Nodes (20): fmtAmt(), dmy(), Kv(), Letterhead, money(), PURCHASE_PAPER_WIDTH_PX, PurchaseInvoiceDocument(), expiryShort() (+12 more)
 
 ### Community 95 - "MobilePurchase.tsx"
-Cohesion: 0.11
-Nodes (29): formatLedgerBalance(), getBalBadgeColor(), LedgerPicker(), select(), MobilePurchase(), PurchaseBanners(), CREDIT_DAYS, PurchaseDetailsSheet() (+21 more)
+Cohesion: 0.10
+Nodes (30): formatLedgerBalance(), getBalBadgeColor(), LedgerPicker(), select(), MobilePurchase(), PurchaseBanners(), PurchaseDetailsSheet(), PurchaseDetailsSheetProps (+22 more)
 
 ### Community 96 - "ExportButton.tsx"
-Cohesion: 0.18
-Nodes (18): ExportButton(), getStoredToken(), GSTReportPDFProps, styles, downloadCSV(), exportExpiryReportCSV(), exportGSTR1_CSV(), exportGSTR3B_CSV() (+10 more)
+Cohesion: 0.16
+Nodes (20): ExportButton(), getStoredToken(), GSTReportPDFProps, styles, downloadCSV(), exportExpiryReportCSV(), exportGSTR1_CSV(), exportGSTR3B_CSV() (+12 more)
+
+### Community 98 - "SandboxConfiguration"
+Cohesion: 0.16
+Nodes (9): SandboxAuthService, _get_fernet(), SandboxConfiguration, Meta, generate_ewb_payload(), _quantize(), request_ewaybill(), run_live_test() (+1 more)
 
 ### Community 99 - "report.py"
-Cohesion: 0.10
-Nodes (10): Command, tidy_twins(), _money_text(), _number(), read_answers(), take(), shop_questions(), name_key() (+2 more)
+Cohesion: 0.14
+Nodes (11): tidy_twins(), Answers, batch_key(), _money_text(), _number(), read_answers(), take(), shop_questions() (+3 more)
 
 ### Community 100 - "gst/views.py"
-Cohesion: 0.05
-Nodes (39): GstTaxpayerAuth, Meta, CanAccessReports, _digest(), normalize_invoice_number(), run_advisory_reconciliation(), generate_checksum(), sync_gstr2b_job() (+31 more)
+Cohesion: 0.06
+Nodes (34): preview_excel(), GSTR3BValidationConfig, normalize_invoice_number(), run_advisory_reconciliation(), generate_checksum(), sync_gstr2b_job(), Rule37Adjustment, Meta (+26 more)
 
-### Community 101 - "create_receipt_payment"
-Cohesion: 0.12
-Nodes (9): ExpenseEntry, Meta, create_expense_entry(), create_receipt_payment(), ExpenseServiceError, ReceiptServiceError, ExpenseListCreateView, ReceiptListCreateView (+1 more)
+### Community 101 - "purchaseLine.ts"
+Cohesion: 0.17
+Nodes (19): BAR, Fig(), PurchaseLineCard(), itemSchema, lineAmount(), calcPTR(), calcPTS(), ExpiryStatus (+11 more)
 
 ### Community 103 - "@playwright/test"
 Cohesion: 0.12
 Nodes (4): RevisionHistoryPage, { test, expect }, { test, expect }, @playwright/test
 
 ### Community 105 - "CartLineCard.tsx"
-Cohesion: 0.05
-Nodes (68): AdjustTarget, InlineRowEditor(), InlineRowEditorProps, item, props, AddLineSheetProps, Badge(), BAR (+60 more)
+Cohesion: 0.06
+Nodes (39): InlineRowEditorProps, Badge(), BAR, batchFromItem(), CartLineCard(), CartLineCardProps, computeLine(), describeStock() (+31 more)
 
 ### Community 106 - "LineEditorSheet.test.tsx"
 Cohesion: 0.21
 Nodes (17): ledger_of(), shop(), person(), put(), test_a_customer_imported_with_a_landline_number_can_still_be_edited(), test_a_family_members_edit_leaves_the_owners_ledger_and_limit_alone(), test_a_ledger_name_another_ledger_already_uses_does_not_fail_the_save(), test_a_ledger_name_typed_by_hand_in_accounts_is_left_alone() (+9 more)
 
 ### Community 107 - "os"
-Cohesion: 0.06
-Nodes (8): analyze(), analyze(), preview_excel(), Command, _open_rows(), export_missing_data(), main(), parse_date()
+Cohesion: 0.03
+Nodes (28): analyze(), analyze(), Migration, _count_failure(), Command, Command, generate_deterministic_anchors(), run_seeder() (+20 more)
 
 ### Community 108 - "shortcuts.ts"
 Cohesion: 0.09
-Nodes (19): PermissionGateProps, ACCOUNTS_SHORTCUTS, BILL_JUMPS, BILLING_SHORTCUTS, BROWSER_RESERVED, create(), CREATE_SHORTCUTS, GENERAL_SHORTCUTS (+11 more)
+Nodes (19): ACCOUNTS_SHORTCUTS, BILL_JUMPS, BILLING_SHORTCUTS, BROWSER_RESERVED, create(), CREATE_SHORTCUTS, GENERAL_SHORTCUTS, go() (+11 more)
 
 ### Community 109 - "frontend (109)"
 Cohesion: 0.13
 Nodes (14): aliases, components, utils, iconLibrary, rsc, $schema, style, tailwind (+6 more)
 
 ### Community 110 - "ManavataA4Invoice.tsx"
-Cohesion: 0.16
-Nodes (18): BillSuccessScreenProps, InvoicePreviewModalProps, InvoiceThermalProps, abbrevMfg(), amountInWords(), DEFAULT_CONFIG, fmtAmt(), fmtExpiry() (+10 more)
+Cohesion: 0.09
+Nodes (25): BillSuccessScreenProps, InvoicePreviewModalProps, InvoiceThermalProps, abbrevMfg(), amountInWords(), DEFAULT_CONFIG, fmtExpiry(), InvoicePreviewProps (+17 more)
 
-### Community 111 - "SaleInvoice"
-Cohesion: 0.02
-Nodes (87): post_voucher(), Command, Command, CreditNoteItem, Meta, JournalEntry, Meta, Voucher (+79 more)
+### Community 111 - "Batch"
+Cohesion: 0.01
+Nodes (144): FamilyAccountError, resolve_bill_parties(), Doctor, Meta, AgingLimitExceededException, CreditLimitExceededException, validate_credit_exposure(), validate_invoice_aging() (+136 more)
+
+### Community 112 - "PurchaseOrder"
+Cohesion: 0.11
+Nodes (10): PurchaseOrder, Meta, create_pos_from_shortbook(), group_filter(), link_invoice_to_po(), open_pos_for(), _filtered(), _m() (+2 more)
 
 ### Community 113 - "ShortbookItem"
-Cohesion: 0.18
-Nodes (9): ShortbookItem, Meta, line_insights(), sync_low_stock_into_shortbook(), _page_args(), _paginate(), _serialize_shortbook(), _shortbook_filtered() (+1 more)
+Cohesion: 0.13
+Nodes (12): PurchaseOrderItem, Meta, ShortbookItem, Meta, _close(), delete_draft(), _received_by_product(), recompute_receipts() (+4 more)
 
-### Community 115 - "billing/tests/conftest.py"
-Cohesion: 0.14
-Nodes (9): batch_a(), batch_b(), batch_c(), default_outlet(), product_a_pack10(), product_b_inclusive(), product_c_low_stock(), registered_customer() (+1 more)
+### Community 115 - "attendance/views.py"
+Cohesion: 0.18
+Nodes (9): AttendanceRecord, Meta, AttendanceCheckInView, AttendanceCheckOutView, AttendanceManualView, AttendanceMonthlyView, AttendanceMyIpView, AttendanceSummaryView (+1 more)
 
 ### Community 117 - "frontend (117)"
 Cohesion: 0.14
@@ -768,24 +798,24 @@ Cohesion: 0.18
 Nodes (9): batch(), getDetail, inDays(), mockAllowed, mockRouter, mockToast, product(), renderPage() (+1 more)
 
 ### Community 119 - "Mobile billing: UX design (phone, 360-430px)"
-Cohesion: 0.14
-Nodes (13): 1. What the current screen is (so nothing is forgotten), 2. Design principles, 3.1 Bill (home), 3.2 Search view (full screen), 3.3 Line editor (bottom sheet), 3.4 Totals sheet (tap the bottom bar's total), 3.5 Payment (a short bottom sheet: Collect -> tap how they pay -> done), 3.6 Success (full screen) (+5 more)
+Cohesion: 0.13
+Nodes (14): 1. What the current screen is (so nothing is forgotten), 2. Design principles, 3.1 Bill (home), 3.2 Search view (full screen), 3.3 Line editor (bottom sheet), 3.4 Totals sheet (tap the bottom bar's total), 3.5 Payment (a short bottom sheet: Collect -> tap how they pay -> done), 3.6 Success (full screen) (+6 more)
 
 ### Community 120 - "OutletSettingsView"
-Cohesion: 0.11
-Nodes (10): own_organization_or_404(), OutletSettingsView, serialize_outlet(), Frontend pieces, Known limits (decisions, not bugs), Roles (the only five that exist), Switching outlets (super admin), The staff form (Staff → Add / Edit) (+2 more)
+Cohesion: 0.15
+Nodes (8): own_organization_or_404(), Frontend pieces, Known limits (decisions, not bugs), Roles (the only five that exist), Switching outlets (super admin), The staff form (Staff → Add / Edit), Users, Roles & Access Control, A.9 core (outlet + organization/chain)
 
-### Community 121 - "journal_service.py"
-Cohesion: 0.06
-Nodes (27): _build_purchase_gst_lines(), _build_sale_gst_lines(), _create_lines_and_update_balances(), _get_components_safe(), _get_customer_ledger(), _get_distributor_ledger(), _get_ledger(), _get_ledger_safe() (+19 more)
+### Community 121 - "Staff"
+Cohesion: 0.01
+Nodes (147): atomic_debit_note_update(), _recompute_invoice_outstanding(), account_ledger(), account_people(), attach_member(), create_family_account(), customer_for_ledger(), debtors_group() (+139 more)
 
 ### Community 122 - "access.ts"
-Cohesion: 0.16
-Nodes (16): ADMIN_ROLES, BILLING_ROLES, canonicalRole(), fallbackPermissions(), hasPermission(), isKnownRole(), MANAGER_ROLES, permissionsOf() (+8 more)
+Cohesion: 0.13
+Nodes (22): PermissionGateProps, ShortcutDef, ADMIN_ROLES, BILLING_ROLES, canonicalRole(), fallbackPermissions(), hasAllPermissions(), hasAnyPermission() (+14 more)
 
-### Community 123 - "useBillingStore"
-Cohesion: 0.06
-Nodes (64): FullScreenBillingPage(), ActiveBillsTabs(), BillSuccessScreen(), EditSaleHydrator(), MainInvoiceWorkspace(), MainInvoiceWorkspaceProps, RightBillingRail(), StaffPinEntry() (+56 more)
+### Community 123 - "billingMarginUtils.ts"
+Cohesion: 0.07
+Nodes (46): RightBillingRail(), useCheckout(), useSaveBill(), billDiscountPctOf(), DiscountedBill, billedQtyOf(), calculateLineMargin(), calculateTotalMargin() (+38 more)
 
 ### Community 124 - "has_bill_revision_permission"
 Cohesion: 0.18
@@ -793,15 +823,15 @@ Nodes (4): BillRevisionPermissionTests, MockView, has_bill_revision_permission()
 
 ### Community 125 - "ref_testing_library_react"
 Cohesion: 0.02
-Nodes (58): calls, data, refetch, mockAllowed, mockLedgers, abdul, mockCustomerQuery, DATA (+50 more)
+Nodes (50): calls, data, refetch, mockDoctors, abdul, mockCustomerQuery, DATA, family (+42 more)
 
-### Community 128 - "SummaryTests"
-Cohesion: 0.22
-Nodes (3): FreshnessTests, SummaryTests, ValuationBase
+### Community 128 - "test_line_discount_once.py"
+Cohesion: 0.23
+Nodes (17): convert(), post(), quote(), saved(), test_a_half_paisa_line_is_saved_as_the_screen_showed_it(), test_a_quotation_accepts_an_unrounded_rate_and_discounts(), test_a_quotation_keeps_the_discounted_price_and_bills_it(), test_a_row_without_amounts_is_still_priced_from_rate_and_discount() (+9 more)
 
 ### Community 129 - "test_orientation.py"
-Cohesion: 0.14
-Nodes (17): snap_row_boxes(), _box_dims(), detect_orientation(), _engine(), locate_rows(), compact(), money_forms(), score() (+9 more)
+Cohesion: 0.11
+Nodes (21): auto_rotate_enabled(), prepare_image(), snap_row_boxes(), verify_model(), _box_dims(), detect_orientation(), _engine(), locate_rows() (+13 more)
 
 ### Community 130 - "parse_skips.js"
 Cohesion: 0.14
@@ -809,27 +839,27 @@ Nodes (5): nextConfig, path, withSerwist, manifest, root
 
 ### Community 131 - "AuditJWTAuthentication"
 Cohesion: 0.10
-Nodes (34): show(), first(), Host(), search, EntryHarness(), goodLine(), makeEntry(), out (+26 more)
+Nodes (32): handleSave(), handleSave(), handleClear(), handleKey(), handleSave(), useOpenPOs(), usePurchaseEntry(), useConfirmDraft() (+24 more)
 
-### Community 133 - "purchases/tasks.py"
-Cohesion: 0.07
-Nodes (16): Command, cleanup_scan_photos(), draft_ttl_days(), maybe_cleanup_scan_photos(), ttl_hours(), cleanup_scan_photos_task(), _clear_in_flight(), _fit_phone() (+8 more)
+### Community 133 - "RemoveStockDialog.tsx"
+Cohesion: 0.16
+Nodes (17): Props, RemoveStockDialog(), remove, ROWS, setup(), removeExpiryStock(), RemoveResult, buildRemovePayload() (+9 more)
 
 ### Community 134 - "IsAuthenticated"
 Cohesion: 0.14
 Nodes (17): describeSuggestion(), Highlight(), SuggestInput(), SuggestInputProps, box(), cipla, comp, Host() (+9 more)
 
-### Community 135 - "RISKS / GAPS (report only)"
-Cohesion: 0.11
-Nodes (8): AuditService, ActivityEventLegacyAdapterSerializer, Meta, pin(), What is never stored, Adjusting stock, 11.2 accounts / attendance / audit / core / gst — detail, RISKS / GAPS (report only)
+### Community 135 - "lib/inventory.ts"
+Cohesion: 0.07
+Nodes (34): StockAdjustmentModalProps, AdjustmentDirection, AdjustmentForm, AdjustmentReason, AdjustmentUnit, batchValue(), buildAdjustPayload(), DEFAULT_MIN_QTY (+26 more)
 
-### Community 136 - "voucher_views.py"
-Cohesion: 0.13
-Nodes (25): VoucherService, VoucherSerializer, Meta, BalanceSheetView, DebitNoteDetailView, GSTSummaryView, LedgerDetailView, LedgerListView (+17 more)
+### Community 136 - "test_rupee_bill_discount.py"
+Cohesion: 0.23
+Nodes (14): need(), RevisionNotAllowed, body(), create(), quantity_only_staff(), scope(), test_a_nonsense_rupee_figure_is_ignored(), test_a_percent_discount_remembers_no_rupees() (+6 more)
 
-### Community 137 - "IsSuperAdmin"
-Cohesion: 0.14
-Nodes (11): EditLogView, EventDetailView, EventListView, ExportView, FlagListView, FlagReviewView, PeopleView, PersonView (+3 more)
+### Community 137 - "api.py"
+Cohesion: 0.10
+Nodes (29): _actor_names(), apply_filters(), _d(), EditLogView, entity_ref(), _err(), event_json(), EventDetailView (+21 more)
 
 ### Community 138 - "docker-compose.yml (138)"
 Cohesion: 0.17
@@ -838,6 +868,10 @@ Nodes (11): driver, networks, internal, command, container_name, image, networks
 ### Community 139 - "docs (139)"
 Cohesion: 0.18
 Nodes (12): MediFlow Business Flow Matrix, BF-001 Create Sale Bill, BF-002 Edit Sale Bill, Playwright E2E testing strategy, Purchase workflow matrix (create, edit/revision, return), MediFlow Invariant Matrix, API integrity invariants (select_for_update, atomic, tenant isolation), GST calculation invariants (intra/inter-state split, rounding) (+4 more)
+
+### Community 140 - "make_staff"
+Cohesion: 0.11
+Nodes (4): make_outlet(), make_staff(), ImmutabilityTests, IsSuperAdminPermissionTests
 
 ### Community 141 - "docs (141)"
 Cohesion: 0.17
@@ -849,47 +883,51 @@ Nodes (12): authStore (Zustand), Billing POS Screen, billingStore (Zustand), GST
 
 ### Community 143 - "cn"
 Cohesion: 0.03
-Nodes (144): AccountsLayout(), NAV_LINKS, AttendancePage(), StaffPage(), AccountsPage(), TABS, AttendancePctBadge(), AttendanceSummaryTab() (+136 more)
+Nodes (125): AccountsLayout(), MetricData, MetricWidget(), REPORT_DIRECTORY, ReportCategory, ReportsCenterPage(), ReportWidget(), ReportWidgetData (+117 more)
 
-### Community 144 - "EditBatchModal.test.tsx"
-Cohesion: 0.11
-Nodes (11): QuickEditField, EditBatchModal(), batch, mockToast, open(), Caching, Editing batches and products (the old "Quick edit"), Inventory page, stock list and stock adjustment (+3 more)
+### Community 144 - "@testing-library/user-event"
+Cohesion: 0.06
+Nodes (18): event, flag, m, perms, renderPage(), batch, mockToast, open() (+10 more)
 
 ### Community 145 - "PROJECT_MAP — MediFlow / MDF (pharmacy ERP + billing)"
-Cohesion: 0.15
-Nodes (12): 10. Conventions and how to add things, 1.1 Run, build, test, 1. Overview, 2. Folder structure, 9. Dependency map and "change X → also check Y", F.1 Whole stack (Docker), F.2 Backend without Docker, F.3 Frontend (+4 more)
+Cohesion: 0.17
+Nodes (11): 10. Conventions and how to add things, 1. Overview, 2. Folder structure, 6.1 Pages & routes, 6.3 State management & data fetching, 6.4 Types & schemas, 6. Frontend (`apps/frontend`), C.2 React Query (`lib/queryClient.ts`) (+3 more)
+
+### Community 146 - "gst/views.py"
+Cohesion: 0.30
+Nodes (14): CanAccessReports, GSTExportAuditView, GSTR1InvoicesView, GSTR1ValidationView, GSTR2AWarningView, GSTR2BReconciliationDataView, GSTR2BReconciliationRunView, GSTR2BStatusView (+6 more)
 
 ### Community 147 - "D"
-Cohesion: 0.08
-Nodes (16): bill(), stock(), test_a_discount_that_really_goes_below_cost_is_refused_in_plain_words_and_nothing_is_sold(), test_a_total_that_simply_does_not_match_its_lines_is_still_blocked(), test_it_also_saves_once_the_batch_carries_its_real_landing_cost(), D(), LineCostFloorTests, ResolveItemAmountsTests (+8 more)
+Cohesion: 0.16
+Nodes (6): D(), ResolveItemAmountsTests, SplitAmountsTests, _price_from_rate(), resolve_item_amounts(), _to_decimal()
 
 ### Community 148 - "audit.ts"
-Cohesion: 0.06
-Nodes (86): AuditPage(), Tab, TABS, ActivityTab(), exportNow(), Labeled(), AttentionTab(), FlagCard() (+78 more)
+Cohesion: 0.09
+Nodes (59): AuditPage(), Tab, TABS, ActivityTab(), exportNow(), Labeled(), AttentionTab(), FlagCard() (+51 more)
 
 ### Community 149 - "AddToShortbook.test.tsx"
 Cohesion: 0.28
 Nodes (7): api(), calls, DISTS, INFO(), mockToast, openPopup(), wrap()
 
 ### Community 151 - "expire_overdue"
-Cohesion: 0.16
-Nodes (5): Command, expire_overdue(), today(), PurchaseOrderByDistributorView, PurchaseOrderItemsView
+Cohesion: 0.14
+Nodes (7): Command, expire_overdue(), mint_po_number(), today(), _page_args(), _paginate(), _shortbook_filtered()
 
 ### Community 152 - "normalize_gstr2b_record"
 Cohesion: 0.33
 Nodes (3): extract_monetary(), normalize_gstr2b_record(), parse_date()
 
 ### Community 153 - "OOXMLInjector"
-Cohesion: 0.10
+Cohesion: 0.09
 Nodes (7): GSTR1ExcelExportView, safe_pos(), GSTR3BExcelExportView, get_col_letter(), OOXMLInjector, ExporterPreflightValidator, GSTR3BPreflightValidator
 
-### Community 155 - "PROJECT_MAP — MediFlow / MDF (pharmacy ERP + billing)"
-Cohesion: 0.14
-Nodes (22): StaffFormModal(), StaffFormModalProps, ASSIGNABLE_ROLES, AssignableRole, buildStaffPayload(), customisedFlags(), defaultFormValues(), FLAG_FANOUT (+14 more)
+### Community 155 - "customers/[id]/page.tsx"
+Cohesion: 0.05
+Nodes (66): DetailRow(), formatINR(), getInvoiceStatus(), getPeriodStart(), InvoiceHistory(), InvoiceItemsExpanded(), PeriodFilter, StatCard() (+58 more)
 
 ### Community 156 - "parties.py"
-Cohesion: 0.09
-Nodes (22): Command, Command, ImportRefused, build_party_plan(), builtin_groups(), builtin_ledgers(), LedgerPlan, natural_balance() (+14 more)
+Cohesion: 0.11
+Nodes (20): app_key(), build_party_plan(), builtin_groups(), builtin_ledgers(), LedgerPlan, natural_balance(), norm(), note_party() (+12 more)
 
 ### Community 157 - "PurchaseDetailModal.test.tsx"
 Cohesion: 0.25
@@ -900,20 +938,20 @@ Cohesion: 0.25
 Nodes (3): BATCHES, PRODUCT, setup()
 
 ### Community 159 - "Batch-wise tracking: how other software does it, where MediFlow stands, and how to get the best of both"
-Cohesion: 0.09
-Nodes (22): 1. The short version, 2. What is wrong with the page in your screenshot, 2a. What you see (layout), 2b. What the data says (read-only queries on the dev database), 3. How other software handles batch tracking, 4. What they all share, 5. Scorecard, 6. Best of both: what to build, front to back (+14 more)
+Cohesion: 0.08
+Nodes (23): 1. The short version, 2. What is wrong with the page in your screenshot, 2a. What you see (layout), 2b. What the data says (read-only queries on the dev database), 3. How other software handles batch tracking, 4. What they all share, 5. Scorecard, 6. Best of both: what to build, front to back (+15 more)
 
 ### Community 161 - "get_policy"
-Cohesion: 0.18
-Nodes (9): org_id_of(), PolicyView, _rules_view(), AuditPolicy, Meta, get_policy(), maybe_purge(), rule_setting() (+1 more)
+Cohesion: 0.12
+Nodes (12): org_id_of(), PolicyView, Command, AuditPolicy, Meta, _allow_purge(), get_policy(), maybe_purge() (+4 more)
 
 ### Community 162 - "public (162)"
 Cohesion: 0.20
 Nodes (9): background_color, description, display, icons, name, orientation, short_name, start_url (+1 more)
 
-### Community 164 - "GlobalShortcuts.tsx"
-Cohesion: 0.18
-Nodes (15): consume(), GlobalShortcuts(), HELP_STEP, isModalOpen(), Kbd(), HELP_KEYS, SHORTCUTS, OPEN_SHORTCUT_HELP_EVENT (+7 more)
+### Community 164 - "PurchasesHub.test.tsx"
+Cohesion: 0.29
+Nodes (4): SHORTCUTS, mockToast, params, replace
 
 ### Community 165 - "docker-compose.yml (165)"
 Cohesion: 0.20
@@ -940,12 +978,12 @@ Cohesion: 0.12
 Nodes (7): build_user_payload(), LogoutView, _mask_phone(), serialize_outlet_data(), client_ip(), user(), A.1 accounts: auth (`accounts/auth_urls.py`, prefix `/api/v1/auth/`)
 
 ### Community 172 - "ErpReportService"
-Cohesion: 0.07
-Nodes (10): _is_consolidated(), _purchase_less_returns(), PurchaseBookExportView, ErpReportService, _invoice(), _note(), PurchaseBookServiceTests, PurchaseReportRouteTests (+2 more)
+Cohesion: 0.10
+Nodes (3): GrossLossOnReturnExportView, ErpReportService, GrossLossOnReturnReportTests
 
 ### Community 173 - "PurchaseOrdersList.tsx"
-Cohesion: 0.04
-Nodes (88): PurchaseOrderDetailPage(), PurchasesPage(), TAB_VALUES, tabs, ProductSearchDropdown(), NewPurchaseOrderModal(), POConfirmModal(), Props (+80 more)
+Cohesion: 0.03
+Nodes (127): PurchaseOrderDetailPage(), PurchasesPage(), fmt(), PublicPurchaseOrderPage(), STATUS_NOTE, ProductSearchDropdown(), ProductSearchDropdownProps, NewPurchaseOrderModal() (+119 more)
 
 ### Community 174 - "shortcutCommands.ts"
 Cohesion: 0.60
@@ -960,12 +998,12 @@ Cohesion: 0.29
 Nodes (3): CustomerAdmin, PostDatedChequeAdmin, StaffAdmin
 
 ### Community 179 - "billingStore.ts"
-Cohesion: 0.06
-Nodes (28): get, replace, CollectStateInput, billCustomerFromLedger(), editedMember(), ledgerAfterCustomerEdit(), ledgerHasCustomer(), patientAfterCustomerEdit() (+20 more)
+Cohesion: 0.07
+Nodes (35): CreateLedgerModalProps, LedgerPickerProps, Props, BillingFor(), clean(), Props, CustomerSearch(), CustomerSearchProps (+27 more)
 
 ### Community 180 - "GlobalShortcuts.tsx"
-Cohesion: 0.13
-Nodes (22): ShortcutScope, canonKey(), canonKeys(), canonStep(), CODE_TO_KEY, findConflicts(), findReservedHit(), formatKeys() (+14 more)
+Cohesion: 0.10
+Nodes (34): consume(), GlobalShortcuts(), HELP_STEP, isModalOpen(), Kbd(), OPEN_SHORTCUT_HELP_EVENT, SHORTCUT_EVENT, canonKey() (+26 more)
 
 ### Community 183 - "AddNewProductDrawer.test.tsx"
 Cohesion: 0.13
@@ -976,20 +1014,20 @@ Cohesion: 0.15
 Nodes (12): ocr_raw_data(), ai_items(), compress_for_training(), confirmed_items(), _copy_training_images(), _day(), diff(), keep_training_images() (+4 more)
 
 ### Community 185 - "plan.py"
-Cohesion: 0.05
-Nodes (34): StockRow, Answers, batch_key(), BatchPlan, build_plan(), _choose(), score(), Issue (+26 more)
+Cohesion: 0.06
+Nodes (31): StockRow, BatchPlan, build_plan(), _choose(), score(), Issue, _outlet_path(), _pack_of() (+23 more)
 
-### Community 186 - "voucher_serializers.py"
-Cohesion: 0.07
-Nodes (16): CreditNote, Meta, CreditNoteService, CreditNoteItemSerializer, Meta, CreditNoteSerializer, Meta, DebitNoteItemSerializer (+8 more)
+### Community 186 - "DoctorSheet.tsx"
+Cohesion: 0.19
+Nodes (12): CreateDoctorModal(), CreateDoctorModalProps, DoctorPicker(), DoctorPickerProps, DoctorSearch(), DoctorSearchProps, Props, mehta (+4 more)
 
 ### Community 187 - "sw.ts"
 Cohesion: 0.29
 Nodes (6): serwist, WorkerGlobalScope, serwist@^9.5.13, @serwist/next@^9.5.13, serwist, @serwist/next
 
-### Community 188 - "4.1 accounts / attendance / audit / core / gst"
-Cohesion: 0.19
-Nodes (6): get_client_ip(), serialize_attendance_record(), validate_attendance_security(), 4.1 accounts / attendance / audit / core / gst, A.6 accounts: dashboard (view classes exist in `accounts/views.py:2133-2155`, but ONLY referenced from the unmounted `accounts/urls.py`), A.7 attendance (`attendance/urls.py`, prefix `/api/v1/attendance/`; all DRF `IsAuthenticated` unless noted)
+### Community 188 - "MiddlewareTests"
+Cohesion: 0.07
+Nodes (10): get_client_ip(), serialize_attendance_record(), validate_attendance_security(), AuditContextMiddleware, get_audit_context(), _actor(), _request_from_context(), dummy_view() (+2 more)
 
 ### Community 189 - "docker-compose.yml (189)"
 Cohesion: 0.22
@@ -1003,33 +1041,33 @@ Nodes (9): external, name, external, name, volumes, media_files, postgres_data, 
 Cohesion: 0.25
 Nodes (9): Phase 2 GST Snapshot Mapping Rules, Phase 2 GST Snapshot Source Map, Customer (accounts.Customer), Distributor (purchases.Distributor), GSTTransactionSnapshot model (apps/reports/models.py), Outlet (core.Outlet), PurchaseItem (purchases), SaleItem (billing) (+1 more)
 
-### Community 192 - "ScanRowStrip.tsx"
-Cohesion: 0.52
-Nodes (5): rowStripStyle(), ScanRowBox, ScanRowStrip(), STRIP_CONTEXT, stripWindow()
+### Community 192 - "ExpiryList.tsx"
+Cohesion: 0.16
+Nodes (16): DaysBadge(), ExpiryList(), Props, Tick(), TONE_BADGE, TONE_ROW, GROUPS, ROWS (+8 more)
 
-### Community 193 - "C1. File roles (what is live vs dormant)"
-Cohesion: 0.06
-Nodes (16): convert_dict_to_camel_case(), snake_to_camel(), NotificationLog, Meta, calculate_line_item(), resolve_unit_rate(), TaxCalculatorService, QuotationListCreateView (+8 more)
+### Community 193 - "calculate_line_item"
+Cohesion: 0.21
+Nodes (4): calculate_line_item(), resolve_unit_rate(), TaxCalculatorService, C3. GST / tax computation (live path, views.py:1153-1242)
 
-### Community 196 - "inventory/tests/conftest.py"
-Cohesion: 0.25
-Nodes (10): Command, box_batch(), box_product(), inventory_outlet(), low_stock_batch(), low_stock_product(), strip_batch(), strip_product() (+2 more)
+### Community 196 - "A.3 accounts: staff (`accounts/staff_urls.py`, prefix `/api/v1/staff/`)"
+Cohesion: 0.14
+Nodes (7): _counter_session(), _format_time_safe(), _serialize_staff(), can_assign_role(), can_manage_staff_member(), Rules that are easy to get wrong, A.3 accounts: staff (`accounts/staff_urls.py`, prefix `/api/v1/staff/`)
 
 ### Community 198 - "tests (198)"
 Cohesion: 0.14
 Nodes (10): _canonical_pack_type(), fix_batch_pack_type(), Migration, TestBatchSchema, Keeping the two copies in step, Pack size, unit and type (and selling loose), The model, The rule (one place) (+2 more)
 
-### Community 200 - "PurchaseLineCard.tsx"
-Cohesion: 0.16
-Nodes (14): BAR, Fig(), PurchaseLineCardProps, Props, CheckFix, getPurchaseChecks(), PurchaseCheck, PurchaseCheckInput (+6 more)
+### Community 200 - "PurchaseItemFormData"
+Cohesion: 0.22
+Nodes (10): PurchaseLineCardProps, Props, applyGstAndFreightToBaseRate(), calculateBaseLandingRate(), calculateLandingRate(), calculatePurchaseItem(), calculatePurchaseTotals(), PurchaseCheckInput (+2 more)
 
-### Community 201 - "NumField.tsx"
-Cohesion: 0.27
-Nodes (11): cleanNumber(), NumField(), NumFieldProps, Host(), TextField(), Field(), FieldDescription(), FieldError() (+3 more)
+### Community 201 - "PurchaseLineSheet.tsx"
+Cohesion: 0.15
+Nodes (21): cleanNumber(), NumField(), NumFieldProps, Host(), PurchaseLineSheet(), Section(), TextField(), Field() (+13 more)
 
 ### Community 203 - "Customer"
-Cohesion: 0.02
-Nodes (69): DashboardService, _live_sales(), _posted_purchases(), account_ledger(), account_people(), attach_member(), create_family_account(), debtors_group() (+61 more)
+Cohesion: 0.03
+Nodes (44): DashboardService, _live_sales(), _posted_purchases(), sync_customer_ledger(), RegularMedicine, Meta, bill_counts(), ChangePinView (+36 more)
 
 ### Community 204 - "docker-compose.yml (204)"
 Cohesion: 0.25
@@ -1051,9 +1089,9 @@ Nodes (8): Accounts Tables (PaymentEntry, PaymentAllocation, ReceiptEntry, Expen
 Cohesion: 0.36
 Nodes (8): Append-Only Snapshot Principle, Snapshot Exclusions: PurchaseReturn, Debit/Credit Notes, RCM, gst_transaction_snapshot (append-only table), IGST vs CGST/SGST Split Rule, Polarity Sign Convention (sale/return/purchase), PurchaseItem to Snapshot Mapping, SaleItem to Snapshot Mapping, SalesReturnItem to Snapshot Mapping
 
-### Community 209 - "GlobalModalManager.tsx"
-Cohesion: 0.25
-Nodes (12): AddOutletModal, BillAdjustmentModal, BulkReminderModal, CreateDoctorModal, CreateLedgerModal, GlobalModalManager(), ManualAttendanceModal, StaffFormModal (+4 more)
+### Community 209 - "Plan"
+Cohesion: 0.14
+Nodes (5): Command, verify(), Plan, _stock_text(), write_workbook()
 
 ### Community 210 - "jest.config.js"
 Cohesion: 0.40
@@ -1062,6 +1100,10 @@ Nodes (4): createJestConfig, customJestConfig, ESM_ONLY_DEPENDENCIES, nextJest
 ### Community 211 - "axios"
 Cohesion: 0.40
 Nodes (3): axios@^1.13.6, axios, axios
+
+### Community 212 - "landing_rate_per_pack"
+Cohesion: 0.21
+Nodes (6): _d(), effective_rate(), for_batch(), landing_from_purchase_item(), landing_rate_per_pack(), Command
 
 ### Community 216 - "tailwindcss"
 Cohesion: 0.50
@@ -1076,12 +1118,12 @@ Cohesion: 0.21
 Nodes (6): batch(), getStock, inDays(), mockToast, product(), renderTable()
 
 ### Community 221 - "Audit / activity tracking: review of the feature"
-Cohesion: 0.15
-Nodes (12): 1. The short version, 3. Findings, 4. What works well, 5. What I could not check, 6. Decisions I need from you, 7. Suggested plan, 8. Evidence (re-run any time), A. Events are not being recorded (+4 more)
+Cohesion: 0.25
+Nodes (7): 1. The short version, 4. What works well, 5. What I could not check, 6. Decisions I need from you, 7. Suggested plan, 8. Evidence (re-run any time), Audit / activity tracking: review of the feature
 
-### Community 222 - "CanAccessPurchases"
-Cohesion: 0.14
-Nodes (11): CanAccessPurchases, CanCreatePurchases, CanAddToShortbook, PurchaseOrderBulkCreateView, PurchaseOrderDetailView, PurchaseOrderListView, PurchaseOrderOpenView, PurchaseOrderSuggestionsView (+3 more)
+### Community 222 - "A.10 gst (`gst/urls.py`, prefix `/api/v1/gst/`; ALL use DRF `IsAuthenticated`, outlet = `request.user.outlet`; `reports/gst_urls.py` also mounted at the same prefix: periods/, summary/, reconciliation/, export/... belong to the reports fragment)"
+Cohesion: 0.25
+Nodes (4): get_user_outlet(), is_sandbox_allowed(), mask_gstin(), A.10 gst (`gst/urls.py`, prefix `/api/v1/gst/`; ALL use DRF `IsAuthenticated`, outlet = `request.user.outlet`; `reports/gst_urls.py` also mounted at the same prefix: periods/, summary/, reconciliation/, export/... belong to the reports fragment)
 
 ### Community 223 - "ui (223)"
 Cohesion: 0.33
@@ -1091,25 +1133,21 @@ Nodes (6): BtnType, BUTTONS, CalcButton, CalculatorProps, CalculatorWidget(), sa
 Cohesion: 0.29
 Nodes (7): command, container_name, env_file, networks, restart, volumes, celery
 
-### Community 231 - "@testing-library/user-event"
-Cohesion: 0.11
-Nodes (7): DISTRIBUTORS, setup(), QUICK_EDIT_LABELS, PACK, setup(), trace, @testing-library/user-event
-
-### Community 236 - "app/layout.tsx"
+### Community 231 - "PurchaseLineSheet.test.tsx"
 Cohesion: 0.22
-Nodes (6): metadata, RootLayout(), viewport, ErrorBoundary, Props, State
+Nodes (10): show(), first(), Host(), search, EntryHarness(), goodLine(), makeEntry(), out (+2 more)
 
-### Community 237 - "SaleInvoiceSerializer"
-Cohesion: 0.29
-Nodes (3): SaleInvoiceSerializer, Meta, QuotationSaleSchemaParityTest
+### Community 236 - "AuditJWTAuthentication"
+Cohesion: 0.13
+Nodes (13): AuditJWTAuthentication, 4.4 reports (+ `/api/v1/gst/` routes owned by reports), 7.1 Backend / infra variables, 7.2 Frontend env & build config, 7.3 Django settings highlights, 7. Config and environment (names only — no secret values), D.1 Environment variables (names only), D.2 Config (+5 more)
 
 ### Community 238 - "line_insights"
-Cohesion: 0.18
-Nodes (9): POSequence, Meta, Deployment, Purchase orders: the closed loop, Receiving, Rules (all enforced by the server, `apps/purchases/po_services.py`), Sending and the distributor page, Settings (Settings > Purchase Orders, owners/admins; saving asks for the account password) (+1 more)
+Cohesion: 0.12
+Nodes (13): POSequence, Meta, line_insights(), on_order_map(), on_order_qty(), Deployment, Purchase orders: the closed loop, Receiving (+5 more)
 
-### Community 240 - "EditProductModal.fields.test.tsx"
-Cohesion: 0.20
-Nodes (5): update, DISPENSING_UNIT_OPTIONS, DRUG_TYPE_OPTIONS, PACK_TYPE_OPTIONS, PACK_UNIT_OPTIONS
+### Community 240 - "GstTaxpayerAuth"
+Cohesion: 0.15
+Nodes (6): NotificationLog, Meta, send_whatsapp_reminder(), GstTaxpayerAuth, Meta, 8. External services and integrations
 
 ### Community 241 - "types (241)"
 Cohesion: 0.33
@@ -1131,49 +1169,49 @@ Nodes (6): Customer model, Auto Invoice Numbering (INV-YYYY-NNNNNN), SaleInvoice
 Cohesion: 0.20
 Nodes (9): customerBody(), API, Deployment, Editing a customer (what must stay true), Family accounts (shared mobile number + shared credit), Model, Retail only, Rules (enforced by the server, `apps/accounts/family_accounts.py`) (+1 more)
 
-### Community 246 - "payloadSchemas.ts"
-Cohesion: 0.18
-Nodes (10): PurchasePayload, PurchasePayloadSchema, ReturnPayload, ReturnPayloadSchema, SalePayload, SalePayloadSchema, ScheduleHPayload, ScheduleHPayloadSchema (+2 more)
+### Community 246 - "suggestions.py"
+Cohesion: 0.19
+Nodes (7): _attach_defaults(), is_placeholder(), norm_key(), _rank(), suggest_values(), ProductSuggestionsView, Product field suggestions (Manufacturer and Composition)
 
 ### Community 247 - "po_services.py"
-Cohesion: 0.07
-Nodes (32): POEvent, Meta, PurchaseOrder, Meta, PurchaseOrderItem, Meta, _close(), create_po() (+24 more)
+Cohesion: 0.16
+Nodes (11): POEvent, Meta, duplicate_po(), ensure_share_token(), event(), money(), pack_label(), _parse_lines() (+3 more)
 
-### Community 248 - "payloadBuilders.ts"
-Cohesion: 0.06
-Nodes (40): handleSave(), handleSave(), handleClear(), handleKey(), handleSave(), FamilyFormValues, blank, get (+32 more)
+### Community 248 - "billDiscountRupee.test.tsx"
+Cohesion: 0.33
+Nodes (10): add(), get, given(), id(), line(), open(), payload(), replace (+2 more)
 
-### Community 251 - "reports/page.tsx"
-Cohesion: 0.28
-Nodes (8): MetricData, MetricWidget(), REPORT_DIRECTORY, ReportCategory, ReportsCenterPage(), ReportWidget(), ReportWidgetData, SAMPLE_METRICS
+### Community 249 - "dates.ts"
+Cohesion: 0.30
+Nodes (12): BatchBreakdown(), ProductSummary(), Stat(), Tone, dateFmt, daysUntil(), ExpiryTone, expiryTone() (+4 more)
 
-### Community 252 - "CLAUDE.md"
-Cohesion: 0.22
-Nodes (8): Customers, families and shared credit, Deploying to production, Expiry Manager, graphify, Mobile layout, Pack size, unit and type, Project map (read first), UI consistency
+### Community 251 - "AuditContextPermission"
+Cohesion: 0.14
+Nodes (8): AuditContextPermission, 5.1 accounts / attendance / audit / core, 5.3 inventory & purchases, 5. Data models, B1. inventory/models.py, B2. purchases/models.py, B.2 attendance (`attendance/models.py`), B.3 audit (`audit/models.py`)
+
+### Community 252 - "safe_record"
+Cohesion: 0.09
+Nodes (15): after_commit(), _go(), safe_record(), confirms_identity(), _err(), _outlet(), Audit trail, Customers, families and shared credit (+7 more)
 
 ### Community 253 - "PurchaseInvoiceFull"
 Cohesion: 0.25
 Nodes (8): MobilePurchaseProps, NewPurchaseFormProps, PurchaseDetailModalProps, Props, Props, UsePurchaseEntryOptions, PurchaseInvoice, PurchaseInvoiceFull
 
-### Community 255 - "TotalsSheet.test.tsx"
-Cohesion: 0.33
-Nodes (3): line(), open(), seed()
+### Community 256 - "debouncedStorage.ts"
+Cohesion: 0.24
+Nodes (8): addExitListeners(), createDebouncedJSONStorage(), discardPendingStorageWrites(), flushAll(), flushPendingStorageWrites(), pendingDiscards, pendingFlushes, 8.3 Speed rules for the billing screen (both layouts)
 
-### Community 256 - "AuditPage.test.tsx"
-Cohesion: 0.29
-Nodes (5): event, flag, m, perms, renderPage()
-
-### Community 257 - "StockAdjustmentModal.test.tsx"
-Cohesion: 0.29
-Nodes (4): bottle, mockToast, open(), strip
+### Community 257 - "billingDiscount.test.tsx"
+Cohesion: 0.24
+Nodes (12): add(), batch, draftOf(), get, linesSum(), open(), payload(), product (+4 more)
 
 ### Community 258 - "frontend (258)"
 Cohesion: 0.40
 Nodes (3): http, options, req
 
-### Community 259 - "billing/models.py"
-Cohesion: 0.03
-Nodes (64): org_outlet_ids(), _scope(), scoped_flags(), Command, Command, ActivityEvent, Meta, ActivityLog (+56 more)
+### Community 259 - "erp_views.py"
+Cohesion: 0.11
+Nodes (9): _is_consolidated(), _purchase_less_returns(), PurchaseBookExportView, _invoice(), _note(), PurchaseBookServiceTests, PurchaseReportRouteTests, PurchaseReturnBookServiceTests (+1 more)
 
 ### Community 260 - "docker-compose.yml (260)"
 Cohesion: 0.60
@@ -1187,25 +1225,33 @@ Nodes (3): AgingBucket, CreditAging, TODAY
 Cohesion: 0.40
 Nodes (4): exports, main, name, version
 
-### Community 263 - "constants/index.ts"
-Cohesion: 0.33
-Nodes (5): DRUG_SCHEDULES, GST_RATES, INDIAN_STATES, STAFF_ROLES, STATE_CODES
+### Community 265 - "ProductSearchResult"
+Cohesion: 0.24
+Nodes (12): AdjustTarget, BatchBreakdownProps, EditProductModalProps, Row, InlineEditCellProps, StockTableProps, Props, Options (+4 more)
 
-### Community 267 - "scripts"
-Cohesion: 0.40
-Nodes (5): scripts, build, dev, lint, type-check
+### Community 267 - "Stock Ledger (`/dashboard/stockledger`) and ledger health"
+Cohesion: 0.18
+Nodes (8): describe(), _split_reason(), formatDecimalQty(), Opening the invoice behind a row, and the Excel, Stock Ledger (`/dashboard/stockledger`) and ledger health, Tests, The screen: product first, then batch, then history, Who supplied it, and who got it (recall)
 
 ### Community 269 - ".get"
-Cohesion: 0.15
-Nodes (7): build_group_data(), ledger_closing(), classify_balance_sheet_group(), get_descendant_group_ids(), build_group_block(), group_total(), ledger_rows_for_group()
+Cohesion: 0.25
+Nodes (3): build_group_data(), ledger_closing(), classify_balance_sheet_group()
+
+### Community 270 - "others_fingerprint"
+Cohesion: 0.20
+Nodes (5): Command, others_fingerprint(), read_daybook(), others_fingerprint(), outlet_stock_fingerprint()
+
+### Community 271 - "BarcodeScanner.tsx"
+Cohesion: 0.22
+Nodes (6): BarcodeScannerProps, FORMATS, MESSAGES, ScanState, originalMediaDevices, UNSUPPORTED_MESSAGE
 
 ### Community 272 - "PartnerSerializer"
-Cohesion: 0.05
-Nodes (19): Doctor, Meta, Partner, Meta, PartnerShareHistory, Meta, PartnerDetailView, PartnerListCreateView (+11 more)
+Cohesion: 0.15
+Nodes (8): PartnerDetailView, PartnerListCreateView, PartnerSerializer, Meta, 4.1 accounts / attendance / audit / core / gst, A.11 integrations / compliance / apps/apps/gst (no HTTP routes), A.4 accounts: doctors, partners, A.6 accounts: dashboard (view classes exist in `accounts/views.py:2133-2155`, but ONLY referenced from the unmounted `accounts/urls.py`)
 
 ### Community 273 - "SheetShell"
-Cohesion: 0.05
-Nodes (79): BillDiscountShortfall(), AddLineBody(), AddLineSheet(), batchStockWording(), describeInBill(), formatExpiry(), hasBatchStock(), isBatchExpired() (+71 more)
+Cohesion: 0.06
+Nodes (60): BillDiscountShortfall(), BarcodeScanner(), BillingForSheet(), billingForState(), clean(), inr(), Props, relationOf() (+52 more)
 
 ### Community 274 - "MediFlow (MDF) — Production Deployment Guide"
 Cohesion: 0.10
@@ -1215,41 +1261,61 @@ Nodes (19): 1. Server layout (the facts that matter), 2. The server config is in
 Cohesion: 0.30
 Nodes (14): LeavePurchaseDialog(), LeavePurchaseDialogProps, PackSizeConfirmDialog(), PackSizeConfirmDialogProps, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription (+6 more)
 
+### Community 280 - "test_constraints.py"
+Cohesion: 0.33
+Nodes (6): api_client(), test_atomicity_on_failure(), test_concurrency_stock_deduction(), make_request(), test_no_negative_stock(), test_unit_integrity_enforcement()
+
+### Community 281 - ".get"
+Cohesion: 0.32
+Nodes (5): _date_or_none(), build_group_block(), group_total(), ledger_rows_for_group(), parse_date()
+
+### Community 283 - "bill"
+Cohesion: 0.29
+Nodes (5): bill(), stock(), test_a_discount_that_really_goes_below_cost_is_refused_in_plain_words_and_nothing_is_sold(), test_a_total_that_simply_does_not_match_its_lines_is_still_blocked(), test_it_also_saves_once_the_batch_carries_its_real_landing_cost()
+
+### Community 284 - "1.1 Run, build, test"
+Cohesion: 0.29
+Nodes (7): 1.1 Run, build, test, F.1 Whole stack (Docker), F.2 Backend without Docker, F.3 Frontend, F.4 Tests (backend), F.5 CI (`.github/workflows/playwright.yml`, name "Playwright Tests"), F.6 Celery schedule
+
 ### Community 289 - "files.py"
-Cohesion: 0.14
-Nodes (25): clean_xml(), _dec(), MargFileError, MargGroup, MargItem, MargItemLine, MargLedger, MargVoucher (+17 more)
+Cohesion: 0.12
+Nodes (25): Command, clean_xml(), _dec(), MargFileError, MargGroup, MargItem, MargItemLine, MargLedger (+17 more)
 
 ### Community 292 - "types (292)"
 Cohesion: 0.50
 Nodes (3): main, name, version
 
-### Community 321 - "sale_update_service.py"
+### Community 305 - "WebcamCapture"
+Cohesion: 0.67
+Nodes (3): WebcamCapture(), react-webcam@^7.2.0, react-webcam
+
+### Community 321 - "StockLedger"
 Cohesion: 0.04
-Nodes (38): FamilyAccountError, resolve_bill_parties(), record_activity(), record_revision(), InvoicePayment, Meta, _add_customer_purchases(), allowed_revision_actions() (+30 more)
+Nodes (38): is_v2_write_enabled(), record_activity(), record_mutation(), record_revision(), SnapshotBuilderRegistry, atomic_sale_return_update(), _last_ledger_balance(), _line_has_quantity() (+30 more)
 
 ### Community 377 - ".as_user"
-Cohesion: 0.06
-Nodes (8): LegacyCustomRoleTests, make_staff(), MergedViewPermissionTests, OutletIsolationTests, UnprotectedWriteEndpointTests, SwitchOutletTests, _same_organization(), user_can_access_outlet()
+Cohesion: 0.04
+Nodes (13): AccessControlBase, LegacyCustomRoleTests, make_staff(), MergedViewPermissionTests, OutletIsolationTests, UnprotectedWriteEndpointTests, ChainDashboardTests, make_sale() (+5 more)
 
 ## Knowledge Gaps
 - **49 isolated node(s):** `next/core-web-vitals`, `DJANGO_SETTINGS_MODULE`, `BF-002 Edit Sale Bill`, `API integrity invariants (select_for_update, atomic, tenant isolation)`, `GST calculation invariants (intra/inter-state split, rounding)` (+44 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 3468 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **147 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 3479 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **154 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `9.1 Module dependency overview` connect `billing/views.py` to `create_sale_snapshots`, `check_outlet_access`, `gst/views.py`, `NewPurchaseForm`, `Batch`, `@tanstack/react-query`, `Customer`, `frontend/types/index.ts`, `SaleInvoice`, `PROJECT_MAP — MediFlow / MDF (pharmacy ERP + billing)`, `get_audit_context`, `Staff`, `journal_service.py`, `useBillingStore`?**
-  _High betweenness centrality (0.103) - this node is a cross-community bridge._
+- **Why does `9.1 Module dependency overview` connect `Outlet` to `StockLedger`, `check_outlet_access`, `gst/views.py`, `NewPurchaseForm`, `Customer`, `AuditJWTAuthentication`, `frontend/types/index.ts`, `Batch`, `useBillingStore`, `BaseErpReportView`, `Staff`, `@tanstack/react-query`?**
+  _High betweenness centrality (0.107) - this node is a cross-community bridge._
 - **Are the 185 inferred relationships involving `Outlet` (e.g. with `Command` and `Command`) actually correct?**
   _`Outlet` has 185 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `next/core-web-vitals`, `DJANGO_SETTINGS_MODULE`, `BF-002 Edit Sale Bill` to the rest of the system?**
   _49 weakly-connected nodes found - possible documentation gaps or missing edges._
-- **Should `Outlet` be split into smaller, more focused modules?**
-  _Cohesion score 0.015277405521307961 - nodes in this community are weakly interconnected._
-- **Why does `Outlet` connect `Customer` to `Outlet`, `billing/models.py`, `RISKS / GAPS (report only)`, `voucher_views.py`, `.post`, `inventory/views.py`, `django_db`, `PartnerSerializer`, `POError`, `VoucherModTests`, `parties.py`, `PartyChips.tsx`, `create_sale_snapshots`, `log_activity`, `GSTR1Builder`, `Batch`, `test_product_search.py`, `ErpReportService`, `Command`, `ledger_views.py`, `_ScanTestBase`, `Staff`, `PacketBTests`, `plan.py`, `C1. File roles (what is live vs dormant)`, `sale_update_service.py`, `tests (198)`, `taxpayer_auth.py`, `A.5 accounts: ledgers, vouchers, notes, accounting reports (`accounts/voucher_urls.py`, mounted at `/api/v1/` with NO sub-prefix; docstrings in views wrongly say `/api/v1/accounts/...`)`, `ocr_engine.py`, `BaseErpReportView`, `po_views.py`, `ErpExcelService`, `OCRFlowTest`, `5.4 reports`, `billing/views.py`, `report.py`, `gst/views.py`, `create_receipt_payment`, `OutletSettingsPrintEngineTests`, `os`, `SaleInvoice`, `OutletSettingsView`, `.as_user`, `has_bill_revision_permission`?**
-  _High betweenness centrality (0.082) - this node is a cross-community bridge._
-- **Should `dump_permission_matrix.py` be split into smaller, more focused modules?**
-  _Cohesion score 0.13071895424836602 - nodes in this community are weakly interconnected._
-- **Why does `cn()` connect `cn` to `formatCurrency`, `IsAuthenticated`, `DateRangeFilter`, `SheetShell`, `audit.ts`, `AlertsRow.tsx`, `GrossLossOnReturnExportView`, `@tanstack/react-query`, `PROJECT_MAP — MediFlow / MDF (pharmacy ERP + billing)`, `PaymentView.tsx`, `EditBatchModal.tsx`, `PurchaseOrdersList.tsx`, `BatchGrid.tsx`, `PartyChips.tsx`, `toast.tsx`, `PurchaseLineSheet.tsx`, `react`, `PurchaseLineCard.tsx`, `NumField.tsx`, `apiClient.ts`, `Button`, `7.1 Backend / infra variables`, `next`, `SaleReturnItemsGrid.tsx`, `expiryManager.ts`, `PurchaseInvoiceDocument.tsx`, `MobilePurchase.tsx`, `CartLineCard.tsx`, `reports/page.tsx`, `useBillingStore`?**
-  _High betweenness centrality (0.072) - this node is a cross-community bridge._
+- **Should `po_views.py` be split into smaller, more focused modules?**
+  _Cohesion score 0.015882733054450225 - nodes in this community are weakly interconnected._
+- **Why does `Outlet` connect `Outlet` to `po_views.py`, `erp_views.py`, `api.py`, `atomic_purchase_save`, `make_staff`, `IsAuthenticated`, `django_db`, `others_fingerprint`, `PartnerSerializer`, `PurchasesList.tsx`, `gst/views.py`, `POError`, `VoucherModTests`, `TestSaleModificationOptionsView`, `get_policy`, `log_activity`, `check_outlet_access`, `files.py`, `GSTR1Builder`, `BatchFactory`, `commands (40)`, `test_product_search.py`, `ErpReportService`, `Command`, `Command`, `Command`, `ledger_health.py`, `_ScanTestBase`, `PacketBTests`, `plan.py`, `DocumentRevision`, `StockLedger`, `tests (198)`, `taxpayer_auth.py`, `Customer`, `ocr_engine.py`, `Plan`, `BaseErpReportView`, `ErpExcelService`, `OCRFlowTest`, `5.4 reports`, `Staff`, `gst/views.py`, `OutletSettingsPrintEngineTests`, `os`, `Batch`, `attendance/views.py`, `safe_record`, `.as_user`, `has_bill_revision_permission`, `SaleReviseAPITests`?**
+  _High betweenness centrality (0.077) - this node is a cross-community bridge._
+- **Should `formatCurrency` be split into smaller, more focused modules?**
+  _Cohesion score 0.04808080808080808 - nodes in this community are weakly interconnected._
+- **Why does `cn()` connect `cn` to `formatCurrency`, `formatCurrency`, `productDetail.ts`, `RemoveStockDialog.tsx`, `IsAuthenticated`, `MainInvoiceWorkspace.tsx`, `apiClient.ts`, `@testing-library/user-event`, `SheetShell`, `audit.ts`, `stockLedger.ts`, `dashboard.ts`, `GrossLossOnReturnExportView`, `@tanstack/react-query`, `customers/[id]/page.tsx`, `PaymentView.tsx`, `useSettingsStore`, `PurchaseOrdersList.tsx`, `BatchGrid.tsx`, `useBillingStore`, `billingStore.ts`, `toast.tsx`, `DoctorSheet.tsx`, `PurchaseItemRow.tsx`, `ExpiryList.tsx`, `useToast`, `PurchaseLineSheet.tsx`, `Dashboard home & modules`, `Button`, `AlertTables.test.tsx`, `7.1 Backend / infra variables`, `vouchers/page.tsx`, `react`, `expiryManager.ts`, `PurchaseInvoiceDocument.tsx`, `MobilePurchase.tsx`, `purchaseLine.ts`, `CartLineCard.tsx`, `dates.ts`, `billingMarginUtils.ts`?**
+  _High betweenness centrality (0.073) - this node is a cross-community bridge._
